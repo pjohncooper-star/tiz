@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OnboardingBack } from "@/components/onboarding-nav";
 import { Button, Card, Label, Select } from "@/components/ui";
@@ -307,6 +308,11 @@ export default function ImportStep() {
             Clear upload queue
           </Button>
         )}
+        <p className="mt-3 text-sm">
+          <Link href="/api/onboarding/skip-import" className="text-sky-600">
+            Skip for now
+          </Link>
+        </p>
       </Card>
     </div>
   );
