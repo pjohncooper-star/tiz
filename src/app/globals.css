@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+body {
+  font-family: var(--font-geist), system-ui, sans-serif;
+}
+
+select option {
+  color: #18181b !important;
+  background-color: #ffffff !important;
+}

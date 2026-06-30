@@ -1,0 +1,743 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ATHLETE
+  SUPER_USER
+  ADMIN
+}
+
+enum ActivityLegType {
+  SWIM
+  BIKE
+  RUN
+  TRANSITION
+}
+
+enum Discipline {
+  BIKE
+  RUN
+  SWIM
+  STRENGTH
+}
+
+enum SignalType {
+  POWER
+  HEART_RATE
+  PACE
+}
+
+enum DisplayUnit {
+  METRIC
+  IMPERIAL
+}
+
+enum PoolSize {
+  SCY
+  SCM
+  LCM
+}
+
+enum PastWorkoutShading {
+  OFF
+  DURATION
+  ELAPSED_DURATION
+  MOVING_DURATION
+  DISTANCE
+  TIZ
+}
+
+enum ActivitySource {
+  BULK_IMPORT
+  STRAVA_LIVE
+}
+
+enum ImportSource {
+  GARMIN_EXPORT
+  STRAVA_EXPORT
+  TRAININGPEAKS_EXPORT
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETE
+  FAILED
+}
+
+enum DayQualityFlag {
+  GREAT
+  GOOD
+  ROUGH
+  BAD
+}
+
+enum SurveySource {
+  PROSPECTIVE
+  HISTORICAL_BACKFILL
+  FIT_IMPORT
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum InsightTier {
+  V0
+  V1
+  V2
+}
+
+enum SegmentType {
+  WARMUP
+  COOLDOWN
+  DRILL
+  RECOVERY
+  OTHER
+}
+
+enum OnboardingStep {
+  PROFILE
+  THRESHOLDS
+  HISTORICAL_THRESHOLDS
+  IMPORT
+  STRAVA
+  DAY_FLAGS
+  COMPLETE
+}
+
+enum PlannedSessionSource {
+  FLEXIBLE
+  ANCHORED_INSTANCE
+  TEMPLATE
+  RACE
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum SportTemplate {
+  TRIATHLON
+}
+
+enum SeasonStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum PhaseKind {
+  BASE
+  BUILD
+  RACE_PREP
+  TAPER
+}
+
+enum PhaseFocus {
+  AEROBIC_BASE
+  THRESHOLD
+  VO2_MAX
+  RACE_SPECIFICITY
+  FRESHNESS
+  STRENGTH_POWER
+  MAINTENANCE
+}
+
+enum FocusMode {
+  PHASE
+  DISCIPLINE
+}
+
+enum DeLoadStrategy {
+  VOLUME_ONLY
+  VOLUME_AND_INTENSITY
+  SINGLE_SPORT_FOCUS
+}
+
+enum GoalEventDiscipline {
+  SWIM
+  BIKE
+  RUN
+}
+
+enum EventPriority {
+  A
+  B
+  C
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  role          UserRole  @default(ATHLETE)
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  athlete       Athlete?
+  consentGrants ConsentGrant[] @relation("SuperUserGrants")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Athlete {
+  id                         String               @id @default(cuid())
+  userId                     String               @unique
+  onboardingStep             OnboardingStep       @default(PROFILE)
+  strengthPastWorkoutShading PastWorkoutShading   @default(OFF)
+  createdAt                  DateTime             @default(now())
+  updatedAt                  DateTime             @updatedAt
+
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  disciplineSettings  AthleteDisciplineSettings[]
+  thresholdProfiles   ThresholdProfile[]
+  signalPreferences   SignalPreference[]
+  importJobs          ImportJob[]
+  stravaConnection    StravaConnection?
+  syncedActivities    SyncedActivity[]
+  plannedSessions     PlannedSession[]
+  anchorWorkouts      AnchorWorkout[]
+  workoutFolders      WorkoutFolder[]
+  workoutTemplates    WorkoutTemplate[]
+  reusableSegments    ReusableSegment[]
+  structuredWorkouts  StructuredWorkout[]
+  weeklyScheduleTemplate WeeklyScheduleTemplate?
+  surveyResponses     SurveyResponse[]
+  interactionInsights InteractionInsight[]
+  consentGrants       ConsentGrant[]           @relation("AthleteGrants")
+  seasonPlans         SeasonPlan[]
+  goalEvents          GoalEvent[]
+}
+
+model AthleteDisciplineSettings {
+  id             String      @id @default(cuid())
+  athleteId      String
+  discipline     Discipline
+  primarySignal  SignalType
+  fallbackSignal SignalType?
+  displayUnit        DisplayUnit         @default(METRIC)
+  poolSize           PoolSize?
+  pastWorkoutShading PastWorkoutShading  @default(OFF)
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, discipline])
+}
+
+model ThresholdProfile {
+  id             String     @id @default(cuid())
+  athleteId      String
+  discipline     Discipline
+  signalType     SignalType
+  thresholdValue Float
+  zoneCount      Int        @default(5)
+  zoneBoundaries Json
+  effectiveDate  DateTime   @db.Date
+  isEstimated    Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+
+  athlete        Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  zoneBreakdowns ZoneBreakdown[]
+
+  @@unique([athleteId, discipline, signalType, effectiveDate])
+  @@index([athleteId, discipline, signalType, effectiveDate])
+}
+
+model SignalPreference {
+  id             String     @id @default(cuid())
+  athleteId      String
+  discipline     Discipline
+  primarySignal  SignalType
+  fallbackSignal SignalType?
+  effectiveDate  DateTime   @db.Date
+  createdAt      DateTime   @default(now())
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, discipline, effectiveDate])
+  @@index([athleteId, discipline, effectiveDate])
+}
+
+model ImportJob {
+  id             String       @id @default(cuid())
+  athleteId      String
+  source         ImportSource
+  status         ImportStatus @default(PENDING)
+  totalFiles     Int          @default(0)
+  processedFiles Int          @default(0)
+  failedFiles    Int          @default(0)
+  errorLog       Json?
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+
+  athlete    Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  activities SyncedActivity[]
+}
+
+model StravaConnection {
+  id              String   @id @default(cuid())
+  athleteId       String   @unique
+  stravaAthleteId BigInt
+  accessToken     String   @db.Text
+  refreshToken    String   @db.Text
+  expiresAt       DateTime
+  webhookSubId    Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+}
+
+model SyncedActivity {
+  id               String         @id @default(cuid())
+  athleteId        String
+  importJobId      String?
+  externalId       String?
+  dedupFingerprint String
+  discipline       Discipline
+  name             String
+  startTime        DateTime
+  durationSeconds  Int
+  distanceMeters   Float?
+  source           ActivitySource
+  rawStreams       Json?
+  streamsFetched   Boolean        @default(false)
+  zoneComputed     Boolean        @default(false)
+  noUsableSignal   Boolean        @default(false)
+  isPrOrAchievement Boolean       @default(false)
+  multisportGroupId String?
+  sessionIndex      Int?
+  legType           ActivityLegType?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  athlete        Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  importJob      ImportJob?      @relation(fields: [importJobId], references: [id], onDelete: SetNull)
+  zoneBreakdowns ZoneBreakdown[]
+  surveyResponse SurveyResponse?
+  linkedPlannedSession PlannedSession?
+
+  @@unique([athleteId, dedupFingerprint])
+  @@index([athleteId, startTime])
+  @@index([athleteId, multisportGroupId])
+  @@index([externalId])
+}
+
+model ZoneBreakdown {
+  id                 String     @id @default(cuid())
+  activityId         String
+  zone               Int
+  minutes            Float
+  signalUsed         SignalType
+  thresholdProfileId String
+  isCanonical        Boolean    @default(true)
+  usedFallback       Boolean    @default(false)
+
+  activity         SyncedActivity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  thresholdProfile ThresholdProfile @relation(fields: [thresholdProfileId], references: [id])
+
+  @@unique([activityId, zone, signalUsed, isCanonical])
+  @@index([activityId, isCanonical])
+}
+
+model AnchorWorkout {
+  id                String     @id @default(cuid())
+  athleteId         String
+  seasonPlanId      String?
+  seasonPhaseId     String?
+  workoutTemplateId String?
+  title             String
+  discipline        Discipline
+  weekday           Weekday
+  durationMinutes   Int?
+  distanceMeters    Float?
+  targetSpeedMps    Float?
+  targetPaceSeconds Float?
+  targetZones       Json?
+  steps             Json?
+  effectiveFrom     DateTime   @db.Date
+  effectiveUntil    DateTime?  @db.Date
+  respectTaper      Boolean    @default(true)
+  notes             String?
+  skippedDates      Json?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  athlete         Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  seasonPlan      SeasonPlan?      @relation(fields: [seasonPlanId], references: [id], onDelete: SetNull)
+  seasonPhase     SeasonPhase?     @relation(fields: [seasonPhaseId], references: [id], onDelete: SetNull)
+  workoutTemplate WorkoutTemplate? @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
+  instances       PlannedSession[]
+
+  @@index([athleteId, weekday])
+  @@index([seasonPlanId])
+  @@index([seasonPhaseId])
+}
+
+model SeasonPlan {
+  id                       String         @id @default(cuid())
+  athleteId                String
+  name                     String
+  sportTemplate            SportTemplate  @default(TRIATHLON)
+  startDate                DateTime       @db.Date
+  endDate                  DateTime       @db.Date
+  totalWeeks               Int
+  status                   SeasonStatus   @default(DRAFT)
+  mesocycleLengthWeeks     Int            @default(4)
+  startHours               Float
+  peakHours                Float
+  maxRampPercent           Float          @default(10)
+  deLoadEveryNWeeks        Int            @default(4)
+  deLoadWeekFlags          Json?
+  deLoadVolumePercent      Float          @default(60)
+  deLoadStrategy           DeLoadStrategy @default(VOLUME_ONLY)
+  reduceCountsOnDeLoad     Boolean        @default(true)
+  deLoadCountScalePercent  Float?
+  longRideStartMin         Int            @default(60)
+  longRidePeakMin          Int            @default(180)
+  longRunStartMin          Int            @default(30)
+  longRunPeakMin           Int            @default(90)
+  primaryGoalEventId       String?        @unique
+  setupComplete            Boolean        @default(false)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+
+  athlete           Athlete        @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  primaryGoalEvent  GoalEvent?     @relation("PrimaryGoalEvent", fields: [primaryGoalEventId], references: [id], onDelete: SetNull)
+  phases            SeasonPhase[]
+  weeks             SeasonWeek[]
+  goalEvents        GoalEvent[]    @relation("SeasonGoalEvents")
+  anchorWorkouts    AnchorWorkout[]
+
+  @@index([athleteId, startDate])
+  @@index([athleteId, status])
+}
+
+model GoalEvent {
+  id                       String                @id @default(cuid())
+  athleteId                String
+  seasonPlanId             String
+  name                     String
+  date                     DateTime              @db.Date
+  disciplines              GoalEventDiscipline[]
+  priority                 EventPriority         @default(A)
+  distanceMeters           Float?
+  estimatedDurationMinutes Int?
+  taperDaysBefore          Int?
+  notes                    String?
+  plannedSessionId         String?               @unique
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+
+  athlete          Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  seasonPlan       SeasonPlan        @relation("SeasonGoalEvents", fields: [seasonPlanId], references: [id], onDelete: Cascade)
+  primaryForSeason SeasonPlan?       @relation("PrimaryGoalEvent")
+  plannedSession   PlannedSession?   @relation("GoalEventPrimarySession", fields: [plannedSessionId], references: [id], onDelete: SetNull)
+  calendarSessions PlannedSession[]  @relation("GoalEventCalendarSessions")
+
+  @@index([athleteId, date])
+  @@index([seasonPlanId])
+}
+
+model SeasonPhase {
+  id                 String     @id @default(cuid())
+  seasonPlanId       String
+  name               String
+  sortOrder          Int
+  weekCount          Int
+  phaseKind          PhaseKind
+  color              String     @default("#38bdf8")
+  coachNotes         String?
+  focusMode          FocusMode  @default(PHASE)
+  phaseFocus         PhaseFocus?
+  swimSessionsPerWeek  Int      @default(3)
+  bikeSessionsPerWeek  Int      @default(4)
+  runSessionsPerWeek   Int      @default(3)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  seasonPlan   SeasonPlan              @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
+  mesocycles   SeasonMesocycle[]
+  disciplines  SeasonPhaseDiscipline[]
+  anchorWorkouts AnchorWorkout[]
+
+  @@index([seasonPlanId, sortOrder])
+}
+
+model SeasonPhaseDiscipline {
+  id         String     @id @default(cuid())
+  phaseId    String
+  discipline Discipline
+  focus      PhaseFocus
+
+  phase SeasonPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@unique([phaseId, discipline])
+}
+
+model SeasonMesocycle {
+  id                String @id @default(cuid())
+  phaseId           String
+  name              String
+  index             Int
+  startWeekIndex    Int
+  endWeekIndex      Int
+
+  phase SeasonPhase  @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  weeks SeasonWeek[]
+
+  @@index([phaseId, index])
+}
+
+model SeasonWeek {
+  id               String   @id @default(cuid())
+  seasonPlanId     String
+  weekIndex        Int
+  weekStartDate    DateTime @db.Date
+  isDeLoadWeek     Boolean  @default(false)
+  mesocycleId      String?
+  totalHours       Float
+  swimHours        Float
+  bikeHours        Float
+  runHours         Float
+  zoneMinutes      Json
+  swimSessions     Int
+  bikeSessions     Int
+  runSessions      Int
+  longRideMinutes  Int
+  longRunMinutes   Int
+
+  seasonPlan SeasonPlan       @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
+  mesocycle  SeasonMesocycle? @relation(fields: [mesocycleId], references: [id], onDelete: SetNull)
+
+  @@unique([seasonPlanId, weekIndex])
+  @@index([seasonPlanId, weekStartDate])
+}
+
+model PlannedSession {
+  id                       String               @id @default(cuid())
+  athleteId                String
+  anchorWorkoutId          String?
+  weeklyTemplateItemId     String?
+  goalEventId              String?
+  scheduledDate            DateTime             @db.Date
+  discipline               Discipline
+  title                    String
+  notes                    String?
+  targetZones              Json?
+  distanceMeters           Float?
+  targetSpeedMps           Float?
+  targetPaceSeconds        Float?
+  poolSize                 PoolSize?
+  source                   PlannedSessionSource @default(FLEXIBLE)
+  multisportGroupId        String?
+  sessionIndex             Int?
+  estimatedDurationMinutes Int?
+  zoneAllocationMissing    Boolean              @default(false)
+  linkedActivityId         String?              @unique
+  completedDurationMinutes Float?
+  completedDistanceMeters  Float?
+  completedTargetSpeedMps  Float?
+  completedTargetPaceSeconds Float?
+  completedZones           Json?
+
+  athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  anchorWorkout        AnchorWorkout?              @relation(fields: [anchorWorkoutId], references: [id], onDelete: SetNull)
+  weeklyTemplateItem   WeeklyScheduleTemplateItem? @relation(fields: [weeklyTemplateItemId], references: [id], onDelete: SetNull)
+  goalEvent            GoalEvent?                  @relation("GoalEventCalendarSessions", fields: [goalEventId], references: [id], onDelete: SetNull)
+  primaryForGoalEvent  GoalEvent?                  @relation("GoalEventPrimarySession")
+  structuredWorkout    StructuredWorkout?
+  linkedActivity       SyncedActivity?             @relation(fields: [linkedActivityId], references: [id], onDelete: SetNull)
+
+  @@unique([athleteId, anchorWorkoutId, scheduledDate])
+  @@index([athleteId, scheduledDate])
+  @@index([goalEventId])
+  @@index([multisportGroupId])
+}
+
+model WorkoutFolder {
+  id        String   @id @default(cuid())
+  athleteId String
+  name      String
+  createdAt DateTime @default(now())
+
+  athlete   Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  templates WorkoutTemplate[]
+
+  @@unique([athleteId, name])
+}
+
+model WorkoutTemplate {
+  id         String     @id @default(cuid())
+  athleteId  String
+  folderId   String?
+  discipline Discipline
+  name       String
+  steps      Json
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  athlete Athlete        @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  folder  WorkoutFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  anchors AnchorWorkout[]
+}
+
+model ReusableSegment {
+  id          String      @id @default(cuid())
+  athleteId   String
+  discipline  Discipline
+  segmentType SegmentType
+  name        String
+  steps       Json
+  createdAt   DateTime    @default(now())
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+}
+
+model StructuredWorkout {
+  id               String     @id @default(cuid())
+  athleteId        String
+  plannedSessionId String?    @unique
+  discipline       Discipline
+  steps            Json
+  sourceTemplateId String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  athlete        Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  plannedSession PlannedSession? @relation(fields: [plannedSessionId], references: [id], onDelete: SetNull)
+}
+
+model SurveyResponse {
+  id             String          @id @default(cuid())
+  athleteId      String
+  activityId     String?         @unique
+  rpe            Int?
+  freshness      Int?
+  sleep          Int?
+  motivation     Int?
+  soreness       Int?
+  dayQualityFlag DayQualityFlag?
+  source         SurveySource    @default(PROSPECTIVE)
+  note           String?
+  reminderSent   Boolean         @default(false)
+  createdAt      DateTime        @default(now())
+
+  athlete  Athlete         @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  activity SyncedActivity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+
+  @@index([athleteId, createdAt])
+}
+
+model InteractionInsight {
+  id             String      @id @default(cuid())
+  athleteId      String
+  tier           InsightTier @default(V0)
+  triggerPattern String
+  outcomePattern String
+  sampleSize     Int
+  confidenceNote String
+  headline       String
+  generatedAt    DateTime    @default(now())
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@index([athleteId, generatedAt])
+}
+
+model ConsentGrant {
+  id          String        @id @default(cuid())
+  athleteId   String
+  superUserId String
+  status      ConsentStatus @default(ACTIVE)
+  grantedAt   DateTime      @default(now())
+  revokedAt   DateTime?
+
+  athlete   Athlete @relation("AthleteGrants", fields: [athleteId], references: [id], onDelete: Cascade)
+  superUser User    @relation("SuperUserGrants", fields: [superUserId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, superUserId])
+}
+
+model WeeklyScheduleTemplate {
+  id        String   @id @default(cuid())
+  athleteId String   @unique
+  name      String   @default("Weekly template")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete Athlete                      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  items   WeeklyScheduleTemplateItem[]
+}
+
+model WeeklyScheduleTemplateItem {
+  id              String     @id @default(cuid())
+  templateId      String
+  weekday         Weekday
+  discipline      Discipline
+  title           String
+  durationMinutes Int?
+  distanceMeters  Float?
+  poolSize        PoolSize?
+  sortOrder       Int        @default(0)
+
+  template         WeeklyScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  plannedSessions  PlannedSession[]
+
+  @@index([templateId, weekday, sortOrder])
+}
