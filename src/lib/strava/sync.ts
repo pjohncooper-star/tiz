@@ -1,7 +1,5 @@
+import { upsertSyncedActivity } from "@/lib/activity/upsert-synced";
 import { db } from "@/lib/db";
-import { buildDedupFingerprint } from "@/lib/import/dedup";
-import { tryAutoLinkActivityToPlannedSession } from "@/lib/plan/session-link";
-import { inngest } from "@/inngest/client";
 import type { NormalizedStreams } from "@/lib/zones/compute";
 import {
   mapStravaType,
@@ -64,37 +62,24 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
     streams = {};
   }
 
-  const fingerprint = buildDedupFingerprint(
-    discipline,
-    new Date(activity.start_date),
-    activity.moving_time,
-    activity.distance
-  );
-
-  const synced = await db.syncedActivity.upsert({
-    where: { athleteId_dedupFingerprint: { athleteId, dedupFingerprint: fingerprint } },
-    create: {
-      athleteId,
-      externalId: String(activity.id),
-      dedupFingerprint: fingerprint,
-      discipline,
+  const synced = await upsertSyncedActivity(
+    athleteId,
+    {
       name: activity.name,
+      discipline,
       startTime: new Date(activity.start_date),
       durationSeconds: activity.moving_time,
       distanceMeters: activity.distance,
+      externalId: String(activity.id),
+      rawStreams: streams,
       source: "STRAVA_LIVE",
-      rawStreams: streams,
-      streamsFetched: true,
     },
-    update: {
-      name: activity.name,
-      rawStreams: streams,
-      zoneComputed: false,
-    },
-  });
+    {
+      matchDurationSeconds: activity.moving_time,
+      linkPlannedSession: true,
+    }
+  );
 
-  await inngest.send({ name: "activity/zones.compute", data: { activityId: synced.id } });
-  await tryAutoLinkActivityToPlannedSession(athleteId, synced.id);
   return synced;
 }
 

@@ -1,6 +1,7 @@
 import type { Discipline, DisplayUnit, PlannedSession, PoolSize, SignalType, SyncedActivity } from "@prisma/client";
+import { format } from "date-fns";
 import { resolveActivityNumericMetrics } from "@/lib/activity/summary";
-import { formatDateKey } from "@/lib/dates";
+import { calendarDateFromDb } from "@/lib/dates";
 import type { NormalizedStreams } from "@/lib/zones/compute";
 import { sessionPlannedZoneRollup } from "@/lib/plan/rollup";
 import { hasSessionCompletionOverride } from "@/lib/plan/session-completion";
@@ -203,7 +204,7 @@ export function serializePlannedSessions(
           );
     return {
       id: s.id,
-      scheduledDate: formatDateKey(s.scheduledDate),
+      scheduledDate: format(calendarDateFromDb(s.scheduledDate), "yyyy-MM-dd"),
       discipline: s.discipline,
       title: s.title,
       totalMinutes: resolvedPlannedMinutes,

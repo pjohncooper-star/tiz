@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeActivityStreams } from "./persist";
+import { mergeActivityStreams } from "@/lib/import/persist-helpers";
 import type { NormalizedStreams } from "@/lib/zones/compute";
 
 describe("mergeActivityStreams", () => {

@@ -12,7 +12,13 @@ import { recordedActivityWhere } from "@/lib/import/classify";
 import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
-import { normalizeWeekStart, parseDateKey, WEEK_OPTS } from "@/lib/dates";
+import {
+  calendarDateFromDb,
+  endDateKey,
+  normalizeWeekStart,
+  parseDateKey,
+  WEEK_OPTS,
+} from "@/lib/dates";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { buildWorkoutShadingSettings } from "@/lib/plan/workout-shading";
 import { isPlanningCalendarEnabled } from "@/lib/features";
@@ -21,6 +27,8 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+const CONTEXT_WEEKS = 12;
+const MAX_PAST_WEEKS = 52;
 
 export default async function CalendarPage({
   searchParams,
@@ -43,18 +51,57 @@ export default async function CalendarPage({
     weekParam && DATE_KEY.test(weekParam) ? normalizeWeekStart(weekParam) : null;
 
   const currentWeekStart = startOfWeek(new Date(), WEEK_OPTS);
-  // Default window: recent history + ~6 months ahead (season races, template weeks).
-  const INITIAL_PAST_WEEKS = 8;
-  const INITIAL_FUTURE_WEEKS = 26;
-  let rangeStart = addWeeks(currentWeekStart, -INITIAL_PAST_WEEKS);
-  let rangeEnd = endOfWeek(addWeeks(currentWeekStart, INITIAL_FUTURE_WEEKS), WEEK_OPTS);
+
+  const [activityBounds, plannedBounds, totalActivityCount] = await Promise.all([
+    db.syncedActivity.aggregate({
+      where: { athleteId, ...recordedActivityWhere },
+      _min: { startTime: true },
+      _max: { startTime: true },
+    }),
+    db.plannedSession.aggregate({
+      where: { athleteId },
+      _min: { scheduledDate: true },
+      _max: { scheduledDate: true },
+    }),
+    db.syncedActivity.count({ where: { athleteId, ...recordedActivityWhere } }),
+  ]);
+
+  // Anchor the loaded window on the most recent workout (or today if none).
+  let anchorWeek = currentWeekStart;
+  if (activityBounds._max.startTime) {
+    anchorWeek = startOfWeek(activityBounds._max.startTime, WEEK_OPTS);
+  }
+
+  let rangeStart = addWeeks(anchorWeek, -CONTEXT_WEEKS);
+  let rangeEnd = endOfWeek(addWeeks(anchorWeek, CONTEXT_WEEKS), WEEK_OPTS);
+
+  if (plannedBounds._min.scheduledDate) {
+    const plannedStart = startOfWeek(
+      calendarDateFromDb(plannedBounds._min.scheduledDate),
+      WEEK_OPTS
+    );
+    if (plannedStart < rangeStart) rangeStart = plannedStart;
+  }
+  if (plannedBounds._max.scheduledDate) {
+    const plannedEnd = endOfWeek(
+      calendarDateFromDb(plannedBounds._max.scheduledDate),
+      WEEK_OPTS
+    );
+    if (plannedEnd > rangeEnd) rangeEnd = plannedEnd;
+  }
+
+  const futureFloor = endOfWeek(addWeeks(currentWeekStart, 8), WEEK_OPTS);
+  if (rangeEnd < futureFloor) rangeEnd = futureFloor;
+
+  const earliestAllowed = addWeeks(currentWeekStart, -MAX_PAST_WEEKS);
+  if (rangeStart < earliestAllowed) rangeStart = earliestAllowed;
 
   if (scrollWeekStart) {
     const targetMonday = parseDateKey(scrollWeekStart);
     if (targetMonday < rangeStart) {
       rangeStart = targetMonday;
     }
-    const targetRangeEnd = endOfWeek(addWeeks(targetMonday, 2), WEEK_OPTS);
+    const targetRangeEnd = endOfWeek(addWeeks(targetMonday, CONTEXT_WEEKS), WEEK_OPTS);
     if (targetRangeEnd > rangeEnd) {
       rangeEnd = targetRangeEnd;
     }
@@ -63,13 +110,15 @@ export default async function CalendarPage({
   const from = format(rangeStart, "yyyy-MM-dd");
   const to = format(rangeEnd, "yyyy-MM-dd");
   const fromDate = parseDateKey(from);
-  const toDate = parseDateKey(to);
+  const toDateEnd = endDateKey(to);
+
+  const defaultScrollWeek = scrollWeekStart ?? format(anchorWeek, "yyyy-MM-dd");
 
   const [plannedSessions, activities, allStarts, disciplineSettings] = await Promise.all([
     db.plannedSession.findMany({
       where: {
         athleteId,
-        scheduledDate: { gte: fromDate, lte: toDate },
+        scheduledDate: { gte: fromDate, lte: parseDateKey(to) },
       },
       include: {
         structuredWorkout: true,
@@ -95,7 +144,7 @@ export default async function CalendarPage({
     db.syncedActivity.findMany({
       where: {
         athleteId,
-        startTime: { gte: fromDate, lte: toDate },
+        startTime: { gte: fromDate, lte: toDateEnd },
         ...recordedActivityWhere,
       },
       include: { zoneBreakdowns: { where: { isCanonical: true } } },
@@ -171,10 +220,20 @@ export default async function CalendarPage({
         </Link>
       </div>
 
+      {totalActivityCount > 0 &&
+        activities.length === 0 &&
+        plannedSessions.length === 0 && (
+          <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            No workouts in the loaded date range. Use <strong>Jump to week</strong> and pick your
+            last training day
+            {maxDate ? ` (${maxDate})` : ""}, or scroll to find planned races.
+          </p>
+        )}
+
       <PlanningCalendar
         initialData={initialData}
         currentWeekStart={format(currentWeekStart, "yyyy-MM-dd")}
-        initialScrollWeekStart={scrollWeekStart}
+        initialScrollWeekStart={defaultScrollWeek}
         disciplineSettings={disciplineUnitSettings}
         workoutShadingSettings={workoutShadingSettings}
         activityDates={activityDates}

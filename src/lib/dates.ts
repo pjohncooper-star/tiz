@@ -1,4 +1,4 @@
-import { format, parseISO, startOfDay, startOfWeek } from "date-fns";
+import { endOfDay, format, parseISO, startOfDay, startOfWeek } from "date-fns";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 
@@ -7,6 +7,11 @@ const WEEK_OPTS = { weekStartsOn: 1 as const };
  */
 export function parseDateKey(dateKey: string): Date {
   return startOfDay(parseISO(`${dateKey}T12:00:00`));
+}
+
+/** End of local calendar day for yyyy-MM-dd (inclusive upper bound for timestamps). */
+export function endDateKey(dateKey: string): Date {
+  return endOfDay(parseDateKey(dateKey));
 }
 
 /**

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
-import { serializePlannedSessions, parseDateKey } from "@/lib/plan/calendar/serialize";
+import { endDateKey, parseDateKey } from "@/lib/dates";
+import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
 import type { DisplayUnit } from "@/lib/workout/metrics";
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
 
   const fromDate = parseDateKey(from);
   const toDate = parseDateKey(to);
+  const toDateEnd = endDateKey(to);
   if (toDate < fromDate) {
     return NextResponse.json({ error: "to must be on or after from" }, { status: 400 });
   }
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
     db.syncedActivity.findMany({
       where: {
         athleteId,
-        startTime: { gte: fromDate, lte: toDate },
+        startTime: { gte: fromDate, lte: toDateEnd },
         ...recordedActivityWhere,
       },
       include: { zoneBreakdowns: { where: { isCanonical: true } } },
