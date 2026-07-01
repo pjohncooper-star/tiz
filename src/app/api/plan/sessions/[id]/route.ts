@@ -270,11 +270,18 @@ export async function DELETE(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const linkedActivityId = existing.linkedActivityId;
+
   await db.$transaction(async (tx) => {
     if (existing.structuredWorkout) {
       await tx.structuredWorkout.delete({ where: { id: existing.structuredWorkout.id } });
     }
     await tx.plannedSession.delete({ where: { id } });
+    if (linkedActivityId) {
+      await tx.syncedActivity.delete({
+        where: { id: linkedActivityId, athleteId },
+      });
+    }
   });
 
   return NextResponse.json({ ok: true });

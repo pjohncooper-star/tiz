@@ -333,7 +333,13 @@ export function PlannedSessionEditor({
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this planned session?")) return;
+    const linkedActivityName = activityCompleted?.activities[0]?.name;
+    const confirmMessage = linkedActivityId
+      ? linkedActivityName
+        ? `Delete "${title}" and the linked workout "${linkedActivityName}"? This cannot be undone.`
+        : `Delete "${title}" and the linked completed workout? This cannot be undone.`
+      : `Delete "${title}"? This cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
 
     setDeleting(true);
     const res = await fetch(`/api/plan/sessions/${sessionId}`, { method: "DELETE" });

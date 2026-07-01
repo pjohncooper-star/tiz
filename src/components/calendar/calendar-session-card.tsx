@@ -80,7 +80,10 @@ export function CalendarSessionCard({
     e.preventDefault();
     e.stopPropagation();
     if (deleting) return;
-    if (!confirm(`Delete "${session.title}"?`)) return;
+    const confirmMessage = linked
+      ? `Delete "${session.title}" and the linked workout "${linked.name}"? This cannot be undone.`
+      : `Delete "${session.title}"? This cannot be undone.`;
+    if (!confirm(confirmMessage)) return;
 
     setDeleting(true);
     try {
