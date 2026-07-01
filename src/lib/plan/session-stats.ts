@@ -17,7 +17,7 @@ import {
   derivePlannedMetricsFromPlanningSteps,
   type DerivePlannedMetricsOptions,
 } from "@/lib/workout/planned-metrics-from-steps";
-import { flattenForPlanning, parseWorkoutTree } from "@/lib/workout/workout-tree";
+import { flattenForPlanning, formatDurationHms, parseWorkoutTree } from "@/lib/workout/workout-tree";
 import {
   formatZoneMinutes,
   totalZoneMinutes,
@@ -315,7 +315,17 @@ export function disciplineZoneMinutes(
 }
 
 /** Completed duration for planned-vs-completed: swim = elapsed, bike/run = moving. */
-export function completedComparisonDuration(
+function parseDisplayDurationToSeconds(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(":").map((p) => Number(p.trim()));
+  if (parts.some((p) => !Number.isFinite(p) || p < 0)) return null;
+  if (parts.length === 2) return parts[0]! * 60 + parts[1]!;
+  if (parts.length === 3) return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!;
+  return null;
+}
+
+function completedDurationStatValue(
   stats: SummaryStat[],
   discipline: PlanDiscipline
 ): string | null {
@@ -331,6 +341,27 @@ export function completedComparisonDuration(
     stats.find((s) => s.label === "Duration")?.value ??
     null
   );
+}
+
+export function completedComparisonDuration(
+  completed: CompletedSessionSnapshot,
+  discipline: PlanDiscipline
+): string | null {
+  const minutes = completed.canonical?.durationMinutes;
+  if (minutes != null && minutes > 0) {
+    return formatDurationHms(Math.round(minutes * 60));
+  }
+
+  const raw = completedDurationStatValue(completed.stats, discipline);
+  if (!raw) return null;
+
+  const segments = raw.split(" + ").map((part) => parseDisplayDurationToSeconds(part));
+  if (segments.every((sec) => sec != null)) {
+    const total = segments.reduce((sum, sec) => sum + (sec ?? 0), 0);
+    return total > 0 ? formatDurationHms(total) : null;
+  }
+
+  return raw;
 }
 
 function completedDurationSourceLabel(

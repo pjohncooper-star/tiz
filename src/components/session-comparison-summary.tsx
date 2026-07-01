@@ -165,7 +165,7 @@ export function SessionComparisonSummary({
 
   const durationPlanned = planned.stats.find((s) => s.label === "Duration")?.value ?? null;
   const distancePlanned = planned.stats.find((s) => s.label === "Distance")?.value ?? null;
-  const durationCompleted = completedComparisonDuration(completed.stats, discipline);
+  const durationCompleted = completedComparisonDuration(completed, discipline);
   const extraCompletedRows = extraCompletedSummaryStats(completed.stats, discipline);
 
   const paceLabel = discipline === "BIKE" ? "Avg speed" : "Avg pace";
