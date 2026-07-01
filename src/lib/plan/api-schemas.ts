@@ -290,3 +290,47 @@ export const anchorWorkoutWithSeasonSchema = anchorWorkoutSchema.extend({
   seasonPlanId: z.string().nullable().optional(),
   seasonPhaseId: z.string().nullable().optional(),
 });
+
+export const componentTypeSchema = z.enum([
+  "WARMUP",
+  "PRIMER",
+  "MAIN_SET",
+  "COOLDOWN",
+  "DRILL",
+  "RECOVERY",
+  "OTHER",
+]);
+
+export const createWorkoutComponentSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  discipline: planDisciplineSchema,
+  componentType: componentTypeSchema,
+  notes: z.string().trim().max(2000).nullable().optional(),
+  steps: stepsPayloadSchema.optional(),
+});
+
+export const updateWorkoutComponentSchema = createWorkoutComponentSchema.partial();
+
+export const createProgressionStepSchema = z.object({
+  label: z.string().trim().min(1).max(120),
+  steps: stepsPayloadSchema,
+  orderIndex: z.number().int().nonnegative().optional(),
+});
+
+export const updateProgressionStepSchema = z.object({
+  label: z.string().trim().min(1).max(120).optional(),
+  steps: stepsPayloadSchema.optional(),
+  orderIndex: z.number().int().nonnegative().optional(),
+});
+
+export const applyWorkoutPaletteSchema = z.object({
+  palette: z
+    .array(
+      z.object({
+        componentId: z.string().min(1),
+        progressionStepId: z.string().min(1).nullable().optional(),
+        orderIndex: z.number().int().nonnegative(),
+      })
+    )
+    .min(1),
+});

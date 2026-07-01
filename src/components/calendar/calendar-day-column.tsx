@@ -8,6 +8,7 @@ import { CalendarSessionCard } from "@/components/calendar/calendar-session-card
 import { CalendarActivityGroupCard } from "@/components/calendar/calendar-activity-card";
 import { CalendarPlannedRaceGroupCard } from "@/components/calendar/calendar-planned-race-group-card";
 import { groupPlannedSessions } from "@/lib/plan/group-planned-sessions";
+import { ASSEMBLED_WORKOUT_DRAG_ID } from "@/lib/plan/workout-builder-dnd";
 import { weekDayColumnClass } from "@/components/calendar/week-day-layout";
 import type { WeekActivityGroup } from "@/components/dashboard-week-view";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
@@ -51,6 +52,7 @@ export function CalendarDayColumn({
   const today = isToday(day);
   const hasPlannedSessions = sessions.length > 0;
   const activityDragActive = activeDragId?.startsWith("activity:") ?? false;
+  const workoutDragActive = activeDragId === ASSEMBLED_WORKOUT_DRAG_ID;
 
   function openAdd() {
     onSelectDay();
@@ -142,6 +144,7 @@ export function CalendarDayColumn({
                 workoutShadingSettings={workoutShadingSettings}
                 isDragging={activeDragId === item.session.id}
                 showLinkDropTarget={activityDragActive}
+                showWorkoutDropTarget={workoutDragActive}
                 onUnlinkActivity={onUnlinkActivity}
                 onDeleted={onSessionCreated}
               />

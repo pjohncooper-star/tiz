@@ -32,6 +32,8 @@ import {
   parseActivityDragId,
   parseSessionLinkDropId,
 } from "@/lib/plan/session-link";
+import { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
+import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
@@ -101,6 +103,10 @@ export function PlanningCalendar({
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
+
+  const workoutBuilder = useWorkoutBuilder({
+    onApplied: () => void handleRefresh(),
+  });
 
   const sortedWeeks = useMemo(
     () => [...data.weekStarts].sort(),
@@ -318,6 +324,8 @@ export function PlanningCalendar({
     const { active, over } = event;
     if (!over) return;
 
+    if (await workoutBuilder.handleDragEnd(event)) return;
+
     if (active.data.current?.type === "activity") {
       const activityId = parseActivityDragId(active.id);
       const sessionId =
@@ -499,6 +507,13 @@ export function PlanningCalendar({
                   Edit weekly template
                 </Button>
               </Link>
+              <Button
+                type="button"
+                variant={workoutBuilder.open ? "primary" : "secondary"}
+                onClick={() => workoutBuilder.setOpen((v) => !v)}
+              >
+                Workout builder
+              </Button>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" variant="secondary" onClick={scrollToToday}>
@@ -513,6 +528,13 @@ export function PlanningCalendar({
               </Button>
             </div>
           </div>
+
+          {workoutBuilder.open ? (
+            <WorkoutBuilderPane
+              builder={workoutBuilder}
+              onClose={() => workoutBuilder.setOpen(false)}
+            />
+          ) : null}
 
           {calendarOpen && (
             <div className="mt-3 max-h-[min(70vh,32rem)] overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800">

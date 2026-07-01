@@ -4,6 +4,7 @@ import { ActivitySelfEval } from "@/components/activity-self-eval";
 import { ActivityWorkoutChartCard } from "@/components/activity-workout-chart-card";
 import { ActivityZoneTable } from "@/components/activity-zone-table";
 import { PlannedSessionEditor } from "@/components/planned-session-editor";
+import { SessionComponentProvenance } from "@/components/session-component-provenance";
 import { SessionUploadButton } from "@/components/session-upload-button";
 import { SwimLapPaceChart } from "@/components/swim-lap-pace-chart";
 import { WorkoutStepExecution } from "@/components/workout-step-execution";
@@ -42,7 +43,13 @@ export default async function PlannedSessionPage({
 
   const plannedSession = await db.plannedSession.findFirst({
     where: { id, athleteId },
-    include: { structuredWorkout: true },
+    include: {
+      structuredWorkout: true,
+      sessionComponentInstances: {
+        orderBy: { paletteOrderIndex: "asc" },
+        include: { component: true, progressionStep: true },
+      },
+    },
   });
 
   if (!plannedSession) notFound();
@@ -245,6 +252,8 @@ export default async function PlannedSessionPage({
             />
           </Card>
         ) : null}
+
+        <SessionComponentProvenance instances={plannedSession.sessionComponentInstances} />
       </PlannedSessionEditor>
     </main>
   );

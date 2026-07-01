@@ -347,9 +347,25 @@ async function fullMigration(
     (r) => target.workoutTemplate.create({ data: r })
   );
   await copy(
-    "ReusableSegment",
-    () => source.reusableSegment.findMany({ where: { athleteId } }),
-    (r) => target.reusableSegment.create({ data: r })
+    "WorkoutComponent",
+    () => source.workoutComponent.findMany({ where: { athleteId } }),
+    (r) => target.workoutComponent.create({ data: r })
+  );
+  await copy(
+    "ComponentProgressionStep",
+    () =>
+      source.componentProgressionStep.findMany({
+        where: { component: { athleteId } },
+      }),
+    (r) => target.componentProgressionStep.create({ data: r })
+  );
+  await copy(
+    "SessionComponentInstance",
+    () =>
+      source.sessionComponentInstance.findMany({
+        where: { plannedSession: { athleteId } },
+      }),
+    (r) => target.sessionComponentInstance.create({ data: r })
   );
 
   const seasonPlans = await source.seasonPlan.findMany({ where: { athleteId } });

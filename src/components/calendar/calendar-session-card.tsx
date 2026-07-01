@@ -41,6 +41,7 @@ type CalendarSessionCardProps = {
   onDeleted?: () => void;
   onUnlinkActivity?: (sessionId: string) => void;
   showLinkDropTarget?: boolean;
+  showWorkoutDropTarget?: boolean;
 };
 
 export function CalendarSessionCard({
@@ -50,6 +51,7 @@ export function CalendarSessionCard({
   onDeleted,
   onUnlinkActivity,
   showLinkDropTarget = false,
+  showWorkoutDropTarget = false,
 }: CalendarSessionCardProps) {
   const { attributes, listeners, setNodeRef: setDragRef, transform } = useDraggable({
     id: session.id,
@@ -59,6 +61,17 @@ export function CalendarSessionCard({
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `link:${session.id}`,
     data: { type: "session-link", sessionId: session.id, session },
+  });
+
+  const { setNodeRef: setWorkoutDropRef, isOver: isWorkoutOver } = useDroppable({
+    id: `workout:${session.id}`,
+    data: {
+      type: "session-workout",
+      sessionId: session.id,
+      discipline: session.discipline,
+      source: session.source,
+      hasStructuredWorkout: session.stepCount > 0,
+    },
   });
 
   const [deleting, setDeleting] = useState(false);
@@ -120,66 +133,74 @@ export function CalendarSessionCard({
     }
 
     return (
-      <div
-        ref={(node) => {
-          setDragRef(node);
-          setDropRef(node);
-        }}
-        style={style}
-        className={`flex items-start gap-1 ${cardClassName}`}
-      >
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-          aria-label="Drag to reschedule"
-          {...listeners}
-          {...attributes}
+      <div className={cardClassName}>
+        <div
+          ref={(node) => {
+            setDragRef(node);
+            setDropRef(node);
+            setWorkoutDropRef(node);
+          }}
+          style={style}
+          className="flex items-start gap-1"
         >
-          ⠿
-        </button>
-        <Link
-          href={`/plan/sessions/${session.id}?returnTo=${encodeURIComponent("/calendar")}`}
-          className="min-w-0 flex-1 transition hover:opacity-90"
-        >
-          <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
-          <p className="mt-1 text-xs text-zinc-500">{metaParts.join(" · ")}</p>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-              {linked.legType ??
-                DISCIPLINE_DISPLAY_LABELS[
-                  session.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS
-                ] ??
-                session.discipline}
-            </span>
-            <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              done
-            </span>
-          </div>
-          {session.workoutProfile ? (
-            <WorkoutProfileMiniChart profile={session.workoutProfile} />
-          ) : null}
-        </Link>
-        {onUnlinkActivity ? (
           <button
             type="button"
-            disabled={unlinking}
-            className="shrink-0 rounded px-1 text-[10px] text-zinc-400 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
-            aria-label="Unlink completed workout"
-            onClick={(e) => void handleUnlink(e)}
+            className="mt-0.5 shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
+            aria-label="Drag to reschedule"
+            {...listeners}
+            {...attributes}
           >
-            Unlink
+            ⠿
           </button>
+          <Link
+            href={`/plan/sessions/${session.id}?returnTo=${encodeURIComponent("/calendar")}`}
+            className="min-w-0 flex-1 transition hover:opacity-90"
+          >
+            <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
+            <p className="mt-1 text-xs text-zinc-500">{metaParts.join(" · ")}</p>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                {linked.legType ??
+                  DISCIPLINE_DISPLAY_LABELS[
+                    session.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS
+                  ] ??
+                  session.discipline}
+              </span>
+              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                done
+              </span>
+            </div>
+            {session.workoutProfile ? (
+              <WorkoutProfileMiniChart profile={session.workoutProfile} />
+            ) : null}
+          </Link>
+          {onUnlinkActivity ? (
+            <button
+              type="button"
+              disabled={unlinking}
+              className="shrink-0 rounded px-1 text-[10px] text-zinc-400 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+              aria-label="Unlink completed workout"
+              onClick={(e) => void handleUnlink(e)}
+            >
+              Unlink
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={deleting}
+            className="shrink-0 rounded p-0.5 text-sm leading-none text-zinc-400 hover:bg-red-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+            aria-label={`Delete ${session.title}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => void handleDelete(e)}
+          >
+            ×
+          </button>
+        </div>
+        {showWorkoutDropTarget && session.source !== "RACE" && isWorkoutOver ? (
+          <p className="mt-2 rounded border border-dashed border-sky-400 bg-sky-50/80 px-2 py-1 text-center text-[10px] font-medium text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
+            Drop structured workout
+          </p>
         ) : null}
-        <button
-          type="button"
-          disabled={deleting}
-          className="shrink-0 rounded p-0.5 text-sm leading-none text-zinc-400 hover:bg-red-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-          aria-label={`Delete ${session.title}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => void handleDelete(e)}
-        >
-          ×
-        </button>
       </div>
     );
   }
@@ -189,6 +210,7 @@ export function CalendarSessionCard({
       ref={(node) => {
         setDragRef(node);
         setDropRef(node);
+        setWorkoutDropRef(node);
       }}
       style={style}
       className={cardClassName}
@@ -254,6 +276,11 @@ export function CalendarSessionCard({
       {canAcceptLink && isOver ? (
         <p className="mt-2 rounded border border-dashed border-emerald-400 bg-emerald-50/80 px-2 py-1 text-center text-[10px] font-medium text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
           Drop to link workout
+        </p>
+      ) : null}
+      {showWorkoutDropTarget && session.source !== "RACE" && isWorkoutOver ? (
+        <p className="mt-2 rounded border border-dashed border-sky-400 bg-sky-50/80 px-2 py-1 text-center text-[10px] font-medium text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
+          Drop structured workout
         </p>
       ) : null}
     </div>

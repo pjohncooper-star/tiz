@@ -5,6 +5,7 @@ import { formatDateKey, parseDateKey } from "@/lib/dates";
 import { isSessionPlanningEnabled } from "@/lib/features";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
+import { markComponentsCompleted } from "@/lib/workout/component-library";
 export class SessionLinkError extends Error {
   constructor(
     message: string,
@@ -78,6 +79,7 @@ export async function linkActivityToPlannedSession(
       where: { id: sessionId },
       data: { linkedActivityId: activityId },
     });
+    await markComponentsCompleted(tx, sessionId);
   });
 
   return { sessionId, activityId };
