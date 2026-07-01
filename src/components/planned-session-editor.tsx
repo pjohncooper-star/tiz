@@ -13,7 +13,6 @@ import {
   totalZoneMinuteInputValues,
   zoneMinuteValuesFromDisciplineZones,
   zoneMinuteValuesFromRecord,
-  ZoneMinutePills,
   type ZoneMinuteValues,
 } from "@/components/zone-minute-pills";
 import {
@@ -274,6 +273,31 @@ export function PlannedSessionEditor({
     };
   }
 
+  function applySavedSession(saved: {
+    discipline: Discipline;
+    targetZones: unknown;
+    distanceMeters: number | null;
+    targetSpeedMps: number | null;
+    targetPaceSeconds: number | null;
+    poolSize: PoolSize | null;
+  }) {
+    const budget = sessionBudgetRollup(saved.discipline, saved.targetZones);
+    const nextZones = zoneMinuteValuesFromRecord(parseTargetZones(saved.targetZones));
+    setZoneMinutes(nextZones);
+    setDistanceMeters(saved.distanceMeters);
+    setTargetSpeedMps(saved.targetSpeedMps);
+    setTargetPaceSeconds(saved.targetPaceSeconds);
+    if (saved.discipline === "SWIM" && saved.poolSize) {
+      setPoolSize(saved.poolSize);
+    }
+    setPlannedTriad({
+      durationMinutes: budget.durationMinutes > 0 ? budget.durationMinutes : null,
+      distanceMeters: saved.distanceMeters,
+      targetSpeedMps: saved.discipline === "BIKE" ? saved.targetSpeedMps : null,
+      targetPaceSeconds: saved.discipline === "BIKE" ? null : saved.targetPaceSeconds,
+    });
+  }
+
   async function persistSession(): Promise<boolean> {
     if (!title.trim()) {
       setError("Title is required");
@@ -356,10 +380,27 @@ export function PlannedSessionEditor({
       return false;
     }
 
+    try {
+      const data = (await res.json()) as {
+        session?: {
+          discipline: Discipline;
+          targetZones: unknown;
+          distanceMeters: number | null;
+          targetSpeedMps: number | null;
+          targetPaceSeconds: number | null;
+          poolSize: PoolSize | null;
+        };
+      };
+      if (data.session) {
+        applySavedSession(data.session);
+      }
+    } catch {
+      setZoneMinutes(
+        fitZoneMinuteValuesToDuration(zoneMinutes, plannedTriad.durationMinutes)
+      );
+    }
+
     setCompletedDirty(false);
-    setZoneMinutes(
-      fitZoneMinuteValuesToDuration(zoneMinutes, plannedTriad.durationMinutes)
-    );
     router.refresh();
     return true;
   }
@@ -487,10 +528,23 @@ export function PlannedSessionEditor({
     }
   }
 
-  const liveTargetZones = buildSessionTargetZones(
-    parseZoneMinuteValues(zoneMinutes),
+  function handlePlannedZoneMinutesChange(
+    zone: import("@/components/zone-minute-pills").ZoneNumber,
+    value: string
+  ) {
+    setMetricsFromSteps(false);
+    setZoneMinutes((prev) => ({ ...prev, [zone]: value }));
+  }
+
+  const fittedZoneMinutes = fitZoneMinuteValuesToDuration(
+    zoneMinutes,
     plannedTriad.durationMinutes
   );
+  const liveTargetZones = buildSessionTargetZones(
+    parseZoneMinuteValues(fittedZoneMinutes),
+    plannedTriad.durationMinutes
+  );
+  const structuredWorkoutActive = hasWorkout && !!workoutTree;
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
@@ -563,50 +617,39 @@ export function PlannedSessionEditor({
             Strength session — duration from workout steps; not counted toward endurance TiZ targets.
           </p>
         ) : (
-          <>
-            <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-              <Label>TiZ budget (zone minutes)</Label>
-              {hasWorkout && (
-                <p className="mt-1 text-xs text-zinc-500">
-                  Zone totals and charts use the structured workout. TiZ budget is not applied
-                  while a workout is attached.
-                </p>
-              )}
-              <div className="mt-2">
-                <ZoneMinutePills
-                  values={zoneMinutes}
-                  maxTotalMinutes={durationCap}
-                  onChange={(zone, value) =>
-                    setZoneMinutes((prev) => ({ ...prev, [zone]: value }))
-                  }
-                />
-              </div>
-            </div>
-            <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-              <PlannedSessionStats
-                discipline={discipline as PlanDiscipline}
-                displayUnit={displayUnit}
-                poolSize={sessionPoolSize}
-                targetZones={liveTargetZones}
-                structuredSteps={
-                  hasWorkout && workoutTree ? serializeTree(workoutTree) : undefined
-                }
-                thresholdPaceSeconds={thresholdPaceSeconds}
-                plannedTriad={plannedTriad}
-                completedTriad={completedTriad}
-                onPlannedTriadChange={handlePlannedTriadChange}
-                onCompletedTriadChange={handleCompletedTriadChange}
-                completedZoneMinutes={completedZoneMinutes}
-                onCompletedZoneMinutesChange={handleCompletedZoneMinutesChange}
-                linkedActivityId={linkedActivityId}
-                hasCompletedOverride={hasCompletedOverride}
-                onResetCompletedToActivity={
-                  linkedActivityId ? handleResetCompletedToActivity : undefined
-                }
-                completed={completed}
-              />
-            </div>
-          </>
+          <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            <PlannedSessionStats
+              discipline={discipline as PlanDiscipline}
+              displayUnit={displayUnit}
+              poolSize={sessionPoolSize}
+              targetZones={liveTargetZones}
+              structuredSteps={
+                structuredWorkoutActive ? serializeTree(workoutTree!) : undefined
+              }
+              thresholdPaceSeconds={thresholdPaceSeconds}
+              plannedTriad={plannedTriad}
+              completedTriad={completedTriad}
+              onPlannedTriadChange={handlePlannedTriadChange}
+              onCompletedTriadChange={handleCompletedTriadChange}
+              completedZoneMinutes={completedZoneMinutes}
+              onCompletedZoneMinutesChange={handleCompletedZoneMinutesChange}
+              plannedZoneMinutes={zoneMinutes}
+              onPlannedZoneMinutesChange={handlePlannedZoneMinutesChange}
+              plannedZoneBudgetMinutes={durationCap}
+              hidePlannedZonePills={structuredWorkoutActive}
+              structuredWorkoutWarning={
+                structuredWorkoutActive
+                  ? "Zone totals use the structured workout. TiZ budget pills are hidden while a workout is attached."
+                  : null
+              }
+              linkedActivityId={linkedActivityId}
+              hasCompletedOverride={hasCompletedOverride}
+              onResetCompletedToActivity={
+                linkedActivityId ? handleResetCompletedToActivity : undefined
+              }
+              completed={completed}
+            />
+          </div>
         )}
 
         <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">

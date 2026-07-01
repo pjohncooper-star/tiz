@@ -7,6 +7,7 @@ import { ComparisonMetricsEditor } from "@/components/comparison-metrics-editor"
 import { PlanTizChart } from "@/components/plan-tiz-chart";
 import {
   disciplineZoneMinutesFromPills,
+  fitZoneMinuteValuesToDuration,
   ZoneMinutePills,
   type ZoneMinuteValues,
 } from "@/components/zone-minute-pills";
@@ -44,6 +45,11 @@ export type SessionComparisonSummaryProps = {
   onCompletedTriadChange?: (values: PlannedMetricsTriadValues) => void;
   completedZoneMinutes?: ZoneMinuteValues;
   onCompletedZoneMinutesChange?: (zone: import("@/components/zone-minute-pills").ZoneNumber, value: string) => void;
+  plannedZoneMinutes?: ZoneMinuteValues;
+  onPlannedZoneMinutesChange?: (zone: import("@/components/zone-minute-pills").ZoneNumber, value: string) => void;
+  plannedZoneBudgetMinutes?: number | null;
+  hidePlannedZonePills?: boolean;
+  structuredWorkoutWarning?: string | null;
   linkedActivityId?: string | null;
   hasCompletedOverride?: boolean;
   onResetCompletedToActivity?: () => void;
@@ -112,6 +118,11 @@ export function SessionComparisonSummary({
   onCompletedTriadChange,
   completedZoneMinutes,
   onCompletedZoneMinutesChange,
+  plannedZoneMinutes,
+  onPlannedZoneMinutesChange,
+  plannedZoneBudgetMinutes = null,
+  hidePlannedZonePills = false,
+  structuredWorkoutWarning = null,
   linkedActivityId = null,
   hasCompletedOverride = false,
   onResetCompletedToActivity,
@@ -142,7 +153,16 @@ export function SessionComparisonSummary({
     ]
   );
 
-  const plannedZones = disciplineZoneMinutes(planned.zoneMinutes, discipline);
+  const plannedZones =
+    showPlannedZoneEditor && plannedZoneMinutes
+      ? disciplineZoneMinutesFromPills(
+          fitZoneMinuteValuesToDuration(
+            plannedZoneMinutes,
+            plannedZoneBudgetMinutes ?? plannedTriad?.durationMinutes ?? null
+          ),
+          discipline
+        )
+      : disciplineZoneMinutes(planned.zoneMinutes, discipline);
 
   const showEditable =
     editable &&
@@ -162,6 +182,11 @@ export function SessionComparisonSummary({
   const completedZoneBudgetMinutes = zoneDurationBudgetMinutes(
     completedTriad?.durationMinutes ?? null
   );
+  const showPlannedZoneEditor =
+    showEditable &&
+    plannedZoneMinutes &&
+    onPlannedZoneMinutesChange &&
+    !hidePlannedZonePills;
 
   const durationPlanned = planned.stats.find((s) => s.label === "Duration")?.value ?? null;
   const distancePlanned = planned.stats.find((s) => s.label === "Distance")?.value ?? null;
@@ -242,6 +267,9 @@ export function SessionComparisonSummary({
 
       <div className="mt-5 space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-700">
         <p className="text-xs font-medium text-zinc-500">Zone time by zone</p>
+        {structuredWorkoutWarning ? (
+          <p className="text-xs text-zinc-500">{structuredWorkoutWarning}</p>
+        ) : null}
         <div className="mb-2 grid grid-cols-2 gap-x-6">
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Planned</p>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
@@ -250,7 +278,24 @@ export function SessionComparisonSummary({
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            {plannedZoneTotal > 0 ? (
+            {showPlannedZoneEditor ? (
+              <div className="space-y-3">
+                {plannedZoneTotal > 0 ? (
+                  <PlanTizChart
+                    discipline={discipline as Discipline}
+                    values={plannedZones}
+                    maxMinutes={chartScale}
+                  />
+                ) : (
+                  <ComparisonValue value={null} />
+                )}
+                <ZoneMinutePills
+                  values={plannedZoneMinutes}
+                  maxTotalMinutes={plannedZoneBudgetMinutes}
+                  onChange={onPlannedZoneMinutesChange}
+                />
+              </div>
+            ) : plannedZoneTotal > 0 ? (
               <PlanTizChart
                 discipline={discipline as Discipline}
                 values={plannedZones}

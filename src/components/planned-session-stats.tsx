@@ -24,6 +24,14 @@ type PlannedSessionStatsProps = {
     zone: import("@/components/zone-minute-pills").ZoneNumber,
     value: string
   ) => void;
+  plannedZoneMinutes: ZoneMinuteValues;
+  onPlannedZoneMinutesChange: (
+    zone: import("@/components/zone-minute-pills").ZoneNumber,
+    value: string
+  ) => void;
+  plannedZoneBudgetMinutes: number | null;
+  hidePlannedZonePills?: boolean;
+  structuredWorkoutWarning?: string | null;
   linkedActivityId?: string | null;
   hasCompletedOverride?: boolean;
   onResetCompletedToActivity?: () => void;
@@ -43,6 +51,11 @@ export function PlannedSessionStats({
   onCompletedTriadChange,
   completedZoneMinutes,
   onCompletedZoneMinutesChange,
+  plannedZoneMinutes,
+  onPlannedZoneMinutesChange,
+  plannedZoneBudgetMinutes,
+  hidePlannedZonePills = false,
+  structuredWorkoutWarning = null,
   linkedActivityId,
   hasCompletedOverride,
   onResetCompletedToActivity,
@@ -72,6 +85,11 @@ export function PlannedSessionStats({
         onCompletedTriadChange={onCompletedTriadChange}
         completedZoneMinutes={completedZoneMinutes}
         onCompletedZoneMinutesChange={onCompletedZoneMinutesChange}
+        plannedZoneMinutes={plannedZoneMinutes}
+        onPlannedZoneMinutesChange={onPlannedZoneMinutesChange}
+        plannedZoneBudgetMinutes={plannedZoneBudgetMinutes}
+        hidePlannedZonePills={hidePlannedZonePills}
+        structuredWorkoutWarning={structuredWorkoutWarning}
         linkedActivityId={linkedActivityId}
         hasCompletedOverride={hasCompletedOverride}
         onResetCompletedToActivity={onResetCompletedToActivity}

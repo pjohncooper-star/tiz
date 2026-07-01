@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { format, parseISO } from "date-fns";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import { sessionCardClassName } from "@/lib/plan/workout-shading";
 import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
 import { POOL_SIZE_OPTIONS } from "@/lib/units/discipline-settings";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
+import { formatLinkedSessionCardLines } from "@/lib/plan/calendar/session-card-summary";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 
 function formatMinutes(minutes: number): string {
@@ -18,13 +18,6 @@ function formatMinutes(minutes: number): string {
   const m = Math.round(minutes % 60);
   if (h > 0) return `${h}h ${m}m`;
   return `${Math.round(minutes)}m`;
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
 }
 
 function sourceLabel(source: CalendarPlannedSession["source"]): string {
@@ -124,13 +117,7 @@ export function CalendarSessionCard({
   }
 
   if (linked) {
-    const metaParts = [
-      format(parseISO(linked.startTime), "h:mm a"),
-      formatDuration(linked.durationSeconds),
-    ];
-    if (linked.name.trim() !== session.title.trim()) {
-      metaParts.push(linked.name);
-    }
+    const summaryLines = formatLinkedSessionCardLines(session);
 
     return (
       <div className={cardClassName}>
@@ -157,7 +144,18 @@ export function CalendarSessionCard({
             className="min-w-0 flex-1 transition hover:opacity-90"
           >
             <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
-            <p className="mt-1 text-xs text-zinc-500">{metaParts.join(" · ")}</p>
+            {summaryLines.length > 0 ? (
+              <div className="mt-1 space-y-0.5">
+                {summaryLines.map((line) => (
+                  <p key={line} className="text-xs text-zinc-500">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+            {linked.name.trim() !== session.title.trim() ? (
+              <p className="mt-1 text-xs text-zinc-400">{linked.name}</p>
+            ) : null}
             <div className="mt-1.5 flex flex-wrap gap-1">
               <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                 {linked.legType ??

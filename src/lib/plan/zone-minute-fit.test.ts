@@ -6,7 +6,7 @@ import {
   parseZoneMinuteValues,
   totalZoneMinuteInputValues,
   zoneMinuteValuesFromRecord,
-} from "@/components/zone-minute-pills";
+} from "@/lib/plan/zone-minute-fit";
 
 describe("fitZoneMinuteValuesToDuration", () => {
   it("scales zones proportionally when total exceeds duration", () => {

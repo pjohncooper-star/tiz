@@ -1,11 +1,14 @@
 import type { PlanDiscipline } from "@/lib/plan/session";
 
+import { fitZoneRecordToDuration } from "@/lib/plan/zone-minute-fit";
+
 /** Build TiZ budget zone keys from zone pills and optional session duration. */
 export function buildSessionTargetZones(
   zones: Partial<Record<number, number>>,
   durationMinutes: number | null
 ): Record<string, number> {
-  const zoneEntries = Object.entries(zones) as Array<[string, number]>;
+  const fittedZones = fitZoneRecordToDuration(zones, durationMinutes);
+  const zoneEntries = Object.entries(fittedZones) as Array<[string, number]>;
   const zoneTotal = zoneEntries.reduce((sum, [, m]) => sum + m, 0);
   const sessionDuration = durationMinutes ?? (zoneTotal > 0 ? zoneTotal : null);
 
