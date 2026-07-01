@@ -96,14 +96,9 @@ enum InsightTier {
   V2
 }
 
-enum ComponentType {
-  WARMUP
-  PRIMER
-  MAIN_SET
-  COOLDOWN
-  DRILL
-  RECOVERY
-  OTHER
+enum WorkoutFolderKind {
+  LIBRARY
+  PROGRESSION
 }
 
 enum OnboardingStep {
@@ -256,7 +251,6 @@ model Athlete {
   anchorWorkouts      AnchorWorkout[]
   workoutFolders      WorkoutFolder[]
   workoutTemplates    WorkoutTemplate[]
-  workoutComponents     WorkoutComponent[]
   structuredWorkouts  StructuredWorkout[]
   weeklyScheduleTemplate WeeklyScheduleTemplate?
   surveyResponses     SurveyResponse[]
@@ -605,8 +599,8 @@ model PlannedSession {
   primaryForGoalEvent  GoalEvent?                  @relation("GoalEventPrimarySession")
   structuredWorkout    StructuredWorkout?
   linkedActivity       SyncedActivity?             @relation(fields: [linkedActivityId], references: [id], onDelete: SetNull)
-  sessionComponentInstances SessionComponentInstance[]
-  componentsLastCompleted   WorkoutComponent[]      @relation("ComponentLastCompleted")
+  workoutSource        SessionWorkoutSource?
+  foldersLastCompleted WorkoutFolder[]       @relation("FolderLastCompleted")
 
   @@unique([athleteId, anchorWorkoutId, scheduledDate])
   @@index([athleteId, scheduledDate])
@@ -615,15 +609,28 @@ model PlannedSession {
 }
 
 model WorkoutFolder {
-  id        String   @id @default(cuid())
-  athleteId String
-  name      String
-  createdAt DateTime @default(now())
+  id                      String            @id @default(cuid())
+  athleteId               String
+  parentFolderId          String?
+  name                    String
+  folderKind              WorkoutFolderKind @default(LIBRARY)
+  discipline              Discipline?
+  sortOrder               Int               @default(0)
+  lastCompletedAt         DateTime?
+  lastCompletedTemplateId String?
+  lastCompletedSessionId  String?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
 
-  athlete   Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  templates WorkoutTemplate[]
+  athlete               Athlete           @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  parentFolder          WorkoutFolder?    @relation("FolderTree", fields: [parentFolderId], references: [id], onDelete: Cascade)
+  childFolders          WorkoutFolder[]   @relation("FolderTree")
+  templates             WorkoutTemplate[]
+  lastCompletedTemplate WorkoutTemplate?  @relation("FolderLastCompleted", fields: [lastCompletedTemplateId], references: [id], onDelete: SetNull)
+  lastCompletedSession  PlannedSession?   @relation("FolderLastCompleted", fields: [lastCompletedSessionId], references: [id], onDelete: SetNull)
+  sessionSources        SessionWorkoutSource[]
 
-  @@unique([athleteId, name])
+  @@index([athleteId, parentFolderId, sortOrder])
 }
 
 model WorkoutTemplate {
@@ -633,62 +640,33 @@ model WorkoutTemplate {
   discipline Discipline
   name       String
   steps      Json
+  sortOrder  Int?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  athlete Athlete        @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  folder  WorkoutFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  anchors AnchorWorkout[]
+  athlete              Athlete                @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  folder               WorkoutFolder?         @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  anchors              AnchorWorkout[]
+  foldersLastCompleted WorkoutFolder[]        @relation("FolderLastCompleted")
+  sessionSources       SessionWorkoutSource[]
+
+  @@unique([folderId, sortOrder])
+  @@index([folderId])
 }
 
-model WorkoutComponent {
-  id                     String        @id @default(cuid())
-  athleteId              String
-  discipline             Discipline
-  componentType          ComponentType
-  name                   String
-  notes                  String?
-  steps                  Json
-  lastCompletedAt        DateTime?
-  lastCompletedSessionId String?
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-
-  athlete              Athlete                    @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  progressionSteps     ComponentProgressionStep[]
-  sessionInstances     SessionComponentInstance[]
-  lastCompletedSession PlannedSession?            @relation("ComponentLastCompleted", fields: [lastCompletedSessionId], references: [id], onDelete: SetNull)
-
-  @@index([athleteId, discipline, componentType])
-}
-
-model ComponentProgressionStep {
-  id          String @id @default(cuid())
-  componentId String
-  orderIndex  Int
-  label       String
-  steps       Json
-
-  component        WorkoutComponent           @relation(fields: [componentId], references: [id], onDelete: Cascade)
-  sessionInstances SessionComponentInstance[]
-
-  @@unique([componentId, orderIndex])
-}
-
-model SessionComponentInstance {
+model SessionWorkoutSource {
   id                String   @id @default(cuid())
-  plannedSessionId  String
-  componentId       String
-  progressionStepId String?
-  paletteOrderIndex Int
+  plannedSessionId  String   @unique
+  folderId          String?
+  workoutTemplateId String
+  sortOrder         Int?
   appliedAt         DateTime @default(now())
 
-  plannedSession  PlannedSession            @relation(fields: [plannedSessionId], references: [id], onDelete: Cascade)
-  component       WorkoutComponent          @relation(fields: [componentId], references: [id], onDelete: Cascade)
-  progressionStep ComponentProgressionStep? @relation(fields: [progressionStepId], references: [id], onDelete: SetNull)
+  plannedSession  PlannedSession  @relation(fields: [plannedSessionId], references: [id], onDelete: Cascade)
+  folder          WorkoutFolder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  workoutTemplate WorkoutTemplate @relation(fields: [workoutTemplateId], references: [id], onDelete: Cascade)
 
-  @@index([plannedSessionId])
-  @@index([componentId])
+  @@index([workoutTemplateId])
 }
 
 model StructuredWorkout {

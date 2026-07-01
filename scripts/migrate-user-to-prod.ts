@@ -347,25 +347,12 @@ async function fullMigration(
     (r) => target.workoutTemplate.create({ data: r })
   );
   await copy(
-    "WorkoutComponent",
-    () => source.workoutComponent.findMany({ where: { athleteId } }),
-    (r) => target.workoutComponent.create({ data: r })
-  );
-  await copy(
-    "ComponentProgressionStep",
+    "SessionWorkoutSource",
     () =>
-      source.componentProgressionStep.findMany({
-        where: { component: { athleteId } },
-      }),
-    (r) => target.componentProgressionStep.create({ data: r })
-  );
-  await copy(
-    "SessionComponentInstance",
-    () =>
-      source.sessionComponentInstance.findMany({
+      source.sessionWorkoutSource.findMany({
         where: { plannedSession: { athleteId } },
       }),
-    (r) => target.sessionComponentInstance.create({ data: r })
+    (r) => target.sessionWorkoutSource.create({ data: r })
   );
 
   const seasonPlans = await source.seasonPlan.findMany({ where: { athleteId } });

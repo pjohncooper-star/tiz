@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { applyWorkoutPaletteSchema } from "@/lib/plan/api-schemas";
+import { applyWorkoutTemplateSchema } from "@/lib/plan/api-schemas";
 import {
-  applyWorkoutPaletteToSession,
+  applyWorkoutTemplateToSession,
   ApplyWorkoutError,
-} from "@/lib/workout/apply-workout-palette";
+} from "@/lib/workout/apply-workout-template";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -24,16 +24,16 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = applyWorkoutPaletteSchema.safeParse(body);
+  const parsed = applyWorkoutTemplateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   try {
-    const updated = await applyWorkoutPaletteToSession(
+    const updated = await applyWorkoutTemplateToSession(
       athleteId,
       sessionId,
-      parsed.data.palette
+      parsed.data.workoutTemplateId
     );
     return NextResponse.json({ session: updated });
   } catch (e) {

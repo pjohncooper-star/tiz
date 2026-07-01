@@ -29,17 +29,20 @@ function isSessionApiPath(pathname: string): boolean {
   return pathname.startsWith("/api/plan/sessions");
 }
 
-function isWorkoutComponentsPath(pathname: string): boolean {
+function isWorkoutLibraryPath(pathname: string): boolean {
   return (
+    pathname === "/plan/workouts" ||
+    pathname.startsWith("/plan/workouts/") ||
+    pathname.startsWith("/api/plan/workout-folders") ||
     pathname === "/plan/components" ||
-    pathname.startsWith("/plan/components/") ||
-    pathname.startsWith("/api/plan/components")
+    pathname.startsWith("/plan/components/")
   );
 }
 
 function isPlanBuilderApiPath(pathname: string): boolean {
   if (pathname.startsWith("/api/plan/calendar")) return false;
   if (pathname.startsWith("/api/plan/sessions")) return false;
+  if (pathname.startsWith("/api/plan/workout-folders")) return false;
   if (pathname.startsWith("/api/plan/components")) return false;
   return pathname.startsWith("/api/plan");
 }
@@ -76,7 +79,7 @@ export default auth((req) => {
     return blockApi();
   }
 
-  if (!sessions && isWorkoutComponentsPath(pathname)) {
+  if (!sessions && isWorkoutLibraryPath(pathname)) {
     return pathname.startsWith("/api/") ? blockApi() : blockPage(req);
   }
 

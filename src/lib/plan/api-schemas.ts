@@ -291,46 +291,45 @@ export const anchorWorkoutWithSeasonSchema = anchorWorkoutSchema.extend({
   seasonPhaseId: z.string().nullable().optional(),
 });
 
-export const componentTypeSchema = z.enum([
-  "WARMUP",
-  "PRIMER",
-  "MAIN_SET",
-  "COOLDOWN",
-  "DRILL",
-  "RECOVERY",
-  "OTHER",
-]);
+export const applyWorkoutTemplateSchema = z.object({
+  workoutTemplateId: z.string().min(1),
+});
 
-export const createWorkoutComponentSchema = z.object({
+export const createWorkoutFolderSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  parentFolderId: z.string().min(1).nullable().optional(),
+  folderKind: z.enum(["LIBRARY", "PROGRESSION"]).optional(),
+  discipline: planDisciplineSchema.nullable().optional(),
+  sortOrder: z.number().int().nonnegative().optional(),
+});
+
+export const updateWorkoutFolderSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  parentFolderId: z.string().min(1).nullable().optional(),
+  discipline: planDisciplineSchema.nullable().optional(),
+  sortOrder: z.number().int().nonnegative().optional(),
+});
+
+export const createFolderWorkoutSchema = z.object({
   name: z.string().trim().min(1).max(200),
   discipline: planDisciplineSchema,
-  componentType: componentTypeSchema,
-  notes: z.string().trim().max(2000).nullable().optional(),
   steps: stepsPayloadSchema.optional(),
+  sortOrder: z.number().int().nonnegative().optional(),
 });
 
-export const updateWorkoutComponentSchema = createWorkoutComponentSchema.partial();
-
-export const createProgressionStepSchema = z.object({
-  label: z.string().trim().min(1).max(120),
-  steps: stepsPayloadSchema,
-  orderIndex: z.number().int().nonnegative().optional(),
-});
-
-export const updateProgressionStepSchema = z.object({
-  label: z.string().trim().min(1).max(120).optional(),
+export const updateFolderWorkoutSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  discipline: planDisciplineSchema.optional(),
   steps: stepsPayloadSchema.optional(),
-  orderIndex: z.number().int().nonnegative().optional(),
+  sortOrder: z.number().int().nonnegative().optional(),
+  folderId: z.string().min(1).nullable().optional(),
 });
 
-export const applyWorkoutPaletteSchema = z.object({
-  palette: z
-    .array(
-      z.object({
-        componentId: z.string().min(1),
-        progressionStepId: z.string().min(1).nullable().optional(),
-        orderIndex: z.number().int().nonnegative(),
-      })
-    )
-    .min(1),
+export const reorderFolderWorkoutsSchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1),
+});
+
+export const reorderFoldersSchema = z.object({
+  parentFolderId: z.string().min(1).nullable(),
+  orderedIds: z.array(z.string().min(1)).min(1),
 });

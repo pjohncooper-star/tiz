@@ -15,7 +15,7 @@ import {
 } from "@/lib/plan/api-schemas";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
-import { markComponentsCompleted } from "@/lib/workout/component-library";
+import { markFolderWorkoutCompleted } from "@/lib/workout/workout-folder-library";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -250,7 +250,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       },
       include: { structuredWorkout: true },
     });
-    await markComponentsCompleted(tx, id);
+    await markFolderWorkoutCompleted(tx, id);
     return updated;
   });
 

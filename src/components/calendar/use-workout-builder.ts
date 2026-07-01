@@ -2,146 +2,122 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEndEvent } from "@dnd-kit/core";
-import type { ComponentType, Discipline } from "@prisma/client";
+import type { Discipline } from "@prisma/client";
 import {
-  mergePaletteIntoTree,
-  progressionLabel,
-  resolveComponentSteps,
-  type PaletteApplyItem,
-} from "@/lib/workout/component-library";
+  findFolderInTree,
+  type FolderTreeNode,
+} from "@/lib/workout/workout-folder-library";
+import { templateNodes } from "@/lib/workout/apply-workout-template";
 import {
   ASSEMBLED_WORKOUT_DRAG_ID,
   isAssembledWorkoutDrag,
-  parseComponentLibraryDragId,
-  parsePaletteItemDragId,
   parseWorkoutSessionDropId,
 } from "@/lib/plan/workout-builder-dnd";
 import type { WorkoutNode } from "@/lib/workout/workout-tree";
 
-export type WorkoutComponentSummary = {
-  id: string;
-  name: string;
+export type SelectedLibraryWorkout = {
+  templateId: string;
+  folderId: string;
+  folderName: string;
+  workoutName: string;
   discipline: Discipline;
-  componentType: ComponentType;
-  steps: unknown;
-  progressionSteps: { id: string; label: string; orderIndex: number; steps: unknown }[];
-};
-
-export type ClientPaletteItem = {
-  clientId: string;
-  componentId: string;
-  componentName: string;
-  componentType: ComponentType;
-  progressionStepId: string | null;
-  progressionLabel: string;
+  label: string;
+  nodes: WorkoutNode[];
 };
 
 export type ProgressionPickerState = {
-  component: WorkoutComponentSummary;
-  onSelect: (progressionStepId: string | null, label: string) => void;
+  folder: FolderTreeNode;
+  onSelect: (workout: { id: string; name: string }) => void;
 } | null;
 
-function newClientId() {
-  return `p-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function useWorkoutBuilder(options: {
-  onApplied?: () => void;
-}) {
+export function useWorkoutBuilder(options: { onApplied?: () => void }) {
   const [open, setOpen] = useState(false);
   const [discipline, setDiscipline] = useState<Discipline>("RUN");
-  const [components, setComponents] = useState<WorkoutComponentSummary[]>([]);
-  const [palette, setPalette] = useState<ClientPaletteItem[]>([]);
+  const [tree, setTree] = useState<FolderTreeNode[]>([]);
+  const [loadingTree, setLoadingTree] = useState(false);
+  const [selected, setSelected] = useState<SelectedLibraryWorkout | null>(null);
   const [picker, setPicker] = useState<ProgressionPickerState>(null);
-  const [loadingComponents, setLoadingComponents] = useState(false);
 
-  const loadComponents = useCallback(async () => {
-    setLoadingComponents(true);
+  const loadTree = useCallback(async () => {
+    setLoadingTree(true);
     try {
-      const res = await fetch(`/api/plan/components?discipline=${discipline}`);
+      const res = await fetch(`/api/plan/workout-folders?tree=1&discipline=${discipline}`);
       if (!res.ok) return;
-      const data = (await res.json()) as { components: WorkoutComponentSummary[] };
-      setComponents(data.components);
+      const data = (await res.json()) as { tree: FolderTreeNode[] };
+      setTree(data.tree);
     } finally {
-      setLoadingComponents(false);
+      setLoadingTree(false);
     }
   }, [discipline]);
 
   useEffect(() => {
-    if (open) void loadComponents();
-  }, [open, loadComponents]);
+    if (open) void loadTree();
+  }, [open, loadTree]);
 
-  const mergedNodes = useMemo(() => {
-    const groups: WorkoutNode[][] = [];
-    for (const item of palette) {
-      const component = components.find((c) => c.id === item.componentId);
-      if (!component) continue;
-      groups.push(resolveComponentSteps(component, item.progressionStepId));
-    }
-    return mergePaletteIntoTree(groups).nodes;
-  }, [palette, components]);
+  const mergedNodes = useMemo(() => selected?.nodes ?? [], [selected]);
 
-  const addToPalette = useCallback(
-    (component: WorkoutComponentSummary, progressionStepId: string | null) => {
-      const label = progressionLabel(
-        component.name,
-        progressionStepId,
-        component.progressionSteps
+  const selectWorkout = useCallback(
+    async (folderId: string, templateId: string, workoutName: string) => {
+      const folder = findFolderInTree(tree, folderId);
+      if (!folder) return;
+      const res = await fetch(
+        `/api/plan/workout-folders/${folderId}/workouts/${templateId}`
       );
-      setPalette((prev) => [
-        ...prev,
-        {
-          clientId: newClientId(),
-          componentId: component.id,
-          componentName: component.name,
-          componentType: component.componentType,
-          progressionStepId,
-          progressionLabel: label,
-        },
-      ]);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        workout: { id: string; name: string; discipline: Discipline; steps: unknown };
+      };
+      const nodes = templateNodes(data.workout);
+      setSelected({
+        templateId,
+        folderId,
+        folderName: folder.name,
+        workoutName,
+        discipline: data.workout.discipline,
+        label: `${folder.name} · ${workoutName}`,
+        nodes,
+      });
     },
-    []
+    [tree]
   );
 
-  const openPicker = useCallback(
-    (component: WorkoutComponentSummary) => {
+  const openFolder = useCallback(
+    (folder: FolderTreeNode) => {
+      if (folder.workouts.length === 0) return;
+      if (folder.workouts.length === 1) {
+        const w = folder.workouts[0]!;
+        void selectWorkout(folder.id, w.id, w.name);
+        return;
+      }
       setPicker({
-        component,
-        onSelect: (progressionStepId, label) => {
-          addToPalette(component, progressionStepId);
+        folder,
+        onSelect: (workout) => {
+          void selectWorkout(folder.id, workout.id, workout.name);
           setPicker(null);
         },
       });
     },
-    [addToPalette]
+    [selectWorkout]
   );
-
-  const paletteApplyPayload = useCallback((): PaletteApplyItem[] => {
-    return palette.map((item, index) => ({
-      componentId: item.componentId,
-      progressionStepId: item.progressionStepId,
-      orderIndex: index,
-    }));
-  }, [palette]);
 
   const applyToSession = useCallback(
     async (sessionId: string) => {
-      if (palette.length === 0) return false;
+      if (!selected) return false;
       const res = await fetch(`/api/plan/sessions/${sessionId}/apply-workout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ palette: paletteApplyPayload() }),
+        body: JSON.stringify({ workoutTemplateId: selected.templateId }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         alert(data.error ?? "Could not apply workout");
         return false;
       }
-      setPalette([]);
+      setSelected(null);
       options.onApplied?.();
       return true;
     },
-    [palette, paletteApplyPayload, options]
+    [selected, options]
   );
 
   const handleDragEnd = useCallback(
@@ -150,17 +126,15 @@ export function useWorkoutBuilder(options: {
       const { active, over } = event;
       if (!over) return false;
 
-      const activeType = active.data.current?.type as string | undefined;
-
       if (isAssembledWorkoutDrag(active.id)) {
         const sessionId =
           parseWorkoutSessionDropId(over.id) ??
           (over.data.current?.type === "session-workout"
             ? (over.data.current.sessionId as string)
             : null);
-        if (!sessionId) return false;
+        if (!sessionId || !selected) return false;
         const sessionDiscipline = over.data.current?.discipline as Discipline | undefined;
-        if (sessionDiscipline && sessionDiscipline !== discipline) {
+        if (sessionDiscipline && sessionDiscipline !== selected.discipline) {
           alert("Workout discipline does not match session");
           return true;
         }
@@ -178,37 +152,9 @@ export function useWorkoutBuilder(options: {
         return true;
       }
 
-      if (activeType === "workout-component") {
-        const componentId = parseComponentLibraryDragId(active.id);
-        if (!componentId) return false;
-        const overType = over.data.current?.type as string | undefined;
-        if (overType !== "palette-drop" && overType !== "palette-item") return false;
-        const component = components.find((c) => c.id === componentId);
-        if (component) openPicker(component);
-        return true;
-      }
-
-      if (activeType === "palette-item") {
-        const clientId = parsePaletteItemDragId(active.id);
-        if (!clientId) return false;
-        const overClientId = parsePaletteItemDragId(over.id);
-        if (!overClientId || clientId === overClientId) return false;
-        setPalette((prev) => {
-          const from = prev.findIndex((p) => p.clientId === clientId);
-          const to = prev.findIndex((p) => p.clientId === overClientId);
-          if (from < 0 || to < 0) return prev;
-          const next = [...prev];
-          const [moved] = next.splice(from, 1);
-          if (!moved) return prev;
-          next.splice(to, 0, moved);
-          return next;
-        });
-        return true;
-      }
-
       return false;
     },
-    [open, components, discipline, openPicker, applyToSession]
+    [open, selected, applyToSession]
   );
 
   return {
@@ -216,15 +162,16 @@ export function useWorkoutBuilder(options: {
     setOpen,
     discipline,
     setDiscipline,
-    components,
-    loadingComponents,
-    palette,
-    setPalette,
-    mergedNodes,
+    tree,
+    loadingTree,
+    selected,
+    setSelected,
     picker,
     setPicker,
-    openPicker,
-    loadComponents,
+    openFolder,
+    selectWorkout,
+    loadTree,
+    mergedNodes,
     handleDragEnd,
     assembledDragId: ASSEMBLED_WORKOUT_DRAG_ID,
   };
