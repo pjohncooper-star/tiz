@@ -99,7 +99,7 @@ export function ComparisonMetricsEditor({
             <Input
               type="number"
               min={0}
-              step={discipline === "SWIM" ? (swimUnit === "METRIC" ? 50 : 100) : 0.1}
+              step="any"
               className={FIELD_CLASS}
               aria-label="Planned distance"
               value={plannedTriad.distanceInput()}
@@ -108,7 +108,7 @@ export function ComparisonMetricsEditor({
             <Input
               type="number"
               min={0}
-              step={discipline === "SWIM" ? (swimUnit === "METRIC" ? 50 : 100) : 0.1}
+              step="any"
               className={FIELD_CLASS}
               aria-label="Completed distance"
               value={completedTriad.distanceInput()}

@@ -249,7 +249,7 @@ export function PlannedMetricsFields({
           <input
             type="number"
             min={0}
-            step={discipline === "SWIM" ? (effectiveUnit === "METRIC" ? 50 : 100) : 0.1}
+            step="any"
             className={COMPACT_FIELD}
             value={distanceInput}
             onChange={(e) =>
@@ -275,7 +275,7 @@ export function PlannedMetricsFields({
           <Input
             type="number"
             min={0}
-            step={discipline === "SWIM" ? (effectiveUnit === "METRIC" ? 50 : 100) : 0.1}
+            step="any"
             value={distanceInput}
             onChange={(e) =>
               applyTriad("distance", {

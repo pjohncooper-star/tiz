@@ -288,17 +288,18 @@ export function PlannedSessionEditor({
       }
       body.targetZones = budget.zones;
 
-      const completedPayload = buildCompletedPayload();
-      if (!completedPayload.ok) {
-        setSaving(false);
-        return false;
-      }
-      if ("clear" in completedPayload && completedPayload.clear) {
-        body.clearCompletedOverrides = true;
-        setHasCompletedOverride(false);
-      } else if ("data" in completedPayload) {
-        Object.assign(body, completedPayload.data);
-        setHasCompletedOverride(true);
+      if (hasCompletedOverride) {
+        const completedPayload = buildCompletedPayload();
+        if (!completedPayload.ok) {
+          setSaving(false);
+          return false;
+        }
+        if ("clear" in completedPayload && completedPayload.clear) {
+          body.clearCompletedOverrides = true;
+          setHasCompletedOverride(false);
+        } else if ("data" in completedPayload) {
+          Object.assign(body, completedPayload.data);
+        }
       }
     }
 
@@ -316,7 +317,18 @@ export function PlannedSessionEditor({
 
     setSaving(false);
     if (!res.ok) {
-      setError("Could not save session");
+      let message = "Could not save session";
+      try {
+        const data = (await res.json()) as { error?: unknown };
+        if (typeof data.error === "string") {
+          message = data.error;
+        } else if (data.error && typeof data.error === "object") {
+          message = "Could not save session — check your inputs";
+        }
+      } catch {
+        // ignore parse errors
+      }
+      setError(message);
       return false;
     }
 
@@ -411,6 +423,19 @@ export function PlannedSessionEditor({
 
   const totalMinutes = workoutTree ? totalTreeDurationMinutes(workoutTree.nodes) : 0;
   const durationCap = plannedTriad.durationMinutes ?? null;
+
+  function handleCompletedTriadChange(values: PlannedMetricsTriadValues) {
+    setHasCompletedOverride(true);
+    setCompletedTriad(values);
+  }
+
+  function handleCompletedZoneMinutesChange(
+    zone: import("@/components/zone-minute-pills").ZoneNumber,
+    value: string
+  ) {
+    setHasCompletedOverride(true);
+    setCompletedZoneMinutes((prev) => ({ ...prev, [zone]: value }));
+  }
 
   function handlePlannedTriadChange(values: PlannedMetricsTriadValues) {
     setMetricsFromSteps(false);
@@ -533,11 +558,9 @@ export function PlannedSessionEditor({
                 plannedTriad={plannedTriad}
                 completedTriad={completedTriad}
                 onPlannedTriadChange={handlePlannedTriadChange}
-                onCompletedTriadChange={setCompletedTriad}
+                onCompletedTriadChange={handleCompletedTriadChange}
                 completedZoneMinutes={completedZoneMinutes}
-                onCompletedZoneMinutesChange={(zone, value) =>
-                  setCompletedZoneMinutes((prev) => ({ ...prev, [zone]: value }))
-                }
+                onCompletedZoneMinutesChange={handleCompletedZoneMinutesChange}
                 linkedActivityId={linkedActivityId}
                 hasCompletedOverride={hasCompletedOverride}
                 onResetCompletedToActivity={
