@@ -17,6 +17,7 @@ import { parseWorkoutTree } from "@/lib/workout/steps";
 import { unitSettingsForDiscipline, poolSizeForSwimStep } from "@/lib/units/discipline-settings";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
+import { readApiError } from "@/lib/api/client-error";
 
 type ProgressionStep = {
   id?: string;
@@ -80,13 +81,19 @@ export function WorkoutComponentEditor({
   const poolSize = poolSizeForSwimStep(unitSettings.poolSize);
 
   async function saveComponent() {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("Name is required");
+      return;
+    }
+
     setSaving(true);
     setError(null);
     const body = {
-      name,
+      name: trimmedName,
       discipline,
       componentType,
-      notes: notes || null,
+      notes: notes.trim() || null,
       steps: serializeWorkoutTree(tree),
     };
 
@@ -104,7 +111,13 @@ export function WorkoutComponentEditor({
           });
 
     if (!res.ok) {
-      setError("Could not save component");
+      const data = await res.json().catch(() => null);
+      const message = readApiError(data, "Could not save component");
+      setError(
+        res.status === 404
+          ? "Workout components are not available in this environment. If you self-host, enable session planning features and run the workout components migration."
+          : message
+      );
       setSaving(false);
       return;
     }
@@ -114,22 +127,28 @@ export function WorkoutComponentEditor({
 
     for (const step of progressionSteps) {
       const stepBody = {
-        label: step.label,
+        label: step.label.trim() || `Variant ${step.orderIndex + 1}`,
         steps: serializeWorkoutTree(step.steps),
         orderIndex: step.orderIndex,
       };
-      if (step.id) {
-        await fetch(`/api/plan/components/${id}/progression/${step.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(stepBody),
-        });
-      } else {
-        await fetch(`/api/plan/components/${id}/progression`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(stepBody),
-        });
+      const stepRes = step.id
+        ? await fetch(`/api/plan/components/${id}/progression/${step.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(stepBody),
+          })
+        : await fetch(`/api/plan/components/${id}/progression`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(stepBody),
+          });
+      if (!stepRes.ok) {
+        const stepData = await stepRes.json().catch(() => null);
+        setError(
+          readApiError(stepData, "Component saved, but a progression variant could not be saved.")
+        );
+        setSaving(false);
+        return;
       }
     }
 

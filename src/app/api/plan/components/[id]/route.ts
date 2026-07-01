@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { updateWorkoutComponentSchema } from "@/lib/plan/api-schemas";
 import { serializeComponentSteps } from "@/lib/workout/apply-workout-palette";
+import { workoutComponentDbErrorMessage } from "@/lib/workout/component-api-errors";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -53,26 +54,34 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const component = await db.workoutComponent.update({
-    where: { id },
-    data: {
-      ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
-      ...(parsed.data.discipline !== undefined ? { discipline: parsed.data.discipline } : {}),
-      ...(parsed.data.componentType !== undefined
-        ? { componentType: parsed.data.componentType }
-        : {}),
-      ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
-      ...(parsed.data.steps !== undefined
-        ? { steps: serializeComponentSteps(parsed.data.steps) }
-        : {}),
-    },
-    include: {
-      progressionSteps: { orderBy: { orderIndex: "asc" } },
-      lastCompletedSession: { select: { id: true, title: true, scheduledDate: true } },
-    },
-  });
+  try {
+    const component = await db.workoutComponent.update({
+      where: { id },
+      data: {
+        ...(parsed.data.name !== undefined ? { name: parsed.data.name } : {}),
+        ...(parsed.data.discipline !== undefined ? { discipline: parsed.data.discipline } : {}),
+        ...(parsed.data.componentType !== undefined
+          ? { componentType: parsed.data.componentType }
+          : {}),
+        ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+        ...(parsed.data.steps !== undefined
+          ? { steps: serializeComponentSteps(parsed.data.steps) }
+          : {}),
+      },
+      include: {
+        progressionSteps: { orderBy: { orderIndex: "asc" } },
+        lastCompletedSession: { select: { id: true, title: true, scheduledDate: true } },
+      },
+    });
 
-  return NextResponse.json({ component });
+    return NextResponse.json({ component });
+  } catch (error) {
+    console.error("update workout component failed:", error);
+    return NextResponse.json(
+      { error: workoutComponentDbErrorMessage(error) },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(_request: Request, context: RouteContext) {

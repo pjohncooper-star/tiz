@@ -10,6 +10,7 @@ import {
 } from "@/lib/plan/api-schemas";
 import { serializeComponentSteps } from "@/lib/workout/apply-workout-palette";
 import { defaultLeafStep, WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
+import { workoutComponentDbErrorMessage } from "@/lib/workout/component-api-errors";
 
 const listQuerySchema = z.object({
   discipline: planDisciplineSchema.optional(),
@@ -75,17 +76,25 @@ export async function POST(request: Request) {
     parsed.data.steps ??
     ({ version: WORKOUT_TREE_VERSION, nodes: [defaultLeafStep()] } as const);
 
-  const component = await db.workoutComponent.create({
-    data: {
-      athleteId,
-      name: parsed.data.name,
-      discipline: parsed.data.discipline,
-      componentType: parsed.data.componentType,
-      notes: parsed.data.notes ?? null,
-      steps: serializeComponentSteps(steps),
-    },
-    include: { progressionSteps: { orderBy: { orderIndex: "asc" } } },
-  });
+  try {
+    const component = await db.workoutComponent.create({
+      data: {
+        athleteId,
+        name: parsed.data.name,
+        discipline: parsed.data.discipline,
+        componentType: parsed.data.componentType,
+        notes: parsed.data.notes ?? null,
+        steps: serializeComponentSteps(steps),
+      },
+      include: { progressionSteps: { orderBy: { orderIndex: "asc" } } },
+    });
 
-  return NextResponse.json({ component }, { status: 201 });
+    return NextResponse.json({ component }, { status: 201 });
+  } catch (error) {
+    console.error("create workout component failed:", error);
+    return NextResponse.json(
+      { error: workoutComponentDbErrorMessage(error) },
+      { status: 500 }
+    );
+  }
 }
