@@ -1,5 +1,5 @@
 import type { Discipline } from "@prisma/client";
-import { isBefore, parseISO, startOfDay } from "date-fns";
+import { isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
 import type { CalendarLinkedActivity, CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { totalZoneMinutes } from "@/lib/workout/steps";
 
@@ -105,6 +105,16 @@ export function workoutShadingOptionsForDiscipline(
 export function isPastScheduledDate(scheduledDate: string): boolean {
   const day = parseISO(`${scheduledDate}T12:00:00`);
   return isBefore(day, startOfDay(new Date()));
+}
+
+export function isWorkoutShadingEligible(session: CalendarPlannedSession): boolean {
+  const day = parseISO(`${session.scheduledDate}T12:00:00`);
+  const today = startOfDay(new Date());
+  if (isBefore(day, today)) return true;
+  if (isSameDay(day, today)) {
+    return session.linkedActivity != null || session.hasCompletedOverride;
+  }
+  return false;
 }
 
 const DURATION_GREEN_WINDOW_MINUTES = 5;
@@ -219,7 +229,7 @@ export function resolveSessionShadingTone(
   session: CalendarPlannedSession,
   shadingSettings: WorkoutShadingSettings
 ): WorkoutShadingTone | null {
-  if (!isPastScheduledDate(session.scheduledDate)) return null;
+  if (!isWorkoutShadingEligible(session)) return null;
 
   const discipline = session.discipline as Discipline;
   const mode = shadingSettings[discipline] ?? "OFF";
