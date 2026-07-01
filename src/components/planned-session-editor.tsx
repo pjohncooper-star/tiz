@@ -143,7 +143,8 @@ export function PlannedSessionEditor({
     }
     return zoneMinuteValuesFromDisciplineZones(completed.zoneMinutes, initialDiscipline);
   });
-  const [hasCompletedOverride, setHasCompletedOverride] = useState(initialHasCompletedOverride);
+  const [completedDirty, setCompletedDirty] = useState(false);
+  const hasCompletedOverride = initialHasCompletedOverride || completedDirty;
   const [hasWorkout, setHasWorkout] = useState(initialHasStructuredWorkout);
   const [workoutTree, setWorkoutTree] = useState<WorkoutTreeDocument | null>(
     initialHasStructuredWorkout && initialWorkoutTree ? initialWorkoutTree : null
@@ -274,9 +275,9 @@ export function PlannedSessionEditor({
       discipline,
       title: title.trim(),
       notes: notes.trim() || null,
-      distanceMeters,
-      targetSpeedMps: discipline === "BIKE" ? targetSpeedMps : null,
-      targetPaceSeconds: discipline === "BIKE" ? null : targetPaceSeconds,
+      distanceMeters: plannedTriad.distanceMeters,
+      targetSpeedMps: discipline === "BIKE" ? plannedTriad.targetSpeedMps : null,
+      targetPaceSeconds: discipline === "BIKE" ? null : plannedTriad.targetPaceSeconds,
       poolSize: discipline === "SWIM" ? poolSize : null,
     };
 
@@ -288,7 +289,7 @@ export function PlannedSessionEditor({
       }
       body.targetZones = budget.zones;
 
-      if (hasCompletedOverride) {
+      if (completedDirty) {
         const completedPayload = buildCompletedPayload();
         if (!completedPayload.ok) {
           setSaving(false);
@@ -296,7 +297,7 @@ export function PlannedSessionEditor({
         }
         if ("clear" in completedPayload && completedPayload.clear) {
           body.clearCompletedOverrides = true;
-          setHasCompletedOverride(false);
+          setCompletedDirty(false);
         } else if ("data" in completedPayload) {
           Object.assign(body, completedPayload.data);
         }
@@ -323,7 +324,17 @@ export function PlannedSessionEditor({
         if (typeof data.error === "string") {
           message = data.error;
         } else if (data.error && typeof data.error === "object") {
-          message = "Could not save session — check your inputs";
+          const flattened = data.error as {
+            fieldErrors?: Record<string, string[] | undefined>;
+            formErrors?: string[];
+          };
+          const fieldMessage = Object.values(flattened.fieldErrors ?? {})
+            .flat()
+            .find((value): value is string => typeof value === "string" && value.length > 0);
+          message =
+            fieldMessage ??
+            flattened.formErrors?.[0] ??
+            "Could not save session — check your inputs";
         }
       } catch {
         // ignore parse errors
@@ -332,6 +343,7 @@ export function PlannedSessionEditor({
       return false;
     }
 
+    setCompletedDirty(false);
     router.refresh();
     return true;
   }
@@ -393,7 +405,7 @@ export function PlannedSessionEditor({
     }
 
     const fallback = activityCompleted ?? completed;
-    setHasCompletedOverride(false);
+    setCompletedDirty(false);
     setCompletedTriad({
       durationMinutes: fallback.canonical?.durationMinutes ?? null,
       distanceMeters: fallback.canonical?.distanceMeters ?? null,
@@ -425,7 +437,7 @@ export function PlannedSessionEditor({
   const durationCap = plannedTriad.durationMinutes ?? null;
 
   function handleCompletedTriadChange(values: PlannedMetricsTriadValues) {
-    setHasCompletedOverride(true);
+    setCompletedDirty(true);
     setCompletedTriad(values);
   }
 
@@ -433,7 +445,7 @@ export function PlannedSessionEditor({
     zone: import("@/components/zone-minute-pills").ZoneNumber,
     value: string
   ) {
-    setHasCompletedOverride(true);
+    setCompletedDirty(true);
     setCompletedZoneMinutes((prev) => ({ ...prev, [zone]: value }));
   }
 
