@@ -43,8 +43,11 @@ export default async function CalendarPage({
     weekParam && DATE_KEY.test(weekParam) ? normalizeWeekStart(weekParam) : null;
 
   const currentWeekStart = startOfWeek(new Date(), WEEK_OPTS);
-  let rangeStart = currentWeekStart;
-  let rangeEnd = endOfWeek(addWeeks(currentWeekStart, 2), WEEK_OPTS);
+  // Default window: recent history + ~6 months ahead (season races, template weeks).
+  const INITIAL_PAST_WEEKS = 8;
+  const INITIAL_FUTURE_WEEKS = 26;
+  let rangeStart = addWeeks(currentWeekStart, -INITIAL_PAST_WEEKS);
+  let rangeEnd = endOfWeek(addWeeks(currentWeekStart, INITIAL_FUTURE_WEEKS), WEEK_OPTS);
 
   if (scrollWeekStart) {
     const targetMonday = parseDateKey(scrollWeekStart);

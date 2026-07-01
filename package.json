@@ -15,6 +15,10 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "strava:register-webhook": "npx tsx scripts/register-strava-webhook.ts",
+    "user:list": "npx tsx scripts/list-users.ts",
+    "user:reset-password": "npx tsx scripts/reset-password.ts",
+    "user:delete": "npx tsx scripts/delete-user.ts",
+    "user:migrate-to-prod": "npx tsx scripts/migrate-user-to-prod.ts",
     "test": "npx tsx --test src/components/plan-tiz-chart.test.ts src/lib/zones/signal-preference.test.ts src/lib/plan/rollup-budget.test.ts src/lib/plan/workout-execution.test.ts src/lib/activity/workout-analysis-overlay.test.ts src/lib/import/persist.test.ts src/lib/plan/session-link-auto.test.ts src/lib/plan/session-resolve.test.ts src/lib/plan/session-completion.test.ts src/lib/plan/goal-time.test.ts src/lib/plan/race-calendar-sync.test.ts src/lib/plan/group-planned-sessions.test.ts src/lib/plan/season/goal-events-sync.test.ts src/lib/plan/season/season-dates.test.ts src/lib/plan/season/volume-curve.test.ts src/lib/plan/season/focus-tiz.test.ts src/lib/plan/season/de-load-cadence.test.ts src/lib/plan/season/mesocycle-resolution.test.ts src/lib/strava/oauth-state.test.ts"
   },
   "devDependencies": {

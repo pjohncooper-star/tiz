@@ -389,7 +389,7 @@ model ZoneBreakdown {
   usedFallback       Boolean    @default(false)
 
   activity         SyncedActivity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  thresholdProfile ThresholdProfile @relation(fields: [thresholdProfileId], references: [id])
+  thresholdProfile ThresholdProfile @relation(fields: [thresholdProfileId], references: [id], onDelete: Cascade)
 
   @@unique([activityId, zone, signalUsed, isCanonical])
   @@index([activityId, isCanonical])
