@@ -11,6 +11,7 @@ import { POOL_SIZE_OPTIONS } from "@/lib/units/discipline-settings";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
 import { formatLinkedSessionCardLines } from "@/lib/plan/calendar/session-card-summary";
+import { workoutHref } from "@/lib/plan/workout-href";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 
 function formatMinutes(minutes: number): string {
@@ -140,7 +141,7 @@ export function CalendarSessionCard({
             ⠿
           </button>
           <Link
-            href={`/plan/sessions/${session.id}?returnTo=${encodeURIComponent("/calendar")}`}
+            href={workoutHref(session.id, { returnTo: "/calendar" })}
             className="min-w-0 flex-1 transition hover:opacity-90"
           >
             <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
@@ -224,7 +225,7 @@ export function CalendarSessionCard({
           ⠿
         </button>
         <Link
-          href={`/plan/sessions/${session.id}?returnTo=${encodeURIComponent("/calendar")}`}
+          href={workoutHref(session.id, { returnTo: "/calendar" })}
           className="min-w-0 flex-1"
         >
           <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>

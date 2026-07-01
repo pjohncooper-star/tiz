@@ -1,0 +1,298 @@
+import { notFound } from "next/navigation";
+import type {
+  Discipline,
+  DisplayUnit,
+  SignalType,
+  SurveyResponse,
+  ThresholdProfile,
+  ZoneBreakdown,
+} from "@prisma/client";
+import { computeActivitySummary, type SummaryStat } from "@/lib/activity/summary";
+import { formatDateKey } from "@/lib/dates";
+import { db } from "@/lib/db";
+import { titleMatchesSportDefault, type PlanDiscipline } from "@/lib/plan/session";
+import { hasSessionCompletionOverride } from "@/lib/plan/session-completion";
+import { getCompletedSessionSnapshot } from "@/lib/plan/session-stats.server";
+import { resolveWorkoutReturnHref } from "@/lib/plan/workout-return";
+import {
+  buildDisciplineSettings,
+  unitSettingsForDiscipline,
+  type DisciplineUnitSettings,
+} from "@/lib/units/discipline-settings";
+import { parseWorkoutTree } from "@/lib/workout/steps";
+import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
+import type { NormalizedStreams, WorkoutExecutionLap } from "@/lib/zones/compute";
+import { parseStoredStreams } from "@/lib/zones/process-activity";
+import { getSignalPreferenceAtDate } from "@/lib/zones/signal-preference";
+import { parseSwimLapIntervals, type SwimLapInterval } from "@/lib/zones/swim-laps";
+import { getThresholdProfileAtDate, parseZoneBoundaries } from "@/lib/zones/thresholds";
+import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
+
+const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
+
+export type WorkoutDetailMode = "planned" | "completed" | "planned_and_completed";
+
+export type WorkoutDetailLinkedActivity = {
+  id: string;
+  discipline: Discipline;
+  rawStreams: unknown;
+  durationSeconds: number;
+  startTime: Date;
+  surveyResponse: SurveyResponse | null;
+  zoneBreakdowns: (ZoneBreakdown & { thresholdProfile: ThresholdProfile | null })[];
+};
+
+export type WorkoutDetailViewModel = {
+  mode: WorkoutDetailMode;
+  athleteId: string;
+  returnHref: string;
+  scheduledDateKey: string;
+  sessionId: string;
+  discipline: Discipline;
+  title: string;
+  notes: string;
+  distanceMeters: number | null;
+  targetSpeedMps: number | null;
+  targetPaceSeconds: number | null;
+  poolSize: import("@/lib/units/discipline-settings").PoolSize | null;
+  targetZones: unknown;
+  hasStructuredWorkout: boolean;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  displayUnit: DisplayUnit;
+  completed: CompletedSessionSnapshot;
+  activityCompleted: CompletedSessionSnapshot | null;
+  linkedActivityId: string | null;
+  hasCompletedOverride: boolean;
+  initialCompletedZones: unknown;
+  workoutTree: WorkoutTreeDocument | undefined;
+  structuredSteps: unknown;
+  thresholdPaceSeconds: number | null;
+  thresholdZoneBoundaries: number[] | undefined;
+  primarySignal: SignalType | null;
+  sessionSource: "FLEXIBLE" | "ANCHORED_INSTANCE" | "TEMPLATE" | "RACE";
+  workoutSource: {
+    folder: { id: string; name: string; folderKind: string } | null;
+    workoutTemplate: { id: string; name: string; sortOrder: number | null };
+  } | null;
+  linkedActivity: WorkoutDetailLinkedActivity | null;
+  workoutLaps: WorkoutExecutionLap[] | undefined;
+  swimLaps: SwimLapInterval[] | null;
+  showExecutionChart: boolean;
+  isEndurance: boolean;
+  summaryStats: SummaryStat[];
+};
+
+export function detectWorkoutDetailMode(input: {
+  hasCompleted: boolean;
+  hasStructuredWorkout: boolean;
+  hasPlannedMetrics: boolean;
+  hasNotes: boolean;
+  isDefaultTitle: boolean;
+  source: "FLEXIBLE" | "ANCHORED_INSTANCE" | "TEMPLATE" | "RACE";
+}): WorkoutDetailMode {
+  const hasPlannedContent =
+    input.hasStructuredWorkout ||
+    input.hasPlannedMetrics ||
+    input.hasNotes ||
+    !input.isDefaultTitle ||
+    input.source !== "FLEXIBLE";
+
+  if (input.hasCompleted && hasPlannedContent) return "planned_and_completed";
+  if (input.hasCompleted) return "completed";
+  return "planned";
+}
+
+export async function loadWorkoutDetail(
+  athleteId: string,
+  sessionId: string,
+  returnTo?: string | null
+): Promise<WorkoutDetailViewModel> {
+  const returnHref = resolveWorkoutReturnHref(returnTo);
+
+  const plannedSession = await db.plannedSession.findFirst({
+    where: { id: sessionId, athleteId },
+    include: {
+      structuredWorkout: true,
+      workoutSource: {
+        include: {
+          folder: { select: { id: true, name: true, folderKind: true } },
+          workoutTemplate: { select: { id: true, name: true, sortOrder: true } },
+        },
+      },
+    },
+  });
+
+  if (!plannedSession) notFound();
+
+  const disciplineSettingsRows = await db.athleteDisciplineSettings.findMany({
+    where: { athleteId },
+  });
+
+  const disciplineSettings = buildDisciplineSettings(
+    disciplineSettingsRows.map((s) => ({
+      discipline: s.discipline,
+      displayUnit: s.displayUnit,
+      poolSize: s.poolSize,
+    }))
+  );
+
+  const displayUnit = unitSettingsForDiscipline(
+    plannedSession.discipline,
+    disciplineSettings
+  ).displayUnit;
+
+  const completed = await getCompletedSessionSnapshot(
+    athleteId,
+    plannedSession.scheduledDate,
+    plannedSession.discipline,
+    displayUnit,
+    {
+      plannedSessionId: plannedSession.id,
+      linkedActivityId: plannedSession.linkedActivityId,
+    }
+  );
+
+  const activityCompleted = plannedSession.linkedActivityId
+    ? await getCompletedSessionSnapshot(
+        athleteId,
+        plannedSession.scheduledDate,
+        plannedSession.discipline,
+        displayUnit,
+        { linkedActivityId: plannedSession.linkedActivityId }
+      )
+    : null;
+
+  const hasCompletedOverride = hasSessionCompletionOverride(plannedSession);
+
+  const settingsRow = disciplineSettingsRows.find(
+    (s) => s.discipline === plannedSession.discipline
+  );
+
+  const preference = await getSignalPreferenceAtDate(
+    athleteId,
+    plannedSession.discipline,
+    plannedSession.scheduledDate
+  );
+  const primarySignal =
+    preference?.primarySignal ??
+    settingsRow?.primarySignal ??
+    (plannedSession.discipline === "BIKE" ? "POWER" : "PACE");
+
+  let thresholdPaceSeconds: number | null = null;
+  let thresholdZoneBoundaries: number[] | undefined;
+
+  if (plannedSession.discipline === "RUN" || plannedSession.discipline === "SWIM") {
+    const paceProfile = await getThresholdProfileAtDate(
+      athleteId,
+      plannedSession.discipline,
+      "PACE",
+      plannedSession.scheduledDate
+    );
+    thresholdPaceSeconds = paceProfile?.thresholdValue ?? null;
+    if (primarySignal === "PACE" && paceProfile) {
+      thresholdZoneBoundaries = parseZoneBoundaries(paceProfile.zoneBoundaries);
+    }
+  }
+
+  const workoutTree = plannedSession.structuredWorkout
+    ? parseWorkoutTree(plannedSession.structuredWorkout.steps)
+    : undefined;
+
+  const linkedActivity = plannedSession.linkedActivityId
+    ? await db.syncedActivity.findFirst({
+        where: { id: plannedSession.linkedActivityId, athleteId },
+        include: {
+          surveyResponse: true,
+          zoneBreakdowns: {
+            orderBy: [{ isCanonical: "desc" }, { zone: "asc" }],
+            include: { thresholdProfile: true },
+          },
+        },
+      })
+    : null;
+
+  let workoutLaps: WorkoutExecutionLap[] | undefined;
+  let swimLaps: SwimLapInterval[] | null = null;
+
+  if (linkedActivity?.rawStreams && typeof linkedActivity.rawStreams === "object") {
+    const streams = linkedActivity.rawStreams as NormalizedStreams;
+    const wl = streams.workoutLaps;
+    workoutLaps = Array.isArray(wl) ? wl : wl?.data;
+    if (plannedSession.discipline === "SWIM") {
+      swimLaps = parseSwimLapIntervals(parseStoredStreams(linkedActivity.rawStreams));
+    }
+  }
+
+  const structuredSteps = plannedSession.structuredWorkout?.steps;
+  const isEndurance = ENDURANCE_DISCIPLINES.has(plannedSession.discipline as PlanDiscipline);
+  const showExecutionChart =
+    !!linkedActivity &&
+    (plannedSession.discipline === "BIKE" || plannedSession.discipline === "RUN");
+
+  const hasCompleted = !!linkedActivity || hasCompletedOverride;
+  const hasPlannedMetrics =
+    plannedSession.distanceMeters != null ||
+    plannedSession.targetSpeedMps != null ||
+    plannedSession.targetPaceSeconds != null ||
+    plannedSession.targetZones != null;
+
+  const mode = detectWorkoutDetailMode({
+    hasCompleted,
+    hasStructuredWorkout: !!plannedSession.structuredWorkout,
+    hasPlannedMetrics,
+    hasNotes: !!(plannedSession.notes && plannedSession.notes.trim()),
+    isDefaultTitle: titleMatchesSportDefault(
+      plannedSession.title,
+      plannedSession.discipline as PlanDiscipline
+    ),
+    source: plannedSession.source,
+  });
+
+  const summaryStats =
+    linkedActivity && !isEndurance
+      ? computeActivitySummary({
+          discipline: linkedActivity.discipline,
+          durationSeconds: linkedActivity.durationSeconds,
+          distanceMeters: linkedActivity.distanceMeters,
+          streams: parseStoredStreams(linkedActivity.rawStreams),
+          displayUnit,
+        })
+      : [];
+
+  return {
+    mode,
+    athleteId,
+    returnHref,
+    scheduledDateKey: formatDateKey(plannedSession.scheduledDate),
+    sessionId: plannedSession.id,
+    discipline: plannedSession.discipline,
+    title: plannedSession.title,
+    notes: plannedSession.notes ?? "",
+    distanceMeters: plannedSession.distanceMeters,
+    targetSpeedMps: plannedSession.targetSpeedMps,
+    targetPaceSeconds: plannedSession.targetPaceSeconds,
+    poolSize: plannedSession.poolSize,
+    targetZones: plannedSession.targetZones,
+    hasStructuredWorkout: !!plannedSession.structuredWorkout,
+    disciplineSettings,
+    displayUnit,
+    completed,
+    activityCompleted,
+    linkedActivityId: plannedSession.linkedActivityId,
+    hasCompletedOverride,
+    initialCompletedZones: plannedSession.completedZones,
+    workoutTree,
+    structuredSteps,
+    thresholdPaceSeconds,
+    thresholdZoneBoundaries,
+    primarySignal,
+    sessionSource: plannedSession.source,
+    workoutSource: plannedSession.workoutSource,
+    linkedActivity,
+    workoutLaps,
+    swimLaps,
+    showExecutionChart,
+    isEndurance,
+    summaryStats,
+  };
+}

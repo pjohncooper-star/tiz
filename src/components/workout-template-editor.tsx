@@ -16,6 +16,7 @@ import { unitSettingsForDiscipline, poolSizeForSwimStep } from "@/lib/units/disc
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { readApiError } from "@/lib/api/client-error";
+import { libraryHref } from "@/lib/plan/library-href";
 
 export type WorkoutTemplateEditorProps = {
   folderId: string;
@@ -92,7 +93,7 @@ export function WorkoutTemplateEditor({
     }
 
     setSaving(false);
-    router.push(`/plan/workouts?folder=${folderId}`);
+    router.push(libraryHref({ folderId }));
     router.refresh();
   }
 
@@ -137,7 +138,7 @@ export function WorkoutTemplateEditor({
         <Button
           type="button"
           variant="secondary"
-          onClick={() => router.push(`/plan/workouts?folder=${folderId}`)}
+          onClick={() => router.push(libraryHref({ folderId }))}
         >
           Cancel
         </Button>

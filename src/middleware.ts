@@ -21,8 +21,8 @@ function isPlanBuilderUiPath(pathname: string): boolean {
   return pathname === "/plan";
 }
 
-function isSessionEditorPath(pathname: string): boolean {
-  return pathname.startsWith("/plan/sessions/");
+function isWorkoutDetailPath(pathname: string): boolean {
+  return pathname.startsWith("/workouts/");
 }
 
 function isSessionApiPath(pathname: string): boolean {
@@ -31,6 +31,8 @@ function isSessionApiPath(pathname: string): boolean {
 
 function isWorkoutLibraryPath(pathname: string): boolean {
   return (
+    pathname === "/plan/library" ||
+    pathname.startsWith("/plan/library/") ||
     pathname === "/plan/workouts" ||
     pathname.startsWith("/plan/workouts/") ||
     pathname.startsWith("/api/plan/workout-folders") ||
@@ -71,7 +73,7 @@ export default auth((req) => {
     return blockPage(req);
   }
 
-  if (!sessions && isSessionEditorPath(pathname)) {
+  if (!sessions && isWorkoutDetailPath(pathname)) {
     return blockPage(req);
   }
 

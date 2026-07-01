@@ -12,6 +12,7 @@ import {
   type ZoneMinuteValues,
 } from "@/components/zone-minute-pills";
 import { Button } from "@/components/ui";
+import { workoutHref } from "@/lib/plan/workout-href";
 import { zoneDurationBudgetMinutes } from "@/lib/plan/session-completion";
 import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
 import {
@@ -201,9 +202,9 @@ export function SessionComparisonSummary({
 
   const plannedSessionHref =
     plannedSessionId && plannedSessionReturnTo
-      ? `/plan/sessions/${plannedSessionId}?returnTo=${encodeURIComponent(plannedSessionReturnTo)}`
+      ? workoutHref(plannedSessionId, { returnTo: plannedSessionReturnTo })
       : plannedSessionId
-        ? `/plan/sessions/${plannedSessionId}`
+        ? workoutHref(plannedSessionId)
         : null;
 
   return (

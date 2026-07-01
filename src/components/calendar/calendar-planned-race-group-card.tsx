@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { PlannedSessionGroup } from "@/lib/plan/group-planned-sessions";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
+import { workoutHref } from "@/lib/plan/workout-href";
 
 function formatRaceGoalTime(minutes: number | null): string {
   return formatGoalTimeDisplay(minutes);
@@ -28,7 +29,7 @@ export function CalendarPlannedRaceGroupCard({ group }: CalendarPlannedRaceGroup
         {group.legs.map((leg) => (
           <Link
             key={leg.id}
-            href={`/plan/sessions/${leg.id}`}
+            href={workoutHref(leg.id)}
             className="rounded border border-amber-300/60 bg-white/80 px-2 py-1 text-xs text-zinc-700 dark:border-amber-800 dark:bg-zinc-900/60 dark:text-zinc-300"
           >
             {DISCIPLINE_DISPLAY_LABELS[leg.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ??

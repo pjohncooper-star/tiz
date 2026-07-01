@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Discipline, WorkoutFolderKind } from "@prisma/client";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 import type { FolderTreeNode } from "@/lib/workout/workout-folder-library";
+import { libraryNewTemplateHref, libraryTemplateHref } from "@/lib/plan/library-href";
 
 type WorkoutLibraryViewProps = {
   initialTree: FolderTreeNode[];
@@ -226,7 +227,7 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
         ) : (
           <Card title={selected.name}>
             <div className="mb-3 flex flex-wrap gap-2">
-              <Link href={`/plan/workouts/${selected.id}/new`}>
+              <Link href={libraryNewTemplateHref(selected.id)}>
                 <Button type="button">Add workout</Button>
               </Link>
               <Button
@@ -284,7 +285,7 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
                           </Button>
                         </>
                       ) : null}
-                      <Link href={`/plan/workouts/${selected.id}/${workout.id}`}>
+                      <Link href={libraryTemplateHref(selected.id, workout.id)}>
                         <Button type="button" variant="secondary" className="px-2 py-1">
                           Edit
                         </Button>

@@ -1,13 +1,12 @@
 import { notFound, redirect } from "next/navigation";
-import { ActivityDetailFallback } from "@/components/activity-detail-fallback";
 import { requireAthlete } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { activityReturnHrefFromStartTime, resolveActivityReturnHref } from "@/lib/plan/activity-return";
-import { isSessionPlanningEnabled } from "@/lib/features";
+import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
 import {
   resolveOrCreateSessionForActivity,
   SessionLinkError,
 } from "@/lib/plan/session-link";
+import { workoutHref } from "@/lib/plan/workout-href";
 
 export const dynamic = "force-dynamic";
 
@@ -21,53 +20,26 @@ export default async function ActivityPage({
   const session = await requireAthlete();
   const { id } = await params;
   const { returnTo } = await searchParams;
-  const returnHref = resolveActivityReturnHref(returnTo);
   const athleteId = session.user.athleteId!;
 
   const activity = await db.syncedActivity.findFirst({
     where: { id, athleteId },
-    include: {
-      surveyResponse: true,
-      zoneBreakdowns: {
-        orderBy: [{ isCanonical: "desc" }, { zone: "asc" }],
-        include: { thresholdProfile: true },
-      },
-    },
+    select: { startTime: true },
   });
   if (!activity) notFound();
 
-  if (isSessionPlanningEnabled()) {
-    let sessionId: string;
-    try {
-      ({ sessionId } = await resolveOrCreateSessionForActivity(athleteId, id));
-    } catch (error) {
-      if (error instanceof SessionLinkError && error.status === 404) {
-        notFound();
-      }
-      throw error;
+  let sessionId: string;
+  try {
+    ({ sessionId } = await resolveOrCreateSessionForActivity(athleteId, id));
+  } catch (error) {
+    if (error instanceof SessionLinkError && error.status === 404) {
+      notFound();
     }
-
-    const sessionReturn =
-      returnTo ?? activityReturnHrefFromStartTime(activity.startTime.toISOString());
-    redirect(
-      `/plan/sessions/${sessionId}?returnTo=${encodeURIComponent(sessionReturn)}`
-    );
+    throw error;
   }
 
-  const disciplineSettings = await db.athleteDisciplineSettings.findMany({
-    where: { athleteId },
-    select: { discipline: true, displayUnit: true },
-  });
-  const displayUnit =
-    disciplineSettings.find((s) => s.discipline === activity.discipline)
-      ?.displayUnit ?? "METRIC";
+  const sessionReturn =
+    returnTo ?? activityReturnHrefFromStartTime(activity.startTime.toISOString());
 
-  return (
-    <ActivityDetailFallback
-      athleteId={athleteId}
-      returnHref={returnHref}
-      activity={activity}
-      displayUnit={displayUnit}
-    />
-  );
+  redirect(workoutHref(sessionId, { returnTo: sessionReturn }));
 }

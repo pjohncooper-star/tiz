@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { libraryHref } from "@/lib/plan/library-href";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline } from "@prisma/client";
@@ -167,7 +168,7 @@ export function WorkoutBuilderPane({ builder, onClose }: WorkoutBuilderPaneProps
               <option value="SWIM">Swim</option>
             </Select>
             <Link
-              href="/plan/workouts"
+              href={libraryHref()}
               className="text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400"
             >
               Manage library →

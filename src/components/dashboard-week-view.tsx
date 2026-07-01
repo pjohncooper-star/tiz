@@ -15,6 +15,7 @@ import {
 } from "date-fns";
 import { DayCalendarPicker } from "@/components/day-calendar-picker";
 import { Button } from "@/components/ui";
+import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
 
 export type WeekActivity = {
   id: string;
@@ -93,9 +94,10 @@ function toDateKey(iso: string): string {
 }
 
 function ActivityCard({ a }: { a: WeekActivity }) {
+  const returnTo = encodeURIComponent(activityReturnHrefFromStartTime(a.startTime));
   return (
     <Link
-      href={`/activities/${a.id}`}
+      href={`/activities/${a.id}?returnTo=${returnTo}`}
       className="block rounded-md border border-zinc-200 bg-white p-2 text-sm shadow-sm transition hover:border-sky-400 hover:shadow dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-sky-600"
     >
       <p className="line-clamp-2 font-medium leading-snug">{a.name}</p>
@@ -125,10 +127,12 @@ function MultisportCard({ group }: { group: Extract<WeekActivityGroup, { kind: "
         </p>
       </div>
       <div className="flex flex-col gap-1.5 pl-1">
-        {group.legs.map((leg) => (
+        {group.legs.map((leg) => {
+          const returnTo = encodeURIComponent(activityReturnHrefFromStartTime(leg.startTime));
+          return (
           <Link
             key={leg.id}
-            href={`/activities/${leg.id}`}
+            href={`/activities/${leg.id}?returnTo=${returnTo}`}
             className="block rounded border border-zinc-100 bg-zinc-50/80 p-1.5 transition hover:border-sky-400 dark:border-zinc-800 dark:bg-zinc-950/60"
           >
             <p className="text-xs font-medium">{leg.name}</p>
@@ -137,7 +141,8 @@ function MultisportCard({ group }: { group: Extract<WeekActivityGroup, { kind: "
               {leg.signalUsed ?? (leg.noUsableSignal ? "no signal" : "…")}
             </p>
           </Link>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

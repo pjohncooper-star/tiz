@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card } from "@/components/ui";
+import { libraryHref } from "@/lib/plan/library-href";
 
 type Source = {
   folder: { id: string; name: string; folderKind: string } | null;
@@ -10,8 +11,8 @@ export function SessionWorkoutProvenance({ source }: { source: Source | null }) 
   if (!source) return null;
 
   const folderHref = source.folder
-    ? `/plan/workouts?folder=${source.folder.id}`
-    : "/plan/workouts";
+    ? libraryHref({ folderId: source.folder.id })
+    : libraryHref();
 
   return (
     <Card title="Workout source">
