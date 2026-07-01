@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PlannedSessionStats } from "@/components/planned-session-stats";
 import { PoolSizeSlider } from "@/components/pool-size-slider";
 import { WorkoutTreeEditor } from "@/components/workout-tree-editor";
 import {
   emptyZoneMinuteValues,
+  fitZoneMinuteValuesToDuration,
   parseZoneMinuteValues,
+  totalZoneMinuteInputValues,
   zoneMinuteValuesFromDisciplineZones,
   zoneMinuteValuesFromRecord,
   ZoneMinutePills,
@@ -150,6 +152,7 @@ export function PlannedSessionEditor({
     initialHasStructuredWorkout && initialWorkoutTree ? initialWorkoutTree : null
   );
   const [saving, setSaving] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => {
     if (!metricsFromSteps || !hasWorkout || !workoutTree || discipline === "STRENGTH") return;
@@ -192,6 +195,12 @@ export function PlannedSessionEditor({
   const [detaching, setDetaching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [error]);
+
   function serializeTree(tree: WorkoutTreeDocument) {
     return serializeWorkoutTree(tree);
   }
@@ -199,7 +208,11 @@ export function PlannedSessionEditor({
   function buildTargetZonesPayload():
     | { ok: true; zones: Record<string, number> | null }
     | { ok: false } {
-    const zones = parseZoneMinuteValues(zoneMinutes);
+    const fittedZoneMinutes = fitZoneMinuteValuesToDuration(
+      zoneMinutes,
+      plannedTriad.durationMinutes
+    );
+    const zones = parseZoneMinuteValues(fittedZoneMinutes);
     const zoneSum = Object.values(zones).reduce((s, m) => s + m, 0);
     if (
       plannedTriad.durationMinutes != null &&
@@ -344,6 +357,9 @@ export function PlannedSessionEditor({
     }
 
     setCompletedDirty(false);
+    setZoneMinutes(
+      fitZoneMinuteValuesToDuration(zoneMinutes, plannedTriad.durationMinutes)
+    );
     router.refresh();
     return true;
   }
@@ -459,6 +475,15 @@ export function PlannedSessionEditor({
     } else {
       setTargetPaceSeconds(values.targetPaceSeconds);
       setTargetSpeedMps(null);
+    }
+    if (
+      values.durationMinutes != null &&
+      values.durationMinutes > 0 &&
+      totalZoneMinuteInputValues(zoneMinutes) > values.durationMinutes
+    ) {
+      setZoneMinutes(
+        fitZoneMinuteValuesToDuration(zoneMinutes, values.durationMinutes)
+      );
     }
   }
 
@@ -625,7 +650,11 @@ export function PlannedSessionEditor({
         )}
       </Card>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p ref={errorRef} className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button
