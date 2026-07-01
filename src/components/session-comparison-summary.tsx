@@ -153,6 +153,19 @@ export function SessionComparisonSummary({
     ]
   );
 
+  const showEditable =
+    editable &&
+    plannedTriad &&
+    completedTriad &&
+    onPlannedTriadChange &&
+    onCompletedTriadChange;
+
+  const showPlannedZoneEditor =
+    showEditable &&
+    plannedZoneMinutes &&
+    onPlannedZoneMinutesChange &&
+    !hidePlannedZonePills;
+
   const plannedZones =
     showPlannedZoneEditor && plannedZoneMinutes
       ? disciplineZoneMinutesFromPills(
@@ -163,13 +176,6 @@ export function SessionComparisonSummary({
           discipline
         )
       : disciplineZoneMinutes(planned.zoneMinutes, discipline);
-
-  const showEditable =
-    editable &&
-    plannedTriad &&
-    completedTriad &&
-    onPlannedTriadChange &&
-    onCompletedTriadChange;
 
   const liveCompletedZones =
     showEditable && completedZoneMinutes
@@ -182,11 +188,6 @@ export function SessionComparisonSummary({
   const completedZoneBudgetMinutes = zoneDurationBudgetMinutes(
     completedTriad?.durationMinutes ?? null
   );
-  const showPlannedZoneEditor =
-    showEditable &&
-    plannedZoneMinutes &&
-    onPlannedZoneMinutesChange &&
-    !hidePlannedZonePills;
 
   const durationPlanned = planned.stats.find((s) => s.label === "Duration")?.value ?? null;
   const distancePlanned = planned.stats.find((s) => s.label === "Distance")?.value ?? null;
