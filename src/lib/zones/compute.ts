@@ -153,6 +153,19 @@ export function computeZoneBreakdown(
     const dt = sampleDurations[i] ?? 1;
     zoneMinutes[clamped] = (zoneMinutes[clamped] ?? 0) + dt / 60;
   }
+
+  if (
+    discipline === "SWIM" &&
+    signal === "PACE" &&
+    streams.swimLaps?.data?.length
+  ) {
+    for (const lap of streams.swimLaps.data) {
+      if (lap.speedMps <= 0 && lap.durationSec > 0) {
+        zoneMinutes[1] = (zoneMinutes[1] ?? 0) + lap.durationSec / 60;
+      }
+    }
+  }
+
   return zoneMinutes;
 }
 

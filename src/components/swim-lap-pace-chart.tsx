@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { SwimLapInterval } from "@/lib/zones/swim-laps";
+import { restChartPaceSec } from "@/lib/zones/swim-rest";
 import { formatPace } from "@/lib/units/pace";
 
 type SwimLapPaceChartProps = {
@@ -54,8 +55,10 @@ function buildRows(
     .filter((l) => !l.isRest && l.paceSecPer100m != null)
     .map((l) => toDisplayPace(l.paceSecPer100m!, displayUnit));
 
-  const restHeight =
-    activePaces.length > 0 ? Math.min(...activePaces) * 0.12 : 10;
+  const restChartPace =
+    activePaces.length > 0
+      ? restChartPaceSec(Math.max(...activePaces))
+      : restChartPaceSec(0);
 
   return laps.map((lap) => {
     const durationLabel = formatDuration(lap.durationSec);
@@ -63,7 +66,7 @@ function buildRows(
     if (lap.isRest || lap.paceSecPer100m == null) {
       return {
         ...lap,
-        chartPace: restHeight,
+        chartPace: restChartPace,
         paceLabel: "Rest",
         timeLabel,
         durationLabel,
@@ -99,10 +102,9 @@ export function SwimLapPaceChart({
 
   const plotW = VIEW_W - MARGIN.left - MARGIN.right;
   const plotH = VIEW_H - MARGIN.top - MARGIN.bottom;
-  const activePaces = rows.filter((r) => !r.isRest).map((r) => r.chartPace);
   const yMax =
-    activePaces.length > 0
-      ? Math.ceil(Math.max(...activePaces) * 1.08)
+    rows.length > 0
+      ? Math.ceil(Math.max(...rows.map((r) => r.chartPace)) * 1.08)
       : 120;
   const xMax = Math.ceil(Math.max(...rows.map((r) => r.endSec)) * 1.02);
 

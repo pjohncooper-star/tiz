@@ -15,12 +15,13 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "strava:register-webhook": "npx tsx scripts/register-strava-webhook.ts",
+    "strava:backfill-swim-laps": "npx tsx scripts/backfill-strava-swim-laps.ts",
     "user:list": "npx tsx scripts/list-users.ts",
     "user:reset-password": "npx tsx scripts/reset-password.ts",
     "user:delete": "npx tsx scripts/delete-user.ts",
     "user:migrate-to-prod": "npx tsx scripts/migrate-user-to-prod.ts",
     "user:dedup-activities": "npx tsx scripts/dedup-activities.ts",
-    "test": "npx tsx --test src/components/plan-tiz-chart.test.ts src/lib/zones/signal-preference.test.ts src/lib/plan/rollup-budget.test.ts src/lib/plan/workout-execution.test.ts src/lib/activity/workout-analysis-overlay.test.ts src/lib/activity/match.test.ts src/lib/workout/workout-folder-library.test.ts src/lib/import/persist.test.ts src/lib/plan/session-link-auto.test.ts src/lib/plan/session-resolve.test.ts src/lib/plan/session-completion.test.ts src/lib/plan/goal-time.test.ts src/lib/plan/race-calendar-sync.test.ts src/lib/plan/group-planned-sessions.test.ts src/lib/plan/season/goal-events-sync.test.ts src/lib/plan/season/season-dates.test.ts src/lib/plan/season/volume-curve.test.ts src/lib/plan/season/focus-tiz.test.ts src/lib/plan/season/de-load-cadence.test.ts src/lib/plan/season/mesocycle-resolution.test.ts src/lib/strava/oauth-state.test.ts"
+    "test": "npx tsx --test src/components/plan-tiz-chart.test.ts src/lib/zones/signal-preference.test.ts src/lib/plan/rollup-budget.test.ts src/lib/plan/workout-execution.test.ts src/lib/activity/workout-analysis-overlay.test.ts src/lib/activity/match.test.ts src/lib/workout/workout-folder-library.test.ts src/lib/import/persist.test.ts src/lib/plan/session-link-auto.test.ts src/lib/plan/session-resolve.test.ts src/lib/plan/session-completion.test.ts src/lib/plan/goal-time.test.ts src/lib/plan/race-calendar-sync.test.ts src/lib/plan/group-planned-sessions.test.ts src/lib/plan/season/goal-events-sync.test.ts src/lib/plan/season/season-dates.test.ts src/lib/plan/season/volume-curve.test.ts src/lib/plan/season/focus-tiz.test.ts src/lib/plan/season/de-load-cadence.test.ts src/lib/plan/season/mesocycle-resolution.test.ts src/lib/strava/oauth-state.test.ts src/lib/strava/laps.test.ts src/lib/zones/swim-rest.test.ts"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",

@@ -6,6 +6,7 @@ import {
   refreshStravaToken,
   stravaFetch,
 } from "./client";
+import { fetchStravaActivityLaps, mapStravaLapsToSwimLaps } from "./laps";
 
 async function getToken(athleteId: string) {
   const conn = await db.stravaConnection.findUnique({ where: { athleteId } });
@@ -60,6 +61,21 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
     }
   } catch {
     streams = {};
+  }
+
+  if (discipline === "SWIM") {
+    try {
+      const laps = await fetchStravaActivityLaps(stravaId, token);
+      const swimLaps = mapStravaLapsToSwimLaps(
+        laps,
+        new Date(activity.start_date)
+      );
+      if (swimLaps) {
+        streams = { ...streams, swimLaps: { data: swimLaps } };
+      }
+    } catch {
+      // Laps are optional; open-water swims may rely on velocity streams.
+    }
   }
 
   const synced = await upsertSyncedActivity(
