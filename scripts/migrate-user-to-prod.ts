@@ -301,10 +301,9 @@ async function fullMigration(
   }
 
   const { athlete: _athlete, ...userData } = user;
-  const { userId: _userId, ...athleteData } = athlete;
 
   await target.user.create({ data: userData });
-  await target.athlete.create({ data: athleteData });
+  await target.athlete.create({ data: athlete });
   console.log(`Copied User + Athlete (${athleteId}).`);
 
   const copy = async <T extends { id: string }>(
