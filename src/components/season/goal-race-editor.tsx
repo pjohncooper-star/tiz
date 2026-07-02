@@ -4,6 +4,7 @@ import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
   formatGoalDisciplines,
+  sortDisciplines,
   toggleGoalDiscipline,
   type Discipline,
   type EventPriority,
@@ -11,6 +12,10 @@ import {
 } from "@/components/season/season-settings-types";
 import { Button, Input, Label } from "@/components/ui";
 import { GoalTimeInput } from "@/components/goal-time-input";
+import {
+  goalMinutesForDiscipline,
+  setDisciplineGoalMinutes,
+} from "@/lib/plan/season/goal-event-times";
 
 type GoalRaceEditorProps = {
   priority: EventPriority;
@@ -42,6 +47,14 @@ export function GoalRaceEditor({
     );
     onRemove(deleteFromCalendar);
   }
+
+  function updateDisciplineGoalTime(discipline: Discipline, minutes: number | null) {
+    const nextTimes = setDisciplineGoalMinutes(value, discipline, minutes);
+    onChange({ ...value, ...nextTimes });
+  }
+
+  const multisport = value.disciplines.length > 1;
+  const sortedDisciplines = sortDisciplines(value.disciplines);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -106,7 +119,7 @@ export function GoalRaceEditor({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Distance (m)</Label>
+            <Label>Distance (meters, optional)</Label>
             <Input
               type="number"
               min={0}
@@ -119,12 +132,37 @@ export function GoalRaceEditor({
               }
               placeholder="Optional"
             />
+            <p className="mt-1 text-xs text-zinc-500">
+              Total event distance in meters. Per-leg distances coming later.
+            </p>
           </div>
-          <GoalTimeInput
-            value={value.estimatedDurationMinutes}
-            onChange={(estimatedDurationMinutes) => update({ estimatedDurationMinutes })}
-          />
+          {!multisport && (
+            <GoalTimeInput
+              value={value.estimatedDurationMinutes}
+              onChange={(estimatedDurationMinutes) => update({ estimatedDurationMinutes })}
+            />
+          )}
         </div>
+        {multisport && (
+          <div className="space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+              Goal time by discipline
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {sortedDisciplines.map((discipline) => (
+                <GoalTimeInput
+                  key={discipline}
+                  label={`${DISCIPLINE_LABELS[discipline]} goal`}
+                  value={goalMinutesForDiscipline(value, discipline)}
+                  onChange={(minutes) => updateDisciplineGoalTime(discipline, minutes)}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-zinc-500">
+              Total race time is the sum when all leg times are entered.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

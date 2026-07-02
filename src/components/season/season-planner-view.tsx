@@ -59,6 +59,9 @@ type SeasonDetail = {
     priority: "A" | "B" | "C";
     distanceMeters?: number | null;
     estimatedDurationMinutes?: number | null;
+    swimGoalMinutes?: number | null;
+    bikeGoalMinutes?: number | null;
+    runGoalMinutes?: number | null;
   }[];
 };
 

@@ -3,6 +3,10 @@ import {
   mesocyclesFromSerialized,
   type MesocycleDraft,
 } from "@/lib/plan/season/mesocycle-draft";
+import {
+  goalMinutesForDiscipline,
+  hasPartialDisciplineGoalTimes,
+} from "@/lib/plan/season/goal-event-times";
 
 export type PhaseFocus =
   | "AEROBIC_BASE"
@@ -27,6 +31,9 @@ export type GoalEventDraft = {
   disciplines: Discipline[];
   distanceMeters?: number | null;
   estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
   taperDaysBefore?: number | null;
   notes?: string | null;
 };
@@ -49,6 +56,9 @@ export function emptyGoalEventDraft(disciplines: Discipline[] = ["RUN"]): GoalEv
     disciplines,
     distanceMeters: null,
     estimatedDurationMinutes: null,
+    swimGoalMinutes: null,
+    bikeGoalMinutes: null,
+    runGoalMinutes: null,
     notes: null,
   };
 }
@@ -64,9 +74,23 @@ export function isGoalEventPartial(race: GoalEventDraft): boolean {
       race.disciplines.length > 0 ||
       race.distanceMeters != null ||
       race.estimatedDurationMinutes != null ||
+      race.swimGoalMinutes != null ||
+      race.bikeGoalMinutes != null ||
+      race.runGoalMinutes != null ||
       (race.notes?.trim() ?? "")
   );
   return hasAny && !isGoalEventComplete(race);
+}
+
+export function isGoalEventTimesPartial(race: GoalEventDraft): boolean {
+  if (race.disciplines.length <= 1) return false;
+  return hasPartialDisciplineGoalTimes({
+    disciplines: race.disciplines,
+    swimGoalMinutes: race.swimGoalMinutes,
+    bikeGoalMinutes: race.bikeGoalMinutes,
+    runGoalMinutes: race.runGoalMinutes,
+    estimatedDurationMinutes: race.estimatedDurationMinutes,
+  });
 }
 
 export function goalEventFromApi(event: {
@@ -76,16 +100,37 @@ export function goalEventFromApi(event: {
   disciplines: Discipline[];
   distanceMeters?: number | null;
   estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
   taperDaysBefore?: number | null;
   notes?: string | null;
 }): GoalEventDraft {
+  const disciplines = event.disciplines?.length ? event.disciplines : ["RUN"];
+  const swimGoalMinutes = event.swimGoalMinutes ?? null;
+  const bikeGoalMinutes = event.bikeGoalMinutes ?? null;
+  const runGoalMinutes = event.runGoalMinutes ?? null;
+  let estimatedDurationMinutes = event.estimatedDurationMinutes ?? null;
+  if (disciplines.length === 1) {
+    const only = disciplines[0]!;
+    const legMinutes = goalMinutesForDiscipline(
+      { swimGoalMinutes, bikeGoalMinutes, runGoalMinutes },
+      only
+    );
+    if (legMinutes != null) {
+      estimatedDurationMinutes = legMinutes;
+    }
+  }
   return {
     id: event.id,
     name: event.name,
     date: event.date,
-    disciplines: event.disciplines?.length ? event.disciplines : ["RUN"],
+    disciplines,
     distanceMeters: event.distanceMeters ?? null,
-    estimatedDurationMinutes: event.estimatedDurationMinutes ?? null,
+    estimatedDurationMinutes,
+    swimGoalMinutes,
+    bikeGoalMinutes,
+    runGoalMinutes,
     taperDaysBefore: event.taperDaysBefore ?? null,
     notes: event.notes ?? null,
   };

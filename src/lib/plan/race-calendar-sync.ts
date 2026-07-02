@@ -17,6 +17,9 @@ export type GoalEventRaceInput = {
   priority: "A" | "B" | "C";
   distanceMeters?: number | null;
   estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
   taperDaysBefore?: number | null;
   notes?: string | null;
   plannedSessionId?: string | null;
@@ -39,6 +42,22 @@ function isMultisport(disciplines: GoalEventDiscipline[]): boolean {
 
 function disciplineToEnum(d: GoalEventDiscipline): Discipline {
   return d as Discipline;
+}
+
+function goalMinutesForLeg(
+  goalEvent: GoalEventRaceInput,
+  discipline: GoalEventDiscipline
+): number | null {
+  switch (discipline) {
+    case "SWIM":
+      return goalEvent.swimGoalMinutes ?? goalEvent.estimatedDurationMinutes ?? null;
+    case "BIKE":
+      return goalEvent.bikeGoalMinutes ?? goalEvent.estimatedDurationMinutes ?? null;
+    case "RUN":
+      return goalEvent.runGoalMinutes ?? goalEvent.estimatedDurationMinutes ?? null;
+    default:
+      return goalEvent.estimatedDurationMinutes ?? null;
+  }
 }
 
 async function sessionsForGoalEvent(tx: Tx, goalEventId: string): Promise<PlannedSession[]> {
@@ -115,7 +134,7 @@ export async function syncRaceToCalendar(
           title: goalEvent.name,
           notes: goalEvent.notes ?? null,
           distanceMeters: goalEvent.distanceMeters ?? null,
-          estimatedDurationMinutes: goalEvent.estimatedDurationMinutes ?? null,
+          estimatedDurationMinutes: goalMinutesForLeg(goalEvent, disciplines[0]!),
           source: "RACE",
           goalEventId: goalEvent.id,
           multisportGroupId: null,
@@ -142,7 +161,7 @@ export async function syncRaceToCalendar(
         title: goalEvent.name,
         notes: goalEvent.notes ?? null,
         distanceMeters: goalEvent.distanceMeters ?? null,
-        estimatedDurationMinutes: goalEvent.estimatedDurationMinutes ?? null,
+        estimatedDurationMinutes: goalMinutesForLeg(goalEvent, discipline),
         source: "RACE",
         goalEventId: goalEvent.id,
       },
@@ -171,7 +190,7 @@ export async function syncRaceToCalendar(
       title: goalEvent.name,
       notes: goalEvent.notes ?? null,
       distanceMeters: goalEvent.distanceMeters ?? null,
-      estimatedDurationMinutes: goalEvent.estimatedDurationMinutes ?? null,
+      estimatedDurationMinutes: goalMinutesForLeg(goalEvent, d),
       source: "RACE" as const,
       goalEventId: goalEvent.id,
       multisportGroupId: groupId,

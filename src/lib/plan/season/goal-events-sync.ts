@@ -19,6 +19,9 @@ export type GoalEventWriteInput = {
   disciplines: GoalEventDiscipline[];
   distanceMeters?: number | null;
   estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
   taperDaysBefore?: number | null;
   notes?: string | null;
 };
@@ -44,6 +47,9 @@ function toRaceInput(
     priority: EventPriority;
     distanceMeters?: number | null;
     estimatedDurationMinutes?: number | null;
+    swimGoalMinutes?: number | null;
+    bikeGoalMinutes?: number | null;
+    runGoalMinutes?: number | null;
     taperDaysBefore?: number | null;
     notes?: string | null;
     plannedSessionId?: string | null;
@@ -59,6 +65,9 @@ function toRaceInput(
     priority: event.priority,
     distanceMeters: event.distanceMeters,
     estimatedDurationMinutes: event.estimatedDurationMinutes,
+    swimGoalMinutes: event.swimGoalMinutes,
+    bikeGoalMinutes: event.bikeGoalMinutes,
+    runGoalMinutes: event.runGoalMinutes,
     taperDaysBefore: event.taperDaysBefore,
     notes: event.notes,
     plannedSessionId: event.plannedSessionId,
@@ -86,6 +95,9 @@ export async function upsertGoalEventWithCalendar(
         disciplines: input.disciplines,
         distanceMeters: input.distanceMeters ?? null,
         estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
+        swimGoalMinutes: input.swimGoalMinutes ?? null,
+        bikeGoalMinutes: input.bikeGoalMinutes ?? null,
+        runGoalMinutes: input.runGoalMinutes ?? null,
         taperDaysBefore: input.taperDaysBefore ?? null,
         notes: input.notes ?? null,
         priority,
@@ -104,6 +116,9 @@ export async function upsertGoalEventWithCalendar(
         priority,
         distanceMeters: input.distanceMeters ?? null,
         estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
+        swimGoalMinutes: input.swimGoalMinutes ?? null,
+        bikeGoalMinutes: input.bikeGoalMinutes ?? null,
+        runGoalMinutes: input.runGoalMinutes ?? null,
         taperDaysBefore: input.taperDaysBefore ?? null,
         notes: input.notes ?? null,
       },

@@ -8,6 +8,7 @@ import {
   goalEventFromApi,
   isGoalEventComplete,
   isGoalEventPartial,
+  isGoalEventTimesPartial,
   normalizePhasesFromApi,
   phasesForApi,
   type GoalEventDraft,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/plan/season/mesocycle-draft";
 import { markDeLoadWeeksPerMesocycle } from "@/lib/plan/season/de-load-cadence";
 import { defaultPhaseForKind, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
+import { goalEventTimesForApi } from "@/lib/plan/season/goal-event-times";
 import { resolveMesocycles } from "@/lib/plan/season/phase-split";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 
@@ -106,13 +108,23 @@ function flagsFromSeason(season: SeasonData): boolean[] | null {
 }
 
 function goalEventPayload(race: GoalEventDraft) {
+  const times = goalEventTimesForApi({
+    disciplines: race.disciplines,
+    estimatedDurationMinutes: race.estimatedDurationMinutes ?? null,
+    swimGoalMinutes: race.swimGoalMinutes ?? null,
+    bikeGoalMinutes: race.bikeGoalMinutes ?? null,
+    runGoalMinutes: race.runGoalMinutes ?? null,
+  });
   return {
     id: race.id,
     name: race.name.trim(),
     date: race.date,
     disciplines: race.disciplines,
     distanceMeters: race.distanceMeters ?? null,
-    estimatedDurationMinutes: race.estimatedDurationMinutes ?? null,
+    estimatedDurationMinutes: times.estimatedDurationMinutes,
+    swimGoalMinutes: times.swimGoalMinutes,
+    bikeGoalMinutes: times.bikeGoalMinutes,
+    runGoalMinutes: times.runGoalMinutes,
     taperDaysBefore: race.taperDaysBefore ?? null,
     notes: race.notes ?? null,
   };
@@ -561,6 +573,11 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     const partial = [...bRaces, ...cRaces].find(isGoalEventPartial);
     if (partial) {
       setError("Complete or remove partially filled B/C races");
+      return false;
+    }
+    const partialTimes = [...bRaces, ...cRaces, aRace].find(isGoalEventTimesPartial);
+    if (partialTimes) {
+      setError("Enter a goal time for each selected discipline, or leave all blank");
       return false;
     }
 

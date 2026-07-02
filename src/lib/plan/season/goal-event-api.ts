@@ -14,6 +14,9 @@ export function parseGoalEventWrite(event: GoalEventApi): GoalEventWriteInput {
     disciplines: event.disciplines,
     distanceMeters: event.distanceMeters,
     estimatedDurationMinutes: event.estimatedDurationMinutes,
+    swimGoalMinutes: event.swimGoalMinutes,
+    bikeGoalMinutes: event.bikeGoalMinutes,
+    runGoalMinutes: event.runGoalMinutes,
     taperDaysBefore: event.taperDaysBefore,
     notes: event.notes,
   };

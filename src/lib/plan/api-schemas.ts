@@ -205,6 +205,9 @@ export const seasonGoalEventSchema = z.object({
   disciplines: z.array(goalEventDisciplineSchema).min(1),
   distanceMeters: z.number().positive().nullable().optional(),
   estimatedDurationMinutes: z.number().int().positive().nullable().optional(),
+  swimGoalMinutes: z.number().int().positive().nullable().optional(),
+  bikeGoalMinutes: z.number().int().positive().nullable().optional(),
+  runGoalMinutes: z.number().int().positive().nullable().optional(),
   taperDaysBefore: z.number().int().positive().nullable().optional(),
   notes: z.string().nullable().optional(),
 });

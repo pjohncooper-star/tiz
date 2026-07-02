@@ -483,6 +483,9 @@ model GoalEvent {
   priority                 EventPriority         @default(A)
   distanceMeters           Float?
   estimatedDurationMinutes Int?
+  swimGoalMinutes          Int?
+  bikeGoalMinutes          Int?
+  runGoalMinutes           Int?
   taperDaysBefore          Int?
   notes                    String?
   plannedSessionId         String?               @unique

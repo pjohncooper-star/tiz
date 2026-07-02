@@ -16,6 +16,9 @@ export function serializeGoalEvent(event: {
   priority: string;
   distanceMeters?: number | null;
   estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
   plannedSessionId?: string | null;
   taperDaysBefore: number | null;
   notes: string | null;
@@ -28,6 +31,9 @@ export function serializeGoalEvent(event: {
     priority: event.priority,
     distanceMeters: event.distanceMeters ?? null,
     estimatedDurationMinutes: event.estimatedDurationMinutes ?? null,
+    swimGoalMinutes: event.swimGoalMinutes ?? null,
+    bikeGoalMinutes: event.bikeGoalMinutes ?? null,
+    runGoalMinutes: event.runGoalMinutes ?? null,
     plannedSessionId: event.plannedSessionId ?? null,
     taperDaysBefore: event.taperDaysBefore,
     notes: event.notes,

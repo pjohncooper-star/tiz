@@ -277,6 +277,46 @@ describe("syncRaceToCalendar", () => {
     assert.equal(goalEvents.get("ge_tri")!.plannedSessionId, legs[0]!.id);
   });
 
+  it("applies per-leg goal minutes to multisport calendar sessions", async () => {
+    const { tx, plannedSessions, goalEvents } = createMockTx();
+    goalEvents.set("ge_703", {
+      id: "ge_703",
+      athleteId: "athlete_1",
+      seasonPlanId: "season_1",
+      name: "70.3",
+      date: new Date("2026-08-01"),
+      disciplines: ["SWIM", "BIKE", "RUN"],
+      priority: "A",
+      distanceMeters: null,
+      estimatedDurationMinutes: 300,
+      taperDaysBefore: null,
+      notes: null,
+      plannedSessionId: null,
+    });
+
+    await syncRaceToCalendar(tx, {
+      id: "ge_703",
+      athleteId: "athlete_1",
+      seasonPlanId: "season_1",
+      name: "70.3",
+      date: new Date("2026-08-01"),
+      disciplines: ["SWIM", "BIKE", "RUN"],
+      priority: "A",
+      estimatedDurationMinutes: 300,
+      swimGoalMinutes: 30,
+      bikeGoalMinutes: 180,
+      runGoalMinutes: 90,
+    });
+
+    const legs = [...plannedSessions.values()].sort(
+      (a, b) => (a.sessionIndex ?? 0) - (b.sessionIndex ?? 0)
+    );
+    assert.deepEqual(
+      legs.map((l) => l.estimatedDurationMinutes),
+      [30, 180, 90]
+    );
+  });
+
   it("moves session date on update", async () => {
     const { tx, plannedSessions, goalEvents } = createMockTx();
     goalEvents.set("ge_1", {

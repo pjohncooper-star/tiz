@@ -3,6 +3,7 @@
 import { Card } from "@/components/ui";
 import { formatGoalDisciplines, type Discipline, type EventPriority } from "@/components/season/season-settings-types";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
+import { formatDisciplineGoalTimesSummary } from "@/lib/plan/season/goal-event-times";
 
 export type GoalEventSummary = {
   id: string;
@@ -12,6 +13,9 @@ export type GoalEventSummary = {
   priority: EventPriority;
   distanceMeters?: number | null;
   estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
 };
 
 export type SeasonSummary = {
@@ -91,14 +95,18 @@ export function SeasonPlannerShell({ season, children }: SeasonPlannerShellProps
                         · {formatGoalDisciplines(event.disciplines)}
                       </span>
                     )}
-                    {(event.distanceMeters != null || event.estimatedDurationMinutes != null) && (
+                    {(event.distanceMeters != null ||
+                      event.estimatedDurationMinutes != null ||
+                      formatDisciplineGoalTimesSummary(event.disciplines, event)) && (
                       <span className="block text-xs text-zinc-500">
                         {event.distanceMeters != null && `${Math.round(event.distanceMeters)} m`}
                         {event.distanceMeters != null &&
-                          event.estimatedDurationMinutes != null &&
+                          (event.estimatedDurationMinutes != null ||
+                            formatDisciplineGoalTimesSummary(event.disciplines, event)) &&
                           " · "}
-                        {event.estimatedDurationMinutes != null &&
-                          formatGoalTimeDisplay(event.estimatedDurationMinutes)}
+                        {formatDisciplineGoalTimesSummary(event.disciplines, event) ??
+                          (event.estimatedDurationMinutes != null &&
+                            formatGoalTimeDisplay(event.estimatedDurationMinutes))}
                       </span>
                     )}
                   </li>
