@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { DisciplineUnitsSettings } from "@/components/discipline-units-settings";
+import { SelfEvalSettingsPanel } from "@/components/self-eval-settings-panel";
 import { WorkoutShadingSettingsPanel } from "@/components/workout-shading-settings";
 import { Card } from "@/components/ui";
 import { requireAthlete } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { buildWorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import { parseSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { signalLabel } from "@/lib/zones/display";
 
@@ -18,7 +20,7 @@ export default async function SettingsPage() {
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
     db.athlete.findUnique({
       where: { id: athleteId },
-      select: { strengthPastWorkoutShading: true },
+      select: { strengthPastWorkoutShading: true, selfEvalConfig: true },
     }),
   ]);
 
@@ -38,6 +40,8 @@ export default async function SettingsPage() {
     athlete?.strengthPastWorkoutShading
   );
 
+  const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
       <h1 className="text-2xl font-semibold">Settings</h1>
@@ -46,6 +50,9 @@ export default async function SettingsPage() {
       </Card>
       <Card title="Workout shading">
         <WorkoutShadingSettingsPanel initialSettings={workoutShadingSettings} />
+      </Card>
+      <Card title="Self evaluation">
+        <SelfEvalSettingsPanel initialConfig={selfEvalConfig} />
       </Card>
       <Card title="Strava">
         {connection ? (

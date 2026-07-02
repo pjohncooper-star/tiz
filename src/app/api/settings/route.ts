@@ -11,6 +11,7 @@ import {
   validatePrimarySignal,
 } from "@/lib/zones/signal-preference";
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
+import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import type { Discipline } from "@prisma/client";
 const settingsSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
@@ -122,6 +123,26 @@ export async function PUT(req: Request) {
               /poolSize|PoolSize|column/.test(error.message)
             ? "Pool size is not available yet. Run prisma/migrations/manual_pool_size.sql, then restart the dev server."
             : "Could not save unit settings";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (body.type === "self-eval") {
+    try {
+      const config = validateSelfEvalConfig(body.data);
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: { selfEvalConfig: config },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      const message =
+        error instanceof Error &&
+        /selfEvalConfig|SelfEvalConfig|column/.test(error.message)
+          ? "Self-eval settings are not available yet. Run prisma/migrations/manual_self_eval_config.sql, then run npx prisma generate and restart the dev server."
+          : error instanceof Error
+            ? error.message
+            : "Could not save self-eval settings";
       return NextResponse.json({ error: message }, { status: 500 });
     }
   }

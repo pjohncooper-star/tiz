@@ -83,6 +83,7 @@ enum SurveySource {
   PROSPECTIVE
   HISTORICAL_BACKFILL
   FIT_IMPORT
+  MANUAL
 }
 
 enum ConsentStatus {
@@ -237,6 +238,7 @@ model Athlete {
   userId                     String               @unique
   onboardingStep             OnboardingStep       @default(PROFILE)
   strengthPastWorkoutShading PastWorkoutShading   @default(OFF)
+  selfEvalConfig             Json?
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 
@@ -695,6 +697,7 @@ model SurveyResponse {
   dayQualityFlag DayQualityFlag?
   source         SurveySource    @default(PROSPECTIVE)
   note           String?
+  customFields   Json?
   reminderSent   Boolean         @default(false)
   createdAt      DateTime        @default(now())
 

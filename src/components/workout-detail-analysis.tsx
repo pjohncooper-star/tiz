@@ -1,4 +1,4 @@
-import { ActivitySelfEval } from "@/components/activity-self-eval";
+import { ActivitySelfEvalEditor } from "@/components/activity-self-eval-editor";
 import { ActivitySummary } from "@/components/activity-summary";
 import { ActivityWorkoutChartCard } from "@/components/activity-workout-chart-card";
 import { ActivityZoneTable } from "@/components/activity-zone-table";
@@ -16,6 +16,7 @@ type WorkoutDetailAnalysisProps = {
     | "displayUnit"
     | "structuredSteps"
     | "linkedActivity"
+    | "selfEvalConfig"
     | "workoutLaps"
     | "swimLaps"
     | "showExecutionChart"
@@ -31,6 +32,7 @@ export function WorkoutDetailAnalysis({ viewModel }: WorkoutDetailAnalysisProps)
     displayUnit,
     structuredSteps,
     linkedActivity,
+    selfEvalConfig,
     workoutLaps,
     swimLaps,
     showExecutionChart,
@@ -96,12 +98,25 @@ export function WorkoutDetailAnalysis({ viewModel }: WorkoutDetailAnalysisProps)
       </Card>
 
       <Card title="Self evaluation">
-        {linkedActivity?.surveyResponse ? (
-          <ActivitySelfEval
-            rpe={linkedActivity.surveyResponse.rpe}
-            freshness={linkedActivity.surveyResponse.freshness}
-            dayQualityFlag={linkedActivity.surveyResponse.dayQualityFlag}
-            source={linkedActivity.surveyResponse.source}
+        {linkedActivity ? (
+          <ActivitySelfEvalEditor
+            activityId={linkedActivity.id}
+            initialSurvey={
+              linkedActivity.surveyResponse
+                ? {
+                    rpe: linkedActivity.surveyResponse.rpe,
+                    freshness: linkedActivity.surveyResponse.freshness,
+                    sleep: linkedActivity.surveyResponse.sleep,
+                    motivation: linkedActivity.surveyResponse.motivation,
+                    soreness: linkedActivity.surveyResponse.soreness,
+                    note: linkedActivity.surveyResponse.note,
+                    customFields: linkedActivity.surveyResponse.customFields,
+                    dayQualityFlag: linkedActivity.surveyResponse.dayQualityFlag,
+                    source: linkedActivity.surveyResponse.source,
+                  }
+                : null
+            }
+            fieldConfig={selfEvalConfig}
           />
         ) : (
           <p className="text-sm text-zinc-500">No self evaluation recorded</p>

@@ -23,8 +23,9 @@ import { parseWorkoutTree } from "@/lib/workout/steps";
 import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
 import type { NormalizedStreams, WorkoutExecutionLap } from "@/lib/zones/compute";
 import { parseStoredStreams } from "@/lib/zones/process-activity";
-import { getSignalPreferenceAtDate } from "@/lib/zones/signal-preference";
+import { parseSelfEvalConfig, type SelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { parseSwimLapIntervals, type SwimLapInterval } from "@/lib/zones/swim-laps";
+import { getSignalPreferenceAtDate } from "@/lib/zones/signal-preference";
 import { getThresholdProfileAtDate, parseZoneBoundaries } from "@/lib/zones/thresholds";
 import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
 
@@ -74,6 +75,7 @@ export type WorkoutDetailViewModel = {
     folder: { id: string; name: string; folderKind: string } | null;
     workoutTemplate: { id: string; name: string; sortOrder: number | null };
   } | null;
+  selfEvalConfig: SelfEvalConfig;
   linkedActivity: WorkoutDetailLinkedActivity | null;
   workoutLaps: WorkoutExecutionLap[] | undefined;
   swimLaps: SwimLapInterval[] | null;
@@ -109,20 +111,28 @@ export async function loadWorkoutDetail(
 ): Promise<WorkoutDetailViewModel> {
   const returnHref = resolveWorkoutReturnHref(returnTo);
 
-  const plannedSession = await db.plannedSession.findFirst({
-    where: { id: sessionId, athleteId },
-    include: {
-      structuredWorkout: true,
-      workoutSource: {
-        include: {
-          folder: { select: { id: true, name: true, folderKind: true } },
-          workoutTemplate: { select: { id: true, name: true, sortOrder: true } },
+  const [plannedSession, athlete] = await Promise.all([
+    db.plannedSession.findFirst({
+      where: { id: sessionId, athleteId },
+      include: {
+        structuredWorkout: true,
+        workoutSource: {
+          include: {
+            folder: { select: { id: true, name: true, folderKind: true } },
+            workoutTemplate: { select: { id: true, name: true, sortOrder: true } },
+          },
         },
       },
-    },
-  });
+    }),
+    db.athlete.findUnique({
+      where: { id: athleteId },
+      select: { selfEvalConfig: true },
+    }),
+  ]);
 
   if (!plannedSession) notFound();
+
+  const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
 
   const disciplineSettingsRows = await db.athleteDisciplineSettings.findMany({
     where: { athleteId },
@@ -288,6 +298,7 @@ export async function loadWorkoutDetail(
     primarySignal,
     sessionSource: plannedSession.source,
     workoutSource: plannedSession.workoutSource,
+    selfEvalConfig,
     linkedActivity,
     workoutLaps,
     swimLaps,
