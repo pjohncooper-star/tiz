@@ -355,3 +355,32 @@ export const reorderFoldersSchema = z.object({
   parentFolderId: z.string().min(1).nullable(),
   orderedIds: z.array(z.string().min(1)).min(1),
 });
+
+export const componentTypeSchema = z.enum([
+  "WARMUP",
+  "PRIMER",
+  "MAIN_SET",
+  "COOLDOWN",
+  "DRILL",
+  "RECOVERY",
+  "OTHER",
+]);
+
+/** Legacy workout component library (pre–workout-folder migration). */
+export const createWorkoutComponentSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  discipline: planDisciplineSchema,
+  componentType: componentTypeSchema,
+  notes: z.string().nullable().optional(),
+  steps: stepsPayloadSchema,
+});
+
+export const updateWorkoutComponentSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    discipline: planDisciplineSchema.optional(),
+    componentType: componentTypeSchema.optional(),
+    notes: z.string().nullable().optional(),
+    steps: stepsPayloadSchema.optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
