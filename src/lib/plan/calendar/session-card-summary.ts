@@ -1,3 +1,4 @@
+import type { Discipline } from "@prisma/client";
 import type { CalendarLinkedActivity, CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import { formatSessionDistance } from "@/lib/workout/metrics";
@@ -57,7 +58,7 @@ export function formatSessionCardMetricComparison(
   session: CalendarPlannedSession,
   displayUnit: DisplayUnit
 ): { duration: string | null; distance: string | null } {
-  const discipline = session.discipline;
+  const discipline = session.discipline as Discipline;
 
   const plannedDur =
     plannedDurationMinutes(session) != null
@@ -119,7 +120,7 @@ export function formatActivityCardMetricLines(
   if (activity.durationSeconds > 0) {
     parts.push(formatDurationSeconds(activity.durationSeconds));
   }
-  const dist = formatSessionDistance(activity.distanceMeters, activity.discipline, displayUnit);
+  const dist = formatSessionDistance(activity.distanceMeters, activity.discipline as Discipline, displayUnit);
   if (dist) parts.push(dist);
   if (parts.length === 0) return [];
   return [parts.join(" · ")];
@@ -157,3 +158,6 @@ export function formatLinkedSessionCardLines(
 ): string[] {
   return formatSessionCardMetricLines(session, displayUnit);
 }
+
+
+

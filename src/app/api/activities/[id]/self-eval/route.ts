@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import type { DayQualityFlag } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { dayQualityFromFitSelfEval } from "@/lib/survey/fit-self-eval";
@@ -6,9 +8,24 @@ import {
   buildSurveyUpdateFromValues,
   parseSelfEvalConfig,
   type SelfEvalConfig,
+  type SurveyUpdateData,
 } from "@/lib/survey/self-eval-config";
 
 type RouteContext = { params: Promise<{ id: string }> };
+function surveyFieldsForDb(
+  data: SurveyUpdateData & { dayQualityFlag: DayQualityFlag | null }
+) {
+  const { customFields, ...rest } = data;
+  return {
+    ...rest,
+    customFields:
+      customFields === undefined
+        ? undefined
+        : customFields === null
+          ? Prisma.DbNull
+          : (customFields as Prisma.InputJsonValue),
+  };
+}
 
 export async function PUT(request: Request, context: RouteContext) {
   const session = await auth();
@@ -64,10 +81,10 @@ export async function PUT(request: Request, context: RouteContext) {
   const mergedRpe = update.rpe !== undefined ? update.rpe : existing?.rpe ?? null;
   const dayQualityFlag = dayQualityFromFitSelfEval(mergedFreshness, mergedRpe);
 
-  const data = {
+  const data = surveyFieldsForDb({
     ...update,
     dayQualityFlag,
-  };
+  });
 
   const survey = existing
     ? await db.surveyResponse.update({
@@ -88,3 +105,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   return NextResponse.json({ survey });
 }
+
+
+
+

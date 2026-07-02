@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DayQualityFlag, SurveySource } from "@prisma/client";
+import type { DayQualityFlag, Prisma, SurveySource } from "@prisma/client";
 import { Button, Label, SegmentedControl, Select } from "@/components/ui";
 import {
   DAY_QUALITY_LABELS,
@@ -23,7 +23,7 @@ export type ActivitySelfEvalSurvey = {
   motivation: number | null;
   soreness: number | null;
   note: string | null;
-  customFields: unknown;
+  customFields: Prisma.JsonValue | null;
   dayQualityFlag: DayQualityFlag | null;
   source: SurveySource;
 };
@@ -244,3 +244,4 @@ export function ActivitySelfEvalEditor({
     </div>
   );
 }
+
