@@ -24,7 +24,7 @@ import {
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
-import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
@@ -37,6 +37,7 @@ type CalendarWeekRowProps = {
   activities: CalendarWeekActivity[];
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   workoutShadingSettings: WorkoutShadingSettings;
+  workoutShadingTarget: WorkoutShadingTarget;
   onSessionCreated: () => void;
   activeDragId: string | null;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
@@ -50,6 +51,7 @@ export function CalendarWeekRow({
   activities,
   disciplineSettings,
   workoutShadingSettings,
+  workoutShadingTarget,
   onSessionCreated,
   activeDragId,
   scrollAnchorRef,
@@ -130,6 +132,7 @@ export function CalendarWeekRow({
               weekDays={weekDays}
               disciplineSettings={disciplineSettings}
               workoutShadingSettings={workoutShadingSettings}
+              workoutShadingTarget={workoutShadingTarget}
               onSessionCreated={onSessionCreated}
               activeDragId={activeDragId}
               isSelected={selectedDateKey === dateKey}

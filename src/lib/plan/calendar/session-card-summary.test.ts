@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildActivityCardMetrics,
+  buildSessionCardMetrics,
   formatActivityCardMetricLines,
   formatCardDistance,
   formatCardDuration,
@@ -88,6 +90,41 @@ describe("isRedundantCalendarActivityTitle", () => {
 
   it("keeps custom activity names", () => {
     assert.equal(isRedundantCalendarActivityTitle("Morning Ride", "BIKE"), false);
+  });
+});
+
+describe("buildSessionCardMetrics", () => {
+  it("splits planned and completed values for linked sessions", () => {
+    const metrics = buildSessionCardMetrics(baseSession({ linkedActivity }), "IMPERIAL");
+    assert.deepEqual(metrics.duration, { planned: "45m", completed: "1:02" });
+    assert.deepEqual(metrics.distance, { planned: "3k", completed: "3.5k" });
+    assert.equal(metrics.hasAny, true);
+  });
+
+  it("returns planned-only rows for unlinked sessions", () => {
+    const metrics = buildSessionCardMetrics(baseSession(), "IMPERIAL");
+    assert.deepEqual(metrics.duration, { planned: "45m", completed: null });
+    assert.deepEqual(metrics.distance, { planned: "3k", completed: null });
+  });
+
+  it("returns hasAny false when no metrics exist", () => {
+    const metrics = buildSessionCardMetrics(
+      baseSession({ plannedMinutes: 0, distanceMeters: null }),
+      "IMPERIAL"
+    );
+    assert.equal(metrics.hasAny, false);
+  });
+});
+
+describe("buildActivityCardMetrics", () => {
+  it("returns completed-only duration and distance", () => {
+    const metrics = buildActivityCardMetrics(
+      { discipline: "RUN", durationSeconds: 2700, distanceMeters: 8000 },
+      "METRIC"
+    );
+    assert.equal(metrics.duration, "45m");
+    assert.equal(metrics.distance, "8k");
+    assert.equal(metrics.hasAny, true);
   });
 });
 

@@ -7,7 +7,9 @@ import {
   buildWorkoutShadingSettings,
   type WorkoutShadingMode,
   type WorkoutShadingSettings,
+  type WorkoutShadingTarget,
   workoutShadingOptionsForDiscipline,
+  workoutShadingTargetOptions,
 } from "@/lib/plan/workout-shading";
 import { Button, Label, Select } from "@/components/ui";
 
@@ -15,6 +17,7 @@ const SHADING_DISCIPLINES: Discipline[] = ["BIKE", "RUN", "SWIM", "STRENGTH"];
 
 type WorkoutShadingSettingsPanelProps = {
   initialSettings: WorkoutShadingSettings;
+  initialShadingTarget: WorkoutShadingTarget;
 };
 
 async function persistWorkoutShading(
@@ -34,23 +37,54 @@ async function persistWorkoutShading(
   return { ok: false, error: data?.error ?? "Could not save workout shading" };
 }
 
+async function persistWorkoutShadingTarget(
+  workoutShadingTarget: WorkoutShadingTarget
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await fetch("/api/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "workout-shading-target",
+      data: { workoutShadingTarget },
+    }),
+  });
+  if (res.ok) return { ok: true };
+  const data = (await res.json().catch(() => null)) as { error?: string } | null;
+  return { ok: false, error: data?.error ?? "Could not save workout shading target" };
+}
+
 export function WorkoutShadingSettingsPanel({
   initialSettings,
+  initialShadingTarget,
 }: WorkoutShadingSettingsPanelProps) {
   const [saved, setSaved] = useState(initialSettings);
   const [draft, setDraft] = useState(initialSettings);
+  const [savedTarget, setSavedTarget] = useState(initialShadingTarget);
+  const [draftTarget, setDraftTarget] = useState(initialShadingTarget);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const dirty = SHADING_DISCIPLINES.some((d) => draft[d] !== saved[d]);
+  const dirtyDisciplines = SHADING_DISCIPLINES.some((d) => draft[d] !== saved[d]);
+  const dirtyTarget = draftTarget !== savedTarget;
+  const dirty = dirtyDisciplines || dirtyTarget;
 
   async function handleSave() {
-    const toSave = SHADING_DISCIPLINES.filter((d) => draft[d] !== saved[d]);
-    if (toSave.length === 0) return;
+    if (!dirty) return;
 
     setSaving(true);
     setError(null);
 
+    if (dirtyTarget) {
+      const result = await persistWorkoutShadingTarget(draftTarget);
+      if (!result.ok) {
+        setSaving(false);
+        setError(result.error);
+        return;
+      }
+      setSavedTarget(draftTarget);
+    }
+
+    const toSave = SHADING_DISCIPLINES.filter((d) => draft[d] !== saved[d]);
     for (const discipline of toSave) {
       const result = await persistWorkoutShading(discipline, draft[discipline]);
       if (!result.ok) {
@@ -71,6 +105,23 @@ export function WorkoutShadingSettingsPanel({
         Within 10% is green, within 25% is amber, outside 25% or not completed is red. Off uses
         gray for past workouts.
       </p>
+      <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+        <Label>Apply shading to</Label>
+        <Select
+          value={draftTarget}
+          onChange={(e) => {
+            setDraftTarget(e.target.value as WorkoutShadingTarget);
+            setError(null);
+          }}
+          disabled={saving}
+        >
+          {workoutShadingTargetOptions().map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </Select>
+      </div>
       {SHADING_DISCIPLINES.map((discipline) => {
         const options = workoutShadingOptionsForDiscipline(discipline);
         return (

@@ -13,7 +13,7 @@ import { weekDayColumnClass } from "@/components/calendar/week-day-layout";
 import type { WeekActivityGroup } from "@/components/dashboard-week-view";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
-import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
 type CalendarDayColumnProps = {
@@ -23,6 +23,7 @@ type CalendarDayColumnProps = {
   weekDays: string[];
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   workoutShadingSettings: WorkoutShadingSettings;
+  workoutShadingTarget: WorkoutShadingTarget;
   onSessionCreated: () => void;
   activeDragId: string | null;
   isSelected: boolean;
@@ -37,6 +38,7 @@ export function CalendarDayColumn({
   weekDays,
   disciplineSettings,
   workoutShadingSettings,
+  workoutShadingTarget,
   onSessionCreated,
   activeDragId,
   isSelected,
@@ -140,6 +142,7 @@ export function CalendarDayColumn({
                 key={item.session.id}
                 session={item.session}
                 workoutShadingSettings={workoutShadingSettings}
+                workoutShadingTarget={workoutShadingTarget}
                 disciplineSettings={disciplineSettings}
                 isDragging={activeDragId === item.session.id}
                 showLinkDropTarget={activityDragActive}

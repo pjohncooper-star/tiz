@@ -1,6 +1,10 @@
 import type { Discipline } from "@prisma/client";
 import { isBefore, isSameDay, parseISO, startOfDay } from "date-fns";
-import type { CalendarLinkedActivity, CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+import {
+  completedDistanceMeters,
+  plannedDurationMinutes,
+} from "@/lib/plan/calendar/session-card-summary";
 import { totalZoneMinutes } from "@/lib/workout/steps";
 
 export type WorkoutShadingMode =
@@ -13,6 +17,8 @@ export type WorkoutShadingMode =
 
 export type WorkoutShadingTone = "gray" | "green" | "amber" | "red";
 
+export type WorkoutShadingTarget = "CARD" | "METRICS" | "BOTH";
+
 export type WorkoutShadingSettings = Record<Discipline, WorkoutShadingMode>;
 
 export const DEFAULT_WORKOUT_SHADING: WorkoutShadingSettings = {
@@ -21,6 +27,8 @@ export const DEFAULT_WORKOUT_SHADING: WorkoutShadingSettings = {
   SWIM: "OFF",
   STRENGTH: "OFF",
 };
+
+export const DEFAULT_WORKOUT_SHADING_TARGET: WorkoutShadingTarget = "BOTH";
 
 const PAST_GRAY_CARD_CLASS =
   "rounded-md border border-zinc-300 bg-zinc-100 p-1.5 text-sm shadow-sm dark:border-zinc-600 dark:bg-zinc-800/80";
@@ -32,6 +40,39 @@ const TONE_CARD_CLASSES: Record<Exclude<WorkoutShadingTone, "gray">, string> = {
     "rounded-md border border-amber-400 bg-amber-50 p-1.5 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-950/40",
   red: "rounded-md border border-red-400 bg-red-50 p-1.5 text-sm shadow-sm dark:border-red-700 dark:bg-red-950/40",
 };
+
+const PLANNED_METRIC_PILL_CLASS =
+  "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-700 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300";
+
+const TONE_METRIC_PILL_CLASSES: Record<WorkoutShadingTone, string> = {
+  gray: "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-600 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400",
+  green:
+    "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-emerald-800 bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-200",
+  amber:
+    "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-900 bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200",
+  red: "inline-block rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-red-800 bg-red-100 dark:bg-red-950/50 dark:text-red-200",
+};
+
+export function parseWorkoutShadingTarget(value: string | null | undefined): WorkoutShadingTarget {
+  if (value === "CARD" || value === "METRICS" || value === "BOTH") return value;
+  return DEFAULT_WORKOUT_SHADING_TARGET;
+}
+
+export function shouldShadeSessionCard(target: WorkoutShadingTarget): boolean {
+  return target === "CARD" || target === "BOTH";
+}
+
+export function shouldShadeMetricPills(target: WorkoutShadingTarget): boolean {
+  return target === "METRICS" || target === "BOTH";
+}
+
+export function plannedMetricPillClassName(): string {
+  return PLANNED_METRIC_PILL_CLASS;
+}
+
+export function metricPillClassName(tone: WorkoutShadingTone): string {
+  return TONE_METRIC_PILL_CLASSES[tone];
+}
 
 export function buildWorkoutShadingSettings(
   rows: Array<{ discipline: string; pastWorkoutShading?: WorkoutShadingMode | null }>,
@@ -102,6 +143,17 @@ export function workoutShadingOptionsForDiscipline(
   ];
 }
 
+export function workoutShadingTargetOptions(): Array<{
+  value: WorkoutShadingTarget;
+  label: string;
+}> {
+  return [
+    { value: "CARD", label: "Session card only" },
+    { value: "METRICS", label: "Metric pills only" },
+    { value: "BOTH", label: "Both card and metric pills" },
+  ];
+}
+
 export function isPastScheduledDate(scheduledDate: string): boolean {
   const day = parseISO(`${scheduledDate}T12:00:00`);
   return isBefore(day, startOfDay(new Date()));
@@ -115,6 +167,12 @@ export function isWorkoutShadingEligible(session: CalendarPlannedSession): boole
     return session.linkedActivity != null || session.hasCompletedOverride;
   }
   return false;
+}
+
+export function isDurationShadingMode(mode: WorkoutShadingMode): boolean {
+  return (
+    mode === "DURATION" || mode === "ELAPSED_DURATION" || mode === "MOVING_DURATION"
+  );
 }
 
 const DURATION_GREEN_WINDOW_MINUTES = 5;
@@ -179,7 +237,7 @@ function plannedMetricValue(
     case "DURATION":
     case "ELAPSED_DURATION":
     case "MOVING_DURATION":
-      return session.plannedMinutes > 0 ? session.plannedMinutes : null;
+      return plannedDurationMinutes(session);
     case "DISTANCE":
       return session.distanceMeters != null && session.distanceMeters > 0
         ? session.distanceMeters
@@ -193,11 +251,17 @@ function plannedMetricValue(
   }
 }
 
-function completedMetricValue(
-  linked: CalendarLinkedActivity,
+function completedDurationMinutesForMode(
+  session: CalendarPlannedSession,
   mode: WorkoutShadingMode,
   discipline: Discipline
 ): number | null {
+  if (session.completedDurationMinutes != null && session.completedDurationMinutes > 0) {
+    return session.completedDurationMinutes;
+  }
+  const linked = session.linkedActivity;
+  if (!linked) return null;
+
   switch (mode) {
     case "DURATION":
       if (discipline === "STRENGTH") {
@@ -214,15 +278,61 @@ function completedMetricValue(
         return linked.movingSeconds / 60;
       }
       return linked.elapsedSeconds > 0 ? linked.elapsedSeconds / 60 : null;
-    case "DISTANCE":
-      return linked.distanceMeters != null && linked.distanceMeters > 0
-        ? linked.distanceMeters
-        : null;
-    case "TIZ":
-      return linked.zoneMinutes > 0 ? linked.zoneMinutes : null;
     default:
       return null;
   }
+}
+
+function completedMetricValue(
+  session: CalendarPlannedSession,
+  mode: WorkoutShadingMode,
+  discipline: Discipline
+): number | null {
+  switch (mode) {
+    case "DURATION":
+    case "ELAPSED_DURATION":
+    case "MOVING_DURATION":
+      return completedDurationMinutesForMode(session, mode, discipline);
+    case "DISTANCE":
+      return completedDistanceMeters(session);
+    case "TIZ": {
+      const linked = session.linkedActivity;
+      return linked && linked.zoneMinutes > 0 ? linked.zoneMinutes : null;
+    }
+    default:
+      return null;
+  }
+}
+
+export function resolveCompletedMetricPillTone(
+  session: CalendarPlannedSession,
+  shadingSettings: WorkoutShadingSettings,
+  kind: "duration" | "distance",
+  shadingTarget: WorkoutShadingTarget
+): WorkoutShadingTone {
+  if (!shouldShadeMetricPills(shadingTarget)) return "gray";
+  if (!isWorkoutShadingEligible(session)) return "gray";
+
+  const discipline = session.discipline as Discipline;
+  const mode = shadingSettings[discipline] ?? "OFF";
+  if (mode === "OFF") return "gray";
+
+  if (!session.linkedActivity) return "red";
+
+  if (kind === "duration") {
+    if (!isDurationShadingMode(mode)) return "gray";
+    const planned = plannedDurationMinutes(session);
+    const completed = completedDurationMinutesForMode(session, mode, discipline);
+    return metricComparisonTone(planned, completed, "duration", discipline);
+  }
+
+  if (mode !== "DISTANCE") return "gray";
+  const planned =
+    session.distanceMeters != null && session.distanceMeters > 0
+      ? session.distanceMeters
+      : null;
+  const completed = completedDistanceMeters(session);
+  return metricComparisonTone(planned, completed, "distance", discipline);
 }
 
 export function resolveSessionShadingTone(
@@ -238,17 +348,26 @@ export function resolveSessionShadingTone(
   if (!session.linkedActivity) return "red";
 
   const planned = plannedMetricValue(session, mode);
-  const completed = completedMetricValue(session.linkedActivity, mode, discipline);
+  const completed = completedMetricValue(session, mode, discipline);
   return metricComparisonTone(planned, completed, metricKindForMode(mode), discipline);
 }
 
 export function sessionCardClassName(
   session: CalendarPlannedSession,
-  shadingSettings: WorkoutShadingSettings
+  shadingSettings: WorkoutShadingSettings,
+  shadingTarget: WorkoutShadingTarget = DEFAULT_WORKOUT_SHADING_TARGET
 ): string {
-  const tone = resolveSessionShadingTone(session, shadingSettings);
-  if (tone) {
-    return tone === "gray" ? PAST_GRAY_CARD_CLASS : TONE_CARD_CLASSES[tone];
+  if (shouldShadeSessionCard(shadingTarget)) {
+    const tone = resolveSessionShadingTone(session, shadingSettings);
+    if (tone) {
+      return tone === "gray" ? PAST_GRAY_CARD_CLASS : TONE_CARD_CLASSES[tone];
+    }
+  } else if (isWorkoutShadingEligible(session) && !session.linkedActivity) {
+    const discipline = session.discipline as Discipline;
+    const mode = shadingSettings[discipline] ?? "OFF";
+    if (mode !== "OFF") {
+      return TONE_CARD_CLASSES.red;
+    }
   }
 
   const anchored = session.source === "ANCHORED_INSTANCE";
@@ -258,6 +377,9 @@ export function sessionCardClassName(
   }
   if (templated) {
     return "rounded-md border border-violet-400 bg-violet-50/80 p-1.5 text-sm shadow-sm dark:border-violet-700 dark:bg-violet-950/30";
+  }
+  if (session.linkedActivity) {
+    return "rounded-md border border-zinc-200 bg-white p-1.5 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-900";
   }
   return "rounded-md border border-dashed border-sky-400 bg-sky-50/80 p-1.5 text-sm shadow-sm dark:border-sky-700 dark:bg-sky-950/30";
 }

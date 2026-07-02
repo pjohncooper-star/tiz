@@ -7,7 +7,22 @@ const METERS_PER_KM = 1000;
 const METERS_PER_MILE = 1609.344;
 const YARDS_PER_METER = 1 / 0.9144;
 
-const CARD_METRIC_SEP = "|";
+export type SessionCardMetricRow = {
+  planned: string | null;
+  completed: string | null;
+};
+
+export type SessionCardMetrics = {
+  duration: SessionCardMetricRow;
+  distance: SessionCardMetricRow;
+  hasAny: boolean;
+};
+
+export type ActivityCardMetrics = {
+  duration: string | null;
+  distance: string | null;
+  hasAny: boolean;
+};
 
 export function formatCardDuration(totalMinutes: number): string {
   const rounded = Math.round(totalMinutes);
@@ -63,7 +78,7 @@ export function isRedundantCalendarActivityTitle(name: string, discipline: strin
   return false;
 }
 
-function plannedDurationMinutes(session: CalendarPlannedSession): number | null {
+export function plannedDurationMinutes(session: CalendarPlannedSession): number | null {
   if (session.plannedMinutes > 0) return session.plannedMinutes;
   if (session.source === "RACE" && session.estimatedDurationMinutes != null && session.estimatedDurationMinutes > 0) {
     return session.estimatedDurationMinutes;
@@ -71,7 +86,7 @@ function plannedDurationMinutes(session: CalendarPlannedSession): number | null 
   return null;
 }
 
-function completedDurationSeconds(session: CalendarPlannedSession): number | null {
+export function completedDurationSeconds(session: CalendarPlannedSession): number | null {
   if (session.completedDurationMinutes != null && session.completedDurationMinutes > 0) {
     return session.completedDurationMinutes * 60;
   }
@@ -83,7 +98,7 @@ function completedDurationSeconds(session: CalendarPlannedSession): number | nul
   return linked.durationSeconds > 0 ? linked.durationSeconds : null;
 }
 
-function completedDistanceMeters(session: CalendarPlannedSession): number | null {
+export function completedDistanceMeters(session: CalendarPlannedSession): number | null {
   if (session.completedDistanceMeters != null && session.completedDistanceMeters > 0) {
     return session.completedDistanceMeters;
   }
@@ -92,18 +107,14 @@ function completedDistanceMeters(session: CalendarPlannedSession): number | null
   return linked.distanceMeters;
 }
 
-function formatMetricComparison(
-  planned: string | null,
-  completed: string | null
-): string | null {
-  if (planned && completed) return `${planned}→${completed}`;
-  return completed ?? planned;
+function metricRowHasValue(row: SessionCardMetricRow): boolean {
+  return row.planned != null || row.completed != null;
 }
 
-export function formatSessionCardMetricComparison(
+export function buildSessionCardMetrics(
   session: CalendarPlannedSession,
   displayUnit: DisplayUnit
-): { duration: string | null; distance: string | null } {
+): SessionCardMetrics {
   const discipline = session.discipline as Discipline;
 
   const plannedMinutes = plannedDurationMinutes(session);
@@ -123,27 +134,64 @@ export function formatSessionCardMetricComparison(
       ? formatCardDistance(completedDistM, discipline, displayUnit)
       : null;
 
-  if (session.linkedActivity) {
-    return {
-      duration: formatMetricComparison(plannedDur, completedDur),
-      distance: formatMetricComparison(plannedDist, completedDist),
-    };
-  }
+  const duration = { planned: plannedDur, completed: completedDur };
+  const distance = { planned: plannedDist, completed: completedDist };
+  const hasAny = metricRowHasValue(duration) || metricRowHasValue(distance);
 
-  return { duration: plannedDur, distance: plannedDist };
+  return { duration, distance, hasAny };
 }
 
+export function buildActivityCardMetrics(
+  activity: {
+    discipline: string;
+    durationSeconds: number;
+    distanceMeters: number | null;
+  },
+  displayUnit: DisplayUnit
+): ActivityCardMetrics {
+  const discipline = activity.discipline as Discipline;
+  const duration =
+    activity.durationSeconds > 0 ? formatDurationSeconds(activity.durationSeconds) : null;
+  const distance = formatCardDistance(activity.distanceMeters, discipline, displayUnit);
+  const hasAny = duration != null || distance != null;
+  return { duration, distance, hasAny };
+}
+
+/** @deprecated Use buildSessionCardMetrics */
+export function formatSessionCardMetricComparison(
+  session: CalendarPlannedSession,
+  displayUnit: DisplayUnit
+): { duration: string | null; distance: string | null } {
+  const { duration, distance } = buildSessionCardMetrics(session, displayUnit);
+  const join = (row: SessionCardMetricRow) => {
+    if (row.planned && row.completed) return `${row.planned}→${row.completed}`;
+    return row.completed ?? row.planned;
+  };
+  return {
+    duration: join(duration),
+    distance: join(distance),
+  };
+}
+
+/** @deprecated Use buildSessionCardMetrics */
 export function formatSessionCardMetricLines(
   session: CalendarPlannedSession,
   displayUnit: DisplayUnit
 ): string[] {
-  const { duration, distance } = formatSessionCardMetricComparison(session, displayUnit);
-
-  const parts = [duration, distance].filter((part): part is string => part != null);
-  if (parts.length === 0) return [];
-  return [parts.join(CARD_METRIC_SEP)];
+  const { duration, distance, hasAny } = buildSessionCardMetrics(session, displayUnit);
+  if (!hasAny) return [];
+  const parts = [
+    duration.planned && duration.completed
+      ? `${duration.planned}→${duration.completed}`
+      : duration.completed ?? duration.planned,
+    distance.planned && distance.completed
+      ? `${distance.planned}→${distance.completed}`
+      : distance.completed ?? distance.planned,
+  ].filter((part): part is string => part != null);
+  return parts.length > 0 ? [parts.join("|")] : [];
 }
 
+/** @deprecated Use buildActivityCardMetrics */
 export function formatActivityCardMetricLines(
   activity: {
     discipline: string;
@@ -152,21 +200,15 @@ export function formatActivityCardMetricLines(
   },
   displayUnit: DisplayUnit
 ): string[] {
-  const parts: string[] = [];
-  if (activity.durationSeconds > 0) {
-    parts.push(formatDurationSeconds(activity.durationSeconds));
-  }
-  const dist = formatCardDistance(
-    activity.distanceMeters,
-    activity.discipline as Discipline,
-    displayUnit
+  const metrics = buildActivityCardMetrics(activity, displayUnit);
+  if (!metrics.hasAny) return [];
+  const parts = [metrics.duration, metrics.distance].filter(
+    (part): part is string => part != null
   );
-  if (dist) parts.push(dist);
-  if (parts.length === 0) return [];
-  return [parts.join(CARD_METRIC_SEP)];
+  return [parts.join("|")];
 }
 
-/** @deprecated Use formatSessionCardMetricLines */
+/** @deprecated Use buildSessionCardMetrics */
 export function formatPlannedSessionCardSummary(session: {
   plannedMinutes: number;
   metricsSummary: string | null;
@@ -182,7 +224,7 @@ export function formatPlannedSessionCardSummary(session: {
   return `Planned ${parts.join(" · ")}`;
 }
 
-/** @deprecated Use formatSessionCardMetricLines */
+/** @deprecated Use buildSessionCardMetrics */
 export function formatLinkedActivityCardSummary(linked: CalendarLinkedActivity): string {
   const seconds =
     linked.movingSeconds != null && linked.movingSeconds > 0
@@ -191,7 +233,7 @@ export function formatLinkedActivityCardSummary(linked: CalendarLinkedActivity):
   return `Done · ${formatDurationSeconds(seconds)}`;
 }
 
-/** @deprecated Use formatSessionCardMetricLines */
+/** @deprecated Use buildSessionCardMetrics */
 export function formatLinkedSessionCardLines(
   session: CalendarPlannedSession,
   displayUnit: DisplayUnit = "METRIC"

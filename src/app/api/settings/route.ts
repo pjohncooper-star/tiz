@@ -147,6 +147,34 @@ export async function PUT(req: Request) {
     }
   }
 
+  if (body.type === "workout-shading-target") {
+    try {
+      const data = z
+        .object({
+          workoutShadingTarget: z.enum(["CARD", "METRICS", "BOTH"]),
+        })
+        .parse(body.data);
+
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: { workoutShadingTarget: data.workoutShadingTarget },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      console.error("workout-shading-target update failed:", error);
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid workout shading target"
+          : error instanceof Error &&
+              /workoutShadingTarget|WorkoutShadingTarget|column/.test(error.message)
+            ? "Workout shading target is not available yet. Run prisma/migrations/manual_workout_shading_target.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save workout shading target";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
   if (body.type === "workout-shading") {
     try {
       const data = z

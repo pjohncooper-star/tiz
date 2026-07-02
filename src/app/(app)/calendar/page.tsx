@@ -20,7 +20,7 @@ import {
   WEEK_OPTS,
 } from "@/lib/dates";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
-import { buildWorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import { buildWorkoutShadingSettings, parseWorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import { isPlanningCalendarEnabled } from "@/lib/features";
 import { redirect } from "next/navigation";
 
@@ -40,7 +40,14 @@ export default async function CalendarPage({
   }
 
   const session = await requireAthlete();
-  const athlete = await db.athlete.findUnique({ where: { id: session.user.athleteId! } });
+  const athlete = await db.athlete.findUnique({
+    where: { id: session.user.athleteId! },
+    select: {
+      onboardingStep: true,
+      strengthPastWorkoutShading: true,
+      workoutShadingTarget: true,
+    },
+  });
   if (athlete && athlete.onboardingStep !== "COMPLETE") {
     onboardingRedirect(athlete.onboardingStep);
   }
@@ -165,6 +172,8 @@ export default async function CalendarPage({
     athlete?.strengthPastWorkoutShading
   );
 
+  const workoutShadingTarget = parseWorkoutShadingTarget(athlete?.workoutShadingTarget);
+
   const disciplineUnitSettings = buildDisciplineSettings(
     disciplineSettings.map((s) => ({
       discipline: s.discipline,
@@ -236,6 +245,7 @@ export default async function CalendarPage({
         initialScrollWeekStart={defaultScrollWeek}
         disciplineSettings={disciplineUnitSettings}
         workoutShadingSettings={workoutShadingSettings}
+        workoutShadingTarget={workoutShadingTarget}
         activityDates={activityDates}
         minDate={minDate}
         maxDate={maxDate}

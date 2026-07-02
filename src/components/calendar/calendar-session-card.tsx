@@ -5,10 +5,11 @@ import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
+import { CalendarSessionMetricGrid } from "@/components/calendar/calendar-session-metric-grid";
 import { sessionCardClassName } from "@/lib/plan/workout-shading";
-import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
-import { formatSessionCardMetricLines } from "@/lib/plan/calendar/session-card-summary";
+import { buildSessionCardMetrics } from "@/lib/plan/calendar/session-card-summary";
 import {
   resolveSessionPoolSize,
   swimDisplayUnit,
@@ -22,6 +23,7 @@ import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart
 type CalendarSessionCardProps = {
   session: CalendarPlannedSession;
   workoutShadingSettings: WorkoutShadingSettings;
+  workoutShadingTarget: WorkoutShadingTarget;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   isDragging?: boolean;
   onDeleted?: () => void;
@@ -41,6 +43,7 @@ const poolSizePillClassName =
 export function CalendarSessionCard({
   session,
   workoutShadingSettings,
+  workoutShadingTarget,
   disciplineSettings,
   isDragging,
   onDeleted,
@@ -76,8 +79,8 @@ export function CalendarSessionCard({
 
   const cardClassName =
     session.source === "RACE"
-      ? `${sessionCardClassName(session, workoutShadingSettings)} border-amber-400/80 bg-amber-50/50 dark:border-amber-600/50 dark:bg-amber-950/20`
-      : sessionCardClassName(session, workoutShadingSettings);
+      ? `${sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget)} border-amber-400/80 bg-amber-50/50 dark:border-amber-600/50 dark:bg-amber-950/20`
+      : sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget);
 
   const linked = session.linkedActivity;
   const canAcceptLink = showLinkDropTarget && !linked;
@@ -89,7 +92,7 @@ export function CalendarSessionCard({
   const poolSize = resolveSessionPoolSize(session.discipline, session.poolSize, disciplineSettings);
   const displayUnit =
     session.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
-  const metricLines = formatSessionCardMetricLines(session, displayUnit);
+  const metrics = buildSessionCardMetrics(session, displayUnit);
   const pillClassName = linked
     ? "rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
     : "rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-800 dark:bg-sky-900 dark:text-sky-200";
@@ -148,11 +151,12 @@ export function CalendarSessionCard({
                 <span className={poolSizePillClassName}>{poolSize}</span>
               ) : null}
             </div>
-            {metricLines.length > 0 ? (
-              <p className="mt-0.5 whitespace-nowrap text-[10px] leading-tight text-zinc-500">
-                {metricLines[0]}
-              </p>
-            ) : null}
+            <CalendarSessionMetricGrid
+              metrics={metrics}
+              session={session}
+              shadingSettings={workoutShadingSettings}
+              shadingTarget={workoutShadingTarget}
+            />
           </Link>
           {session.workoutProfile ? (
             <div className="mt-1 w-full">

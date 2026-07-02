@@ -35,7 +35,7 @@ import {
 import { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
 import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
-import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { Button } from "@/components/ui";
 
@@ -48,6 +48,7 @@ type PlanningCalendarProps = {
   initialScrollWeekStart?: string | null;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   workoutShadingSettings: WorkoutShadingSettings;
+  workoutShadingTarget: WorkoutShadingTarget;
   activityDates: string[];
   minDate: string | null;
   maxDate: string | null;
@@ -79,6 +80,7 @@ export function PlanningCalendar({
   initialScrollWeekStart,
   disciplineSettings,
   workoutShadingSettings,
+  workoutShadingTarget,
   activityDates,
   minDate,
   maxDate,
@@ -563,6 +565,7 @@ export function PlanningCalendar({
               activities={activitiesForWeek(weekStart)}
               disciplineSettings={disciplineSettings}
               workoutShadingSettings={workoutShadingSettings}
+              workoutShadingTarget={workoutShadingTarget}
               onSessionCreated={handleRefresh}
               activeDragId={activeDragId}
               isCurrentWeek={weekStart === currentWeekStart}
@@ -580,6 +583,7 @@ export function PlanningCalendar({
           <CalendarSessionCard
             session={activeSession}
             workoutShadingSettings={workoutShadingSettings}
+            workoutShadingTarget={workoutShadingTarget}
             disciplineSettings={disciplineSettings}
             isDragging
           />

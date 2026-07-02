@@ -5,7 +5,9 @@ import type { CalendarLinkedActivity, CalendarPlannedSession } from "@/lib/plan/
 import {
   DEFAULT_WORKOUT_SHADING,
   isWorkoutShadingEligible,
+  resolveCompletedMetricPillTone,
   resolveSessionShadingTone,
+  sessionCardClassName,
 } from "@/lib/plan/workout-shading";
 
 function linkedActivity(
@@ -111,5 +113,58 @@ describe("resolveSessionShadingTone", () => {
       { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" }
     );
     assert.equal(tone, null);
+  });
+});
+
+describe("resolveCompletedMetricPillTone", () => {
+  it("shades duration pill when duration mode is active", () => {
+    const tone = resolveCompletedMetricPillTone(
+      session({ linkedActivity: linkedActivity() }),
+      { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" },
+      "duration",
+      "BOTH"
+    );
+    assert.equal(tone, "green");
+  });
+
+  it("keeps distance pill gray when duration mode is active", () => {
+    const tone = resolveCompletedMetricPillTone(
+      session({ linkedActivity: linkedActivity() }),
+      { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" },
+      "distance",
+      "BOTH"
+    );
+    assert.equal(tone, "gray");
+  });
+
+  it("returns gray when shading target is card only", () => {
+    const tone = resolveCompletedMetricPillTone(
+      session({ linkedActivity: linkedActivity() }),
+      { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" },
+      "duration",
+      "CARD"
+    );
+    assert.equal(tone, "gray");
+  });
+});
+
+describe("sessionCardClassName", () => {
+  it("uses default linked styling when shading target is metrics only", () => {
+    const className = sessionCardClassName(
+      session({ linkedActivity: linkedActivity() }),
+      { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" },
+      "METRICS"
+    );
+    assert.match(className, /border-zinc-200/);
+    assert.doesNotMatch(className, /emerald/);
+  });
+
+  it("applies tone classes when shading target includes card", () => {
+    const className = sessionCardClassName(
+      session({ linkedActivity: linkedActivity() }),
+      { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" },
+      "BOTH"
+    );
+    assert.match(className, /emerald/);
   });
 });

@@ -54,6 +54,12 @@ enum PastWorkoutShading {
   TIZ
 }
 
+enum WorkoutShadingTarget {
+  CARD
+  METRICS
+  BOTH
+}
+
 enum ActivitySource {
   BULK_IMPORT
   STRAVA_LIVE
@@ -238,6 +244,7 @@ model Athlete {
   userId                     String               @unique
   onboardingStep             OnboardingStep       @default(PROFILE)
   strengthPastWorkoutShading PastWorkoutShading   @default(OFF)
+  workoutShadingTarget     WorkoutShadingTarget     @default(BOTH)
   selfEvalConfig             Json?
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt

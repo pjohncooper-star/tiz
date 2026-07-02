@@ -5,7 +5,7 @@ import { WorkoutShadingSettingsPanel } from "@/components/workout-shading-settin
 import { Card } from "@/components/ui";
 import { requireAthlete } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { buildWorkoutShadingSettings } from "@/lib/plan/workout-shading";
+import { buildWorkoutShadingSettings, parseWorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import { parseSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { signalLabel } from "@/lib/zones/display";
@@ -20,7 +20,7 @@ export default async function SettingsPage() {
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
     db.athlete.findUnique({
       where: { id: athleteId },
-      select: { strengthPastWorkoutShading: true, selfEvalConfig: true },
+      select: { strengthPastWorkoutShading: true, selfEvalConfig: true, workoutShadingTarget: true },
     }),
   ]);
 
@@ -40,6 +40,8 @@ export default async function SettingsPage() {
     athlete?.strengthPastWorkoutShading
   );
 
+  const workoutShadingTarget = parseWorkoutShadingTarget(athlete?.workoutShadingTarget);
+
   const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
 
   return (
@@ -49,7 +51,10 @@ export default async function SettingsPage() {
         <DisciplineUnitsSettings initialSettings={disciplineSettings} />
       </Card>
       <Card title="Workout shading">
-        <WorkoutShadingSettingsPanel initialSettings={workoutShadingSettings} />
+        <WorkoutShadingSettingsPanel
+          initialSettings={workoutShadingSettings}
+          initialShadingTarget={workoutShadingTarget}
+        />
       </Card>
       <Card title="Self evaluation">
         <SelfEvalSettingsPanel initialConfig={selfEvalConfig} />

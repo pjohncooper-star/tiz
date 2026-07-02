@@ -6,8 +6,9 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { WeekActivity, WeekActivityGroup } from "@/components/dashboard-week-view";
 import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
+import { CalendarActivityMetricGrid } from "@/components/calendar/calendar-activity-metric-grid";
 import {
-  formatActivityCardMetricLines,
+  buildActivityCardMetrics,
   formatCardDuration,
   isRedundantCalendarActivityTitle,
 } from "@/lib/plan/calendar/session-card-summary";
@@ -105,7 +106,7 @@ export function DraggableActivityCard({
     : undefined;
 
   const returnTo = encodeURIComponent(activityReturnHrefFromStartTime(activity.startTime));
-  const metricLines = formatActivityCardMetricLines(
+  const metrics = buildActivityCardMetrics(
     activity,
     activityDisplayUnit(activity, disciplineSettings)
   );
@@ -141,11 +142,7 @@ export function DraggableActivityCard({
           <span className={pillClassName}>{disciplineLabel(activity.discipline)}</span>
           {swimPoolSize ? <span className={pillClassName}>{swimPoolSize}</span> : null}
         </div>
-        {metricLines.length > 0 ? (
-          <p className="mt-0.5 whitespace-nowrap text-[10px] leading-tight text-zinc-500">
-            {metricLines[0]}
-          </p>
-        ) : null}
+        <CalendarActivityMetricGrid metrics={metrics} />
       </Link>
       <DeleteActivityButton activity={activity} onDeleted={onDeleted} />
     </div>
