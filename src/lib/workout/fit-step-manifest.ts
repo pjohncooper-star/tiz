@@ -7,6 +7,7 @@ import {
   type StepIntensity,
   type WorkoutNode,
 } from "@/lib/workout/workout-tree";
+import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
 
 export type FitStepManifestEntry = {
   messageIndex: number;
@@ -46,6 +47,13 @@ export function walkFitStepManifest(nodes: WorkoutNode[], walker: FitManifestWal
 
   function walk(nodeList: WorkoutNode[]): void {
     for (const node of nodeList) {
+      if (node.kind === "swim_interval") {
+        const block = swimIntervalToRepeatBlock(node);
+        walker.onRepeat(block, idx);
+        idx++;
+        walk(block.children);
+        continue;
+      }
       if (node.kind === "repeat") {
         walker.onRepeat(node, idx);
         idx++;

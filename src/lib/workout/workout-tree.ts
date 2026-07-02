@@ -1,4 +1,9 @@
 import type { Discipline } from "@prisma/client";
+import {
+  parseSwimIntervalSet,
+  swimIntervalSetDurationSeconds,
+  swimIntervalToFlatSteps,
+} from "@/lib/workout/swim-interval-set";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
 
 export const WORKOUT_TREE_VERSION = 2 as const;
@@ -40,6 +45,20 @@ export type LeafStep = {
   notes?: string;
 };
 
+export type SwimIntervalRestMode = "sendoff" | "fixed";
+
+export type SwimIntervalSet = {
+  kind: "swim_interval";
+  repeatCount: number;
+  distanceMeters: number;
+  restMode: SwimIntervalRestMode;
+  sendOffSeconds?: number;
+  fixedRestSeconds?: number;
+  target: StepTarget;
+  targetPaceSeconds?: number;
+  notes?: string;
+};
+
 export type RepeatBlock = {
   kind: "repeat";
   repeatCount: number;
@@ -61,7 +80,7 @@ export type RampStep = {
   notes?: string;
 };
 
-export type WorkoutNode = LeafStep | RepeatBlock | RampStep;
+export type WorkoutNode = LeafStep | RepeatBlock | RampStep | SwimIntervalSet;
 
 export type WorkoutTreeDocument = {
   version: typeof WORKOUT_TREE_VERSION;
@@ -229,6 +248,7 @@ function parseWorkoutNode(raw: unknown): WorkoutNode | null {
   if (!isRecord(raw)) return null;
   const kind = raw.kind;
   if (kind === "repeat") return parseRepeatBlock(raw);
+  if (kind === "swim_interval") return parseSwimIntervalSet(raw);
   if (kind === "ramp") return parseRampStep(raw);
   if (kind === "step") return parseLeafStep(raw);
   if (raw.type && raw.durationMinutes) return parseLeafStep(raw);
@@ -423,23 +443,32 @@ function rampToFlatPlanningSteps(step: RampStep): FlatPlanningStep[] {
   ];
 }
 
-export function flattenNodeForPlanning(node: WorkoutNode): FlatPlanningStep[] {
+export function flattenNodeForPlanning(
+  node: WorkoutNode,
+  thresholdPaceSeconds?: number | null
+): FlatPlanningStep[] {
   if (node.kind === "step") {
     const flat = leafToFlatPlanningStep(node);
     return flat ? [flat] : [];
   }
   if (node.kind === "ramp") return rampToFlatPlanningSteps(node);
+  if (node.kind === "swim_interval") {
+    return swimIntervalToFlatSteps(node, thresholdPaceSeconds);
+  }
   const out: FlatPlanningStep[] = [];
   for (let i = 0; i < node.repeatCount; i++) {
     for (const child of node.children) {
-      out.push(...flattenNodeForPlanning(child));
+      out.push(...flattenNodeForPlanning(child, thresholdPaceSeconds));
     }
   }
   return out;
 }
 
-export function flattenForPlanning(nodes: WorkoutNode[]): FlatPlanningStep[] {
-  return nodes.flatMap(flattenNodeForPlanning);
+export function flattenForPlanning(
+  nodes: WorkoutNode[],
+  thresholdPaceSeconds?: number | null
+): FlatPlanningStep[] {
+  return nodes.flatMap((node) => flattenNodeForPlanning(node, thresholdPaceSeconds));
 }
 
 export function flatPlanningToLegacySteps(flat: FlatPlanningStep[]): WorkoutStep[] {
@@ -477,8 +506,22 @@ export function rollupTreeToZoneMinutes(raw: unknown): ZoneMinutes {
   return rollupFlatPlanningToZoneMinutes(flattenForPlanning(tree.nodes));
 }
 
-export function totalTreeDurationSeconds(nodes: WorkoutNode[]): number {
-  return flattenForPlanning(nodes).reduce((sum, s) => sum + s.durationSeconds, 0);
+export function totalTreeDurationSeconds(
+  nodes: WorkoutNode[],
+  thresholdPaceSeconds?: number | null
+): number {
+  let sum = 0;
+  for (const node of nodes) {
+    if (node.kind === "swim_interval") {
+      sum += swimIntervalSetDurationSeconds(node, thresholdPaceSeconds);
+      continue;
+    }
+    sum += flattenNodeForPlanning(node, thresholdPaceSeconds).reduce(
+      (acc, s) => acc + s.durationSeconds,
+      0
+    );
+  }
+  return sum;
 }
 
 export function totalTreeDurationMinutes(nodes: WorkoutNode[]): number {
@@ -515,6 +558,8 @@ export function defaultRepeatBlock(): RepeatBlock {
     ],
   };
 }
+
+export { defaultSwimIntervalSet } from "@/lib/workout/swim-interval-set";
 
 export function defaultRampStep(): RampStep {
   return {

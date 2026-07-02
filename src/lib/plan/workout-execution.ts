@@ -3,6 +3,7 @@ import {
   executionLabelForLeaf,
   walkFitStepManifest,
 } from "@/lib/workout/fit-step-manifest";
+import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
 import {
   parseWorkoutTree,
   type WorkoutNode,
@@ -48,10 +49,11 @@ export function expandExecutionOccurrences(
 
   function walk(nodeList: WorkoutNode[], groupLabel: string | null): void {
     for (const node of nodeList) {
-      if (node.kind === "repeat") {
+      const repeatNode = asRepeatNode(node);
+      if (repeatNode) {
         messageIndexRef.value++;
-        const templates = collectTemplateRows(node.children, discipline, messageIndexRef);
-        for (let r = 0; r < node.repeatCount; r++) {
+        const templates = collectTemplateRows(repeatNode.children, discipline, messageIndexRef);
+        for (let r = 0; r < repeatNode.repeatCount; r++) {
           const roundLabel = useGroups ? `Interval ${r + 1}` : null;
           for (const template of templates) {
             rows.push({
@@ -75,15 +77,17 @@ export function expandExecutionOccurrences(
         messageIndexRef.value++;
         continue;
       }
-      rows.push({
-        rowIndex: rowIndex++,
-        messageIndex: messageIndexRef.value,
-        groupLabel,
-        label: executionLabelForLeaf(node, discipline),
-        plannedSeconds: leafPlannedSeconds(node),
-        openDuration: node.duration.type === "open",
-      });
-      messageIndexRef.value++;
+      if (node.kind === "step") {
+        rows.push({
+          rowIndex: rowIndex++,
+          messageIndex: messageIndexRef.value,
+          groupLabel,
+          label: executionLabelForLeaf(node, discipline),
+          plannedSeconds: leafPlannedSeconds(node),
+          openDuration: node.duration.type === "open",
+        });
+        messageIndexRef.value++;
+      }
     }
   }
 
@@ -93,9 +97,15 @@ export function expandExecutionOccurrences(
 
 function hasRepeatInTree(nodes: WorkoutNode[]): boolean {
   for (const node of nodes) {
-    if (node.kind === "repeat") return true;
+    if (node.kind === "repeat" || node.kind === "swim_interval") return true;
   }
   return false;
+}
+
+function asRepeatNode(node: WorkoutNode) {
+  if (node.kind === "repeat") return node;
+  if (node.kind === "swim_interval") return swimIntervalToRepeatBlock(node);
+  return null;
 }
 
 function normalizeWorkoutLaps(laps: WorkoutExecutionLap[]): WorkoutExecutionLap[] {
@@ -128,10 +138,11 @@ function collectTemplateRows(
 
   function walk(nodes: WorkoutNode[]): void {
     for (const node of nodes) {
-      if (node.kind === "repeat") {
+      const repeatNode = asRepeatNode(node);
+      if (repeatNode) {
         messageIndexRef.value++;
-        const inner = collectTemplateRows(node.children, discipline, messageIndexRef);
-        for (let r = 0; r < node.repeatCount; r++) {
+        const inner = collectTemplateRows(repeatNode.children, discipline, messageIndexRef);
+        for (let r = 0; r < repeatNode.repeatCount; r++) {
           templates.push(...inner);
         }
         continue;
@@ -146,13 +157,15 @@ function collectTemplateRows(
         messageIndexRef.value++;
         continue;
       }
-      templates.push({
-        messageIndex: messageIndexRef.value,
-        label: executionLabelForLeaf(node, discipline),
-        plannedSeconds: leafPlannedSeconds(node),
-        openDuration: node.duration.type === "open",
-      });
-      messageIndexRef.value++;
+      if (node.kind === "step") {
+        templates.push({
+          messageIndex: messageIndexRef.value,
+          label: executionLabelForLeaf(node, discipline),
+          plannedSeconds: leafPlannedSeconds(node),
+          openDuration: node.duration.type === "open",
+        });
+        messageIndexRef.value++;
+      }
     }
   }
 

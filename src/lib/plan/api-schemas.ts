@@ -49,6 +49,27 @@ export const leafStepSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const swimIntervalSetSchema = z
+  .object({
+    kind: z.literal("swim_interval"),
+    repeatCount: z.number().int().positive(),
+    distanceMeters: z.number().positive(),
+    restMode: z.enum(["sendoff", "fixed"]),
+    sendOffSeconds: z.number().positive().optional(),
+    fixedRestSeconds: z.number().positive().optional(),
+    target: stepTargetSchema,
+    targetPaceSeconds: z.number().positive().optional(),
+    notes: z.string().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.restMode === "sendoff" && (val.sendOffSeconds == null || val.sendOffSeconds <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "sendOffSeconds required for sendoff mode" });
+    }
+    if (val.restMode === "fixed" && (val.fixedRestSeconds == null || val.fixedRestSeconds <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "fixedRestSeconds required for fixed mode" });
+    }
+  });
+
 export const rampStepSchema = z.object({
   kind: z.literal("ramp"),
   duration: z.object({ type: z.literal("time"), value: z.number().positive() }),
@@ -66,6 +87,7 @@ export const workoutNodeSchema: z.ZodType<unknown> = z.lazy(() =>
       notes: z.string().optional(),
     }),
     rampStepSchema,
+    swimIntervalSetSchema,
   ])
 );
 

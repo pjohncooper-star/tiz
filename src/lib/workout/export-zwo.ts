@@ -1,3 +1,4 @@
+import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
 import {
   parseWorkoutTree,
   type LeafStep,
@@ -102,7 +103,8 @@ function emitRepeat(block: RepeatBlock, lines: string[]): void {
 function emitNode(node: WorkoutNode, lines: string[]): void {
   if (node.kind === "step") emitLeaf(node, lines);
   else if (node.kind === "ramp") emitRamp(node, lines);
-  else emitRepeat(node, lines);
+  else if (node.kind === "repeat") emitRepeat(node, lines);
+  else if (node.kind === "swim_interval") emitRepeat(swimIntervalToRepeatBlock(node), lines);
 }
 
 export function workoutTreeToZwo(title: string, raw: unknown): string {

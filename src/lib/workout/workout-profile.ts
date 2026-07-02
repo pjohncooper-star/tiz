@@ -9,6 +9,7 @@ import type {
   StepTarget,
   WorkoutNode,
 } from "@/lib/workout/workout-tree";
+import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
 import { targetZoneFromTarget } from "@/lib/workout/workout-tree";
 
 export type ProfileLengthView = "duration" | "distance";
@@ -343,12 +344,16 @@ function appendNode(
   thresholds: WorkoutProfileThresholds,
   idPrefix: string
 ): number {
-  if (node.kind === "repeat") {
+  if (node.kind === "repeat" || node.kind === "swim_interval") {
+    const repeatNode =
+      node.kind === "swim_interval"
+        ? swimIntervalToRepeatBlock(node, thresholds.thresholdPaceSeconds)
+        : node;
     let x = xCursor;
-    for (let r = 0; r < node.repeatCount; r++) {
-      for (let c = 0; c < node.children.length; c++) {
+    for (let r = 0; r < repeatNode.repeatCount; r++) {
+      for (let c = 0; c < repeatNode.children.length; c++) {
         x = appendNode(
-          node.children[c],
+          repeatNode.children[c],
           segments,
           x,
           primarySignal,
@@ -514,7 +519,7 @@ export type ExecutionProfileBand = {
 
 function hasRepeatInTree(nodes: WorkoutNode[]): boolean {
   for (const node of nodes) {
-    if (node.kind === "repeat") return true;
+    if (node.kind === "repeat" || node.kind === "swim_interval") return true;
   }
   return false;
 }
@@ -531,10 +536,14 @@ export function collectExecutionProfileBands(
 
   function walk(nodeList: WorkoutNode[], groupLabel: string | null): void {
     for (const node of nodeList) {
-      if (node.kind === "repeat") {
-        for (let r = 0; r < node.repeatCount; r++) {
+      if (node.kind === "repeat" || node.kind === "swim_interval") {
+        const repeatNode =
+          node.kind === "swim_interval"
+            ? swimIntervalToRepeatBlock(node, thresholds.thresholdPaceSeconds)
+            : node;
+        for (let r = 0; r < repeatNode.repeatCount; r++) {
           const roundLabel = useGroups ? `Interval ${r + 1}` : null;
-          walk(node.children, roundLabel);
+          walk(repeatNode.children, roundLabel);
         }
         continue;
       }

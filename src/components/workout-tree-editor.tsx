@@ -15,6 +15,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline, SignalType } from "@prisma/client";
 import { Button, Input, Label, Select } from "@/components/ui";
+import { SwimIntervalSetEditor } from "@/components/swim-interval-set-editor";
 import { WorkoutProfileChart } from "@/components/workout-profile-chart";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisplayUnit } from "@/lib/workout/metrics";
@@ -31,6 +32,7 @@ import {
   defaultLeafStep,
   defaultRampStep,
   defaultRepeatBlock,
+  defaultSwimIntervalSet,
   formatDurationSeconds,
   formatDurationHms,
   intensityLabel,
@@ -40,12 +42,14 @@ import {
   type LeafStep,
   type RampStep,
   type RepeatBlock,
+  type SwimIntervalSet,
   type StepDuration,
   type StepIntensity,
   type StepTarget,
   type WorkoutNode,
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
+import { formatSwimIntervalLabel } from "@/lib/workout/swim-interval-set";
 import {
   moveWorkoutNode,
   getNodeAtPath,
@@ -291,9 +295,14 @@ function supportsLapEnd(discipline: Discipline): boolean {
   return discipline === "RUN" || discipline === "BIKE";
 }
 
-function nodeDragSummary(node: WorkoutNode): string {
+function nodeDragSummary(
+  node: WorkoutNode,
+  poolSize: PoolSize | null,
+  displayUnit: DisplayUnit
+): string {
   if (node.kind === "step") return intensityLabel(node.intensity);
   if (node.kind === "ramp") return "Ramp";
+  if (node.kind === "swim_interval") return formatSwimIntervalLabel(node, poolSize, displayUnit);
   return `Repeat × ${node.repeatCount}`;
 }
 
@@ -1026,6 +1035,27 @@ function NodeEditor({
   const canRemove = siblingCount > 1;
   const dimmed = activeDragPath != null && !pathsEqual(activeDragPath, path);
 
+  if (node.kind === "swim_interval") {
+    const swimSet = node as SwimIntervalSet;
+    return (
+      <DraggableNodeShell path={path} dimmed={dimmed}>
+        <SwimIntervalSetEditor
+          set={swimSet}
+          poolSize={poolSize}
+          displayUnit={displayUnit}
+          targetView={targetView}
+          canRemove={canRemove}
+          onChange={(next) =>
+            onTreeChange((nodes) =>
+              updateAtPath(nodes, path, (n) => (n.kind === "swim_interval" ? next : n))
+            )
+          }
+          onRemove={() => onTreeChange((nodes) => removeAtPath(nodes, path))}
+        />
+      </DraggableNodeShell>
+    );
+  }
+
   if (node.kind === "step") {
     const step = node;
     const showLap = supportsLapEnd(discipline) && lengthView === "duration";
@@ -1586,7 +1616,7 @@ export function WorkoutTreeEditor({
     () => resolvePrimaryTargetSignal(discipline, primarySignal),
     [discipline, primarySignal]
   );
-  const totalSeconds = totalTreeDurationSeconds(tree.nodes);
+  const totalSeconds = totalTreeDurationSeconds(tree.nodes, thresholdPaceSeconds);
   const totalLabel = totalSeconds > 0 ? formatDurationSeconds(totalSeconds) : "0s";
   const [activeDragPath, setActiveDragPath] = useState<number[] | null>(null);
 
@@ -1714,6 +1744,15 @@ export function WorkoutTreeEditor({
         <Button type="button" variant="secondary" onClick={() => onTreeChange((nodes) => [...nodes, newLeafStep()])}>
           Add step
         </Button>
+        {discipline === "SWIM" ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onTreeChange((nodes) => [...nodes, defaultSwimIntervalSet()])}
+          >
+            Add interval set
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="secondary"
@@ -1734,7 +1773,7 @@ export function WorkoutTreeEditor({
       <DragOverlay>
         {draggedNode ? (
           <div className="rounded-md border border-sky-300 bg-white px-3 py-2 text-sm font-medium shadow-lg dark:border-sky-700 dark:bg-zinc-900">
-            {nodeDragSummary(draggedNode)}
+            {nodeDragSummary(draggedNode, poolSize, displayUnit)}
           </div>
         ) : null}
       </DragOverlay>
