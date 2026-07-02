@@ -71,13 +71,15 @@ describe("formatCardDuration", () => {
 });
 
 describe("formatCardDistance", () => {
-  it("formats swim distances with k suffix at 1000+ display units", () => {
-    assert.equal(formatCardDistance(1200, "SWIM", "METRIC"), "1.2k");
-    assert.equal(formatCardDistance(2743, "SWIM", "IMPERIAL"), "3k");
+  it("uses full units when they fit on the card", () => {
+    assert.equal(formatCardDistance(800, "SWIM", "METRIC"), "800m");
+    assert.equal(formatCardDistance(1200, "SWIM", "METRIC"), "1200m");
+    assert.equal(formatCardDistance(8000, "RUN", "METRIC"), "8000m");
   });
 
-  it("formats run distances with k suffix in metric", () => {
-    assert.equal(formatCardDistance(8000, "RUN", "METRIC"), "8k");
+  it("uses k suffix only when full units are too long", () => {
+    assert.equal(formatCardDistance(2743, "SWIM", "IMPERIAL"), "3k");
+    assert.equal(formatCardDistance(10000, "RUN", "METRIC"), "10k");
   });
 });
 
@@ -123,7 +125,7 @@ describe("buildActivityCardMetrics", () => {
       "METRIC"
     );
     assert.equal(metrics.duration, "45m");
-    assert.equal(metrics.distance, "8k");
+    assert.equal(metrics.distance, "8000m");
     assert.equal(metrics.hasAny, true);
   });
 });
@@ -215,7 +217,7 @@ describe("session card summary", () => {
         },
         "METRIC"
       ),
-      ["45m|8k"]
+      ["45m|8000m"]
     );
   });
 });

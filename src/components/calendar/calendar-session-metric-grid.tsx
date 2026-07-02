@@ -31,12 +31,10 @@ function MetricPill({
 }
 
 function MetricRow({
-  label,
   planned,
   completed,
   completedClassName,
 }: {
-  label: string;
   planned: string | null;
   completed: string | null;
   completedClassName: string;
@@ -45,7 +43,6 @@ function MetricRow({
 
   return (
     <>
-      <span className="text-[10px] text-zinc-400">{label}</span>
       <MetricPill value={planned} className={plannedMetricPillClassName()} />
       <MetricPill value={completed} className={completedClassName} />
     </>
@@ -74,20 +71,17 @@ export function CalendarSessionMetricGrid({
   );
 
   return (
-    <div className="mt-1 grid grid-cols-[auto_1fr_1fr] items-center gap-x-1.5 gap-y-0.5 text-[10px]">
-      <span />
+    <div className="mt-1 grid grid-cols-2 items-center gap-x-1.5 gap-y-0.5 text-[10px]">
       <span className="text-[9px] font-medium uppercase tracking-wide text-zinc-400">Planned</span>
       <span className="text-[9px] font-medium uppercase tracking-wide text-zinc-400">
         Completed
       </span>
       <MetricRow
-        label="Duration"
         planned={metrics.duration.planned}
         completed={metrics.duration.completed}
         completedClassName={metricPillClassName(durationTone)}
       />
       <MetricRow
-        label="Distance"
         planned={metrics.distance.planned}
         completed={metrics.distance.completed}
         completedClassName={metricPillClassName(distanceTone)}

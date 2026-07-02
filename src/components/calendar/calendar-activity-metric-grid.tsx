@@ -7,30 +7,17 @@ type CalendarActivityMetricGridProps = {
   metrics: ActivityCardMetrics;
 };
 
-function MetricRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null;
-}) {
-  if (value == null) return null;
-
-  return (
-    <>
-      <span className="text-[10px] text-zinc-400">{label}</span>
-      <span className={metricPillClassName("gray")}>{value}</span>
-    </>
-  );
-}
-
 export function CalendarActivityMetricGrid({ metrics }: CalendarActivityMetricGridProps) {
   if (!metrics.hasAny) return null;
 
   return (
-    <div className="mt-1 grid grid-cols-[auto_1fr] items-center gap-x-1.5 gap-y-0.5">
-      <MetricRow label="Duration" value={metrics.duration} />
-      <MetricRow label="Distance" value={metrics.distance} />
+    <div className="mt-1 flex flex-col gap-0.5">
+      {metrics.duration != null ? (
+        <span className={metricPillClassName("gray")}>{metrics.duration}</span>
+      ) : null}
+      {metrics.distance != null ? (
+        <span className={metricPillClassName("gray")}>{metrics.distance}</span>
+      ) : null}
     </div>
   );
 }

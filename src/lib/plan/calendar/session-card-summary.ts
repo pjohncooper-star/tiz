@@ -36,9 +36,50 @@ function formatDurationSeconds(seconds: number): string {
   return formatCardDuration(seconds / 60);
 }
 
+/** Full unit suffixes longer than this use k-notation on narrow calendar cards. */
+const CARD_DISTANCE_FULL_MAX_CHARS = 5;
+
 function formatKSuffix(value: number): string {
   const k = Math.round((value / 1000) * 10) / 10;
   return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1)}k`;
+}
+
+function formatFullCardDistance(
+  meters: number,
+  discipline: Discipline,
+  displayUnit: DisplayUnit
+): string {
+  if (discipline === "SWIM") {
+    const raw = displayUnit === "METRIC" ? meters : meters * YARDS_PER_METER;
+    const unit = displayUnit === "METRIC" ? "m" : "yd";
+    return `${Math.round(raw)}${unit}`;
+  }
+
+  if (displayUnit === "METRIC") {
+    return `${Math.round(meters)}m`;
+  }
+
+  const miles = meters / METERS_PER_MILE;
+  const rounded = Math.round(miles * 10) / 10;
+  return Number.isInteger(rounded) ? `${rounded}mi` : `${rounded.toFixed(1)}mi`;
+}
+
+function formatCompactCardDistance(
+  meters: number,
+  discipline: Discipline,
+  displayUnit: DisplayUnit
+): string | null {
+  if (discipline === "SWIM") {
+    const raw = displayUnit === "METRIC" ? meters : meters * YARDS_PER_METER;
+    if (raw >= 1000) return formatKSuffix(raw);
+    return null;
+  }
+
+  if (displayUnit === "METRIC" && meters >= METERS_PER_KM) {
+    return formatKSuffix(meters);
+  }
+
+  return null;
 }
 
 export function formatCardDistance(
@@ -48,21 +89,11 @@ export function formatCardDistance(
 ): string | null {
   if (!meters || meters <= 0) return null;
 
-  if (discipline === "SWIM") {
-    const raw = displayUnit === "METRIC" ? meters : meters * YARDS_PER_METER;
-    if (raw >= 1000) return formatKSuffix(raw);
-    const unit = displayUnit === "METRIC" ? "m" : "yd";
-    return `${Math.round(raw)}${unit}`;
-  }
+  const full = formatFullCardDistance(meters, discipline, displayUnit);
+  if (full.length <= CARD_DISTANCE_FULL_MAX_CHARS) return full;
 
-  if (displayUnit === "METRIC") {
-    if (meters >= METERS_PER_KM) return formatKSuffix(meters);
-    return `${Math.round(meters)}m`;
-  }
-
-  const miles = meters / METERS_PER_MILE;
-  const rounded = Math.round(miles * 10) / 10;
-  return Number.isInteger(rounded) ? `${rounded}mi` : `${rounded.toFixed(1)}mi`;
+  const compact = formatCompactCardDistance(meters, discipline, displayUnit);
+  return compact ?? full;
 }
 
 export function isRedundantCalendarActivityTitle(name: string, discipline: string): boolean {
