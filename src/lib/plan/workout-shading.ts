@@ -23,14 +23,14 @@ export const DEFAULT_WORKOUT_SHADING: WorkoutShadingSettings = {
 };
 
 const PAST_GRAY_CARD_CLASS =
-  "rounded-md border border-zinc-300 bg-zinc-100 p-2 text-sm shadow-sm dark:border-zinc-600 dark:bg-zinc-800/80";
+  "rounded-md border border-zinc-300 bg-zinc-100 p-1.5 text-sm shadow-sm dark:border-zinc-600 dark:bg-zinc-800/80";
 
 const TONE_CARD_CLASSES: Record<Exclude<WorkoutShadingTone, "gray">, string> = {
   green:
-    "rounded-md border border-emerald-400 bg-emerald-50 p-2 text-sm shadow-sm dark:border-emerald-700 dark:bg-emerald-950/40",
+    "rounded-md border border-emerald-400 bg-emerald-50 p-1.5 text-sm shadow-sm dark:border-emerald-700 dark:bg-emerald-950/40",
   amber:
-    "rounded-md border border-amber-400 bg-amber-50 p-2 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-950/40",
-  red: "rounded-md border border-red-400 bg-red-50 p-2 text-sm shadow-sm dark:border-red-700 dark:bg-red-950/40",
+    "rounded-md border border-amber-400 bg-amber-50 p-1.5 text-sm shadow-sm dark:border-amber-700 dark:bg-amber-950/40",
+  red: "rounded-md border border-red-400 bg-red-50 p-1.5 text-sm shadow-sm dark:border-red-700 dark:bg-red-950/40",
 };
 
 export function buildWorkoutShadingSettings(
@@ -254,10 +254,10 @@ export function sessionCardClassName(
   const anchored = session.source === "ANCHORED_INSTANCE";
   const templated = session.source === "TEMPLATE";
   if (anchored) {
-    return "rounded-md border border-sky-500 bg-sky-50 p-2 text-sm shadow-sm dark:border-sky-600 dark:bg-sky-950/50";
+    return "rounded-md border border-sky-500 bg-sky-50 p-1.5 text-sm shadow-sm dark:border-sky-600 dark:bg-sky-950/50";
   }
   if (templated) {
-    return "rounded-md border border-violet-400 bg-violet-50/80 p-2 text-sm shadow-sm dark:border-violet-700 dark:bg-violet-950/30";
+    return "rounded-md border border-violet-400 bg-violet-50/80 p-1.5 text-sm shadow-sm dark:border-violet-700 dark:bg-violet-950/30";
   }
-  return "rounded-md border border-dashed border-sky-400 bg-sky-50/80 p-2 text-sm shadow-sm dark:border-sky-700 dark:bg-sky-950/30";
+  return "rounded-md border border-dashed border-sky-400 bg-sky-50/80 p-1.5 text-sm shadow-sm dark:border-sky-700 dark:bg-sky-950/30";
 }

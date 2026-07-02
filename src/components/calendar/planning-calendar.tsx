@@ -601,11 +601,16 @@ export function PlanningCalendar({
           <CalendarSessionCard
             session={activeSession}
             workoutShadingSettings={workoutShadingSettings}
+            disciplineSettings={disciplineSettings}
             isDragging
           />
         ) : null}
         {activeActivity ? (
-          <DraggableActivityCard activity={activeActivity} isDragging />
+          <DraggableActivityCard
+            activity={activeActivity}
+            disciplineSettings={disciplineSettings}
+            isDragging
+          />
         ) : null}
       </DragOverlay>
 

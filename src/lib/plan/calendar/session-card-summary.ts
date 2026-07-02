@@ -1,6 +1,8 @@
 import type { CalendarLinkedActivity, CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+import type { DisplayUnit } from "@/lib/workout/metrics";
+import { formatSessionDistance } from "@/lib/workout/metrics";
 
-function formatMinutes(minutes: number): string {
+function formatDurationMinutes(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   if (h > 0) return `${h}h ${m}m`;
@@ -14,22 +16,123 @@ function formatDurationSeconds(seconds: number): string {
   return `${m}m`;
 }
 
-function formatTimeOfDay(iso: string): string {
-  const date = new Date(iso);
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const period = hours >= 12 ? "PM" : "AM";
-  const h = hours % 12 || 12;
-  return minutes > 0 ? `${h}:${String(minutes).padStart(2, "0")} ${period}` : `${h} ${period}`;
+function plannedDurationMinutes(session: CalendarPlannedSession): number | null {
+  if (session.plannedMinutes > 0) return session.plannedMinutes;
+  if (session.source === "RACE" && session.estimatedDurationMinutes != null && session.estimatedDurationMinutes > 0) {
+    return session.estimatedDurationMinutes;
+  }
+  return null;
 }
 
+function completedDurationSeconds(session: CalendarPlannedSession): number | null {
+  if (session.completedDurationMinutes != null && session.completedDurationMinutes > 0) {
+    return session.completedDurationMinutes * 60;
+  }
+  const linked = session.linkedActivity;
+  if (!linked) return null;
+  if (linked.movingSeconds != null && linked.movingSeconds > 0) {
+    return linked.movingSeconds;
+  }
+  return linked.durationSeconds > 0 ? linked.durationSeconds : null;
+}
+
+function completedDistanceMeters(session: CalendarPlannedSession): number | null {
+  if (session.completedDistanceMeters != null && session.completedDistanceMeters > 0) {
+    return session.completedDistanceMeters;
+  }
+  const linked = session.linkedActivity;
+  if (!linked?.distanceMeters || linked.distanceMeters <= 0) return null;
+  return linked.distanceMeters;
+}
+
+function formatMetricComparison(
+  planned: string | null,
+  completed: string | null
+): string | null {
+  if (planned && completed) return `${planned} → ${completed}`;
+  return completed ?? planned;
+}
+
+export function formatSessionCardMetricComparison(
+  session: CalendarPlannedSession,
+  displayUnit: DisplayUnit
+): { duration: string | null; distance: string | null } {
+  const discipline = session.discipline;
+
+  const plannedDur =
+    plannedDurationMinutes(session) != null
+      ? formatDurationMinutes(plannedDurationMinutes(session)!)
+      : null;
+  const completedDurSec = completedDurationSeconds(session);
+  const completedDur =
+    completedDurSec != null ? formatDurationSeconds(completedDurSec) : null;
+
+  const plannedDist =
+    session.distanceMeters != null && session.distanceMeters > 0
+      ? formatSessionDistance(session.distanceMeters, discipline, displayUnit)
+      : null;
+  const completedDistM = completedDistanceMeters(session);
+  const completedDist =
+    completedDistM != null
+      ? formatSessionDistance(completedDistM, discipline, displayUnit)
+      : null;
+
+  if (session.linkedActivity) {
+    return {
+      duration: formatMetricComparison(plannedDur, completedDur),
+      distance: formatMetricComparison(plannedDist, completedDist),
+    };
+  }
+
+  return { duration: plannedDur, distance: plannedDist };
+}
+
+export function formatSessionCardMetricLines(
+  session: CalendarPlannedSession,
+  displayUnit: DisplayUnit
+): string[] {
+  const { duration, distance } = formatSessionCardMetricComparison(session, displayUnit);
+
+  if (session.linkedActivity) {
+    const lines: string[] = [];
+    if (duration) lines.push(duration);
+    if (distance) lines.push(distance);
+    return lines;
+  }
+
+  const parts: string[] = [];
+  if (duration) parts.push(duration);
+  if (distance) parts.push(distance);
+  if (parts.length === 0) return [];
+  return [parts.join(" · ")];
+}
+
+export function formatActivityCardMetricLines(
+  activity: {
+    discipline: string;
+    durationSeconds: number;
+    distanceMeters: number | null;
+  },
+  displayUnit: DisplayUnit
+): string[] {
+  const parts: string[] = [];
+  if (activity.durationSeconds > 0) {
+    parts.push(formatDurationSeconds(activity.durationSeconds));
+  }
+  const dist = formatSessionDistance(activity.distanceMeters, activity.discipline, displayUnit);
+  if (dist) parts.push(dist);
+  if (parts.length === 0) return [];
+  return [parts.join(" · ")];
+}
+
+/** @deprecated Use formatSessionCardMetricLines */
 export function formatPlannedSessionCardSummary(session: {
   plannedMinutes: number;
   metricsSummary: string | null;
 }): string | null {
   const parts: string[] = [];
   if (session.plannedMinutes > 0) {
-    parts.push(formatMinutes(session.plannedMinutes));
+    parts.push(formatDurationMinutes(session.plannedMinutes));
   }
   if (session.metricsSummary) {
     parts.push(session.metricsSummary);
@@ -38,16 +141,19 @@ export function formatPlannedSessionCardSummary(session: {
   return `Planned ${parts.join(" · ")}`;
 }
 
+/** @deprecated Use formatSessionCardMetricLines */
 export function formatLinkedActivityCardSummary(linked: CalendarLinkedActivity): string {
-  return `Done ${formatTimeOfDay(linked.startTime)} · ${formatDurationSeconds(linked.durationSeconds)}`;
+  const seconds =
+    linked.movingSeconds != null && linked.movingSeconds > 0
+      ? linked.movingSeconds
+      : linked.durationSeconds;
+  return `Done · ${formatDurationSeconds(seconds)}`;
 }
 
-export function formatLinkedSessionCardLines(session: CalendarPlannedSession): string[] {
-  const lines: string[] = [];
-  const planned = formatPlannedSessionCardSummary(session);
-  if (planned) lines.push(planned);
-  if (session.linkedActivity) {
-    lines.push(formatLinkedActivityCardSummary(session.linkedActivity));
-  }
-  return lines;
+/** @deprecated Use formatSessionCardMetricLines */
+export function formatLinkedSessionCardLines(
+  session: CalendarPlannedSession,
+  displayUnit: DisplayUnit = "METRIC"
+): string[] {
+  return formatSessionCardMetricLines(session, displayUnit);
 }

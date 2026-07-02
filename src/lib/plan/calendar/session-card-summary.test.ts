@@ -1,77 +1,145 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  formatLinkedActivityCardSummary,
-  formatLinkedSessionCardLines,
-  formatPlannedSessionCardSummary,
+  formatActivityCardMetricLines,
+  formatSessionCardMetricComparison,
+  formatSessionCardMetricLines,
 } from "@/lib/plan/calendar/session-card-summary";
+import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+
+function baseSession(
+  overrides: Partial<CalendarPlannedSession> = {}
+): CalendarPlannedSession {
+  return {
+    id: "s1",
+    scheduledDate: "2026-07-01",
+    discipline: "SWIM",
+    title: "Swim",
+    totalMinutes: 45,
+    plannedMinutes: 45,
+    distanceMeters: 2743,
+    zoneMinutes: {},
+    stepCount: 0,
+    metricsSummary: "3000 yd",
+    zoneAllocationMissing: false,
+    source: "FLEXIBLE",
+    poolSize: "SCY",
+    multisportGroupId: null,
+    sessionIndex: null,
+    estimatedDurationMinutes: null,
+    linkedActivity: null,
+    hasCompletedOverride: false,
+    completedDurationMinutes: null,
+    completedDistanceMeters: null,
+    completedTargetSpeedMps: null,
+    completedTargetPaceSeconds: null,
+    completedZones: null,
+    workoutProfile: null,
+    ...overrides,
+  };
+}
+
+const linkedActivity = {
+  id: "a1",
+  name: "Morning swim",
+  startTime: "2026-07-01T07:02:00.000Z",
+  durationSeconds: 3720,
+  elapsedSeconds: 3720,
+  movingSeconds: null,
+  distanceMeters: 3200,
+  zoneMinutes: 0,
+  discipline: "SWIM",
+  legType: null,
+};
 
 describe("session card summary", () => {
-  it("formats planned summary with duration and metrics", () => {
-    assert.equal(
-      formatPlannedSessionCardSummary({
-        plannedMinutes: 45,
-        metricsSummary: "3000 yd",
+  it("formats unlinked planned session as a single metric line", () => {
+    assert.deepEqual(formatSessionCardMetricLines(baseSession(), "IMPERIAL"), ["45m · 3,000 yd"]);
+  });
+
+  it("formats linked session duration and distance comparisons on separate lines", () => {
+    const lines = formatSessionCardMetricLines(
+      baseSession({ linkedActivity }),
+      "IMPERIAL"
+    );
+    assert.deepEqual(lines, ["45m → 1h 2m", "3,000 yd → 3,500 yd"]);
+  });
+
+  it("compares duration and distance in metric comparison helpers", () => {
+    const comparison = formatSessionCardMetricComparison(
+      baseSession({ linkedActivity }),
+      "IMPERIAL"
+    );
+    assert.equal(comparison.duration, "45m → 1h 2m");
+    assert.equal(comparison.distance, "3,000 yd → 3,500 yd");
+  });
+
+  it("prefers moving seconds for completed duration", () => {
+    const comparison = formatSessionCardMetricComparison(
+      baseSession({
+        linkedActivity: { ...linkedActivity, movingSeconds: 3600, durationSeconds: 3720 },
       }),
-      "Planned 45m · 3000 yd"
+      "IMPERIAL"
+    );
+    assert.equal(comparison.duration, "45m → 1h 0m");
+  });
+
+  it("respects completed duration override", () => {
+    const comparison = formatSessionCardMetricComparison(
+      baseSession({
+        linkedActivity,
+        completedDurationMinutes: 50,
+      }),
+      "IMPERIAL"
+    );
+    assert.equal(comparison.duration, "45m → 50m");
+  });
+
+  it("respects completed distance override", () => {
+    const comparison = formatSessionCardMetricComparison(
+      baseSession({
+        linkedActivity,
+        completedDistanceMeters: 2743,
+      }),
+      "IMPERIAL"
+    );
+    assert.equal(comparison.distance, "3,000 yd → 3,000 yd");
+  });
+
+  it("shows completed-only metrics when planned values are missing", () => {
+    const comparison = formatSessionCardMetricComparison(
+      baseSession({
+        plannedMinutes: 0,
+        distanceMeters: null,
+        linkedActivity,
+      }),
+      "IMPERIAL"
+    );
+    assert.equal(comparison.duration, "1h 2m");
+    assert.equal(comparison.distance, "3,500 yd");
+  });
+
+  it("returns no metric lines for empty planned sessions", () => {
+    assert.deepEqual(
+      formatSessionCardMetricLines(
+        baseSession({ plannedMinutes: 0, distanceMeters: null }),
+        "IMPERIAL"
+      ),
+      []
     );
   });
 
-  it("formats linked activity summary", () => {
-    const summary = formatLinkedActivityCardSummary({
-      id: "a1",
-      name: "Morning swim",
-      startTime: "2026-07-01T07:02:00.000Z",
-      durationSeconds: 3720,
-      elapsedSeconds: 3720,
-      movingSeconds: null,
-      distanceMeters: 3200,
-      zoneMinutes: 0,
-      discipline: "SWIM",
-      legType: null,
-    });
-    assert.match(summary, /^Done .+ · 1h 2m$/);
-  });
-
-  it("returns planned and completed lines for linked sessions", () => {
-    const lines = formatLinkedSessionCardLines({
-      id: "s1",
-      scheduledDate: "2026-07-01",
-      discipline: "SWIM",
-      title: "Swim",
-      totalMinutes: 45,
-      plannedMinutes: 45,
-      distanceMeters: 2743,
-      zoneMinutes: {},
-      stepCount: 0,
-      metricsSummary: "3000 yd",
-      zoneAllocationMissing: false,
-      source: "FLEXIBLE",
-      poolSize: "SCY",
-      multisportGroupId: null,
-      sessionIndex: null,
-      estimatedDurationMinutes: null,
-      linkedActivity: {
-        id: "a1",
-        name: "Morning swim",
-        startTime: "2026-07-01T07:02:00.000Z",
-        durationSeconds: 3720,
-        elapsedSeconds: 3720,
-        movingSeconds: null,
-        distanceMeters: 3200,
-        zoneMinutes: 0,
-        discipline: "SWIM",
-        legType: null,
-      },
-      hasCompletedOverride: false,
-      completedDurationMinutes: null,
-      completedDistanceMeters: null,
-      completedTargetSpeedMps: null,
-      completedTargetPaceSeconds: null,
-      completedZones: null,
-      workoutProfile: null,
-    });
-    assert.equal(lines[0], "Planned 45m · 3000 yd");
-    assert.match(lines[1]!, /^Done .+ · 1h 2m$/);
+  it("formats unlinked activity card metrics without time of day", () => {
+    assert.deepEqual(
+      formatActivityCardMetricLines(
+        {
+          discipline: "RUN",
+          durationSeconds: 2700,
+          distanceMeters: 8000,
+        },
+        "METRIC"
+      ),
+      ["45m · 8 km"]
+    );
   });
 });

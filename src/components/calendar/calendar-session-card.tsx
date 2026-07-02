@@ -7,30 +7,22 @@ import { CSS } from "@dnd-kit/utilities";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import { sessionCardClassName } from "@/lib/plan/workout-shading";
 import type { WorkoutShadingSettings } from "@/lib/plan/workout-shading";
-import { POOL_SIZE_OPTIONS } from "@/lib/units/discipline-settings";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
-import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
-import { formatLinkedSessionCardLines } from "@/lib/plan/calendar/session-card-summary";
+import { formatSessionCardMetricLines } from "@/lib/plan/calendar/session-card-summary";
+import {
+  resolveSessionPoolSize,
+  swimDisplayUnit,
+  unitSettingsForDiscipline,
+  type DisciplineUnitSettings,
+} from "@/lib/units/discipline-settings";
+import type { PlanDiscipline } from "@/lib/plan/session";
 import { workoutHref } from "@/lib/plan/workout-href";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
-
-function formatMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${Math.round(minutes)}m`;
-}
-
-function sourceLabel(source: CalendarPlannedSession["source"]): string {
-  if (source === "RACE") return "Race";
-  if (source === "ANCHORED_INSTANCE") return "Anchored";
-  if (source === "TEMPLATE") return "Template";
-  return "Planned";
-}
 
 type CalendarSessionCardProps = {
   session: CalendarPlannedSession;
   workoutShadingSettings: WorkoutShadingSettings;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   isDragging?: boolean;
   onDeleted?: () => void;
   onUnlinkActivity?: (sessionId: string) => void;
@@ -38,9 +30,19 @@ type CalendarSessionCardProps = {
   showWorkoutDropTarget?: boolean;
 };
 
+function disciplineLabel(session: CalendarPlannedSession): string {
+  const linked = session.linkedActivity;
+  return (
+    linked?.legType ??
+    DISCIPLINE_DISPLAY_LABELS[session.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ??
+    session.discipline
+  );
+}
+
 export function CalendarSessionCard({
   session,
   workoutShadingSettings,
+  disciplineSettings,
   isDragging,
   onDeleted,
   onUnlinkActivity,
@@ -83,6 +85,18 @@ export function CalendarSessionCard({
   const linked = session.linkedActivity;
   const canAcceptLink = showLinkDropTarget && !linked;
 
+  const unitSettings = unitSettingsForDiscipline(
+    session.discipline as PlanDiscipline,
+    disciplineSettings
+  );
+  const poolSize = resolveSessionPoolSize(session.discipline, session.poolSize, disciplineSettings);
+  const displayUnit =
+    session.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
+  const metricLines = formatSessionCardMetricLines(session, displayUnit);
+  const pillClassName = linked
+    ? "rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+    : "rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-800 dark:bg-sky-900 dark:text-sky-200";
+
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -117,93 +131,6 @@ export function CalendarSessionCard({
     }
   }
 
-  if (linked) {
-    const summaryLines = formatLinkedSessionCardLines(session);
-
-    return (
-      <div className={cardClassName}>
-        <div
-          ref={(node) => {
-            setDragRef(node);
-            setDropRef(node);
-            setWorkoutDropRef(node);
-          }}
-          style={style}
-          className="flex items-start gap-1"
-        >
-          <button
-            type="button"
-            className="mt-0.5 shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-            aria-label="Drag to reschedule"
-            {...listeners}
-            {...attributes}
-          >
-            ⠿
-          </button>
-          <Link
-            href={workoutHref(session.id, { returnTo: "/calendar" })}
-            className="min-w-0 flex-1 transition hover:opacity-90"
-          >
-            <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
-            {summaryLines.length > 0 ? (
-              <div className="mt-1 space-y-0.5">
-                {summaryLines.map((line) => (
-                  <p key={line} className="text-xs text-zinc-500">
-                    {line}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-            {linked.name.trim() !== session.title.trim() ? (
-              <p className="mt-1 text-xs text-zinc-400">{linked.name}</p>
-            ) : null}
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                {linked.legType ??
-                  DISCIPLINE_DISPLAY_LABELS[
-                    session.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS
-                  ] ??
-                  session.discipline}
-              </span>
-              <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                done
-              </span>
-            </div>
-            {session.workoutProfile ? (
-              <WorkoutProfileMiniChart profile={session.workoutProfile} />
-            ) : null}
-          </Link>
-          {onUnlinkActivity ? (
-            <button
-              type="button"
-              disabled={unlinking}
-              className="shrink-0 rounded px-1 text-[10px] text-zinc-400 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
-              aria-label="Unlink completed workout"
-              onClick={(e) => void handleUnlink(e)}
-            >
-              Unlink
-            </button>
-          ) : null}
-          <button
-            type="button"
-            disabled={deleting}
-            className="shrink-0 rounded p-0.5 text-sm leading-none text-zinc-400 hover:bg-red-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-            aria-label={`Delete ${session.title}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => void handleDelete(e)}
-          >
-            ×
-          </button>
-        </div>
-        {showWorkoutDropTarget && session.source !== "RACE" && isWorkoutOver ? (
-          <p className="mt-2 rounded border border-dashed border-sky-400 bg-sky-50/80 px-2 py-1 text-center text-[10px] font-medium text-sky-800 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
-            Drop structured workout
-          </p>
-        ) : null}
-      </div>
-    );
-  }
-
   return (
     <div
       ref={(node) => {
@@ -226,40 +153,41 @@ export function CalendarSessionCard({
         </button>
         <Link
           href={workoutHref(session.id, { returnTo: "/calendar" })}
-          className="min-w-0 flex-1"
+          className="min-w-0 flex-1 transition hover:opacity-90"
         >
-          <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            {sourceLabel(session.source)}
-            {session.source === "RACE" && session.estimatedDurationMinutes != null
-              ? ` · ${formatGoalTimeDisplay(session.estimatedDurationMinutes)}`
-              : session.totalMinutes > 0
-                ? ` · ${formatMinutes(session.totalMinutes)}`
-                : ""}
-            {session.metricsSummary ? ` · ${session.metricsSummary}` : ""}
-          </p>
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            <span className="inline-block rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-800 dark:bg-sky-900 dark:text-sky-200">
-              {DISCIPLINE_DISPLAY_LABELS[
-                session.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS
-              ] ?? session.discipline}
+          <p className="line-clamp-1 font-medium leading-snug pr-1">
+            <span>{session.title}</span>
+            <span className={`ml-1.5 inline-block align-middle ${pillClassName}`}>
+              {disciplineLabel(session)}
             </span>
-            {session.source === "RACE" ? (
-              <span className="inline-block rounded bg-amber-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-900 dark:bg-amber-900 dark:text-amber-100">
-                Race
-              </span>
-            ) : null}
-            {session.discipline === "SWIM" && session.poolSize ? (
-              <span className="inline-block rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-cyan-900 dark:bg-cyan-950 dark:text-cyan-200">
-                {POOL_SIZE_OPTIONS.find((o) => o.value === session.poolSize)?.value ??
-                  session.poolSize}
-              </span>
-            ) : null}
-          </div>
+          </p>
+          {metricLines.length > 0 ? (
+            <div className="mt-0.5 space-y-0.5">
+              {metricLines.map((line) => (
+                <p key={line} className="text-xs text-zinc-500">
+                  {line}
+                </p>
+              ))}
+            </div>
+          ) : null}
+          {linked && linked.name.trim() !== session.title.trim() ? (
+            <p className="mt-0.5 text-xs text-zinc-400">{linked.name}</p>
+          ) : null}
           {session.workoutProfile ? (
             <WorkoutProfileMiniChart profile={session.workoutProfile} />
           ) : null}
         </Link>
+        {linked && onUnlinkActivity ? (
+          <button
+            type="button"
+            disabled={unlinking}
+            className="shrink-0 rounded px-1 text-[10px] text-zinc-400 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
+            aria-label="Unlink completed workout"
+            onClick={(e) => void handleUnlink(e)}
+          >
+            Unlink
+          </button>
+        ) : null}
         <button
           type="button"
           disabled={deleting}

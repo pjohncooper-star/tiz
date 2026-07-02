@@ -142,6 +142,7 @@ export function CalendarDayColumn({
                 key={item.session.id}
                 session={item.session}
                 workoutShadingSettings={workoutShadingSettings}
+                disciplineSettings={disciplineSettings}
                 isDragging={activeDragId === item.session.id}
                 showLinkDropTarget={activityDragActive}
                 showWorkoutDropTarget={workoutDragActive}
@@ -168,6 +169,7 @@ export function CalendarDayColumn({
               key={group.kind === "single" ? group.activity.id : group.groupId}
               group={group}
               activeDragId={activeDragId}
+              disciplineSettings={disciplineSettings}
               onDeleted={onSessionCreated}
             />
           ))}

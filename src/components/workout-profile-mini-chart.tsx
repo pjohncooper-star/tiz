@@ -7,7 +7,7 @@ type WorkoutProfileMiniChartProps = {
   className?: string;
 };
 
-const HEIGHT = 36;
+const HEIGHT = 28;
 
 export function WorkoutProfileMiniChart({ profile, className = "" }: WorkoutProfileMiniChartProps) {
   if (profile.segments.length === 0) return null;
@@ -28,7 +28,7 @@ export function WorkoutProfileMiniChart({ profile, className = "" }: WorkoutProf
   return (
     <svg
       viewBox={`0 0 ${width} ${HEIGHT}`}
-      className={`mt-2 h-9 w-full ${className}`}
+      className={`mt-1 h-7 w-full ${className}`}
       preserveAspectRatio="none"
       aria-hidden
     >
