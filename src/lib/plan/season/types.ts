@@ -63,6 +63,8 @@ export type SeasonPlanComputeInput = {
   longRidePeakMin: number;
   longRunStartMin: number;
   longRunPeakMin: number;
+  longRideWeekFlags?: boolean[] | null;
+  longRunWeekFlags?: boolean[] | null;
 };
 
 export type ComputedMesocycle = {

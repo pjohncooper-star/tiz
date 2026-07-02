@@ -179,6 +179,8 @@ export type SeasonData = {
   longRidePeakMin: number;
   longRunStartMin: number;
   longRunPeakMin: number;
+  longRideWeekFlags?: boolean[] | null;
+  longRunWeekFlags?: boolean[] | null;
   primaryGoalEvent: (GoalEventDraft & { id: string }) | null;
   goalEvents?: (GoalEventDraft & { id: string; priority: EventPriority })[];
   unlinkedRaceSessions?: UnlinkedRaceSession[];

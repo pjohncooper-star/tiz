@@ -66,6 +66,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       longRidePeakMin: data.longRidePeakMin,
       longRunStartMin: data.longRunStartMin,
       longRunPeakMin: data.longRunPeakMin,
+      longRideWeekFlags: data.longRideWeekFlags,
+      longRunWeekFlags: data.longRunWeekFlags,
       deLoadEveryNWeeks: data.deLoadEveryNWeeks,
       deLoadWeekFlags: data.deLoadWeekFlags,
       deLoadVolumePercent: data.deLoadVolumePercent,

@@ -12,6 +12,7 @@ import {
   mesocycleLayoutFingerprint,
   parseDeLoadWeekFlags,
 } from "./de-load-cadence";
+import { parseLongWeekFlags } from "./long-session-schedule";
 import { resolveMesocycles } from "./phase-split";
 import { recomputeSeasonWeeks } from "./recompute";
 import {
@@ -59,6 +60,8 @@ export type CreateSeasonPlanInput = {
   longRidePeakMin?: number;
   longRunStartMin?: number;
   longRunPeakMin?: number;
+  longRideWeekFlags?: boolean[] | null;
+  longRunWeekFlags?: boolean[] | null;
   phases: SeasonPhaseInput[];
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
@@ -94,6 +97,8 @@ export type UpdateSeasonPlanInput = {
   longRidePeakMin?: number;
   longRunStartMin?: number;
   longRunPeakMin?: number;
+  longRideWeekFlags?: boolean[] | null;
+  longRunWeekFlags?: boolean[] | null;
   phases?: SeasonPhaseInput[];
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
@@ -255,6 +260,8 @@ function toComputeInput(
     longRidePeakMin: plan.longRidePeakMin ?? 180,
     longRunStartMin: plan.longRunStartMin ?? 30,
     longRunPeakMin: plan.longRunPeakMin ?? 90,
+    longRideWeekFlags: plan.longRideWeekFlags ?? null,
+    longRunWeekFlags: plan.longRunWeekFlags ?? null,
   };
 }
 
@@ -440,6 +447,16 @@ export async function updateSeasonPlan(
       ? input.deLoadWeekFlags
       : parseDeLoadWeekFlags(existing.deLoadWeekFlags);
 
+  let longRideWeekFlags: boolean[] | null =
+    input.longRideWeekFlags !== undefined
+      ? input.longRideWeekFlags
+      : parseLongWeekFlags(existing.longRideWeekFlags);
+
+  let longRunWeekFlags: boolean[] | null =
+    input.longRunWeekFlags !== undefined
+      ? input.longRunWeekFlags
+      : parseLongWeekFlags(existing.longRunWeekFlags);
+
   if (input.phases) {
     const existingMesocycles = resolveMesocycles(
       dbPhasesToSeasonInput(existing.phases),
@@ -450,6 +467,8 @@ export async function updateSeasonPlan(
       mesocycleLayoutFingerprint(existingMesocycles)
     ) {
       deLoadWeekFlags = null;
+      longRideWeekFlags = null;
+      longRunWeekFlags = null;
     }
   }
 
@@ -475,6 +494,8 @@ export async function updateSeasonPlan(
     longRidePeakMin: input.longRidePeakMin ?? existing.longRidePeakMin,
     longRunStartMin: input.longRunStartMin ?? existing.longRunStartMin,
     longRunPeakMin: input.longRunPeakMin ?? existing.longRunPeakMin,
+    longRideWeekFlags,
+    longRunWeekFlags,
   };
 
   const computed = recomputeSeasonWeeks(computeInput);
@@ -536,6 +557,14 @@ export async function updateSeasonPlan(
         longRidePeakMin: computeInput.longRidePeakMin,
         longRunStartMin: computeInput.longRunStartMin,
         longRunPeakMin: computeInput.longRunPeakMin,
+        longRideWeekFlags:
+          longRideWeekFlags === null
+            ? Prisma.DbNull
+            : (longRideWeekFlags as Prisma.InputJsonValue),
+        longRunWeekFlags:
+          longRunWeekFlags === null
+            ? Prisma.DbNull
+            : (longRunWeekFlags as Prisma.InputJsonValue),
         setupComplete:
           input.setupComplete !== undefined
             ? input.setupComplete

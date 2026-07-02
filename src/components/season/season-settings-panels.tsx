@@ -4,6 +4,7 @@ import { AnchorEditor } from "@/components/season/anchor-editor";
 import { CycleStructurePreview } from "@/components/season/cycle-structure-preview";
 import { DeLoadWeekChart } from "@/components/season/de-load-week-chart";
 import { GoalRaceEditor } from "@/components/season/goal-race-editor";
+import { LongSessionWeekChart } from "@/components/season/long-session-week-chart";
 import {
   DISCIPLINE_LABELS,
   formatGoalDisciplines,
@@ -75,6 +76,12 @@ export function SeasonSettingsPanel({
     setLongRunStartMin,
     longRunPeakMin,
     setLongRunPeakMin,
+    longRideWeekFlags,
+    longRunWeekFlags,
+    toggleLongRideWeek,
+    toggleLongRunWeek,
+    applyLongWeekPreset,
+    longSessionWeekPreview,
     deLoadEveryNWeeks,
     setDeLoadEveryNWeeks,
     deLoadVolumePercent,
@@ -648,6 +655,45 @@ export function SeasonSettingsPanel({
             />
           </div>
         </div>
+
+        {cycleStructureValid && (
+          <div className="mt-6 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => applyLongWeekPreset("every_week")}
+              >
+                Every week (full)
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => applyLongWeekPreset("every_other")}
+              >
+                Every other week
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => applyLongWeekPreset("default")}
+              >
+                Reset to defaults
+              </Button>
+            </div>
+            <LongSessionWeekChart
+              phases={phases}
+              mesocycles={resolvedMesocycles}
+              totalWeeks={totalWeeks}
+              deLoadWeekFlags={deLoadWeekFlags}
+              longRideWeekFlags={longRideWeekFlags}
+              longRunWeekFlags={longRunWeekFlags}
+              weekPreview={longSessionWeekPreview}
+              onToggleRideWeek={toggleLongRideWeek}
+              onToggleRunWeek={toggleLongRunWeek}
+            />
+          </div>
+        )}
       </Card>
     );
   }

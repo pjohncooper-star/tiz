@@ -91,8 +91,10 @@ describe("mesocycle resolution", () => {
     assert.equal(defaults.weeks[2]?.isDeLoadWeek, true);
     assert.equal(defaults.weeks[4]?.isDeLoadWeek, false);
     assert.equal(defaults.weeks[0]?.totalHours, defaults.weeks[1]?.totalHours);
-    assert.equal(defaults.weeks[0]?.longRideMinutes, defaults.weeks[1]?.longRideMinutes);
+    assert.ok(defaults.weeks[0]!.longRideMinutes > defaults.weeks[1]!.longRideMinutes);
     assert.ok(defaults.weeks[4]!.totalHours >= defaults.weeks[0]!.totalHours);
+    assert.ok(defaults.weeks[4]!.longRideMinutes > defaults.weeks[0]!.longRideMinutes);
+    assert.ok(defaults.weeks[2]!.longRideMinutes < defaults.weeks[0]!.longRideMinutes);
 
     const overrides = [false, false, false, true, true, false, false, false];
     const withFlags = recomputeSeasonWeeks({

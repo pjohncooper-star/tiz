@@ -38,7 +38,7 @@ describe("long-session-ramp", () => {
     assert.ok(rideAt(4) > rideAt(0));
   });
 
-  it("does not advance long minutes on de-load weeks within a mesocycle", () => {
+  it("returns the same full plateau on de-load weeks within a mesocycle", () => {
     const kinds = ["BUILD", "BUILD", "BUILD", "BUILD"] as const;
     const mesocycles: ComputedMesocycle[] = [
       {
@@ -56,18 +56,18 @@ describe("long-session-ramp", () => {
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
-    const deLoadWeek = computeLongSessionsForWeek(
+    const sibling = computeLongSessionsForWeek(
       1,
       [...kinds],
       mesocycles,
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
-    assert.equal(deLoadWeek.longRideMinutes, normal.longRideMinutes);
-    assert.equal(deLoadWeek.longRunMinutes, normal.longRunMinutes);
+    assert.equal(sibling.longRideMinutes, normal.longRideMinutes);
+    assert.equal(sibling.longRunMinutes, normal.longRunMinutes);
   });
 
-  it("scales taper weeks to 60% of the last ramp plateau", () => {
+  it("returns full plateau on taper weeks before tier flags", () => {
     const kinds = ["BUILD", "BUILD", "TAPER", "TAPER"] as const;
     const mesocycles: ComputedMesocycle[] = [
       {
@@ -92,8 +92,8 @@ describe("long-session-ramp", () => {
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
-    assert.equal(taperWeek.longRideMinutes, Math.round(buildWeek.longRideMinutes * 0.6));
-    assert.equal(taperWeek.longRunMinutes, Math.round(buildWeek.longRunMinutes * 0.6));
+    assert.equal(taperWeek.longRideMinutes, buildWeek.longRideMinutes);
+    assert.equal(taperWeek.longRunMinutes, buildWeek.longRunMinutes);
   });
 
   it("holds race prep at the last ramp plateau", () => {

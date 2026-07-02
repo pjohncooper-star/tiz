@@ -264,6 +264,8 @@ export const seasonWizardStep4Schema = z.object({
   longRidePeakMin: z.number().int().positive().optional(),
   longRunStartMin: z.number().int().positive().optional(),
   longRunPeakMin: z.number().int().positive().optional(),
+  longRideWeekFlags: z.array(z.boolean()).optional(),
+  longRunWeekFlags: z.array(z.boolean()).optional(),
 });
 
 /** Step 5 — sessions per week; may mark setup complete. */
@@ -296,6 +298,8 @@ export const updateSeasonPlanSchema = z
     longRidePeakMin: z.number().int().positive().optional(),
     longRunStartMin: z.number().int().positive().optional(),
     longRunPeakMin: z.number().int().positive().optional(),
+    longRideWeekFlags: z.array(z.boolean()).nullable().optional(),
+    longRunWeekFlags: z.array(z.boolean()).nullable().optional(),
     deLoadEveryNWeeks: z.number().int().min(2).max(8).optional(),
     deLoadWeekFlags: z.array(z.boolean()).nullable().optional(),
     deLoadVolumePercent: z.number().min(30).max(90).optional(),

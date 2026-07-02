@@ -457,6 +457,8 @@ model SeasonPlan {
   longRidePeakMin          Int            @default(180)
   longRunStartMin          Int            @default(30)
   longRunPeakMin           Int            @default(90)
+  longRideWeekFlags        Json?
+  longRunWeekFlags         Json?
   primaryGoalEventId       String?        @unique
   setupComplete            Boolean        @default(false)
   createdAt                DateTime       @default(now())

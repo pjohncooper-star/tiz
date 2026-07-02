@@ -29,9 +29,16 @@ import {
 import { markDeLoadWeeksPerMesocycle } from "@/lib/plan/season/de-load-cadence";
 import { defaultPhaseForKind, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
 import { goalEventTimesForApi } from "@/lib/plan/season/goal-event-times";
+import {
+  defaultLongWeekFlags,
+  type LongWeekPreset,
+} from "@/lib/plan/season/long-session-schedule";
 import { resizePhaseBoundaryAtWeek } from "@/lib/plan/season/phase-boundary-resize";
 import { resolveMesocycles } from "@/lib/plan/season/phase-split";
+import { recomputeSeasonWeeks } from "@/lib/plan/season/recompute";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
+import { parseDateKey } from "@/lib/dates";
+import type { PhaseKind } from "@prisma/client";
 
 type UseSeasonSettingsOptions = {
   seasonIdParam?: string | null;
@@ -108,6 +115,40 @@ function flagsFromSeason(season: SeasonData): boolean[] | null {
   return null;
 }
 
+function phaseKindsFromPhases(phases: PhaseDraft[], totalWeeks: number): PhaseKind[] {
+  const sorted = [...phases].sort((a, b) => a.sortOrder - b.sortOrder);
+  const kinds: PhaseKind[] = [];
+  for (const phase of sorted) {
+    for (let w = 0; w < phase.weekCount; w++) {
+      kinds.push(phase.phaseKind);
+    }
+  }
+  while (kinds.length < totalWeeks) {
+    kinds.push(sorted[sorted.length - 1]?.phaseKind ?? "BUILD");
+  }
+  return kinds.slice(0, totalWeeks);
+}
+
+function defaultLongFlagsForPlan(
+  phases: PhaseDraft[],
+  mesocycleLengthWeeks: number,
+  totalWeeks: number,
+  deLoadWeekFlags: boolean[],
+  preset?: LongWeekPreset
+): boolean[] {
+  const weeks = Math.max(totalWeeks, 1);
+  const mesocycles = resolveMesocycles(phasesToSeasonInput(phases), mesocycleLengthWeeks);
+  const deLoadFlags = [...deLoadWeekFlags];
+  while (deLoadFlags.length < weeks) deLoadFlags.push(false);
+  return defaultLongWeekFlags({
+    totalWeeks: weeks,
+    phaseKindsByWeek: phaseKindsFromPhases(phases, weeks),
+    mesocycles,
+    deLoadFlags: deLoadFlags.slice(0, weeks),
+    preset,
+  });
+}
+
 function goalEventPayload(race: GoalEventDraft) {
   const times = goalEventTimesForApi({
     disciplines: race.disciplines,
@@ -171,6 +212,8 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
   >("VOLUME_ONLY");
   const [reduceCountsOnDeLoad, setReduceCountsOnDeLoad] = useState(true);
   const [deLoadWeekFlags, setDeLoadWeekFlags] = useState<boolean[]>([]);
+  const [longRideWeekFlags, setLongRideWeekFlags] = useState<boolean[]>([]);
+  const [longRunWeekFlags, setLongRunWeekFlags] = useState<boolean[]>([]);
 
   const hydrateFromSeason = useCallback((season: SeasonData) => {
     setName(season.name);
@@ -192,14 +235,34 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     setDeLoadStrategy(season.deLoadStrategy as typeof deLoadStrategy);
     setReduceCountsOnDeLoad(season.reduceCountsOnDeLoad);
     const storedFlags = flagsFromSeason(season);
-    setDeLoadWeekFlags(
+    const deLoadDefaults =
       storedFlags ??
-        defaultDeLoadFlags(
-          phasesNormalized,
-          season.mesocycleLengthWeeks,
-          season.totalWeeks,
-          season.deLoadEveryNWeeks
-        )
+      defaultDeLoadFlags(
+        phasesNormalized,
+        season.mesocycleLengthWeeks,
+        season.totalWeeks,
+        season.deLoadEveryNWeeks
+      );
+    setDeLoadWeekFlags(deLoadDefaults);
+    setLongRideWeekFlags(
+      season.longRideWeekFlags?.length === season.totalWeeks
+        ? season.longRideWeekFlags
+        : defaultLongFlagsForPlan(
+            phasesNormalized,
+            season.mesocycleLengthWeeks,
+            season.totalWeeks,
+            deLoadDefaults
+          )
+    );
+    setLongRunWeekFlags(
+      season.longRunWeekFlags?.length === season.totalWeeks
+        ? season.longRunWeekFlags
+        : defaultLongFlagsForPlan(
+            phasesNormalized,
+            season.mesocycleLengthWeeks,
+            season.totalWeeks,
+            deLoadDefaults
+          )
     );
     if (season.primaryGoalEvent) {
       setARace(goalEventFromApi(season.primaryGoalEvent));
@@ -490,6 +553,46 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     });
   }
 
+  function toggleLongRideWeek(weekIndex: number) {
+    setLongRideWeekFlags((prev) => {
+      const next = [...prev];
+      while (next.length < totalWeeks) next.push(false);
+      next[weekIndex] = !next[weekIndex];
+      return next.slice(0, totalWeeks);
+    });
+  }
+
+  function toggleLongRunWeek(weekIndex: number) {
+    setLongRunWeekFlags((prev) => {
+      const next = [...prev];
+      while (next.length < totalWeeks) next.push(false);
+      next[weekIndex] = !next[weekIndex];
+      return next.slice(0, totalWeeks);
+    });
+  }
+
+  function applyLongWeekPreset(preset: LongWeekPreset) {
+    const deLoadFlags = [...deLoadWeekFlags];
+    while (deLoadFlags.length < totalWeeks) deLoadFlags.push(false);
+    const paddedDeLoad = deLoadFlags.slice(0, Math.max(totalWeeks, 0));
+    const rideFlags = defaultLongFlagsForPlan(
+      phases,
+      mesocycleLengthWeeks,
+      totalWeeks,
+      paddedDeLoad,
+      preset
+    );
+    const runFlags = defaultLongFlagsForPlan(
+      phases,
+      mesocycleLengthWeeks,
+      totalWeeks,
+      paddedDeLoad,
+      preset
+    );
+    setLongRideWeekFlags(rideFlags);
+    setLongRunWeekFlags(runFlags);
+  }
+
   function updateDeLoadEveryNWeeks(value: number) {
     setDeLoadEveryNWeeks(value);
     setDeLoadWeekFlags(
@@ -714,6 +817,72 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     return flags.slice(0, Math.max(totalWeeks, 0));
   }, [deLoadWeekFlags, totalWeeks]);
 
+  const longRideFlagsForDisplay = useMemo(() => {
+    const flags = [...longRideWeekFlags];
+    while (flags.length < totalWeeks) flags.push(false);
+    return flags.slice(0, Math.max(totalWeeks, 0));
+  }, [longRideWeekFlags, totalWeeks]);
+
+  const longRunFlagsForDisplay = useMemo(() => {
+    const flags = [...longRunWeekFlags];
+    while (flags.length < totalWeeks) flags.push(false);
+    return flags.slice(0, Math.max(totalWeeks, 0));
+  }, [longRunWeekFlags, totalWeeks]);
+
+  const longSessionWeekPreview = useMemo(() => {
+    if (!startDate || !endDate || totalWeeks <= 0 || !cycleStructureValid) {
+      return [];
+    }
+    try {
+      return recomputeSeasonWeeks({
+        startDate: parseDateKey(startDate),
+        endDate: parseDateKey(endDate),
+        mesocycleLengthWeeks,
+        phases: phasesToSeasonInput(phases),
+        startHours,
+        peakHours,
+        maxRampPercent,
+        deLoadEveryNWeeks,
+        deLoadWeekFlags: deLoadFlagsForDisplay,
+        deLoadVolumePercent,
+        deLoadStrategy,
+        reduceCountsOnDeLoad,
+        longRideStartMin,
+        longRidePeakMin,
+        longRunStartMin,
+        longRunPeakMin,
+        longRideWeekFlags: longRideFlagsForDisplay,
+        longRunWeekFlags: longRunFlagsForDisplay,
+      }).weeks.map((week) => ({
+        longRideMinutes: week.longRideMinutes,
+        longRunMinutes: week.longRunMinutes,
+      }));
+    } catch {
+      return [];
+    }
+  }, [
+    startDate,
+    endDate,
+    totalWeeks,
+    cycleStructureValid,
+    mesocycleLengthWeeks,
+    phases,
+    startHours,
+    peakHours,
+    maxRampPercent,
+    deLoadEveryNWeeks,
+    deLoadFlagsForDisplay,
+    deLoadVolumePercent,
+    deLoadStrategy,
+    reduceCountsOnDeLoad,
+    longRideStartMin,
+    longRidePeakMin,
+    longRunStartMin,
+    longRunPeakMin,
+    longRideFlagsForDisplay,
+    longRunFlagsForDisplay,
+  ]);
+
   async function saveStep(step: number): Promise<boolean> {
     if (step === 0) return saveStep0();
     if (step === 1) {
@@ -741,6 +910,8 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
         longRidePeakMin,
         longRunStartMin,
         longRunPeakMin,
+        longRideWeekFlags: longRideFlagsForDisplay,
+        longRunWeekFlags: longRunFlagsForDisplay,
       });
     }
     if (step === 5) return patchSeason({ phases });
@@ -827,6 +998,12 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     deLoadWeekFlags: deLoadFlagsForDisplay,
     toggleDeLoadWeek,
     applyDeLoadCadence,
+    longRideWeekFlags: longRideFlagsForDisplay,
+    longRunWeekFlags: longRunFlagsForDisplay,
+    toggleLongRideWeek,
+    toggleLongRunWeek,
+    applyLongWeekPreset,
+    longSessionWeekPreview,
     resolvedMesocycles,
     saveStep,
     saveStepWithFeedback,

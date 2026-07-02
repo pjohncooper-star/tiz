@@ -1,5 +1,6 @@
 import { formatDateKey, calendarDateFromDb } from "@/lib/dates";
 import { parseDeLoadWeekFlags } from "./de-load-cadence";
+import { parseLongWeekFlags } from "./long-session-schedule";
 import {
   findUnlinkedRaceSessions,
   goalEventDisciplinesFromSession,
@@ -156,6 +157,8 @@ export async function serializeSeasonPlan(plan: SeasonPlanRecord) {
     longRidePeakMin: plan.longRidePeakMin,
     longRunStartMin: plan.longRunStartMin,
     longRunPeakMin: plan.longRunPeakMin,
+    longRideWeekFlags: parseLongWeekFlags(plan.longRideWeekFlags),
+    longRunWeekFlags: parseLongWeekFlags(plan.longRunWeekFlags),
     primaryGoalEvent: plan.primaryGoalEvent
       ? serializeGoalEvent(plan.primaryGoalEvent)
       : null,

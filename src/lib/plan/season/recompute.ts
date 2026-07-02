@@ -3,6 +3,11 @@ import { markDeLoadWeeksPerMesocycle, mergeDeLoadFlags, taperWeekIndicesFromPhas
 import { splitHoursByDiscipline } from "./discipline-split";
 import { computeZoneMinutesForWeek } from "./focus-tiz";
 import { computeLongSessionsForWeek } from "./long-session-ramp";
+import {
+  applyLongSessionTier,
+  defaultLongWeekFlags,
+  mergeLongWeekFlags,
+} from "./long-session-schedule";
 import { mesocycleForWeekIndex, resolveMesocycles } from "./phase-split";
 import { applyDeLoadSessionScaling, baseSessionCounts } from "./session-counts";
 import {
@@ -105,6 +110,27 @@ export function recomputeSeasonWeeks(
   });
   const deLoadFlags = mergeDeLoadFlags(defaultDeLoadFlags, input.deLoadWeekFlags);
 
+  const defaultLongRideFlags = defaultLongWeekFlags({
+    totalWeeks: bounds.totalWeeks,
+    phaseKindsByWeek,
+    mesocycles,
+    deLoadFlags,
+  });
+  const defaultLongRunFlags = defaultLongWeekFlags({
+    totalWeeks: bounds.totalWeeks,
+    phaseKindsByWeek,
+    mesocycles,
+    deLoadFlags,
+  });
+  const longRideWeekFlags = mergeLongWeekFlags(
+    defaultLongRideFlags,
+    input.longRideWeekFlags
+  );
+  const longRunWeekFlags = mergeLongWeekFlags(
+    defaultLongRunFlags,
+    input.longRunWeekFlags
+  );
+
   const weeklyHours = computeWeeklyVolumeCurve({
     totalWeeks: bounds.totalWeeks,
     phaseKindsByWeek,
@@ -151,7 +177,7 @@ export function recomputeSeasonWeeks(
       isDeLoadWeek: ctx.isDeLoadWeek,
     });
 
-    const { longRideMinutes, longRunMinutes } = computeLongSessionsForWeek(
+    const fullLongSessions = computeLongSessionsForWeek(
       ctx.weekIndex,
       phaseKindsByWeek,
       mesocycles,
@@ -163,6 +189,14 @@ export function recomputeSeasonWeeks(
         startMin: input.longRunStartMin,
         peakMin: input.longRunPeakMin,
       }
+    );
+    const longRideMinutes = applyLongSessionTier(
+      fullLongSessions.longRideMinutes,
+      longRideWeekFlags[ctx.weekIndex] ?? false
+    );
+    const longRunMinutes = applyLongSessionTier(
+      fullLongSessions.longRunMinutes,
+      longRunWeekFlags[ctx.weekIndex] ?? false
     );
 
     return {

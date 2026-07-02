@@ -15,9 +15,7 @@ export type LongSessionRampInput = {
   peakMin: number;
 };
 
-const TAPER_LONG_SESSION_SCALE = 0.6;
-
-function plateauMinutesForWeek(
+function fullPlateauMinutesForWeek(
   weekIndex: number,
   phaseKindsByWeek: PhaseKind[],
   mesocycles: ComputedMesocycle[],
@@ -28,10 +26,7 @@ function plateauMinutesForWeek(
   const rampMesoList = rampMesocycles(mesocycles, phaseKindsByWeek);
   const peakPlateau = lastRampMesocyclePlateau(rampMesoList, startMin, peakMin);
 
-  if (kind === "TAPER") {
-    return Math.round(peakPlateau * TAPER_LONG_SESSION_SCALE);
-  }
-  if (kind === "RACE_PREP") {
+  if (kind === "TAPER" || kind === "RACE_PREP") {
     return Math.round(peakPlateau);
   }
 
@@ -46,12 +41,11 @@ function plateauMinutesForWeek(
 }
 
 /**
- * Step long-session minutes at mesocycle boundaries (flat within each mesocycle).
- * Race prep holds the last ramp plateau; taper weeks scale to 60%.
+ * Full long-session plateau before per-week tier (full vs medium) is applied.
  */
 export function computeLongSessionMinutes(input: LongSessionRampInput): number {
   const { weekIndex, phaseKindsByWeek, mesocycles, startMin, peakMin } = input;
-  return plateauMinutesForWeek(
+  return fullPlateauMinutesForWeek(
     weekIndex,
     phaseKindsByWeek,
     mesocycles,
