@@ -26,6 +26,7 @@ import {
   type MesocycleDraft,
 } from "@/lib/plan/season/mesocycle-draft";
 import { markDeLoadWeeksPerMesocycle } from "@/lib/plan/season/de-load-cadence";
+import { defaultPhaseForKind, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
 import { resolveMesocycles } from "@/lib/plan/season/phase-split";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 
@@ -70,6 +71,26 @@ function defaultDeLoadFlags(
     totalWeeks: weeks,
     everyNWeeks,
   });
+}
+
+function suggestedPhaseDrafts(
+  totalWeeks: number,
+  mesocycleLengthWeeks: number
+): PhaseDraft[] {
+  if (totalWeeks <= 0) return [];
+  return suggestPhasesForWeeks(totalWeeks).map((phase, i) => ({
+    name: phase.name,
+    sortOrder: i,
+    weekCount: phase.weekCount,
+    phaseKind: phase.phaseKind,
+    color: phase.color ?? "#38bdf8",
+    focusMode: phase.focusMode,
+    phaseFocus: phase.phaseFocus ?? null,
+    swimSessionsPerWeek: phase.swimSessionsPerWeek,
+    bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+    runSessionsPerWeek: phase.runSessionsPerWeek,
+    mesocycles: defaultMesocycleDrafts(phase.name, phase.weekCount, mesocycleLengthWeeks),
+  }));
 }
 
 function flagsFromSeason(season: SeasonData): boolean[] | null {
@@ -321,6 +342,99 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
         return { ...p, disciplineFocuses: focuses };
       })
     );
+  }
+
+  function addPhase() {
+    setPhases((prev) => {
+      const template = defaultPhaseForKind("BUILD", 4, prev.length);
+      return [
+        ...prev,
+        {
+          name: template.name,
+          sortOrder: prev.length,
+          weekCount: template.weekCount,
+          phaseKind: template.phaseKind,
+          color: template.color ?? "#6366f1",
+          focusMode: template.focusMode,
+          phaseFocus: template.phaseFocus ?? null,
+          swimSessionsPerWeek: template.swimSessionsPerWeek,
+          bikeSessionsPerWeek: template.bikeSessionsPerWeek,
+          runSessionsPerWeek: template.runSessionsPerWeek,
+          mesocycles: defaultMesocycleDrafts(
+            template.name,
+            template.weekCount,
+            mesocycleLengthWeeks
+          ),
+        },
+      ];
+    });
+  }
+
+  async function removePhase(index: number) {
+    if (phases.length <= 1) return;
+    const phase = phases[index];
+    if (!phase) return;
+
+    let message = `Remove "${phase.name}"?`;
+    if (phase.id && seasonId) {
+      const res = await fetch(
+        `/api/plan/anchors?seasonPlanId=${encodeURIComponent(seasonId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          anchors: { seasonPhaseId: string | null }[];
+        };
+        const anchorCount = data.anchors.filter((a) => a.seasonPhaseId === phase.id).length;
+        if (anchorCount > 0) {
+          message = `Remove "${phase.name}" and delete ${anchorCount} anchor workout${anchorCount === 1 ? "" : "s"}?`;
+        }
+      }
+    }
+    if (!confirm(message)) return;
+
+    setPhases((prev) =>
+      prev
+        .filter((_, i) => i !== index)
+        .map((p, i) => ({ ...p, sortOrder: i }))
+    );
+    setDeLoadWeekFlags((prev) => {
+      const nextPhases = phases.filter((_, i) => i !== index);
+      return defaultDeLoadFlags(nextPhases, mesocycleLengthWeeks, totalWeeks, deLoadEveryNWeeks);
+    });
+  }
+
+  function movePhase(index: number, direction: -1 | 1) {
+    setPhases((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const current = next[index];
+      const swap = next[target];
+      if (!current || !swap) return prev;
+      next[index] = swap;
+      next[target] = current;
+      return next.map((p, i) => ({ ...p, sortOrder: i }));
+    });
+  }
+
+  function resetPhasesToSuggested() {
+    if (totalWeeks <= 0) {
+      setError("Set season dates first");
+      return;
+    }
+    if (
+      !confirm(
+        "Replace all macro phases with the suggested layout for this season length? This cannot be undone until you save."
+      )
+    ) {
+      return;
+    }
+    const drafts = suggestedPhaseDrafts(totalWeeks, mesocycleLengthWeeks);
+    setPhases(drafts);
+    setDeLoadWeekFlags(
+      defaultDeLoadFlags(drafts, mesocycleLengthWeeks, totalWeeks, deLoadEveryNWeeks)
+    );
+    setError(null);
   }
 
   function applyDeLoadCadence(everyNWeeks = deLoadEveryNWeeks) {
@@ -635,6 +749,10 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     phaseWeekTotal,
     updatePhase,
     updateDisciplineFocus,
+    addPhase,
+    removePhase,
+    movePhase,
+    resetPhasesToSuggested,
     updateMesocycle,
     addMesocycle,
     removeMesocycle,

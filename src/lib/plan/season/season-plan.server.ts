@@ -7,7 +7,7 @@ import {
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb } from "@/lib/dates";
-import { defaultPhasesForWeeks } from "./default-phases";
+import { suggestPhasesForWeeks } from "./default-phases";
 import {
   mesocycleLayoutFingerprint,
   parseDeLoadWeekFlags,
@@ -484,6 +484,20 @@ export async function updateSeasonPlan(
       : deriveSeasonStatus(bounds.startDate, bounds.endDate);
 
   return db.$transaction(async (tx) => {
+    if (input.phases) {
+      const keptPhaseIds = new Set(
+        phases.map((p) => p.id).filter((id): id is string => Boolean(id))
+      );
+      const removedPhaseIds = existing.phases
+        .map((p) => p.id)
+        .filter((id) => !keptPhaseIds.has(id));
+      if (removedPhaseIds.length > 0) {
+        await tx.anchorWorkout.deleteMany({
+          where: { athleteId, seasonPhaseId: { in: removedPhaseIds } },
+        });
+      }
+    }
+
     await tx.seasonWeek.deleteMany({ where: { seasonPlanId } });
     await tx.seasonMesocycle.deleteMany({
       where: { phase: { seasonPlanId } },
@@ -670,7 +684,7 @@ export async function updateSeasonPlan(
   });
 }
 
-export { defaultPhasesForWeeks };
+export { suggestPhasesForWeeks };
 
 export async function refreshSeasonPlanStatus(seasonPlanId: string) {
   const plan = await db.seasonPlan.findUniqueOrThrow({

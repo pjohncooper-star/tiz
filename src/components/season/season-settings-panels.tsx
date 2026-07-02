@@ -55,6 +55,10 @@ export function SeasonSettingsPanel({
     removeMesocycle,
     autoSplitPhaseMesocycles,
     autoSplitAllMesocycles,
+    addPhase,
+    removePhase,
+    movePhase,
+    resetPhasesToSuggested,
     updateDisciplineFocus,
     startHours,
     setStartHours,
@@ -211,11 +215,26 @@ export function SeasonSettingsPanel({
         <div className="mb-6 space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
           <p>Define how your season is divided into training blocks.</p>
           <ul className="list-inside list-disc space-y-1 text-zinc-500">
+            <li>Add, remove, or reorder macro phases — multiple phases of the same kind are allowed.</li>
             <li>Adjust weeks per macro block so the total matches your season length.</li>
             <li>Add, remove, or resize mesocycles within each block (sub-blocks like Base I, Base II).</li>
             <li>Use mesocycle length to auto-split blocks, or edit them manually below.</li>
             <li>Training focus, volume, and workouts are set on later pages.</li>
           </ul>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={() => addPhase()}>
+            Add phase
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => resetPhasesToSuggested()}
+            disabled={totalWeeks <= 0}
+          >
+            Reset to suggested layout
+          </Button>
         </div>
 
         <CycleStructurePreview
@@ -281,6 +300,37 @@ export function SeasonSettingsPanel({
               key={phase.id ?? i}
               className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
             >
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                  Phase {i + 1}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={i === 0}
+                    onClick={() => movePhase(i, -1)}
+                  >
+                    Move up
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={i === phases.length - 1}
+                    onClick={() => movePhase(i, 1)}
+                  >
+                    Move down
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={phases.length <= 1}
+                    onClick={() => void removePhase(i)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
                   <Label>Name</Label>

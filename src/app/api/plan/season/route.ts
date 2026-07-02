@@ -3,10 +3,10 @@ import { auth } from "@/lib/auth";
 import { parseDateKey } from "@/lib/dates";
 import {
   createSeasonPlan,
-  defaultPhasesForWeeks,
   getCurrentSeasonPlan,
   getSeasonPlanById,
 } from "@/lib/plan/season/season-plan.server";
+import { suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
 import { buildSeasonDateBounds } from "@/lib/plan/season/season-dates";
 import { createSeasonPlanSchema } from "@/lib/plan/api-schemas";
 import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   const bounds = buildSeasonDateBounds(startDate, endDate);
   const phases =
     data.phases ??
-    defaultPhasesForWeeks(bounds.totalWeeks).map((p, i) => ({
+    suggestPhasesForWeeks(bounds.totalWeeks).map((p, i) => ({
       ...p,
       sortOrder: i,
     }));
