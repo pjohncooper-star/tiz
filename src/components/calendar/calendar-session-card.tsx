@@ -151,32 +151,28 @@ export function CalendarSessionCard({
         >
           ⠿
         </button>
-        <Link
-          href={workoutHref(session.id, { returnTo: "/calendar" })}
-          className="min-w-0 flex-1 transition hover:opacity-90"
-        >
-          <p className="line-clamp-1 font-medium leading-snug pr-1">
-            <span>{session.title}</span>
-            <span className={`ml-1.5 inline-block align-middle ${pillClassName}`}>
-              {disciplineLabel(session)}
-            </span>
-          </p>
-          {metricLines.length > 0 ? (
-            <div className="mt-0.5 space-y-0.5">
-              {metricLines.map((line) => (
-                <p key={line} className="text-xs text-zinc-500">
-                  {line}
-                </p>
-              ))}
+        <div className="min-w-0 flex-1">
+          <Link
+            href={workoutHref(session.id, { returnTo: "/calendar" })}
+            className="block transition hover:opacity-90"
+          >
+            <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+              <span className={pillClassName}>{disciplineLabel(session)}</span>
+            </div>
+            {metricLines.length > 0 ? (
+              <p className="mt-0.5 text-xs text-zinc-500">{metricLines[0]}</p>
+            ) : null}
+            {linked && linked.name.trim() !== session.title.trim() ? (
+              <p className="mt-0.5 text-xs text-zinc-400">{linked.name}</p>
+            ) : null}
+          </Link>
+          {session.workoutProfile ? (
+            <div className="mt-1 w-full">
+              <WorkoutProfileMiniChart profile={session.workoutProfile} />
             </div>
           ) : null}
-          {linked && linked.name.trim() !== session.title.trim() ? (
-            <p className="mt-0.5 text-xs text-zinc-400">{linked.name}</p>
-          ) : null}
-          {session.workoutProfile ? (
-            <WorkoutProfileMiniChart profile={session.workoutProfile} />
-          ) : null}
-        </Link>
+        </div>
         {linked && onUnlinkActivity ? (
           <button
             type="button"

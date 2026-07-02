@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   formatActivityCardMetricLines,
+  formatCardDuration,
   formatSessionCardMetricComparison,
   formatSessionCardMetricLines,
 } from "@/lib/plan/calendar/session-card-summary";
@@ -52,17 +53,30 @@ const linkedActivity = {
   legType: null,
 };
 
+describe("formatCardDuration", () => {
+  it("formats durations at or below 60 minutes as minutes", () => {
+    assert.equal(formatCardDuration(45), "45m");
+    assert.equal(formatCardDuration(60), "60m");
+  });
+
+  it("formats durations above 60 minutes as h:mm", () => {
+    assert.equal(formatCardDuration(61), "1:01");
+    assert.equal(formatCardDuration(62), "1:02");
+    assert.equal(formatCardDuration(90), "1:30");
+  });
+});
+
 describe("session card summary", () => {
   it("formats unlinked planned session as a single metric line", () => {
     assert.deepEqual(formatSessionCardMetricLines(baseSession(), "IMPERIAL"), ["45m · 3,000 yd"]);
   });
 
-  it("formats linked session duration and distance comparisons on separate lines", () => {
+  it("formats linked session duration and distance comparisons on one line", () => {
     const lines = formatSessionCardMetricLines(
       baseSession({ linkedActivity }),
       "IMPERIAL"
     );
-    assert.deepEqual(lines, ["45m → 1h 2m", "3,000 yd → 3,500 yd"]);
+    assert.deepEqual(lines, ["45m → 1:02 · 3,000 yd → 3,500 yd"]);
   });
 
   it("compares duration and distance in metric comparison helpers", () => {
@@ -70,7 +84,7 @@ describe("session card summary", () => {
       baseSession({ linkedActivity }),
       "IMPERIAL"
     );
-    assert.equal(comparison.duration, "45m → 1h 2m");
+    assert.equal(comparison.duration, "45m → 1:02");
     assert.equal(comparison.distance, "3,000 yd → 3,500 yd");
   });
 
@@ -81,7 +95,7 @@ describe("session card summary", () => {
       }),
       "IMPERIAL"
     );
-    assert.equal(comparison.duration, "45m → 1h 0m");
+    assert.equal(comparison.duration, "45m → 60m");
   });
 
   it("respects completed duration override", () => {
@@ -115,7 +129,7 @@ describe("session card summary", () => {
       }),
       "IMPERIAL"
     );
-    assert.equal(comparison.duration, "1h 2m");
+    assert.equal(comparison.duration, "1:02");
     assert.equal(comparison.distance, "3,500 yd");
   });
 

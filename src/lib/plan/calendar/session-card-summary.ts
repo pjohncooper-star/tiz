@@ -3,18 +3,16 @@ import type { CalendarLinkedActivity, CalendarPlannedSession } from "@/lib/plan/
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import { formatSessionDistance } from "@/lib/workout/metrics";
 
-function formatDurationMinutes(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${Math.round(minutes)}m`;
+export function formatCardDuration(totalMinutes: number): string {
+  const rounded = Math.round(totalMinutes);
+  if (rounded <= 60) return `${rounded}m`;
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  return `${h}:${String(m).padStart(2, "0")}`;
 }
 
 function formatDurationSeconds(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  return formatCardDuration(seconds / 60);
 }
 
 function plannedDurationMinutes(session: CalendarPlannedSession): number | null {
@@ -60,10 +58,9 @@ export function formatSessionCardMetricComparison(
 ): { duration: string | null; distance: string | null } {
   const discipline = session.discipline as Discipline;
 
+  const plannedMinutes = plannedDurationMinutes(session);
   const plannedDur =
-    plannedDurationMinutes(session) != null
-      ? formatDurationMinutes(plannedDurationMinutes(session)!)
-      : null;
+    plannedMinutes != null ? formatCardDuration(plannedMinutes) : null;
   const completedDurSec = completedDurationSeconds(session);
   const completedDur =
     completedDurSec != null ? formatDurationSeconds(completedDurSec) : null;
@@ -95,10 +92,8 @@ export function formatSessionCardMetricLines(
   const { duration, distance } = formatSessionCardMetricComparison(session, displayUnit);
 
   if (session.linkedActivity) {
-    const lines: string[] = [];
-    if (duration) lines.push(duration);
-    if (distance) lines.push(distance);
-    return lines;
+    const parts = [duration, distance].filter((part): part is string => part != null);
+    return parts.length > 0 ? [parts.join(" · ")] : [];
   }
 
   const parts: string[] = [];
@@ -133,7 +128,7 @@ export function formatPlannedSessionCardSummary(session: {
 }): string | null {
   const parts: string[] = [];
   if (session.plannedMinutes > 0) {
-    parts.push(formatDurationMinutes(session.plannedMinutes));
+    parts.push(formatCardDuration(session.plannedMinutes));
   }
   if (session.metricsSummary) {
     parts.push(session.metricsSummary);
@@ -158,6 +153,3 @@ export function formatLinkedSessionCardLines(
 ): string[] {
   return formatSessionCardMetricLines(session, displayUnit);
 }
-
-
-

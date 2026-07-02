@@ -6,7 +6,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { WeekActivity, WeekActivityGroup } from "@/components/dashboard-week-view";
 import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
-import { formatActivityCardMetricLines } from "@/lib/plan/calendar/session-card-summary";
+import { formatActivityCardMetricLines, formatCardDuration } from "@/lib/plan/calendar/session-card-summary";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import {
   swimDisplayUnit,
@@ -15,13 +15,6 @@ import {
 } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
 
 function DeleteActivityButton({
   activity,
@@ -130,12 +123,12 @@ export function DraggableActivityCard({
         href={`/activities/${activity.id}?returnTo=${returnTo}`}
         className="min-w-0 flex-1 transition hover:opacity-90"
       >
-        <p className="line-clamp-1 font-medium leading-snug pr-1">
-          <span>{activity.name}</span>
-          <span className="ml-1.5 inline-block rounded bg-zinc-100 px-1.5 py-0.5 align-middle text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+        <p className="line-clamp-2 font-medium leading-snug pr-1">{activity.name}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
             {disciplineLabel(activity)}
           </span>
-        </p>
+        </div>
         {metricLines.length > 0 ? (
           <p className="mt-0.5 text-xs text-zinc-500">{metricLines[0]}</p>
         ) : null}
@@ -170,7 +163,7 @@ export function CalendarActivityGroupCard({
   return (
     <div className="rounded-md border border-zinc-200 bg-white p-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900">
       <p className="font-medium">Multisport</p>
-      <p className="mt-0.5 text-xs text-zinc-500">{formatDuration(group.totalDurationSeconds)}</p>
+      <p className="mt-0.5 text-xs text-zinc-500">{formatCardDuration(group.totalDurationSeconds / 60)}</p>
       <ul className="mt-2 space-y-2">
         {group.legs.map((leg) => (
           <li key={leg.id}>

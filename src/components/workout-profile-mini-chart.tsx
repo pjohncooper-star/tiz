@@ -28,7 +28,7 @@ export function WorkoutProfileMiniChart({ profile, className = "" }: WorkoutProf
   return (
     <svg
       viewBox={`0 0 ${width} ${HEIGHT}`}
-      className={`mt-1 h-7 w-full ${className}`}
+      className={`mt-1 block h-7 w-full ${className}`}
       preserveAspectRatio="none"
       aria-hidden
     >
