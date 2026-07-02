@@ -29,6 +29,7 @@ import {
 import { markDeLoadWeeksPerMesocycle } from "@/lib/plan/season/de-load-cadence";
 import { defaultPhaseForKind, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
 import { goalEventTimesForApi } from "@/lib/plan/season/goal-event-times";
+import { resizePhaseBoundaryAtWeek } from "@/lib/plan/season/phase-boundary-resize";
 import { resolveMesocycles } from "@/lib/plan/season/phase-split";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 
@@ -276,6 +277,31 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
         return next;
       })
     );
+  }
+
+  function resizePhaseBoundary(boundaryIndex: number, boundaryWeekIndex: number) {
+    setPhases((prev) => {
+      const weekCounts = prev.map((phase) => phase.weekCount);
+      const nextCounts = resizePhaseBoundaryAtWeek(
+        weekCounts,
+        boundaryIndex,
+        boundaryWeekIndex
+      );
+      if (!nextCounts) return prev;
+      return prev.map((phase, index) => {
+        const nextWeekCount = nextCounts[index];
+        if (nextWeekCount === phase.weekCount) return phase;
+        return {
+          ...phase,
+          weekCount: nextWeekCount!,
+          mesocycles: defaultMesocycleDrafts(
+            phase.name,
+            nextWeekCount!,
+            mesocycleLengthWeeks
+          ),
+        };
+      });
+    });
   }
 
   function updateMesocycle(phaseIndex: number, mesoIndex: number, patch: Partial<MesocycleDraft>) {
@@ -765,6 +791,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     totalWeeks,
     phaseWeekTotal,
     updatePhase,
+    resizePhaseBoundary,
     updateDisciplineFocus,
     addPhase,
     removePhase,

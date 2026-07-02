@@ -37,7 +37,24 @@ export function computeTotalWeeks(startDate: Date, endDate: Date): number {
 }
 
 export function weekStartDateForIndex(seasonStart: Date, weekIndex: number): Date {
-  return addDays(snapStartToMonday(seasonStart), weekIndex);
+  return addDays(snapStartToMonday(seasonStart), weekIndex * 7);
+}
+
+/** Month labels at the first week each calendar month appears on the timeline. */
+export function monthTicksForWeeks(
+  seasonStart: Date,
+  displayWeeks: number
+): { weekIndex: number; label: string }[] {
+  const ticks: { weekIndex: number; label: string }[] = [];
+  let previousMonth = "";
+  for (let weekIndex = 0; weekIndex < displayWeeks; weekIndex++) {
+    const month = format(weekStartDateForIndex(seasonStart, weekIndex), "MMM");
+    if (month !== previousMonth) {
+      ticks.push({ weekIndex, label: month });
+      previousMonth = month;
+    }
+  }
+  return ticks;
 }
 
 export function buildSeasonDateBounds(startDate: Date, endDate: Date): SeasonDateBounds {

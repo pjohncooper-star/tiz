@@ -6,10 +6,12 @@ import {
   computeTotalWeeks,
   deriveSeasonStatus,
   findOverlappingSeason,
+  monthTicksForWeeks,
   normalizeSeasonDateRange,
   seasonRangesOverlap,
   snapEndToSunday,
   snapStartToMonday,
+  weekStartDateForIndex,
 } from "./season-dates";
 
 describe("season-dates", () => {
@@ -83,5 +85,27 @@ describe("season-dates", () => {
     const start = parseDateKey("2025-01-01");
     const end = parseDateKey("2025-03-01");
     assert.equal(deriveSeasonStatus(start, end, today), "COMPLETED");
+  });
+
+  it("weekStartDateForIndex snaps to Monday and steps weekly", () => {
+    const start = parseDateKey("2025-01-15");
+    assert.equal(
+      weekStartDateForIndex(start, 0).toISOString().slice(0, 10),
+      "2025-01-13"
+    );
+    assert.equal(
+      weekStartDateForIndex(start, 2).toISOString().slice(0, 10),
+      "2025-01-27"
+    );
+  });
+
+  it("monthTicksForWeeks emits labels when month changes", () => {
+    const start = parseDateKey("2025-01-15");
+    const ticks = monthTicksForWeeks(start, 6);
+    assert.deepEqual(
+      ticks.map((tick) => tick.label),
+      ["Jan", "Feb"]
+    );
+    assert.equal(ticks[1]?.weekIndex, 3);
   });
 });

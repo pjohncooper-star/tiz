@@ -50,6 +50,7 @@ export function SeasonSettingsPanel({
     totalWeeks,
     phaseWeekTotal,
     updatePhase,
+    resizePhaseBoundary,
     updateMesocycle,
     addMesocycle,
     removeMesocycle,
@@ -241,6 +242,8 @@ export function SeasonSettingsPanel({
           phases={phases}
           mesocycleLengthWeeks={mesocycleLengthWeeks}
           totalWeeks={totalWeeks}
+          startDate={startDate}
+          onResizeBoundary={resizePhaseBoundary}
         />
 
         <div className="mb-4 mt-6 flex flex-wrap items-end gap-3">
