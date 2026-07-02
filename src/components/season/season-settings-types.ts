@@ -106,7 +106,7 @@ export function goalEventFromApi(event: {
   taperDaysBefore?: number | null;
   notes?: string | null;
 }): GoalEventDraft {
-  const disciplines = event.disciplines?.length ? event.disciplines : ["RUN"];
+  const disciplines: Discipline[] = event.disciplines?.length ? event.disciplines : ["RUN"];
   const swimGoalMinutes = event.swimGoalMinutes ?? null;
   const bikeGoalMinutes = event.bikeGoalMinutes ?? null;
   const runGoalMinutes = event.runGoalMinutes ?? null;

@@ -161,7 +161,7 @@ export async function syncRaceToCalendar(
         title: goalEvent.name,
         notes: goalEvent.notes ?? null,
         distanceMeters: goalEvent.distanceMeters ?? null,
-        estimatedDurationMinutes: goalMinutesForLeg(goalEvent, discipline),
+        estimatedDurationMinutes: goalMinutesForLeg(goalEvent, disciplines[0]!),
         source: "RACE",
         goalEventId: goalEvent.id,
       },
