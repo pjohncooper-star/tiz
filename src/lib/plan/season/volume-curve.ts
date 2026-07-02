@@ -4,10 +4,17 @@ import {
   TAPER_VOLUME_END_FACTOR,
   TAPER_VOLUME_START_FACTOR,
 } from "./constants";
+import {
+  mesocycleRampStepIndex,
+  mesocycleSteppedValue,
+  rampMesocycles,
+} from "./mesocycle-ramp";
+import type { ComputedMesocycle } from "./types";
 
 export type VolumeCurveInput = {
   totalWeeks: number;
   phaseKindsByWeek: PhaseKind[];
+  mesocycles: ComputedMesocycle[];
   startHours: number;
   peakHours: number;
   maxRampPercent: number;
@@ -28,25 +35,24 @@ function taperFactor(weekIndexInTaper: number, taperWeekCount: number): number {
 }
 
 /**
- * Build weekly hours: ramp to peak in base/build, race prep at 90%, taper 70%→45%,
- * then apply de-load volume multiplier.
+ * Build weekly hours: step from start to peak at mesocycle boundaries in base/build,
+ * race prep at 90%, taper 70%→45%, then apply de-load volume multiplier.
  */
 export function computeWeeklyVolumeCurve(input: VolumeCurveInput): number[] {
   const {
     totalWeeks,
     phaseKindsByWeek,
+    mesocycles,
     startHours,
     peakHours,
-    maxRampPercent,
     deLoadFlags,
     deLoadVolumePercent,
   } = input;
 
   const hours: number[] = [];
-  let rampHours = startHours;
   let taperCounter = 0;
   const taperWeekCount = phaseKindsByWeek.filter((k) => k === "TAPER").length;
-  const rampCap = 1 + Math.max(0, maxRampPercent) / 100;
+  const rampMesoList = rampMesocycles(mesocycles, phaseKindsByWeek);
 
   for (let i = 0; i < totalWeeks; i++) {
     const kind = phaseKindsByWeek[i] ?? "BUILD";
@@ -57,15 +63,12 @@ export function computeWeeklyVolumeCurve(input: VolumeCurveInput): number[] {
       taperCounter += 1;
     } else if (kind === "RACE_PREP") {
       base = peakHours * RACE_PREP_VOLUME_FACTOR;
-      rampHours = base;
     } else {
-      if (i === 0) {
-        base = startHours;
-        rampHours = startHours;
-      } else {
-        rampHours = Math.min(rampHours * rampCap, peakHours);
-        base = rampHours;
-      }
+      const step = mesocycleRampStepIndex(i, rampMesoList);
+      base =
+        step == null
+          ? peakHours
+          : mesocycleSteppedValue(startHours, peakHours, step, rampMesoList.length);
     }
 
     if (deLoadFlags[i]) {

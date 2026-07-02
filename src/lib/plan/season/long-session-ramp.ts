@@ -1,63 +1,86 @@
 import type { PhaseKind } from "@prisma/client";
+import {
+  lastRampMesocyclePlateau,
+  mesocycleRampStepIndex,
+  mesocycleSteppedValue,
+  rampMesocycles,
+} from "./mesocycle-ramp";
+import type { ComputedMesocycle } from "./types";
 
 export type LongSessionRampInput = {
   weekIndex: number;
   phaseKindsByWeek: PhaseKind[];
+  mesocycles: ComputedMesocycle[];
   startMin: number;
   peakMin: number;
 };
 
-function lastNonTaperWeekIndex(phaseKindsByWeek: PhaseKind[]): number {
-  for (let i = phaseKindsByWeek.length - 1; i >= 0; i--) {
-    if (phaseKindsByWeek[i] !== "TAPER") {
-      return i;
-    }
-  }
-  return Math.max(0, phaseKindsByWeek.length - 1);
-}
+const TAPER_LONG_SESSION_SCALE = 0.6;
 
-function rampProgress(weekIndex: number, peakWeekIndex: number): number {
-  if (peakWeekIndex <= 0) return weekIndex === 0 ? 0 : 1;
-  return Math.min(1, weekIndex / peakWeekIndex);
+function plateauMinutesForWeek(
+  weekIndex: number,
+  phaseKindsByWeek: PhaseKind[],
+  mesocycles: ComputedMesocycle[],
+  startMin: number,
+  peakMin: number
+): number {
+  const kind = phaseKindsByWeek[weekIndex] ?? "BUILD";
+  const rampMesoList = rampMesocycles(mesocycles, phaseKindsByWeek);
+  const peakPlateau = lastRampMesocyclePlateau(rampMesoList, startMin, peakMin);
+
+  if (kind === "TAPER") {
+    return Math.round(peakPlateau * TAPER_LONG_SESSION_SCALE);
+  }
+  if (kind === "RACE_PREP") {
+    return Math.round(peakPlateau);
+  }
+
+  const step = mesocycleRampStepIndex(weekIndex, rampMesoList);
+  if (step == null) {
+    return Math.round(peakPlateau);
+  }
+
+  return Math.round(
+    mesocycleSteppedValue(startMin, peakMin, step, rampMesoList.length)
+  );
 }
 
 /**
- * Linear ramp from start to peak minutes, reaching peak at the last non-taper week.
- * Taper weeks hold peak (long sessions are reduced separately via volume curve).
+ * Step long-session minutes at mesocycle boundaries (flat within each mesocycle).
+ * Race prep holds the last ramp plateau; taper weeks scale to 60%.
  */
 export function computeLongSessionMinutes(input: LongSessionRampInput): number {
-  const { weekIndex, phaseKindsByWeek, startMin, peakMin } = input;
-  const peakWeek = lastNonTaperWeekIndex(phaseKindsByWeek);
-  const t = rampProgress(weekIndex, peakWeek);
-  const minutes = startMin + (peakMin - startMin) * t;
-  return Math.round(minutes);
+  const { weekIndex, phaseKindsByWeek, mesocycles, startMin, peakMin } = input;
+  return plateauMinutesForWeek(
+    weekIndex,
+    phaseKindsByWeek,
+    mesocycles,
+    startMin,
+    peakMin
+  );
 }
 
 export function computeLongSessionsForWeek(
   weekIndex: number,
   phaseKindsByWeek: PhaseKind[],
+  mesocycles: ComputedMesocycle[],
   longRide: { startMin: number; peakMin: number },
   longRun: { startMin: number; peakMin: number }
 ): { longRideMinutes: number; longRunMinutes: number } {
-  const kind = phaseKindsByWeek[weekIndex];
-  const taperScale = kind === "TAPER" ? 0.6 : 1;
-
-  const longRideMinutes = Math.round(
-    computeLongSessionMinutes({
+  return {
+    longRideMinutes: computeLongSessionMinutes({
       weekIndex,
       phaseKindsByWeek,
+      mesocycles,
       startMin: longRide.startMin,
       peakMin: longRide.peakMin,
-    }) * taperScale
-  );
-  const longRunMinutes = Math.round(
-    computeLongSessionMinutes({
+    }),
+    longRunMinutes: computeLongSessionMinutes({
       weekIndex,
       phaseKindsByWeek,
+      mesocycles,
       startMin: longRun.startMin,
       peakMin: longRun.peakMin,
-    }) * taperScale
-  );
-
-  return { longRideMinutes, longRunMinutes };
+    }),
+  };
 }

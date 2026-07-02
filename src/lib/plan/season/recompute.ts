@@ -108,6 +108,7 @@ export function recomputeSeasonWeeks(
   const weeklyHours = computeWeeklyVolumeCurve({
     totalWeeks: bounds.totalWeeks,
     phaseKindsByWeek,
+    mesocycles,
     startHours: input.startHours,
     peakHours: input.peakHours,
     maxRampPercent: input.maxRampPercent,
@@ -153,6 +154,7 @@ export function recomputeSeasonWeeks(
     const { longRideMinutes, longRunMinutes } = computeLongSessionsForWeek(
       ctx.weekIndex,
       phaseKindsByWeek,
+      mesocycles,
       {
         startMin: input.longRideStartMin,
         peakMin: input.longRidePeakMin,
