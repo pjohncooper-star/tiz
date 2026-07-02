@@ -79,6 +79,13 @@ export function serializePhase(phase: SeasonPlanRecord["phases"][number]) {
     swimSessionsPerWeek: phase.swimSessionsPerWeek,
     bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
     runSessionsPerWeek: phase.runSessionsPerWeek,
+    volumeMesocycleMode: phase.volumeMesocycleMode,
+    volumeStartHours: phase.volumeStartHours,
+    volumeEndHours: phase.volumeEndHours,
+    longRideStartMin: phase.longRideStartMin,
+    longRideEndMin: phase.longRideEndMin,
+    longRunStartMin: phase.longRunStartMin,
+    longRunEndMin: phase.longRunEndMin,
     disciplineFocuses: phase.disciplines.map((d) => ({
       discipline: d.discipline,
       focus: d.focus,

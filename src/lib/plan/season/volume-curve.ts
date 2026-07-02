@@ -5,15 +5,16 @@ import {
   TAPER_VOLUME_START_FACTOR,
 } from "./constants";
 import {
-  mesocycleRampStepIndex,
-  mesocycleSteppedValue,
-  rampMesocycles,
-} from "./mesocycle-ramp";
-import type { ComputedMesocycle } from "./types";
+  plateauForWeek,
+  resolvePhaseTargets,
+  type SeasonVolumeAnchors,
+} from "./phase-volume-ramp";
+import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
 
 export type VolumeCurveInput = {
   totalWeeks: number;
   phaseKindsByWeek: PhaseKind[];
+  phases: SeasonPhaseInput[];
   mesocycles: ComputedMesocycle[];
   startHours: number;
   peakHours: number;
@@ -34,25 +35,35 @@ function taperFactor(weekIndexInTaper: number, taperWeekCount: number): number {
   return lerp(TAPER_VOLUME_START_FACTOR, TAPER_VOLUME_END_FACTOR, t);
 }
 
+function seasonVolumeAnchors(input: VolumeCurveInput): SeasonVolumeAnchors {
+  return {
+    startHours: input.startHours,
+    peakHours: input.peakHours,
+    longRideStartMin: 0,
+    longRidePeakMin: 0,
+    longRunStartMin: 0,
+    longRunPeakMin: 0,
+  };
+}
+
 /**
- * Build weekly hours: step from start to peak at mesocycle boundaries in base/build,
- * race prep at 90%, taper 70%→45%, then apply de-load volume multiplier.
+ * Build weekly hours: per-phase mesocycle stepping, taper 70%→45%, then de-load multiplier.
  */
 export function computeWeeklyVolumeCurve(input: VolumeCurveInput): number[] {
   const {
     totalWeeks,
     phaseKindsByWeek,
+    phases,
     mesocycles,
-    startHours,
     peakHours,
     deLoadFlags,
     deLoadVolumePercent,
   } = input;
 
+  const resolved = resolvePhaseTargets(phases, seasonVolumeAnchors(input));
   const hours: number[] = [];
   let taperCounter = 0;
   const taperWeekCount = phaseKindsByWeek.filter((k) => k === "TAPER").length;
-  const rampMesoList = rampMesocycles(mesocycles, phaseKindsByWeek);
 
   for (let i = 0; i < totalWeeks; i++) {
     const kind = phaseKindsByWeek[i] ?? "BUILD";
@@ -61,14 +72,15 @@ export function computeWeeklyVolumeCurve(input: VolumeCurveInput): number[] {
     if (kind === "TAPER") {
       base = peakHours * taperFactor(taperCounter, taperWeekCount);
       taperCounter += 1;
-    } else if (kind === "RACE_PREP") {
-      base = peakHours * RACE_PREP_VOLUME_FACTOR;
     } else {
-      const step = mesocycleRampStepIndex(i, rampMesoList);
-      base =
-        step == null
-          ? peakHours
-          : mesocycleSteppedValue(startHours, peakHours, step, rampMesoList.length);
+      const plateau = plateauForWeek(i, phases, mesocycles, resolved, "volume");
+      if (plateau != null) {
+        base = plateau;
+      } else if (kind === "RACE_PREP") {
+        base = peakHours * RACE_PREP_VOLUME_FACTOR;
+      } else {
+        base = peakHours;
+      }
     }
 
     if (deLoadFlags[i]) {

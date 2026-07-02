@@ -35,6 +35,7 @@ import {
 } from "@/lib/plan/season/long-session-schedule";
 import { resizePhaseBoundaryAtWeek } from "@/lib/plan/season/phase-boundary-resize";
 import { resolveMesocycles } from "@/lib/plan/season/phase-split";
+import { resolvePhaseTargets } from "@/lib/plan/season/phase-volume-ramp";
 import { recomputeSeasonWeeks } from "@/lib/plan/season/recompute";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 import { parseDateKey } from "@/lib/dates";
@@ -65,6 +66,13 @@ function phasesToSeasonInput(phases: PhaseDraft[]): SeasonPhaseInput[] {
     swimSessionsPerWeek: phase.swimSessionsPerWeek,
     bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
     runSessionsPerWeek: phase.runSessionsPerWeek,
+    volumeMesocycleMode: phase.volumeMesocycleMode,
+    volumeStartHours: phase.volumeStartHours,
+    volumeEndHours: phase.volumeEndHours,
+    longRideStartMin: phase.longRideStartMin,
+    longRideEndMin: phase.longRideEndMin,
+    longRunStartMin: phase.longRunStartMin,
+    longRunEndMin: phase.longRunEndMin,
   }));
 }
 
@@ -829,6 +837,31 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     return flags.slice(0, Math.max(totalWeeks, 0));
   }, [longRunWeekFlags, totalWeeks]);
 
+  const resolvedPhaseTargets = useMemo(() => {
+    if (!cycleStructureValid || phases.length === 0) return [];
+    try {
+      return resolvePhaseTargets(phasesToSeasonInput(phases), {
+        startHours,
+        peakHours,
+        longRideStartMin,
+        longRidePeakMin,
+        longRunStartMin,
+        longRunPeakMin,
+      });
+    } catch {
+      return [];
+    }
+  }, [
+    cycleStructureValid,
+    phases,
+    startHours,
+    peakHours,
+    longRideStartMin,
+    longRidePeakMin,
+    longRunStartMin,
+    longRunPeakMin,
+  ]);
+
   const longSessionWeekPreview = useMemo(() => {
     if (!startDate || !endDate || totalWeeks <= 0 || !cycleStructureValid) {
       return [];
@@ -912,6 +945,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
         longRunPeakMin,
         longRideWeekFlags: longRideFlagsForDisplay,
         longRunWeekFlags: longRunFlagsForDisplay,
+        phases,
       });
     }
     if (step === 5) return patchSeason({ phases });
@@ -1005,6 +1039,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     applyLongWeekPreset,
     longSessionWeekPreview,
     resolvedMesocycles,
+    resolvedPhaseTargets,
     saveStep,
     saveStepWithFeedback,
     finishWizard,

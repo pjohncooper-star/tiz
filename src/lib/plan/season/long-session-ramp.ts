@@ -1,80 +1,102 @@
 import type { PhaseKind } from "@prisma/client";
 import {
-  lastRampMesocyclePlateau,
-  mesocycleRampStepIndex,
-  mesocycleSteppedValue,
-  rampMesocycles,
-} from "./mesocycle-ramp";
-import type { ComputedMesocycle } from "./types";
+  plateauForWeek,
+  resolvePhaseTargets,
+  type SeasonVolumeAnchors,
+} from "./phase-volume-ramp";
+import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
 
 export type LongSessionRampInput = {
   weekIndex: number;
   phaseKindsByWeek: PhaseKind[];
+  phases: SeasonPhaseInput[];
   mesocycles: ComputedMesocycle[];
-  startMin: number;
-  peakMin: number;
+  anchors: SeasonVolumeAnchors;
 };
 
 function fullPlateauMinutesForWeek(
   weekIndex: number,
   phaseKindsByWeek: PhaseKind[],
+  phases: SeasonPhaseInput[],
   mesocycles: ComputedMesocycle[],
-  startMin: number,
-  peakMin: number
+  anchors: SeasonVolumeAnchors,
+  metric: "longRide" | "longRun"
 ): number {
   const kind = phaseKindsByWeek[weekIndex] ?? "BUILD";
-  const rampMesoList = rampMesocycles(mesocycles, phaseKindsByWeek);
-  const peakPlateau = lastRampMesocyclePlateau(rampMesoList, startMin, peakMin);
-
-  if (kind === "TAPER" || kind === "RACE_PREP") {
-    return Math.round(peakPlateau);
+  if (kind === "TAPER") {
+    const resolved = resolvePhaseTargets(phases, anchors);
+    const lastRamp = resolved[resolved.length - 1];
+    return Math.round(
+      metric === "longRide"
+        ? (lastRamp?.longRideExit ?? anchors.longRidePeakMin)
+        : (lastRamp?.longRunExit ?? anchors.longRunPeakMin)
+    );
   }
 
-  const step = mesocycleRampStepIndex(weekIndex, rampMesoList);
-  if (step == null) {
-    return Math.round(peakPlateau);
+  const resolved = resolvePhaseTargets(phases, anchors);
+  const plateau = plateauForWeek(weekIndex, phases, mesocycles, resolved, metric);
+  if (plateau != null) {
+    return Math.round(plateau);
   }
 
   return Math.round(
-    mesocycleSteppedValue(startMin, peakMin, step, rampMesoList.length)
+    metric === "longRide" ? anchors.longRidePeakMin : anchors.longRunPeakMin
   );
 }
 
 /**
  * Full long-session plateau before per-week tier (full vs medium) is applied.
  */
-export function computeLongSessionMinutes(input: LongSessionRampInput): number {
-  const { weekIndex, phaseKindsByWeek, mesocycles, startMin, peakMin } = input;
+export function computeLongSessionMinutes(
+  input: LongSessionRampInput & {
+    metric: "longRide" | "longRun";
+  }
+): number {
+  const { weekIndex, phaseKindsByWeek, phases, mesocycles, anchors, metric } = input;
   return fullPlateauMinutesForWeek(
     weekIndex,
     phaseKindsByWeek,
+    phases,
     mesocycles,
-    startMin,
-    peakMin
+    anchors,
+    metric
   );
 }
 
 export function computeLongSessionsForWeek(
   weekIndex: number,
   phaseKindsByWeek: PhaseKind[],
+  phases: SeasonPhaseInput[],
   mesocycles: ComputedMesocycle[],
+  volume: { startHours: number; peakHours: number },
   longRide: { startMin: number; peakMin: number },
   longRun: { startMin: number; peakMin: number }
 ): { longRideMinutes: number; longRunMinutes: number } {
+  const anchors: SeasonVolumeAnchors = {
+    startHours: volume.startHours,
+    peakHours: volume.peakHours,
+    longRideStartMin: longRide.startMin,
+    longRidePeakMin: longRide.peakMin,
+    longRunStartMin: longRun.startMin,
+    longRunPeakMin: longRun.peakMin,
+  };
+
   return {
     longRideMinutes: computeLongSessionMinutes({
       weekIndex,
       phaseKindsByWeek,
+      phases,
       mesocycles,
-      startMin: longRide.startMin,
-      peakMin: longRide.peakMin,
+      anchors,
+      metric: "longRide",
     }),
     longRunMinutes: computeLongSessionMinutes({
       weekIndex,
       phaseKindsByWeek,
+      phases,
       mesocycles,
-      startMin: longRun.startMin,
-      peakMin: longRun.peakMin,
+      anchors,
+      metric: "longRun",
     }),
   };
 }

@@ -181,6 +181,8 @@ export const seasonMesocycleSchema = z.object({
   weekCount: z.number().int().positive(),
 });
 
+export const volumeMesocycleModeSchema = z.enum(["INCREASE", "HOLD", "DECREASE"]);
+
 export const seasonPhaseSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
@@ -196,6 +198,13 @@ export const seasonPhaseSchema = z.object({
   swimSessionsPerWeek: z.number().int().nonnegative(),
   bikeSessionsPerWeek: z.number().int().nonnegative(),
   runSessionsPerWeek: z.number().int().nonnegative(),
+  volumeMesocycleMode: volumeMesocycleModeSchema.optional(),
+  volumeStartHours: z.number().positive().nullable().optional(),
+  volumeEndHours: z.number().positive().nullable().optional(),
+  longRideStartMin: z.number().int().positive().nullable().optional(),
+  longRideEndMin: z.number().int().positive().nullable().optional(),
+  longRunStartMin: z.number().int().positive().nullable().optional(),
+  longRunEndMin: z.number().int().positive().nullable().optional(),
 });
 
 export const seasonGoalEventSchema = z.object({
@@ -266,6 +275,7 @@ export const seasonWizardStep4Schema = z.object({
   longRunPeakMin: z.number().int().positive().optional(),
   longRideWeekFlags: z.array(z.boolean()).optional(),
   longRunWeekFlags: z.array(z.boolean()).optional(),
+  phases: z.array(seasonPhaseSchema).min(1).optional(),
 });
 
 /** Step 5 — sessions per week; may mark setup complete. */

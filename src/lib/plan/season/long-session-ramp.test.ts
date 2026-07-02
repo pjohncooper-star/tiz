@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { PhaseKind } from "@prisma/client";
 import { computeLongSessionsForWeek } from "./long-session-ramp";
-import type { ComputedMesocycle } from "./types";
+import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
+
+const basePhase: SeasonPhaseInput = {
+  name: "Base",
+  sortOrder: 0,
+  weekCount: 8,
+  phaseKind: "BASE",
+  focusMode: "PHASE",
+  phaseFocus: "AEROBIC_BASE",
+  swimSessionsPerWeek: 3,
+  bikeSessionsPerWeek: 4,
+  runSessionsPerWeek: 3,
+};
 
 const twoMesocycles: ComputedMesocycle[] = [
   {
@@ -20,26 +33,46 @@ const twoMesocycles: ComputedMesocycle[] = [
   },
 ];
 
+function longRideAt(
+  weekIndex: number,
+  kinds: PhaseKind[],
+  mesocycles: ComputedMesocycle[],
+  phases: SeasonPhaseInput[]
+) {
+  return computeLongSessionsForWeek(
+    weekIndex,
+    kinds,
+    phases,
+    mesocycles,
+    { startHours: 8, peakHours: 12 },
+    { startMin: 60, peakMin: 120 },
+    { startMin: 30, peakMin: 60 }
+  ).longRideMinutes;
+}
+
 describe("long-session-ramp", () => {
   it("holds long ride minutes flat within a mesocycle", () => {
-    const kinds = Array(8).fill("BASE") as ("BASE" | "BUILD")[];
-    const rideAt = (weekIndex: number) =>
-      computeLongSessionsForWeek(
-        weekIndex,
-        kinds,
-        twoMesocycles,
-        { startMin: 60, peakMin: 120 },
-        { startMin: 30, peakMin: 60 }
-      ).longRideMinutes;
-
-    assert.equal(rideAt(0), rideAt(1));
-    assert.equal(rideAt(2), rideAt(3));
-    assert.equal(rideAt(4), rideAt(7));
-    assert.ok(rideAt(4) > rideAt(0));
+    const kinds = Array(8).fill("BASE") as PhaseKind[];
+    assert.equal(longRideAt(0, kinds, twoMesocycles, [basePhase]), longRideAt(1, kinds, twoMesocycles, [basePhase]));
+    assert.equal(longRideAt(2, kinds, twoMesocycles, [basePhase]), longRideAt(3, kinds, twoMesocycles, [basePhase]));
+    assert.equal(longRideAt(4, kinds, twoMesocycles, [basePhase]), longRideAt(7, kinds, twoMesocycles, [basePhase]));
+    assert.ok(longRideAt(4, kinds, twoMesocycles, [basePhase]) > longRideAt(0, kinds, twoMesocycles, [basePhase]));
   });
 
   it("returns the same full plateau on de-load weeks within a mesocycle", () => {
     const kinds = ["BUILD", "BUILD", "BUILD", "BUILD"] as const;
+    const buildPhase: SeasonPhaseInput = {
+      name: "Build",
+      sortOrder: 0,
+      weekCount: 4,
+      phaseKind: "BUILD",
+      focusMode: "PHASE",
+      phaseFocus: "THRESHOLD",
+      swimSessionsPerWeek: 3,
+      bikeSessionsPerWeek: 4,
+      runSessionsPerWeek: 3,
+      volumeMesocycleMode: "HOLD",
+    };
     const mesocycles: ComputedMesocycle[] = [
       {
         phaseIndex: 0,
@@ -52,14 +85,18 @@ describe("long-session-ramp", () => {
     const normal = computeLongSessionsForWeek(
       0,
       [...kinds],
+      [buildPhase],
       mesocycles,
+      { startHours: 10, peakHours: 10 },
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
     const sibling = computeLongSessionsForWeek(
       1,
       [...kinds],
+      [buildPhase],
       mesocycles,
+      { startHours: 10, peakHours: 10 },
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
@@ -69,6 +106,31 @@ describe("long-session-ramp", () => {
 
   it("returns full plateau on taper weeks before tier flags", () => {
     const kinds = ["BUILD", "BUILD", "TAPER", "TAPER"] as const;
+    const phases: SeasonPhaseInput[] = [
+      {
+        name: "Build",
+        sortOrder: 0,
+        weekCount: 2,
+        phaseKind: "BUILD",
+        focusMode: "PHASE",
+        phaseFocus: "THRESHOLD",
+        swimSessionsPerWeek: 3,
+        bikeSessionsPerWeek: 4,
+        runSessionsPerWeek: 3,
+        volumeMesocycleMode: "HOLD",
+      },
+      {
+        name: "Taper",
+        sortOrder: 1,
+        weekCount: 2,
+        phaseKind: "TAPER",
+        focusMode: "PHASE",
+        phaseFocus: "FRESHNESS",
+        swimSessionsPerWeek: 3,
+        bikeSessionsPerWeek: 4,
+        runSessionsPerWeek: 3,
+      },
+    ];
     const mesocycles: ComputedMesocycle[] = [
       {
         phaseIndex: 0,
@@ -81,14 +143,18 @@ describe("long-session-ramp", () => {
     const buildWeek = computeLongSessionsForWeek(
       0,
       [...kinds],
+      phases,
       mesocycles,
+      { startHours: 10, peakHours: 10 },
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
     const taperWeek = computeLongSessionsForWeek(
       2,
       [...kinds],
+      phases,
       mesocycles,
+      { startHours: 10, peakHours: 10 },
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
@@ -96,8 +162,34 @@ describe("long-session-ramp", () => {
     assert.equal(taperWeek.longRunMinutes, buildWeek.longRunMinutes);
   });
 
-  it("holds race prep at the last ramp plateau", () => {
+  it("holds build plateau through race prep when build holds at peak", () => {
     const kinds = ["BUILD", "BUILD", "RACE_PREP", "RACE_PREP"] as const;
+    const phases: SeasonPhaseInput[] = [
+      {
+        name: "Build",
+        sortOrder: 0,
+        weekCount: 2,
+        phaseKind: "BUILD",
+        focusMode: "PHASE",
+        phaseFocus: "THRESHOLD",
+        swimSessionsPerWeek: 3,
+        bikeSessionsPerWeek: 4,
+        runSessionsPerWeek: 3,
+        volumeMesocycleMode: "HOLD",
+      },
+      {
+        name: "Race prep",
+        sortOrder: 1,
+        weekCount: 2,
+        phaseKind: "RACE_PREP",
+        focusMode: "PHASE",
+        phaseFocus: "RACE_SPECIFICITY",
+        swimSessionsPerWeek: 3,
+        bikeSessionsPerWeek: 4,
+        runSessionsPerWeek: 3,
+        volumeMesocycleMode: "HOLD",
+      },
+    ];
     const mesocycles: ComputedMesocycle[] = [
       {
         phaseIndex: 0,
@@ -106,21 +198,34 @@ describe("long-session-ramp", () => {
         startWeekIndex: 0,
         endWeekIndex: 1,
       },
+      {
+        phaseIndex: 1,
+        name: "Race prep I",
+        index: 0,
+        startWeekIndex: 2,
+        endWeekIndex: 3,
+      },
     ];
     const lastBuild = computeLongSessionsForWeek(
       1,
       [...kinds],
+      phases,
       mesocycles,
+      { startHours: 10, peakHours: 10 },
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
     const racePrep = computeLongSessionsForWeek(
       2,
       [...kinds],
+      phases,
       mesocycles,
+      { startHours: 10, peakHours: 10 },
       { startMin: 60, peakMin: 120 },
       { startMin: 30, peakMin: 60 }
     );
-    assert.equal(racePrep.longRideMinutes, lastBuild.longRideMinutes);
+    assert.equal(racePrep.longRideMinutes, 108);
+    assert.equal(lastBuild.longRideMinutes, 120);
+    assert.ok(racePrep.longRideMinutes < lastBuild.longRideMinutes);
   });
 });

@@ -11,9 +11,13 @@ import {
   focusLabel,
   PHASE_FOCUSES,
   PHASE_KINDS,
+  VOLUME_MESOCYCLE_MODE_LABELS,
+  VOLUME_MESOCYCLE_MODES,
+  type VolumeMesocycleMode,
   disciplineFocusesForPhase,
 } from "@/components/season/season-settings-types";
 import type { SeasonSettingsState } from "@/components/season/use-season-settings";
+import { defaultVolumeMesocycleMode } from "@/lib/plan/season/phase-volume-ramp";
 import { mesocycleWeekTotal } from "@/lib/plan/season/mesocycle-draft";
 import { Card, Input, Label, SegmentedControl, Select, Button } from "@/components/ui";
 import type { PhaseFocus, PhaseKind } from "@/components/season/season-settings-types";
@@ -94,6 +98,7 @@ export function SeasonSettingsPanel({
     toggleDeLoadWeek,
     applyDeLoadCadence,
     resolvedMesocycles,
+    resolvedPhaseTargets,
     cycleStructureValid,
     seasonId,
   } = state;
@@ -589,8 +594,28 @@ export function SeasonSettingsPanel({
   }
 
   if (step === 4) {
+    function parseOptionalHours(raw: string): number | null {
+      if (raw.trim() === "") return null;
+      const value = Number(raw);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    function parseOptionalMinutes(raw: string): number | null {
+      if (raw.trim() === "") return null;
+      const value = Number.parseInt(raw, 10);
+      return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    const rampPhases = phases
+      .map((phase, index) => ({ phase, index }))
+      .filter(({ phase }) => phase.phaseKind !== "TAPER");
+
     return (
       <Card title="Volume & ramp">
+        <p className="mb-4 text-sm text-muted-foreground">
+          Season start and peak hours are defaults for the first phase and unset targets.
+          Volume and long sessions step at mesocycle boundaries within each phase.
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label>Starting hours / week</Label>
@@ -610,16 +635,6 @@ export function SeasonSettingsPanel({
               step={0.5}
               value={peakHours}
               onChange={(e) => setPeakHours(Number(e.target.value))}
-            />
-          </div>
-          <div>
-            <Label>Max ramp % / week</Label>
-            <Input
-              type="number"
-              min={0}
-              max={25}
-              value={maxRampPercent}
-              onChange={(e) => setMaxRampPercent(Number(e.target.value))}
             />
           </div>
           <div>
@@ -655,6 +670,167 @@ export function SeasonSettingsPanel({
             />
           </div>
         </div>
+
+        {cycleStructureValid && rampPhases.length > 0 && (
+          <div className="mt-6 space-y-4">
+            <h3 className="text-sm font-medium">Per-phase mesocycle volume</h3>
+            {rampPhases.map(({ phase, index }) => {
+              const resolved = resolvedPhaseTargets.find((t) => t.phaseIndex === index);
+              const resolvedIndex = resolvedPhaseTargets.findIndex(
+                (t) => t.phaseIndex === index
+              );
+              const mode =
+                phase.volumeMesocycleMode ??
+                defaultVolumeMesocycleMode(phase.phaseKind);
+              const priorExit =
+                resolvedIndex > 0
+                  ? resolvedPhaseTargets[resolvedIndex - 1]?.volumeExit
+                  : null;
+              const startPlaceholder =
+                priorExit != null
+                  ? `From previous phase (${priorExit}h)`
+                  : `Season start (${startHours}h)`;
+              const endPlaceholder = resolved
+                ? `Default (${resolved.volumeExit}h)`
+                : "Default";
+
+              return (
+                <div
+                  key={phase.id ?? `${phase.name}-${index}`}
+                  className="rounded-lg border border-border p-4 space-y-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{phase.name}</p>
+                      <p className="text-xs text-muted-foreground">{phase.phaseKind}</p>
+                    </div>
+                    <div className="min-w-[10rem]">
+                      <Label>Mesocycle volume mode</Label>
+                      <Select
+                        value={mode}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            volumeMesocycleMode: e.target.value as VolumeMesocycleMode,
+                          })
+                        }
+                      >
+                        {VOLUME_MESOCYCLE_MODES.map((m) => (
+                          <option key={m} value={m}>
+                            {VOLUME_MESOCYCLE_MODE_LABELS[m]}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label>Start hours</Label>
+                      <Input
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        placeholder={startPlaceholder}
+                        value={phase.volumeStartHours ?? ""}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            volumeStartHours: parseOptionalHours(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>End hours</Label>
+                      <Input
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        placeholder={endPlaceholder}
+                        value={phase.volumeEndHours ?? ""}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            volumeEndHours: parseOptionalHours(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>Long ride start (min)</Label>
+                      <Input
+                        type="number"
+                        placeholder={
+                          resolved
+                            ? `Default (${resolved.longRideEntry})`
+                            : undefined
+                        }
+                        value={phase.longRideStartMin ?? ""}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            longRideStartMin: parseOptionalMinutes(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>Long ride end (min)</Label>
+                      <Input
+                        type="number"
+                        placeholder={
+                          resolved ? `Default (${resolved.longRideExit})` : undefined
+                        }
+                        value={phase.longRideEndMin ?? ""}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            longRideEndMin: parseOptionalMinutes(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>Long run start (min)</Label>
+                      <Input
+                        type="number"
+                        placeholder={
+                          resolved ? `Default (${resolved.longRunEntry})` : undefined
+                        }
+                        value={phase.longRunStartMin ?? ""}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            longRunStartMin: parseOptionalMinutes(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label>Long run end (min)</Label>
+                      <Input
+                        type="number"
+                        placeholder={
+                          resolved ? `Default (${resolved.longRunExit})` : undefined
+                        }
+                        value={phase.longRunEndMin ?? ""}
+                        onChange={(e) =>
+                          updatePhase(index, {
+                            longRunEndMin: parseOptionalMinutes(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {resolved &&
+                    priorExit != null &&
+                    phase.volumeStartHours != null &&
+                    Math.abs(phase.volumeStartHours - priorExit) > 0.05 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        Start differs from prior phase end ({priorExit}h).
+                      </p>
+                    )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {cycleStructureValid && (
           <div className="mt-6 space-y-4">

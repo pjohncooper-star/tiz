@@ -5,6 +5,7 @@ import type {
   PhaseFocus,
   PhaseKind,
   SeasonStatus,
+  VolumeMesocycleMode,
 } from "@prisma/client";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
@@ -43,6 +44,13 @@ export type SeasonPhaseInput = {
   swimSessionsPerWeek: number;
   bikeSessionsPerWeek: number;
   runSessionsPerWeek: number;
+  volumeMesocycleMode?: VolumeMesocycleMode;
+  volumeStartHours?: number | null;
+  volumeEndHours?: number | null;
+  longRideStartMin?: number | null;
+  longRideEndMin?: number | null;
+  longRunStartMin?: number | null;
+  longRunEndMin?: number | null;
 };
 
 export type SeasonPlanComputeInput = {

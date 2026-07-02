@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb } from "@/lib/dates";
+import { defaultVolumeMesocycleMode } from "./phase-volume-ramp";
 import { suggestPhasesForWeeks } from "./default-phases";
 import {
   mesocycleLayoutFingerprint,
@@ -230,12 +231,32 @@ function dbPhasesToSeasonInput(phases: DbPhaseWithMesocycles[]): SeasonPhaseInpu
     swimSessionsPerWeek: p.swimSessionsPerWeek,
     bikeSessionsPerWeek: p.bikeSessionsPerWeek,
     runSessionsPerWeek: p.runSessionsPerWeek,
+    volumeMesocycleMode: p.volumeMesocycleMode,
+    volumeStartHours: p.volumeStartHours,
+    volumeEndHours: p.volumeEndHours,
+    longRideStartMin: p.longRideStartMin,
+    longRideEndMin: p.longRideEndMin,
+    longRunStartMin: p.longRunStartMin,
+    longRunEndMin: p.longRunEndMin,
     mesocycles: p.mesocycles?.map((m) => ({
       id: m.id,
       name: m.name,
       weekCount: m.endWeekIndex - m.startWeekIndex + 1,
     })),
   }));
+}
+
+function phaseVolumeData(phase: SeasonPhaseInput) {
+  return {
+    volumeMesocycleMode:
+      phase.volumeMesocycleMode ?? defaultVolumeMesocycleMode(phase.phaseKind),
+    volumeStartHours: phase.volumeStartHours ?? null,
+    volumeEndHours: phase.volumeEndHours ?? null,
+    longRideStartMin: phase.longRideStartMin ?? null,
+    longRideEndMin: phase.longRideEndMin ?? null,
+    longRunStartMin: phase.longRunStartMin ?? null,
+    longRunEndMin: phase.longRunEndMin ?? null,
+  };
 }
 
 function toComputeInput(
@@ -322,6 +343,7 @@ export async function createSeasonPlan(input: CreateSeasonPlanInput) {
           swimSessionsPerWeek: phase.swimSessionsPerWeek,
           bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
           runSessionsPerWeek: phase.runSessionsPerWeek,
+          ...phaseVolumeData(phase),
           disciplines: phase.disciplineFocuses?.length
             ? {
                 create: phase.disciplineFocuses.map((d) => ({
@@ -590,6 +612,7 @@ export async function updateSeasonPlan(
           swimSessionsPerWeek: phase.swimSessionsPerWeek,
           bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
           runSessionsPerWeek: phase.runSessionsPerWeek,
+          ...phaseVolumeData(phase),
           disciplines: phase.disciplineFocuses?.length
             ? {
                 create: phase.disciplineFocuses.map((d) => ({

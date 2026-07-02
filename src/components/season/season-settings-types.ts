@@ -19,6 +19,8 @@ export type PhaseFocus =
 
 export type PhaseKind = "BASE" | "BUILD" | "RACE_PREP" | "TAPER";
 
+export type VolumeMesocycleMode = "INCREASE" | "HOLD" | "DECREASE";
+
 export type Discipline = "SWIM" | "BIKE" | "RUN";
 
 export type EventPriority = "A" | "B" | "C";
@@ -157,6 +159,13 @@ export type PhaseDraft = {
   swimSessionsPerWeek: number;
   bikeSessionsPerWeek: number;
   runSessionsPerWeek: number;
+  volumeMesocycleMode?: VolumeMesocycleMode;
+  volumeStartHours?: number | null;
+  volumeEndHours?: number | null;
+  longRideStartMin?: number | null;
+  longRideEndMin?: number | null;
+  longRunStartMin?: number | null;
+  longRunEndMin?: number | null;
 };
 
 export type SeasonData = {
@@ -186,6 +195,18 @@ export type SeasonData = {
   unlinkedRaceSessions?: UnlinkedRaceSession[];
   phases: PhaseDraft[];
   weeks?: { weekIndex: number; isDeLoadWeek: boolean }[];
+};
+
+export const VOLUME_MESOCYCLE_MODES: VolumeMesocycleMode[] = [
+  "INCREASE",
+  "HOLD",
+  "DECREASE",
+];
+
+export const VOLUME_MESOCYCLE_MODE_LABELS: Record<VolumeMesocycleMode, string> = {
+  INCREASE: "Increase",
+  HOLD: "Hold",
+  DECREASE: "Decrease",
 };
 
 export const PHASE_KINDS: PhaseKind[] = ["BASE", "BUILD", "RACE_PREP", "TAPER"];

@@ -153,6 +153,12 @@ enum PhaseKind {
   TAPER
 }
 
+enum VolumeMesocycleMode {
+  INCREASE
+  HOLD
+  DECREASE
+}
+
 enum PhaseFocus {
   AEROBIC_BASE
   THRESHOLD
@@ -518,6 +524,13 @@ model SeasonPhase {
   swimSessionsPerWeek  Int      @default(3)
   bikeSessionsPerWeek  Int      @default(4)
   runSessionsPerWeek   Int      @default(3)
+  volumeMesocycleMode  VolumeMesocycleMode @default(INCREASE)
+  volumeStartHours     Float?
+  volumeEndHours       Float?
+  longRideStartMin     Int?
+  longRideEndMin       Int?
+  longRunStartMin      Int?
+  longRunEndMin        Int?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
