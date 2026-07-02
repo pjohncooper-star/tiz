@@ -39,7 +39,6 @@ type CalendarWeekRowProps = {
   workoutShadingSettings: WorkoutShadingSettings;
   onSessionCreated: () => void;
   activeDragId: string | null;
-  onUnlinkActivity?: (sessionId: string) => void;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
   isCurrentWeek?: boolean;
 };
@@ -53,7 +52,6 @@ export function CalendarWeekRow({
   workoutShadingSettings,
   onSessionCreated,
   activeDragId,
-  onUnlinkActivity,
   scrollAnchorRef,
   isCurrentWeek,
 }: CalendarWeekRowProps) {
@@ -134,7 +132,6 @@ export function CalendarWeekRow({
               workoutShadingSettings={workoutShadingSettings}
               onSessionCreated={onSessionCreated}
               activeDragId={activeDragId}
-              onUnlinkActivity={onUnlinkActivity}
               isSelected={selectedDateKey === dateKey}
               onSelectDay={() => setSelectedDateKey(dateKey)}
               onClearSelection={() => setSelectedDateKey(null)}

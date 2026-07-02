@@ -25,7 +25,6 @@ type CalendarDayColumnProps = {
   workoutShadingSettings: WorkoutShadingSettings;
   onSessionCreated: () => void;
   activeDragId: string | null;
-  onUnlinkActivity?: (sessionId: string) => void;
   isSelected: boolean;
   onSelectDay: () => void;
   onClearSelection: () => void;
@@ -40,7 +39,6 @@ export function CalendarDayColumn({
   workoutShadingSettings,
   onSessionCreated,
   activeDragId,
-  onUnlinkActivity,
   isSelected,
   onSelectDay,
   onClearSelection,
@@ -146,7 +144,6 @@ export function CalendarDayColumn({
                 isDragging={activeDragId === item.session.id}
                 showLinkDropTarget={activityDragActive}
                 showWorkoutDropTarget={workoutDragActive}
-                onUnlinkActivity={onUnlinkActivity}
                 onDeleted={onSessionCreated}
               />
             )

@@ -25,19 +25,18 @@ type CalendarSessionCardProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   isDragging?: boolean;
   onDeleted?: () => void;
-  onUnlinkActivity?: (sessionId: string) => void;
   showLinkDropTarget?: boolean;
   showWorkoutDropTarget?: boolean;
 };
 
-function disciplineLabel(session: CalendarPlannedSession): string {
-  const linked = session.linkedActivity;
+function disciplineLabel(discipline: string): string {
   return (
-    linked?.legType ??
-    DISCIPLINE_DISPLAY_LABELS[session.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ??
-    session.discipline
+    DISCIPLINE_DISPLAY_LABELS[discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ?? discipline
   );
 }
+
+const poolSizePillClassName =
+  "rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400";
 
 export function CalendarSessionCard({
   session,
@@ -45,7 +44,6 @@ export function CalendarSessionCard({
   disciplineSettings,
   isDragging,
   onDeleted,
-  onUnlinkActivity,
   showLinkDropTarget = false,
   showWorkoutDropTarget = false,
 }: CalendarSessionCardProps) {
@@ -71,7 +69,6 @@ export function CalendarSessionCard({
   });
 
   const [deleting, setDeleting] = useState(false);
-  const [unlinking, setUnlinking] = useState(false);
 
   const style = transform
     ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
@@ -119,18 +116,6 @@ export function CalendarSessionCard({
     }
   }
 
-  async function handleUnlink(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!onUnlinkActivity || unlinking) return;
-    setUnlinking(true);
-    try {
-      onUnlinkActivity(session.id);
-    } finally {
-      setUnlinking(false);
-    }
-  }
-
   return (
     <div
       ref={(node) => {
@@ -158,13 +143,15 @@ export function CalendarSessionCard({
           >
             <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
-              <span className={pillClassName}>{disciplineLabel(session)}</span>
+              <span className={pillClassName}>{disciplineLabel(session.discipline)}</span>
+              {session.discipline === "SWIM" && poolSize ? (
+                <span className={poolSizePillClassName}>{poolSize}</span>
+              ) : null}
             </div>
             {metricLines.length > 0 ? (
-              <p className="mt-0.5 text-xs text-zinc-500">{metricLines[0]}</p>
-            ) : null}
-            {linked && linked.name.trim() !== session.title.trim() ? (
-              <p className="mt-0.5 text-xs text-zinc-400">{linked.name}</p>
+              <p className="mt-0.5 whitespace-nowrap text-[10px] leading-tight text-zinc-500">
+                {metricLines[0]}
+              </p>
             ) : null}
           </Link>
           {session.workoutProfile ? (
@@ -173,17 +160,6 @@ export function CalendarSessionCard({
             </div>
           ) : null}
         </div>
-        {linked && onUnlinkActivity ? (
-          <button
-            type="button"
-            disabled={unlinking}
-            className="shrink-0 rounded px-1 text-[10px] text-zinc-400 hover:text-zinc-700 disabled:opacity-50 dark:hover:text-zinc-300"
-            aria-label="Unlink completed workout"
-            onClick={(e) => void handleUnlink(e)}
-          >
-            Unlink
-          </button>
-        ) : null}
         <button
           type="button"
           disabled={deleting}

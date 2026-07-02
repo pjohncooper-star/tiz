@@ -449,26 +449,6 @@ export function PlanningCalendar({
     }
   }
 
-  async function handleUnlinkActivity(sessionId: string) {
-    setData((prev) => ({
-      ...prev,
-      sessions: prev.sessions.map((s) =>
-        s.id === sessionId ? { ...s, linkedActivity: null } : s
-      ),
-    }));
-
-    try {
-      const res = await fetch(`/api/plan/sessions/${sessionId}/link`, { method: "DELETE" });
-      if (!res.ok) {
-        await reloadCalendarData();
-        return;
-      }
-      router.refresh();
-    } catch {
-      await reloadCalendarData();
-    }
-  }
-
   async function handleRefresh() {
     await reloadCalendarData();
   }
@@ -585,7 +565,6 @@ export function PlanningCalendar({
               workoutShadingSettings={workoutShadingSettings}
               onSessionCreated={handleRefresh}
               activeDragId={activeDragId}
-              onUnlinkActivity={(sessionId) => void handleUnlinkActivity(sessionId)}
               isCurrentWeek={weekStart === currentWeekStart}
             />
           ))}

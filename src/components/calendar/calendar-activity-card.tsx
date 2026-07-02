@@ -6,9 +6,14 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { WeekActivity, WeekActivityGroup } from "@/components/dashboard-week-view";
 import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
-import { formatActivityCardMetricLines, formatCardDuration } from "@/lib/plan/calendar/session-card-summary";
+import {
+  formatActivityCardMetricLines,
+  formatCardDuration,
+  isRedundantCalendarActivityTitle,
+} from "@/lib/plan/calendar/session-card-summary";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import {
+  poolSizeForSwimStep,
   swimDisplayUnit,
   unitSettingsForDiscipline,
   type DisciplineUnitSettings,
@@ -68,13 +73,14 @@ function activityDisplayUnit(
   return unitSettingsForDiscipline(discipline, disciplineSettings ?? {}).displayUnit;
 }
 
-function disciplineLabel(activity: WeekActivity): string {
+function disciplineLabel(discipline: string): string {
   return (
-    activity.legType ??
-    DISCIPLINE_DISPLAY_LABELS[activity.discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ??
-    activity.discipline
+    DISCIPLINE_DISPLAY_LABELS[discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ?? discipline
   );
 }
+
+const pillClassName =
+  "rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400";
 
 type DraggableActivityCardProps = {
   activity: CalendarWeekActivity;
@@ -103,6 +109,11 @@ export function DraggableActivityCard({
     activity,
     activityDisplayUnit(activity, disciplineSettings)
   );
+  const showTitle = !isRedundantCalendarActivityTitle(activity.name, activity.discipline);
+  const swimPoolSize =
+    activity.discipline === "SWIM"
+      ? poolSizeForSwimStep(disciplineSettings?.SWIM?.poolSize)
+      : null;
 
   return (
     <div
@@ -123,14 +134,17 @@ export function DraggableActivityCard({
         href={`/activities/${activity.id}?returnTo=${returnTo}`}
         className="min-w-0 flex-1 transition hover:opacity-90"
       >
-        <p className="line-clamp-2 font-medium leading-snug pr-1">{activity.name}</p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-          <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-            {disciplineLabel(activity)}
-          </span>
+        {showTitle ? (
+          <p className="line-clamp-2 font-medium leading-snug pr-1">{activity.name}</p>
+        ) : null}
+        <div className={`flex flex-wrap items-center gap-1 ${showTitle ? "mt-0.5" : ""}`}>
+          <span className={pillClassName}>{disciplineLabel(activity.discipline)}</span>
+          {swimPoolSize ? <span className={pillClassName}>{swimPoolSize}</span> : null}
         </div>
         {metricLines.length > 0 ? (
-          <p className="mt-0.5 text-xs text-zinc-500">{metricLines[0]}</p>
+          <p className="mt-0.5 whitespace-nowrap text-[10px] leading-tight text-zinc-500">
+            {metricLines[0]}
+          </p>
         ) : null}
       </Link>
       <DeleteActivityButton activity={activity} onDeleted={onDeleted} />

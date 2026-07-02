@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   formatActivityCardMetricLines,
+  formatCardDistance,
   formatCardDuration,
   formatSessionCardMetricComparison,
   formatSessionCardMetricLines,
+  isRedundantCalendarActivityTitle,
 } from "@/lib/plan/calendar/session-card-summary";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 
@@ -66,9 +68,32 @@ describe("formatCardDuration", () => {
   });
 });
 
+describe("formatCardDistance", () => {
+  it("formats swim distances with k suffix at 1000+ display units", () => {
+    assert.equal(formatCardDistance(1200, "SWIM", "METRIC"), "1.2k");
+    assert.equal(formatCardDistance(2743, "SWIM", "IMPERIAL"), "3k");
+  });
+
+  it("formats run distances with k suffix in metric", () => {
+    assert.equal(formatCardDistance(8000, "RUN", "METRIC"), "8k");
+  });
+});
+
+describe("isRedundantCalendarActivityTitle", () => {
+  it("treats discipline-only and date-suffixed names as redundant", () => {
+    assert.equal(isRedundantCalendarActivityTitle("Bike", "BIKE"), true);
+    assert.equal(isRedundantCalendarActivityTitle("Bike Jun 29", "BIKE"), true);
+    assert.equal(isRedundantCalendarActivityTitle("Pool Swim (lap swimming)", "SWIM"), true);
+  });
+
+  it("keeps custom activity names", () => {
+    assert.equal(isRedundantCalendarActivityTitle("Morning Ride", "BIKE"), false);
+  });
+});
+
 describe("session card summary", () => {
-  it("formats unlinked planned session as a single metric line", () => {
-    assert.deepEqual(formatSessionCardMetricLines(baseSession(), "IMPERIAL"), ["45m · 3,000 yd"]);
+  it("formats unlinked planned session as a single compact metric line", () => {
+    assert.deepEqual(formatSessionCardMetricLines(baseSession(), "IMPERIAL"), ["45m|3k"]);
   });
 
   it("formats linked session duration and distance comparisons on one line", () => {
@@ -76,7 +101,7 @@ describe("session card summary", () => {
       baseSession({ linkedActivity }),
       "IMPERIAL"
     );
-    assert.deepEqual(lines, ["45m → 1:02 · 3,000 yd → 3,500 yd"]);
+    assert.deepEqual(lines, ["45m→1:02|3k→3.5k"]);
   });
 
   it("compares duration and distance in metric comparison helpers", () => {
@@ -84,8 +109,8 @@ describe("session card summary", () => {
       baseSession({ linkedActivity }),
       "IMPERIAL"
     );
-    assert.equal(comparison.duration, "45m → 1:02");
-    assert.equal(comparison.distance, "3,000 yd → 3,500 yd");
+    assert.equal(comparison.duration, "45m→1:02");
+    assert.equal(comparison.distance, "3k→3.5k");
   });
 
   it("prefers moving seconds for completed duration", () => {
@@ -95,7 +120,7 @@ describe("session card summary", () => {
       }),
       "IMPERIAL"
     );
-    assert.equal(comparison.duration, "45m → 60m");
+    assert.equal(comparison.duration, "45m→60m");
   });
 
   it("respects completed duration override", () => {
@@ -106,7 +131,7 @@ describe("session card summary", () => {
       }),
       "IMPERIAL"
     );
-    assert.equal(comparison.duration, "45m → 50m");
+    assert.equal(comparison.duration, "45m→50m");
   });
 
   it("respects completed distance override", () => {
@@ -117,7 +142,7 @@ describe("session card summary", () => {
       }),
       "IMPERIAL"
     );
-    assert.equal(comparison.distance, "3,000 yd → 3,000 yd");
+    assert.equal(comparison.distance, "3k→3k");
   });
 
   it("shows completed-only metrics when planned values are missing", () => {
@@ -130,7 +155,7 @@ describe("session card summary", () => {
       "IMPERIAL"
     );
     assert.equal(comparison.duration, "1:02");
-    assert.equal(comparison.distance, "3,500 yd");
+    assert.equal(comparison.distance, "3.5k");
   });
 
   it("returns no metric lines for empty planned sessions", () => {
@@ -153,7 +178,7 @@ describe("session card summary", () => {
         },
         "METRIC"
       ),
-      ["45m · 8 km"]
+      ["45m|8k"]
     );
   });
 });

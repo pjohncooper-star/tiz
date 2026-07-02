@@ -192,6 +192,7 @@ export function PlannedSessionEditor({
 
   const [deleting, setDeleting] = useState(false);
   const [detaching, setDetaching] = useState(false);
+  const [unlinking, setUnlinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -442,6 +443,19 @@ export function PlannedSessionEditor({
     setDetaching(false);
     if (!res.ok) {
       setError("Could not detach from anchor");
+      return;
+    }
+    router.refresh();
+  }
+
+  async function handleUnlinkActivity() {
+    if (!linkedActivityId || unlinking) return;
+    setUnlinking(true);
+    setError(null);
+    const res = await fetch(`/api/plan/sessions/${sessionId}/link`, { method: "DELETE" });
+    setUnlinking(false);
+    if (!res.ok) {
+      setError("Could not unlink activity");
       return;
     }
     router.refresh();
@@ -733,17 +747,27 @@ export function PlannedSessionEditor({
           <Button
             type="button"
             variant="secondary"
-            disabled={saving || deleting || detaching}
+            disabled={saving || deleting || detaching || unlinking}
             onClick={handleDetach}
           >
             {detaching ? "Detaching…" : "Detach from anchor"}
           </Button>
         )}
+        {linkedActivityId ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving || deleting || unlinking}
+            onClick={() => void handleUnlinkActivity()}
+          >
+            {unlinking ? "Unlinking…" : "Unlink activity"}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="secondary"
           className="text-red-600"
-          disabled={saving || deleting}
+          disabled={saving || deleting || unlinking}
           onClick={handleDelete}
         >
           {deleting ? "Deleting…" : "Delete"}
