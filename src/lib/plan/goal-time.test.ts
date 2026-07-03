@@ -12,13 +12,24 @@ describe("goal time", () => {
     assert.equal(formatGoalTimeDisplay(210), "3:30:00");
   });
 
+  it("formats sub-hour minutes as mm:ss", () => {
+    assert.equal(formatGoalTimeInput(10), "10:00");
+    assert.equal(formatGoalTimeDisplay(10), "10:00");
+    assert.equal(formatGoalTimeInput(45), "45:00");
+  });
+
   it("parses hh:mm:ss to minutes", () => {
     assert.equal(parseGoalTimeInput("1:30:00"), 90);
     assert.equal(parseGoalTimeInput("3:30:00"), 210);
   });
 
+  it("parses plain minutes", () => {
+    assert.equal(parseGoalTimeInput("10"), 10);
+  });
+
   it("parses mm:ss to minutes", () => {
     assert.equal(parseGoalTimeInput("45:30"), 46);
+    assert.equal(parseGoalTimeInput("10:00"), 10);
   });
 
   it("returns null for empty input", () => {

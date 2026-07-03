@@ -12,6 +12,8 @@ import {
   snapEndToSunday,
   snapStartToMonday,
   weekStartDateForIndex,
+  weekIndexForDate,
+  raceTimelineFraction,
 } from "./season-dates";
 
 describe("season-dates", () => {
@@ -107,5 +109,22 @@ describe("season-dates", () => {
       ["Jan", "Feb"]
     );
     assert.equal(ticks[1]?.weekIndex, 3);
+  });
+
+  it("weekIndexForDate maps calendar dates to season weeks", () => {
+    const start = parseDateKey("2025-01-13");
+    assert.equal(weekIndexForDate(start, parseDateKey("2025-01-13")), 0);
+    assert.equal(weekIndexForDate(start, parseDateKey("2025-01-19")), 0);
+    assert.equal(weekIndexForDate(start, parseDateKey("2025-01-20")), 1);
+  });
+
+  it("raceTimelineFraction places race day within the timeline", () => {
+    const start = parseDateKey("2025-01-13");
+    const wedWeek0 = raceTimelineFraction(start, parseDateKey("2025-01-15"), 4);
+    assert.ok(wedWeek0 > 0 && wedWeek0 < 0.25);
+    const before = raceTimelineFraction(start, parseDateKey("2024-12-01"), 4);
+    assert.equal(before, 0);
+    const after = raceTimelineFraction(start, parseDateKey("2025-06-01"), 4);
+    assert.equal(after, 1);
   });
 });

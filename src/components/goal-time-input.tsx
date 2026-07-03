@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   formatGoalTimeInput,
   GOAL_TIME_PLACEHOLDER,
@@ -29,20 +29,12 @@ export function GoalTimeInput({
   className,
 }: GoalTimeInputProps) {
   const [text, setText] = useState(() => formatGoalTimeInput(value));
+  const focusedRef = useRef(false);
 
   useEffect(() => {
+    if (focusedRef.current) return;
     setText(formatGoalTimeInput(value));
   }, [value]);
-
-  function handleTextChange(nextText: string) {
-    setText(nextText);
-    if (!nextText.trim()) {
-      onChange(null);
-      return;
-    }
-    const minutes = parseGoalTimeInput(nextText);
-    if (minutes != null) onChange(minutes);
-  }
 
   function commit(nextText: string) {
     const trimmed = nextText.trim();
@@ -60,28 +52,30 @@ export function GoalTimeInput({
     setText(formatGoalTimeInput(minutes));
   }
 
-  const field = (
-    <input
-      type="text"
-      className={compact ? COMPACT_FIELD : className}
-      value={text}
-      onChange={(e) => handleTextChange(e.target.value)}
-      onBlur={() => commit(text)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commit(text);
-        }
-      }}
-      placeholder={GOAL_TIME_PLACEHOLDER}
-    />
-  );
+  const fieldProps = {
+    value: text,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setText(e.target.value),
+    onFocus: () => {
+      focusedRef.current = true;
+    },
+    onBlur: () => {
+      focusedRef.current = false;
+      commit(text);
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        (e.currentTarget as HTMLInputElement).blur();
+      }
+    },
+    placeholder: GOAL_TIME_PLACEHOLDER,
+  };
 
   if (compact) {
     return (
       <div>
         <span className={COMPACT_LABEL}>{label}</span>
-        {field}
+        <input type="text" className={compact ? COMPACT_FIELD : className} {...fieldProps} />
       </div>
     );
   }
@@ -89,18 +83,7 @@ export function GoalTimeInput({
   return (
     <div>
       <Label>{label}</Label>
-      <Input
-        value={text}
-        onChange={(e) => handleTextChange(e.target.value)}
-        onBlur={() => commit(text)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commit(text);
-          }
-        }}
-        placeholder={GOAL_TIME_PLACEHOLDER}
-      />
+      <Input {...fieldProps} />
     </div>
   );
 }

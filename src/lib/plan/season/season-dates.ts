@@ -40,6 +40,29 @@ export function weekStartDateForIndex(seasonStart: Date, weekIndex: number): Dat
   return addDays(snapStartToMonday(seasonStart), weekIndex * 7);
 }
 
+/** Zero-based week index for a calendar date within a Monday-start season. */
+export function weekIndexForDate(seasonStart: Date, date: Date): number {
+  const start = snapStartToMonday(seasonStart);
+  const days = differenceInCalendarDays(date, start);
+  return Math.floor(days / 7);
+}
+
+/**
+ * Race position on the season timeline as a fraction 0–1 (center of race day).
+ * Clamped when the race falls outside the displayed week range.
+ */
+export function raceTimelineFraction(
+  seasonStart: Date,
+  raceDate: Date,
+  displayWeeks: number
+): number {
+  if (displayWeeks <= 0) return 0;
+  const start = snapStartToMonday(seasonStart);
+  const days = differenceInCalendarDays(raceDate, start);
+  const positionWeeks = (days + 0.5) / 7;
+  return Math.max(0, Math.min(1, positionWeeks / displayWeeks));
+}
+
 /** Month labels at the first week each calendar month appears on the timeline. */
 export function monthTicksForWeeks(
   seasonStart: Date,

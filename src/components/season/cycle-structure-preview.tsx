@@ -2,8 +2,9 @@
 
 import { format } from "date-fns";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { PhaseDraft } from "@/components/season/season-settings-types";
+import type { GoalEventDraft, PhaseDraft } from "@/components/season/season-settings-types";
 import { parseDateKey } from "@/lib/dates";
+import { buildPreviewRaceMarkers } from "@/lib/plan/season/preview-race-markers";
 import {
   monthTicksForWeeks,
   weekStartDateForIndex,
@@ -17,7 +18,16 @@ type CycleStructurePreviewProps = {
   mesocycleLengthWeeks: number;
   totalWeeks: number;
   startDate?: string;
+  aRace?: GoalEventDraft | null;
+  bRaces?: GoalEventDraft[];
+  cRaces?: GoalEventDraft[];
   onResizeBoundary?: (boundaryIndex: number, boundaryWeekIndex: number) => void;
+};
+
+const RACE_PRIORITY_STYLES: Record<"A" | "B" | "C", string> = {
+  A: "bg-amber-500 text-white ring-amber-600/80",
+  B: "bg-sky-500 text-white ring-sky-600/80",
+  C: "bg-zinc-400 text-white ring-zinc-500/80 dark:bg-zinc-500",
 };
 
 function toPhaseInput(phases: PhaseDraft[]): SeasonPhaseInput[] {
@@ -49,6 +59,9 @@ export function CycleStructurePreview({
   mesocycleLengthWeeks,
   totalWeeks,
   startDate,
+  aRace,
+  bRaces = [],
+  cRaces = [],
   onResizeBoundary,
 }: CycleStructurePreviewProps) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -87,6 +100,11 @@ export function CycleStructurePreview({
     return monthTicksForWeeks(seasonStart, displayWeeks);
   }, [displayWeeks, seasonStart]);
 
+  const raceMarkers = useMemo(() => {
+    if (!seasonStart) return [];
+    return buildPreviewRaceMarkers(seasonStart, displayWeeks, aRace, bRaces, cRaces);
+  }, [aRace, bRaces, cRaces, displayWeeks, seasonStart]);
+
   const weekIndexFromPointer = useCallback(
     (clientX: number) => {
       const track = trackRef.current;
@@ -124,6 +142,21 @@ export function CycleStructurePreview({
   return (
     <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/40">
       <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Season preview</p>
+
+      {raceMarkers.length > 0 && (
+        <div className="relative h-5">
+          {raceMarkers.map((race) => (
+            <span
+              key={race.key}
+              className={`absolute top-0 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full text-[10px] font-bold ring-1 ${RACE_PRIORITY_STYLES[race.priority]}`}
+              style={{ left: `${race.positionFraction * 100}%` }}
+              title={race.tooltip}
+            >
+              {race.priority}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div
         ref={trackRef}

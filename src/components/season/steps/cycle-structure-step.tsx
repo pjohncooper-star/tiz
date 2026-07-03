@@ -13,6 +13,9 @@ export function CycleStructureStep({ state }: SeasonSettingsStepProps) {
     setMesocycleLengthWeeks,
     phases,
     totalWeeks,
+    aRace,
+    bRaces,
+    cRaces,
     phaseWeekTotal,
     updatePhase,
     resizePhaseBoundary,
@@ -62,6 +65,9 @@ export function CycleStructureStep({ state }: SeasonSettingsStepProps) {
         mesocycleLengthWeeks={mesocycleLengthWeeks}
         totalWeeks={totalWeeks}
         startDate={startDate}
+        aRace={aRace}
+        bRaces={bRaces}
+        cRaces={cRaces}
         onResizeBoundary={resizePhaseBoundary}
       />
 
