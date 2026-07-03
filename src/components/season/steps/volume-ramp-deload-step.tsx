@@ -36,7 +36,11 @@ function parseOptionalMinutes(raw: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function computedRunPercent(swim: number | null, bike: number | null, run: number | null): string {
+function computedRunPercent(
+  swim: number | null | undefined,
+  bike: number | null | undefined,
+  run: number | null | undefined
+): string {
   if (swim == null && bike == null && run == null) return "—";
   const swimPct = swim ?? 0;
   const bikePct = bike ?? 0;

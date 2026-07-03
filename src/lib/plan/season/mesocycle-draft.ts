@@ -49,6 +49,9 @@ export function mesocyclesFromSerialized(
         index: number;
         startWeekIndex: number;
         endWeekIndex: number;
+        swimSplitPercent?: number | null;
+        bikeSplitPercent?: number | null;
+        runSplitPercent?: number | null;
       }[]
     | undefined,
   phaseName: string,
