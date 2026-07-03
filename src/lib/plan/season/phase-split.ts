@@ -86,6 +86,9 @@ export function buildMesocyclesFromExplicitDefinitions(
         index: i,
         startWeekIndex: weekCursor,
         endWeekIndex,
+        swimSplitPercent: meso.swimSplitPercent,
+        bikeSplitPercent: meso.bikeSplitPercent,
+        runSplitPercent: meso.runSplitPercent,
       });
       weekCursor = endWeekIndex + 1;
     }

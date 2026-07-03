@@ -83,6 +83,15 @@ export function serializePhase(phase: SeasonPlanRecord["phases"][number]) {
     volumeStartHours: phase.volumeStartHours,
     volumeEndHours: phase.volumeEndHours,
     volumeRampPercent: phase.volumeRampPercent,
+    swimStartHours: phase.swimStartHours,
+    swimEndHours: phase.swimEndHours,
+    swimRampPercent: phase.swimRampPercent,
+    bikeStartHours: phase.bikeStartHours,
+    bikeEndHours: phase.bikeEndHours,
+    bikeRampPercent: phase.bikeRampPercent,
+    runStartHours: phase.runStartHours,
+    runEndHours: phase.runEndHours,
+    runRampPercent: phase.runRampPercent,
     longRideStartMin: phase.longRideStartMin,
     longRideEndMin: phase.longRideEndMin,
     longRunStartMin: phase.longRunStartMin,
@@ -92,13 +101,25 @@ export function serializePhase(phase: SeasonPlanRecord["phases"][number]) {
       focus: d.focus,
     })),
     mesocycles: "mesocycles" in phase
-      ? (phase.mesocycles as { id: string; name: string; index: number; startWeekIndex: number; endWeekIndex: number }[]).map(
+      ? (phase.mesocycles as {
+          id: string;
+          name: string;
+          index: number;
+          startWeekIndex: number;
+          endWeekIndex: number;
+          swimSplitPercent?: number | null;
+          bikeSplitPercent?: number | null;
+          runSplitPercent?: number | null;
+        }[]).map(
           (m) => ({
             id: m.id,
             name: m.name,
             index: m.index,
             startWeekIndex: m.startWeekIndex,
             endWeekIndex: m.endWeekIndex,
+            swimSplitPercent: m.swimSplitPercent,
+            bikeSplitPercent: m.bikeSplitPercent,
+            runSplitPercent: m.runSplitPercent,
           })
         )
       : undefined,
@@ -154,6 +175,9 @@ export async function serializeSeasonPlan(plan: SeasonPlanRecord) {
     mesocycleLengthWeeks: plan.mesocycleLengthWeeks,
     startHours: plan.startHours,
     peakHours: plan.peakHours,
+    swimSplitPercent: plan.swimSplitPercent,
+    bikeSplitPercent: plan.bikeSplitPercent,
+    runSplitPercent: plan.runSplitPercent,
     maxRampPercent: plan.maxRampPercent,
     deLoadEveryNWeeks: plan.deLoadEveryNWeeks,
     deLoadWeekFlags: parseDeLoadWeekFlags(plan.deLoadWeekFlags),

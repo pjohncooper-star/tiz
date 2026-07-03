@@ -1,6 +1,10 @@
 import type { PhaseKind } from "@prisma/client";
 import { markDeLoadWeeksPerMesocycle, mergeDeLoadFlags, taperWeekIndicesFromPhaseKinds } from "./de-load-cadence";
-import { splitHoursByDiscipline } from "./discipline-split";
+import {
+  resolveSplitForWeek,
+  splitHoursByResolvedSplit,
+} from "./discipline-split-resolve";
+import { planUsesDisciplineRamps, computeWeeklyDisciplineHours } from "./discipline-volume-ramp";
 import { computeZoneMinutesForWeek } from "./focus-tiz";
 import { computeLongSessionsForWeek } from "./long-session-ramp";
 import {
@@ -21,7 +25,7 @@ import type {
   SeasonRecomputeResult,
   WeekPhaseContext,
 } from "./types";
-import { computeWeeklyVolumeCurve } from "./volume-curve";
+import { computeWeeklyVolumeCurve, roundHours } from "./volume-curve";
 
 function expandPhaseKinds(phases: SeasonPhaseInput[], totalWeeks: number): PhaseKind[] {
   const sorted = [...phases].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -131,7 +135,7 @@ export function recomputeSeasonWeeks(
     input.longRunWeekFlags
   );
 
-  const weeklyHours = computeWeeklyVolumeCurve({
+  const referenceWeeklyHours = computeWeeklyVolumeCurve({
     totalWeeks: bounds.totalWeeks,
     phaseKindsByWeek,
     phases: input.phases,
@@ -143,6 +147,28 @@ export function recomputeSeasonWeeks(
     deLoadVolumePercent: input.deLoadVolumePercent,
   });
 
+  const seasonSplit = {
+    swimSplitPercent: input.swimSplitPercent,
+    bikeSplitPercent: input.bikeSplitPercent,
+    runSplitPercent: input.runSplitPercent,
+  };
+
+  const usesHourRamps = planUsesDisciplineRamps(input.phases);
+  const disciplineHours = usesHourRamps
+    ? computeWeeklyDisciplineHours({
+        totalWeeks: bounds.totalWeeks,
+        phaseKindsByWeek,
+        phases: input.phases,
+        mesocycles,
+        startHours: input.startHours,
+        peakHours: input.peakHours,
+        deLoadFlags,
+        deLoadVolumePercent: input.deLoadVolumePercent,
+        referenceWeeklyHours,
+        seasonSplit,
+      })
+    : null;
+
   const contexts = expandPhaseContexts(
     input.phases,
     bounds.totalWeeks,
@@ -152,11 +178,27 @@ export function recomputeSeasonWeeks(
   );
 
   const weeks: ComputedSeasonWeek[] = contexts.map((ctx) => {
-    const totalHours = weeklyHours[ctx.weekIndex]!;
-    const { swimHours, bikeHours, runHours } = splitHoursByDiscipline(
-      totalHours,
-      ctx.phaseKind
-    );
+    let totalHours: number;
+    let swimHours: number;
+    let bikeHours: number;
+    let runHours: number;
+
+    if (usesHourRamps && disciplineHours) {
+      swimHours = disciplineHours.swimHours[ctx.weekIndex]!;
+      bikeHours = disciplineHours.bikeHours[ctx.weekIndex]!;
+      runHours = disciplineHours.runHours[ctx.weekIndex]!;
+      totalHours = roundHours(swimHours + bikeHours + runHours);
+    } else {
+      totalHours = referenceWeeklyHours[ctx.weekIndex]!;
+      const split = resolveSplitForWeek(
+        ctx.weekIndex,
+        ctx.phaseKind,
+        mesocycles,
+        input.phases,
+        seasonSplit
+      );
+      ({ swimHours, bikeHours, runHours } = splitHoursByResolvedSplit(totalHours, split));
+    }
 
     const baseCounts = baseSessionCounts({
       swimSessionsPerWeek: ctx.phase.swimSessionsPerWeek,

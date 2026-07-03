@@ -452,6 +452,9 @@ model SeasonPlan {
   mesocycleLengthWeeks     Int            @default(4)
   startHours               Float
   peakHours                Float
+  swimSplitPercent         Float?
+  bikeSplitPercent         Float?
+  runSplitPercent          Float?
   maxRampPercent           Float          @default(10)
   deLoadEveryNWeeks        Int            @default(4)
   deLoadWeekFlags          Json?
@@ -528,6 +531,15 @@ model SeasonPhase {
   volumeStartHours     Float?
   volumeEndHours       Float?
   volumeRampPercent    Float?
+  swimStartHours       Float?
+  swimEndHours         Float?
+  swimRampPercent      Float?
+  bikeStartHours       Float?
+  bikeEndHours         Float?
+  bikeRampPercent      Float?
+  runStartHours        Float?
+  runEndHours          Float?
+  runRampPercent       Float?
   longRideStartMin     Int?
   longRideEndMin       Int?
   longRunStartMin      Int?
@@ -561,6 +573,9 @@ model SeasonMesocycle {
   index             Int
   startWeekIndex    Int
   endWeekIndex      Int
+  swimSplitPercent  Float?
+  bikeSplitPercent  Float?
+  runSplitPercent   Float?
 
   phase SeasonPhase  @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   weeks SeasonWeek[]

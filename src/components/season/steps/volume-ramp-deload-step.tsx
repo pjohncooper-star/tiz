@@ -8,6 +8,9 @@ import {
   type VolumeMesocycleMode,
 } from "@/components/season/season-settings-types";
 import type { SeasonSettingsStepProps } from "@/components/season/steps/types";
+import { DEFAULT_DISCIPLINE_SPLIT } from "@/lib/plan/season/constants";
+import { phaseKindDefaultSplit } from "@/lib/plan/season/discipline-split-resolve";
+import type { DisciplineKey } from "@/lib/plan/season/discipline-volume-ramp";
 import { defaultVolumeMesocycleMode } from "@/lib/plan/season/phase-volume-ramp";
 import {
   volumeEndFromStartAndRamp,
@@ -33,6 +36,38 @@ function parseOptionalMinutes(raw: string): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function computedRunPercent(swim: number | null, bike: number | null, run: number | null): string {
+  if (swim == null && bike == null && run == null) return "—";
+  const swimPct = swim ?? 0;
+  const bikePct = bike ?? 0;
+  const runPct = run ?? Math.max(0, 100 - swimPct - bikePct);
+  return String(Math.round(runPct * 10) / 10);
+}
+
+const DISCIPLINE_RAMP_ROWS: { key: DisciplineKey; label: string }[] = [
+  { key: "swim", label: "Swim" },
+  { key: "bike", label: "Bike" },
+  { key: "run", label: "Run" },
+];
+
+const DISCIPLINE_START_FIELDS = {
+  swim: "swimStartHours",
+  bike: "bikeStartHours",
+  run: "runStartHours",
+} as const;
+
+const DISCIPLINE_END_FIELDS = {
+  swim: "swimEndHours",
+  bike: "bikeEndHours",
+  run: "runEndHours",
+} as const;
+
+const DISCIPLINE_RAMP_FIELDS = {
+  swim: "swimRampPercent",
+  bike: "bikeRampPercent",
+  run: "runRampPercent",
+} as const;
+
 export function VolumeRampDeloadStep({ state }: SeasonSettingsStepProps) {
   const {
     phases,
@@ -43,6 +78,12 @@ export function VolumeRampDeloadStep({ state }: SeasonSettingsStepProps) {
     setStartHours,
     peakHours,
     setPeakHours,
+    swimSplitPercent,
+    setSwimSplitPercent,
+    bikeSplitPercent,
+    setBikeSplitPercent,
+    runSplitPercent,
+    setRunSplitPercent,
     longRideStartMin,
     setLongRideStartMin,
     longRidePeakMin,
@@ -52,7 +93,9 @@ export function VolumeRampDeloadStep({ state }: SeasonSettingsStepProps) {
     longRunPeakMin,
     setLongRunPeakMin,
     updatePhase,
+    updateMesocycle,
     resolvedPhaseTargets,
+    resolvedDisciplineTargets,
     resolvedMesocycles,
     deLoadEveryNWeeks,
     setDeLoadEveryNWeeks,
@@ -113,6 +156,55 @@ export function VolumeRampDeloadStep({ state }: SeasonSettingsStepProps) {
               onChange={(e) => setPeakHours(Number(e.target.value))}
             />
           </div>
+        </div>
+
+        <div className="mt-4 space-y-2">
+          <p className="text-sm font-medium">Season discipline split</p>
+          <p className="text-xs text-muted-foreground">
+            Default swim / bike / run mix for the season. Override per mesocycle below. Leave blank
+            to use macro-phase defaults.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <Label>Swim %</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                placeholder="Phase default"
+                value={swimSplitPercent ?? ""}
+                onChange={(e) => setSwimSplitPercent(parseOptionalPercent(e.target.value))}
+              />
+            </div>
+            <div>
+              <Label>Bike %</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                placeholder="Phase default"
+                value={bikeSplitPercent ?? ""}
+                onChange={(e) => setBikeSplitPercent(parseOptionalPercent(e.target.value))}
+              />
+            </div>
+            <div>
+              <Label>Run %</Label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                placeholder={computedRunPercent(swimSplitPercent, bikeSplitPercent, runSplitPercent)}
+                value={runSplitPercent ?? ""}
+                onChange={(e) => setRunSplitPercent(parseOptionalPercent(e.target.value))}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div>
             <Label>Long ride start (min)</Label>
             <Input
@@ -351,6 +443,221 @@ export function VolumeRampDeloadStep({ state }: SeasonSettingsStepProps) {
                         Start differs from prior phase end ({priorExit}h).
                       </p>
                     )}
+
+                  {(phase.mesocycles?.length ?? 0) > 0 && (
+                    <div className="space-y-2 border-t border-border pt-3">
+                      <p className="text-sm font-medium">Mesocycle discipline split</p>
+                      <p className="text-xs text-muted-foreground">
+                        Blank cells inherit season split, then macro-phase default (
+                        {DEFAULT_DISCIPLINE_SPLIT[phase.phaseKind].swim}/
+                        {DEFAULT_DISCIPLINE_SPLIT[phase.phaseKind].bike}/
+                        {DEFAULT_DISCIPLINE_SPLIT[phase.phaseKind].run}).
+                      </p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[28rem] text-sm">
+                          <thead>
+                            <tr className="text-left text-xs text-muted-foreground">
+                              <th className="pb-2 pr-3 font-medium">Mesocycle</th>
+                              <th className="pb-2 pr-3 font-medium">Weeks</th>
+                              <th className="pb-2 pr-3 font-medium">Swim %</th>
+                              <th className="pb-2 pr-3 font-medium">Bike %</th>
+                              <th className="pb-2 font-medium">Run %</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {phase.mesocycles!.map((meso, mesoIndex) => {
+                              const phaseDefault = phaseKindDefaultSplit(phase.phaseKind);
+                              const seasonPlaceholder =
+                                swimSplitPercent != null ||
+                                bikeSplitPercent != null ||
+                                runSplitPercent != null
+                                  ? `${swimSplitPercent ?? 0}/${bikeSplitPercent ?? 0}/${computedRunPercent(swimSplitPercent, bikeSplitPercent, runSplitPercent)}`
+                                  : `${phaseDefault.swim}/${phaseDefault.bike}/${phaseDefault.run}`;
+                              return (
+                                <tr key={meso.id ?? `${meso.name}-${mesoIndex}`}>
+                                  <td className="py-1 pr-3">{meso.name}</td>
+                                  <td className="py-1 pr-3">{meso.weekCount}</td>
+                                  <td className="py-1 pr-3">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      className="h-8"
+                                      placeholder={seasonPlaceholder.split("/")[0]}
+                                      value={meso.swimSplitPercent ?? ""}
+                                      onChange={(e) =>
+                                        updateMesocycle(index, mesoIndex, {
+                                          swimSplitPercent: parseOptionalPercent(e.target.value),
+                                        })
+                                      }
+                                    />
+                                  </td>
+                                  <td className="py-1 pr-3">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      className="h-8"
+                                      placeholder={seasonPlaceholder.split("/")[1]}
+                                      value={meso.bikeSplitPercent ?? ""}
+                                      onChange={(e) =>
+                                        updateMesocycle(index, mesoIndex, {
+                                          bikeSplitPercent: parseOptionalPercent(e.target.value),
+                                        })
+                                      }
+                                    />
+                                  </td>
+                                  <td className="py-1">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={100}
+                                      className="h-8"
+                                      placeholder={
+                                        meso.runSplitPercent != null
+                                          ? String(meso.runSplitPercent)
+                                          : computedRunPercent(
+                                              meso.swimSplitPercent,
+                                              meso.bikeSplitPercent,
+                                              meso.runSplitPercent
+                                            )
+                                      }
+                                      value={meso.runSplitPercent ?? ""}
+                                      onChange={(e) =>
+                                        updateMesocycle(index, mesoIndex, {
+                                          runSplitPercent: parseOptionalPercent(e.target.value),
+                                        })
+                                      }
+                                    />
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <details className="border-t border-border pt-3">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Per-sport hour ramps (optional)
+                    </summary>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      When any sport ramp is set, weekly total becomes swim + bike + run. Unset sports
+                      use the split above.
+                    </p>
+                    <div className="mt-3 space-y-4">
+                      {DISCIPLINE_RAMP_ROWS.map(({ key, label }) => {
+                        const targets = resolvedDisciplineTargets[key];
+                        const target = targets.find((t) => t.phaseIndex === index);
+                        const targetIndex = targets.findIndex((t) => t.phaseIndex === index);
+                        const priorDisciplineExit =
+                          targetIndex > 0 ? targets[targetIndex - 1]?.exit : null;
+                        const startField = DISCIPLINE_START_FIELDS[key];
+                        const endField = DISCIPLINE_END_FIELDS[key];
+                        const rampField = DISCIPLINE_RAMP_FIELDS[key];
+                        const startValue = phase[startField];
+                        const endValue = phase[endField];
+                        const rampValue = phase[rampField];
+                        const effectiveEntry = target?.entry;
+                        const computedEndFromRamp =
+                          effectiveEntry != null && rampValue != null && mode !== "HOLD"
+                            ? volumeEndFromStartAndRamp(
+                                effectiveEntry,
+                                rampValue,
+                                phase.weekCount,
+                                mode
+                              )
+                            : null;
+                        const computedRampFromEnd =
+                          effectiveEntry != null && endValue != null
+                            ? volumeRampPercentFromStartAndEnd(
+                                effectiveEntry,
+                                endValue,
+                                phase.weekCount,
+                                mode
+                              )
+                            : null;
+
+                        return (
+                          <div key={key} className="rounded-md border border-border p-3">
+                            <p className="mb-2 text-sm font-medium">{label}</p>
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div>
+                                <Label>Start hours</Label>
+                                <Input
+                                  type="number"
+                                  min={0.5}
+                                  step={0.5}
+                                  placeholder={
+                                    priorDisciplineExit != null
+                                      ? `From prior (${priorDisciplineExit}h)`
+                                      : target
+                                        ? `Default (${target.entry}h)`
+                                        : undefined
+                                  }
+                                  value={startValue ?? ""}
+                                  onChange={(e) =>
+                                    updatePhase(index, {
+                                      [startField]: parseOptionalHours(e.target.value),
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <Label>End hours</Label>
+                                <Input
+                                  type="number"
+                                  min={0.5}
+                                  step={0.5}
+                                  placeholder={
+                                    computedEndFromRamp != null
+                                      ? `From ramp (${computedEndFromRamp}h)`
+                                      : target
+                                        ? `Default (${target.exit}h)`
+                                        : undefined
+                                  }
+                                  disabled={mode === "HOLD"}
+                                  value={endValue ?? ""}
+                                  onChange={(e) =>
+                                    updatePhase(index, {
+                                      [endField]: parseOptionalHours(e.target.value),
+                                      [rampField]: null,
+                                    })
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <Label>Ramp % / week</Label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={0.5}
+                                  placeholder={
+                                    computedRampFromEnd != null
+                                      ? `${computedRampFromEnd}%/wk`
+                                      : mode === "HOLD"
+                                        ? "0% (hold)"
+                                        : undefined
+                                  }
+                                  disabled={mode === "HOLD"}
+                                  value={rampValue ?? ""}
+                                  onChange={(e) =>
+                                    updatePhase(index, {
+                                      [rampField]: parseOptionalPercent(e.target.value),
+                                      [endField]: null,
+                                    })
+                                  }
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
                 </div>
               );
             })}

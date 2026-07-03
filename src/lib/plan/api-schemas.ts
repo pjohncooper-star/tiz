@@ -175,10 +175,15 @@ export const seasonPhaseDisciplineFocusSchema = z.object({
   focus: phaseFocusSchema,
 });
 
+export const disciplineSplitPercentSchema = z.number().min(0).max(100).nullable();
+
 export const seasonMesocycleSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1),
   weekCount: z.number().int().positive(),
+  swimSplitPercent: disciplineSplitPercentSchema.optional(),
+  bikeSplitPercent: disciplineSplitPercentSchema.optional(),
+  runSplitPercent: disciplineSplitPercentSchema.optional(),
 });
 
 export const volumeMesocycleModeSchema = z.enum(["INCREASE", "HOLD", "DECREASE"]);
@@ -202,6 +207,15 @@ export const seasonPhaseSchema = z.object({
   volumeStartHours: z.number().positive().nullable().optional(),
   volumeEndHours: z.number().positive().nullable().optional(),
   volumeRampPercent: z.number().min(0).max(100).nullable().optional(),
+  swimStartHours: z.number().positive().nullable().optional(),
+  swimEndHours: z.number().positive().nullable().optional(),
+  swimRampPercent: z.number().min(0).max(100).nullable().optional(),
+  bikeStartHours: z.number().positive().nullable().optional(),
+  bikeEndHours: z.number().positive().nullable().optional(),
+  bikeRampPercent: z.number().min(0).max(100).nullable().optional(),
+  runStartHours: z.number().positive().nullable().optional(),
+  runEndHours: z.number().positive().nullable().optional(),
+  runRampPercent: z.number().min(0).max(100).nullable().optional(),
   longRideStartMin: z.number().int().positive().nullable().optional(),
   longRideEndMin: z.number().int().positive().nullable().optional(),
   longRunStartMin: z.number().int().positive().nullable().optional(),
@@ -269,6 +283,9 @@ export const seasonWizardStep3Schema = z.object({
 export const seasonWizardStep4Schema = z.object({
   startHours: z.number().positive(),
   peakHours: z.number().positive(),
+  swimSplitPercent: disciplineSplitPercentSchema.optional(),
+  bikeSplitPercent: disciplineSplitPercentSchema.optional(),
+  runSplitPercent: disciplineSplitPercentSchema.optional(),
   maxRampPercent: z.number().min(0).max(25).optional(),
   longRideStartMin: z.number().int().positive().optional(),
   longRidePeakMin: z.number().int().positive().optional(),
@@ -304,6 +321,9 @@ export const updateSeasonPlanSchema = z
     phases: z.array(seasonPhaseSchema).optional(),
     startHours: z.number().positive().optional(),
     peakHours: z.number().positive().optional(),
+    swimSplitPercent: disciplineSplitPercentSchema.optional(),
+    bikeSplitPercent: disciplineSplitPercentSchema.optional(),
+    runSplitPercent: disciplineSplitPercentSchema.optional(),
     maxRampPercent: z.number().min(0).max(25).optional(),
     longRideStartMin: z.number().int().positive().optional(),
     longRidePeakMin: z.number().int().positive().optional(),

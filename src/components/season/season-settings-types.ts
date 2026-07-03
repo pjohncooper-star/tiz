@@ -163,6 +163,15 @@ export type PhaseDraft = {
   volumeStartHours?: number | null;
   volumeEndHours?: number | null;
   volumeRampPercent?: number | null;
+  swimStartHours?: number | null;
+  swimEndHours?: number | null;
+  swimRampPercent?: number | null;
+  bikeStartHours?: number | null;
+  bikeEndHours?: number | null;
+  bikeRampPercent?: number | null;
+  runStartHours?: number | null;
+  runEndHours?: number | null;
+  runRampPercent?: number | null;
   longRideStartMin?: number | null;
   longRideEndMin?: number | null;
   longRunStartMin?: number | null;
@@ -179,6 +188,9 @@ export type SeasonData = {
   mesocycleLengthWeeks: number;
   startHours: number;
   peakHours: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
   maxRampPercent: number;
   deLoadEveryNWeeks: number;
   deLoadWeekFlags?: boolean[] | null;
@@ -327,6 +339,9 @@ export function phasesForApi(phases: PhaseDraft[]): PhaseDraft[] {
       id: m.id,
       name: m.name,
       weekCount: m.weekCount,
+      swimSplitPercent: m.swimSplitPercent,
+      bikeSplitPercent: m.bikeSplitPercent,
+      runSplitPercent: m.runSplitPercent,
     })),
   }));
 }
@@ -337,6 +352,9 @@ type SerializedMesocycle = {
   index: number;
   startWeekIndex: number;
   endWeekIndex: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
 };
 
 export function normalizePhasesFromApi(

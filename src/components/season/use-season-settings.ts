@@ -36,6 +36,10 @@ import {
 import { resizePhaseBoundaryAtWeek } from "@/lib/plan/season/phase-boundary-resize";
 import { resolveMesocycles } from "@/lib/plan/season/phase-split";
 import { resolvePhaseTargets } from "@/lib/plan/season/phase-volume-ramp";
+import {
+  resolveDisciplineTargets,
+  type DisciplineKey,
+} from "@/lib/plan/season/discipline-volume-ramp";
 import { recomputeSeasonWeeks } from "@/lib/plan/season/recompute";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 import { parseDateKey } from "@/lib/dates";
@@ -62,6 +66,9 @@ function phasesToSeasonInput(phases: PhaseDraft[]): SeasonPhaseInput[] {
       id: m.id,
       name: m.name,
       weekCount: m.weekCount,
+      swimSplitPercent: m.swimSplitPercent,
+      bikeSplitPercent: m.bikeSplitPercent,
+      runSplitPercent: m.runSplitPercent,
     })),
     swimSessionsPerWeek: phase.swimSessionsPerWeek,
     bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
@@ -70,6 +77,15 @@ function phasesToSeasonInput(phases: PhaseDraft[]): SeasonPhaseInput[] {
     volumeStartHours: phase.volumeStartHours,
     volumeEndHours: phase.volumeEndHours,
     volumeRampPercent: phase.volumeRampPercent,
+    swimStartHours: phase.swimStartHours,
+    swimEndHours: phase.swimEndHours,
+    swimRampPercent: phase.swimRampPercent,
+    bikeStartHours: phase.bikeStartHours,
+    bikeEndHours: phase.bikeEndHours,
+    bikeRampPercent: phase.bikeRampPercent,
+    runStartHours: phase.runStartHours,
+    runEndHours: phase.runEndHours,
+    runRampPercent: phase.runRampPercent,
     longRideStartMin: phase.longRideStartMin,
     longRideEndMin: phase.longRideEndMin,
     longRunStartMin: phase.longRunStartMin,
@@ -208,6 +224,9 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
 
   const [startHours, setStartHours] = useState(8);
   const [peakHours, setPeakHours] = useState(12);
+  const [swimSplitPercent, setSwimSplitPercent] = useState<number | null>(null);
+  const [bikeSplitPercent, setBikeSplitPercent] = useState<number | null>(null);
+  const [runSplitPercent, setRunSplitPercent] = useState<number | null>(null);
   const [maxRampPercent, setMaxRampPercent] = useState(10);
   const [longRideStartMin, setLongRideStartMin] = useState(60);
   const [longRidePeakMin, setLongRidePeakMin] = useState(180);
@@ -234,6 +253,9 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     setPhases(phasesNormalized);
     setStartHours(season.startHours);
     setPeakHours(season.peakHours);
+    setSwimSplitPercent(season.swimSplitPercent ?? null);
+    setBikeSplitPercent(season.bikeSplitPercent ?? null);
+    setRunSplitPercent(season.runSplitPercent ?? null);
     setMaxRampPercent(season.maxRampPercent);
     setLongRideStartMin(season.longRideStartMin);
     setLongRidePeakMin(season.longRidePeakMin);
@@ -863,6 +885,48 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     longRunPeakMin,
   ]);
 
+  const seasonSplit = useMemo(
+    () => ({
+      swimSplitPercent,
+      bikeSplitPercent,
+      runSplitPercent,
+    }),
+    [swimSplitPercent, bikeSplitPercent, runSplitPercent]
+  );
+
+  const resolvedDisciplineTargets = useMemo(() => {
+    if (!cycleStructureValid || phases.length === 0) {
+      return { swim: [], bike: [], run: [] } as Record<
+        DisciplineKey,
+        ReturnType<typeof resolveDisciplineTargets>
+      >;
+    }
+    const anchors = {
+      startHours,
+      peakHours,
+      longRideStartMin,
+      longRidePeakMin,
+      longRunStartMin,
+      longRunPeakMin,
+    };
+    const phaseInput = phasesToSeasonInput(phases);
+    return {
+      swim: resolveDisciplineTargets(phaseInput, anchors, "swim", seasonSplit),
+      bike: resolveDisciplineTargets(phaseInput, anchors, "bike", seasonSplit),
+      run: resolveDisciplineTargets(phaseInput, anchors, "run", seasonSplit),
+    };
+  }, [
+    cycleStructureValid,
+    phases,
+    startHours,
+    peakHours,
+    longRideStartMin,
+    longRidePeakMin,
+    longRunStartMin,
+    longRunPeakMin,
+    seasonSplit,
+  ]);
+
   const longSessionWeekPreview = useMemo(() => {
     if (!startDate || !endDate || totalWeeks <= 0 || !cycleStructureValid) {
       return [];
@@ -875,6 +939,9 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
         phases: phasesToSeasonInput(phases),
         startHours,
         peakHours,
+        swimSplitPercent,
+        bikeSplitPercent,
+        runSplitPercent,
         maxRampPercent,
         deLoadEveryNWeeks,
         deLoadWeekFlags: deLoadFlagsForDisplay,
@@ -903,6 +970,9 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     phases,
     startHours,
     peakHours,
+    swimSplitPercent,
+    bikeSplitPercent,
+    runSplitPercent,
     maxRampPercent,
     deLoadEveryNWeeks,
     deLoadFlagsForDisplay,
@@ -935,6 +1005,9 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
       return patchSeason({
         startHours,
         peakHours,
+        swimSplitPercent,
+        bikeSplitPercent,
+        runSplitPercent,
         maxRampPercent,
         longRideStartMin,
         longRidePeakMin,
@@ -1012,6 +1085,12 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     setStartHours,
     peakHours,
     setPeakHours,
+    swimSplitPercent,
+    setSwimSplitPercent,
+    bikeSplitPercent,
+    setBikeSplitPercent,
+    runSplitPercent,
+    setRunSplitPercent,
     maxRampPercent,
     setMaxRampPercent,
     longRideStartMin,
@@ -1041,6 +1120,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     longSessionWeekPreview,
     resolvedMesocycles,
     resolvedPhaseTargets,
+    resolvedDisciplineTargets,
     saveStep,
     saveStepWithFeedback,
     finishWizard,

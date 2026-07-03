@@ -27,6 +27,9 @@ export type PhaseMesocycleInput = {
   id?: string;
   name: string;
   weekCount: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
 };
 
 export type SeasonPhaseInput = {
@@ -48,6 +51,15 @@ export type SeasonPhaseInput = {
   volumeStartHours?: number | null;
   volumeEndHours?: number | null;
   volumeRampPercent?: number | null;
+  swimStartHours?: number | null;
+  swimEndHours?: number | null;
+  swimRampPercent?: number | null;
+  bikeStartHours?: number | null;
+  bikeEndHours?: number | null;
+  bikeRampPercent?: number | null;
+  runStartHours?: number | null;
+  runEndHours?: number | null;
+  runRampPercent?: number | null;
   longRideStartMin?: number | null;
   longRideEndMin?: number | null;
   longRunStartMin?: number | null;
@@ -61,6 +73,9 @@ export type SeasonPlanComputeInput = {
   phases: SeasonPhaseInput[];
   startHours: number;
   peakHours: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
   maxRampPercent: number;
   deLoadEveryNWeeks: number;
   deLoadWeekFlags?: boolean[] | null;
@@ -83,6 +98,9 @@ export type ComputedMesocycle = {
   index: number;
   startWeekIndex: number;
   endWeekIndex: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
 };
 
 export type WeekPhaseContext = {

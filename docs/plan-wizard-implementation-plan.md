@@ -145,14 +145,16 @@ Sections (collapsibles):
 
 ---
 
-## PR 7 — Step 4 P1: discipline volume & distance (follow-up)
+## PR 7 — Step 4 P1: discipline volume & distance
 
-| Item | Work |
-|------|------|
-| Per-discipline hours | Optional columns on phase or season; override `splitHoursByDiscipline` when set |
-| Distance unit | km/mi per discipline on ramp fields |
-| Pace / speed | Reference fields per discipline; convert distance → `totalHours` for `SeasonWeek` and UI totals |
-| Conformance | Week summary: planned duration vs `SeasonWeek.totalHours` (calendar V2+, not wizard gate) |
+| Item | Status | Work |
+|------|--------|------|
+| Season + mesocycle split % | **Shipped** | `SeasonPlan` + `SeasonMesocycle` split fields; hierarchy meso → season → phase default |
+| Per-sport hour ramps | **Shipped** | Phase-level swim/bike/run start/end/ramp %; total = sum when any set |
+| Planning mode setting | **Later** | Season setting: overall volume vs per-discipline UI (onboarding + season setup) |
+| Distance unit | P1 follow-up | km/mi per discipline on ramp fields |
+| Pace / speed | P1 follow-up | Reference fields; convert distance → hours |
+| Per-sport de-load | Deferred | — |
 
 ---
 

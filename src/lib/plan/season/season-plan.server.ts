@@ -50,6 +50,9 @@ export type CreateSeasonPlanInput = {
   mesocycleLengthWeeks?: number;
   startHours: number;
   peakHours: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
   maxRampPercent?: number;
   deLoadEveryNWeeks?: number;
   deLoadWeekFlags?: boolean[] | null;
@@ -87,6 +90,9 @@ export type UpdateSeasonPlanInput = {
   mesocycleLengthWeeks?: number;
   startHours?: number;
   peakHours?: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
   maxRampPercent?: number;
   deLoadEveryNWeeks?: number;
   deLoadWeekFlags?: boolean[] | null;
@@ -235,6 +241,15 @@ function dbPhasesToSeasonInput(phases: DbPhaseWithMesocycles[]): SeasonPhaseInpu
     volumeStartHours: p.volumeStartHours,
     volumeEndHours: p.volumeEndHours,
     volumeRampPercent: p.volumeRampPercent,
+    swimStartHours: p.swimStartHours,
+    swimEndHours: p.swimEndHours,
+    swimRampPercent: p.swimRampPercent,
+    bikeStartHours: p.bikeStartHours,
+    bikeEndHours: p.bikeEndHours,
+    bikeRampPercent: p.bikeRampPercent,
+    runStartHours: p.runStartHours,
+    runEndHours: p.runEndHours,
+    runRampPercent: p.runRampPercent,
     longRideStartMin: p.longRideStartMin,
     longRideEndMin: p.longRideEndMin,
     longRunStartMin: p.longRunStartMin,
@@ -243,6 +258,9 @@ function dbPhasesToSeasonInput(phases: DbPhaseWithMesocycles[]): SeasonPhaseInpu
       id: m.id,
       name: m.name,
       weekCount: m.endWeekIndex - m.startWeekIndex + 1,
+      swimSplitPercent: m.swimSplitPercent,
+      bikeSplitPercent: m.bikeSplitPercent,
+      runSplitPercent: m.runSplitPercent,
     })),
   }));
 }
@@ -254,10 +272,32 @@ function phaseVolumeData(phase: SeasonPhaseInput) {
     volumeStartHours: phase.volumeStartHours ?? null,
     volumeEndHours: phase.volumeEndHours ?? null,
     volumeRampPercent: phase.volumeRampPercent ?? null,
+    swimStartHours: phase.swimStartHours ?? null,
+    swimEndHours: phase.swimEndHours ?? null,
+    swimRampPercent: phase.swimRampPercent ?? null,
+    bikeStartHours: phase.bikeStartHours ?? null,
+    bikeEndHours: phase.bikeEndHours ?? null,
+    bikeRampPercent: phase.bikeRampPercent ?? null,
+    runStartHours: phase.runStartHours ?? null,
+    runEndHours: phase.runEndHours ?? null,
+    runRampPercent: phase.runRampPercent ?? null,
     longRideStartMin: phase.longRideStartMin ?? null,
     longRideEndMin: phase.longRideEndMin ?? null,
     longRunStartMin: phase.longRunStartMin ?? null,
     longRunEndMin: phase.longRunEndMin ?? null,
+  };
+}
+
+function mesocycleSplitData(
+  phases: SeasonPhaseInput[],
+  meso: { phaseIndex: number; index: number }
+) {
+  const phase = [...phases].sort((a, b) => a.sortOrder - b.sortOrder)[meso.phaseIndex];
+  const draft = phase?.mesocycles?.[meso.index];
+  return {
+    swimSplitPercent: draft?.swimSplitPercent ?? null,
+    bikeSplitPercent: draft?.bikeSplitPercent ?? null,
+    runSplitPercent: draft?.runSplitPercent ?? null,
   };
 }
 
@@ -272,6 +312,9 @@ function toComputeInput(
     phases: plan.phases,
     startHours: plan.startHours,
     peakHours: plan.peakHours,
+    swimSplitPercent: plan.swimSplitPercent ?? null,
+    bikeSplitPercent: plan.bikeSplitPercent ?? null,
+    runSplitPercent: plan.runSplitPercent ?? null,
     maxRampPercent: plan.maxRampPercent ?? 10,
     deLoadEveryNWeeks: plan.deLoadEveryNWeeks ?? 4,
     deLoadWeekFlags: plan.deLoadWeekFlags ?? null,
@@ -313,6 +356,9 @@ export async function createSeasonPlan(input: CreateSeasonPlanInput) {
         mesocycleLengthWeeks: input.mesocycleLengthWeeks ?? 4,
         startHours: input.startHours,
         peakHours: input.peakHours,
+        swimSplitPercent: input.swimSplitPercent ?? null,
+        bikeSplitPercent: input.bikeSplitPercent ?? null,
+        runSplitPercent: input.runSplitPercent ?? null,
         maxRampPercent: input.maxRampPercent ?? 10,
         deLoadEveryNWeeks: input.deLoadEveryNWeeks ?? 4,
         deLoadVolumePercent: input.deLoadVolumePercent ?? 60,
@@ -370,6 +416,7 @@ export async function createSeasonPlan(input: CreateSeasonPlanInput) {
           index: meso.index,
           startWeekIndex: meso.startWeekIndex,
           endWeekIndex: meso.endWeekIndex,
+          ...mesocycleSplitData(input.phases, meso),
         },
       });
     }
@@ -503,6 +550,18 @@ export async function updateSeasonPlan(
     phases,
     startHours: input.startHours ?? existing.startHours,
     peakHours: input.peakHours ?? existing.peakHours,
+    swimSplitPercent:
+      input.swimSplitPercent !== undefined
+        ? input.swimSplitPercent
+        : existing.swimSplitPercent,
+    bikeSplitPercent:
+      input.bikeSplitPercent !== undefined
+        ? input.bikeSplitPercent
+        : existing.bikeSplitPercent,
+    runSplitPercent:
+      input.runSplitPercent !== undefined
+        ? input.runSplitPercent
+        : existing.runSplitPercent,
     maxRampPercent: input.maxRampPercent ?? existing.maxRampPercent,
     deLoadEveryNWeeks: input.deLoadEveryNWeeks ?? existing.deLoadEveryNWeeks,
     deLoadWeekFlags,
@@ -567,6 +626,9 @@ export async function updateSeasonPlan(
         mesocycleLengthWeeks: computeInput.mesocycleLengthWeeks,
         startHours: computeInput.startHours,
         peakHours: computeInput.peakHours,
+        swimSplitPercent: computeInput.swimSplitPercent ?? null,
+        bikeSplitPercent: computeInput.bikeSplitPercent ?? null,
+        runSplitPercent: computeInput.runSplitPercent ?? null,
         maxRampPercent: computeInput.maxRampPercent,
         deLoadEveryNWeeks: computeInput.deLoadEveryNWeeks,
         deLoadWeekFlags:
@@ -639,6 +701,7 @@ export async function updateSeasonPlan(
           index: meso.index,
           startWeekIndex: meso.startWeekIndex,
           endWeekIndex: meso.endWeekIndex,
+          ...mesocycleSplitData(phases, meso),
         },
       });
     }

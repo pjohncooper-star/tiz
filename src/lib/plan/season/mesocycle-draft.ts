@@ -5,6 +5,9 @@ export type MesocycleDraft = {
   id?: string;
   name: string;
   weekCount: number;
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
 };
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"] as const;
@@ -61,6 +64,9 @@ export function mesocyclesFromSerialized(
       id: m.id,
       name: m.name,
       weekCount: m.endWeekIndex - m.startWeekIndex + 1,
+      swimSplitPercent: m.swimSplitPercent,
+      bikeSplitPercent: m.bikeSplitPercent,
+      runSplitPercent: m.runSplitPercent,
     }));
 }
 
