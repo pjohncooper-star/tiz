@@ -201,6 +201,7 @@ export const seasonPhaseSchema = z.object({
   volumeMesocycleMode: volumeMesocycleModeSchema.optional(),
   volumeStartHours: z.number().positive().nullable().optional(),
   volumeEndHours: z.number().positive().nullable().optional(),
+  volumeRampPercent: z.number().min(0).max(100).nullable().optional(),
   longRideStartMin: z.number().int().positive().nullable().optional(),
   longRideEndMin: z.number().int().positive().nullable().optional(),
   longRunStartMin: z.number().int().positive().nullable().optional(),

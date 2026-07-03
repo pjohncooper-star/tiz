@@ -162,6 +162,7 @@ export type PhaseDraft = {
   volumeMesocycleMode?: VolumeMesocycleMode;
   volumeStartHours?: number | null;
   volumeEndHours?: number | null;
+  volumeRampPercent?: number | null;
   longRideStartMin?: number | null;
   longRideEndMin?: number | null;
   longRunStartMin?: number | null;
@@ -229,19 +230,23 @@ export const PHASE_FOCUSES: PhaseFocus[] = [
 export const SETUP_STEPS = [
   "Season setup",
   "Cycle structure",
-  "De-load cadence",
-  "Goals & focus",
-  "Volume & ramp",
-  "Workouts / week",
+  "Goals & training days",
+  "Workouts & templates",
+  "Volume, ramp & de-load",
 ] as const;
 
 export type SettingsSectionSlug =
   | "dates"
   | "cycle"
-  | "focus"
-  | "volume"
+  | "goals"
   | "workouts"
-  | "deload";
+  | "volume";
+
+/** Legacy slugs from the 6-step wizard — map to v2 sections. */
+const LEGACY_SECTION_SLUGS: Record<string, SettingsSectionSlug> = {
+  deload: "volume",
+  focus: "goals",
+};
 
 export const SETTINGS_SECTIONS: {
   slug: SettingsSectionSlug;
@@ -250,14 +255,22 @@ export const SETTINGS_SECTIONS: {
 }[] = [
   { slug: "dates", label: "Season setup", step: 0 },
   { slug: "cycle", label: "Cycle structure", step: 1 },
-  { slug: "deload", label: "De-load cadence", step: 2 },
-  { slug: "focus", label: "Goals & focus", step: 3 },
-  { slug: "volume", label: "Volume & ramp", step: 4 },
-  { slug: "workouts", label: "Workouts / week", step: 5 },
+  { slug: "goals", label: "Goals & training days", step: 2 },
+  { slug: "workouts", label: "Workouts & templates", step: 3 },
+  { slug: "volume", label: "Volume, ramp & de-load", step: 4 },
 ];
 
-export function sectionSlugToStep(slug: string): number | null {
+export function normalizeSettingsSectionSlug(slug: string): SettingsSectionSlug | null {
+  const legacy = LEGACY_SECTION_SLUGS[slug];
+  if (legacy) return legacy;
   const found = SETTINGS_SECTIONS.find((s) => s.slug === slug);
+  return found?.slug ?? null;
+}
+
+export function sectionSlugToStep(slug: string): number | null {
+  const normalized = normalizeSettingsSectionSlug(slug);
+  if (!normalized) return null;
+  const found = SETTINGS_SECTIONS.find((s) => s.slug === normalized);
   return found?.step ?? null;
 }
 

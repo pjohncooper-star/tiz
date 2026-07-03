@@ -47,6 +47,7 @@ export type SeasonPhaseInput = {
   volumeMesocycleMode?: VolumeMesocycleMode;
   volumeStartHours?: number | null;
   volumeEndHours?: number | null;
+  volumeRampPercent?: number | null;
   longRideStartMin?: number | null;
   longRideEndMin?: number | null;
   longRunStartMin?: number | null;

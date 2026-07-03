@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   defaultVolumeMesocycleMode,
   phaseMesocyclePlateau,
+  plateauForWeek,
   resolvePhaseTargets,
 } from "./phase-volume-ramp";
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
@@ -85,6 +86,53 @@ describe("phase-volume-ramp", () => {
     );
     assert.equal(resolved[1]!.volumeEntry, 10);
     assert.equal(resolved[1]!.volumeExit, 12);
+  });
+
+  it("derives end from weekly ramp when end hours unset", () => {
+    const resolved = resolvePhaseTargets(
+      [
+        {
+          ...basePhase,
+          weekCount: 3,
+          volumeRampPercent: 10,
+        },
+      ],
+      anchors
+    );
+    assert.equal(resolved[0]!.volumeEntry, 8);
+    assert.equal(resolved[0]!.volumeExit, 9.68);
+  });
+
+  it("plateauForWeek compounds volume weekly when ramp percent set", () => {
+    const phases = [
+      {
+        ...basePhase,
+        weekCount: 3,
+        volumeRampPercent: 10,
+      },
+    ];
+    const mesos: ComputedMesocycle[] = [
+      {
+        phaseIndex: 0,
+        name: "Base I",
+        index: 0,
+        startWeekIndex: 0,
+        endWeekIndex: 2,
+      },
+    ];
+    const resolved = resolvePhaseTargets(phases, anchors);
+    assert.equal(
+      plateauForWeek(0, phases, mesos, resolved, "volume"),
+      8
+    );
+    assert.equal(
+      plateauForWeek(1, phases, mesos, resolved, "volume"),
+      8.8
+    );
+    assert.equal(
+      plateauForWeek(2, phases, mesos, resolved, "volume"),
+      9.68
+    );
   });
 
   it("steps within phase mesocycles for increase and holds for hold", () => {

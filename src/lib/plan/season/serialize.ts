@@ -82,6 +82,7 @@ export function serializePhase(phase: SeasonPlanRecord["phases"][number]) {
     volumeMesocycleMode: phase.volumeMesocycleMode,
     volumeStartHours: phase.volumeStartHours,
     volumeEndHours: phase.volumeEndHours,
+    volumeRampPercent: phase.volumeRampPercent,
     longRideStartMin: phase.longRideStartMin,
     longRideEndMin: phase.longRideEndMin,
     longRunStartMin: phase.longRunStartMin,

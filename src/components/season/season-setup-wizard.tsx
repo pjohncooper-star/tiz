@@ -7,6 +7,8 @@ import { SETUP_STEPS } from "@/components/season/season-settings-types";
 import { useSeasonSettings } from "@/components/season/use-season-settings";
 import { Button } from "@/components/ui";
 
+const LAST_STEP = SETUP_STEPS.length - 1;
+
 export function SeasonSetupWizard() {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
@@ -16,7 +18,7 @@ export function SeasonSetupWizard() {
   async function handleNext() {
     const ok = await state.saveStep(step);
     if (!ok) return;
-    if (step < 5) {
+    if (step < LAST_STEP) {
       setStep(step + 1);
       return;
     }
@@ -75,10 +77,14 @@ export function SeasonSetupWizard() {
           disabled={
             state.saving ||
             (step === 1 && !state.cycleStructureValid) ||
-            (step === 2 && !state.cycleStructureValid)
+            (step === LAST_STEP && !state.cycleStructureValid)
           }
         >
-          {state.saving ? "Saving…" : step === 5 ? "Finish setup" : "Continue"}
+          {state.saving
+            ? "Saving…"
+            : step === LAST_STEP
+              ? "Finish setup"
+              : "Continue"}
         </Button>
       </div>
     </div>

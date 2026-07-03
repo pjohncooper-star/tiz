@@ -5,6 +5,7 @@ import {
   mesocycleSteppedValue,
 } from "./mesocycle-ramp";
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
+import { volumeEndFromStartAndRamp, weeklyCompoundVolumeAtWeek } from "./volume-ramp-triad";
 
 export type SeasonVolumeAnchors = {
   startHours: number;
@@ -45,6 +46,27 @@ export function defaultVolumeMesocycleMode(phaseKind: PhaseKind): VolumeMesocycl
 
 function isRampPhaseKind(phaseKind: PhaseKind): boolean {
   return phaseKind !== "TAPER";
+}
+
+function resolveVolumeExit(
+  phase: SeasonPhaseInput,
+  mode: VolumeMesocycleMode,
+  volumeEntry: number,
+  anchors: SeasonVolumeAnchors,
+  nextRampPhase: SeasonPhaseInput | undefined
+): number {
+  if (phase.volumeEndHours != null) {
+    return phase.volumeEndHours;
+  }
+  if (phase.volumeRampPercent != null && mode !== "HOLD") {
+    return volumeEndFromStartAndRamp(
+      volumeEntry,
+      phase.volumeRampPercent,
+      phase.weekCount,
+      mode
+    );
+  }
+  return defaultVolumeExit(phase, mode, anchors, nextRampPhase);
 }
 
 function defaultVolumeExit(
@@ -107,8 +129,13 @@ export function resolvePhaseTargets(
       : (previousVolumeExit ?? anchors.peakHours);
 
     const volumeEntry = phase.volumeStartHours ?? chainedVolumeEntry;
-    const volumeExit =
-      phase.volumeEndHours ?? defaultVolumeExit(phase, mode, anchors, nextRampPhase);
+    const volumeExit = resolveVolumeExit(
+      phase,
+      mode,
+      volumeEntry,
+      anchors,
+      nextRampPhase
+    );
 
     const longRideEntry =
       phase.longRideStartMin ??
@@ -185,6 +212,20 @@ export function phaseIndexForWeek(
   return null;
 }
 
+export function weekOffsetInPhase(
+  phases: SeasonPhaseInput[],
+  weekIndex: number
+): number | null {
+  const phaseIndex = phaseIndexForWeek(phases, weekIndex);
+  if (phaseIndex === null) return null;
+  const sorted = [...phases].sort((a, b) => a.sortOrder - b.sortOrder);
+  let cursor = 0;
+  for (let i = 0; i < phaseIndex; i++) {
+    cursor += sorted[i]!.weekCount;
+  }
+  return weekIndex - cursor;
+}
+
 export function mesocyclesForPhase(
   mesocycles: ComputedMesocycle[],
   phaseIndex: number
@@ -254,6 +295,22 @@ export function plateauForWeek(
       : metric === "longRide"
         ? targets.longRideExit
         : targets.longRunExit;
+
+  if (
+    metric === "volume" &&
+    phase.volumeRampPercent != null &&
+    targets.mode !== "HOLD"
+  ) {
+    const offset = weekOffsetInPhase(phases, weekIndex);
+    if (offset != null) {
+      return weeklyCompoundVolumeAtWeek(
+        entry,
+        phase.volumeRampPercent,
+        offset,
+        targets.mode
+      );
+    }
+  }
 
   return phaseMesocyclePlateau(weekIndex, phaseMesos, entry, exit, targets.mode);
 }

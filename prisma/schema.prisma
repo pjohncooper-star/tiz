@@ -527,6 +527,7 @@ model SeasonPhase {
   volumeMesocycleMode  VolumeMesocycleMode @default(INCREASE)
   volumeStartHours     Float?
   volumeEndHours       Float?
+  volumeRampPercent    Float?
   longRideStartMin     Int?
   longRideEndMin       Int?
   longRunStartMin      Int?

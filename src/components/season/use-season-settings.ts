@@ -69,6 +69,7 @@ function phasesToSeasonInput(phases: PhaseDraft[]): SeasonPhaseInput[] {
     volumeMesocycleMode: phase.volumeMesocycleMode,
     volumeStartHours: phase.volumeStartHours,
     volumeEndHours: phase.volumeEndHours,
+    volumeRampPercent: phase.volumeRampPercent,
     longRideStartMin: phase.longRideStartMin,
     longRideEndMin: phase.longRideEndMin,
     longRunStartMin: phase.longRunStartMin,
@@ -924,17 +925,13 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
       return patchSeason({ mesocycleLengthWeeks, phases });
     }
     if (step === 2) {
-      if (!cycleStructureValid) return false;
-      return patchSeason({
-        deLoadEveryNWeeks,
-        deLoadVolumePercent,
-        deLoadStrategy,
-        reduceCountsOnDeLoad,
-        deLoadWeekFlags: deLoadFlagsForDisplay,
-      });
+      return patchSeason({ phases });
     }
-    if (step === 3) return patchSeason({ phases });
+    if (step === 3) {
+      return true;
+    }
     if (step === 4) {
+      if (!cycleStructureValid) return false;
       return patchSeason({
         startHours,
         peakHours,
@@ -945,10 +942,14 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
         longRunPeakMin,
         longRideWeekFlags: longRideFlagsForDisplay,
         longRunWeekFlags: longRunFlagsForDisplay,
+        deLoadEveryNWeeks,
+        deLoadVolumePercent,
+        deLoadStrategy,
+        reduceCountsOnDeLoad,
+        deLoadWeekFlags: deLoadFlagsForDisplay,
         phases,
       });
     }
-    if (step === 5) return patchSeason({ phases });
     return false;
   }
 

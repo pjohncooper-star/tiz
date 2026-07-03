@@ -42,7 +42,11 @@ export function SeasonSettingsSection({ step, title }: SeasonSettingsSectionProp
       <Button
         type="button"
         onClick={() => void state.saveStepWithFeedback(step)}
-        disabled={state.saving || (step === 1 && !state.cycleStructureValid)}
+        disabled={
+          state.saving ||
+          (step === 1 && !state.cycleStructureValid) ||
+          (step === 4 && !state.cycleStructureValid)
+        }
       >
         {state.saving ? "Saving…" : "Save changes"}
       </Button>
