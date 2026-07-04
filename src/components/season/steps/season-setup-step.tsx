@@ -26,6 +26,8 @@ export function SeasonSetupStep({ state }: SeasonSettingsStepProps) {
     removeCRace,
     unlinkedCalendarRaces,
     importCalendarRace,
+    phasesAutoAdjusted,
+    totalWeeks,
   } = state;
 
   return (
@@ -46,6 +48,11 @@ export function SeasonSetupStep({ state }: SeasonSettingsStepProps) {
               <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
             </div>
           </div>
+          {phasesAutoAdjusted && totalWeeks > 0 && (
+            <p className="text-sm text-sky-700 dark:text-sky-400">
+              Season length is now {totalWeeks} weeks; base weeks were adjusted to match.
+            </p>
+          )}
         </div>
 
         <GoalRaceEditor priority="A" required value={aRace} onChange={setARace} />

@@ -27,7 +27,8 @@ import {
   type MesocycleDraft,
 } from "@/lib/plan/season/mesocycle-draft";
 import { markDeLoadWeeksPerMesocycle } from "@/lib/plan/season/de-load-cadence";
-import { defaultPhaseForKind, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
+import { defaultPhaseForKind, phaseWeekTotal, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
+import { fitPhasesToTotalWeeks } from "@/lib/plan/season/phase-week-fit";
 import { goalEventTimesForApi } from "@/lib/plan/season/goal-event-times";
 import {
   defaultLongWeekFlags,
@@ -41,6 +42,7 @@ import {
   type DisciplineKey,
 } from "@/lib/plan/season/discipline-volume-ramp";
 import { recomputeSeasonWeeks } from "@/lib/plan/season/recompute";
+import { buildSeasonDateBounds } from "@/lib/plan/season/season-dates";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 import { parseDateKey } from "@/lib/dates";
 import type { PhaseKind } from "@prisma/client";
@@ -105,6 +107,63 @@ function defaultDeLoadFlags(
     mesocycles,
     totalWeeks: weeks,
     everyNWeeks,
+  });
+}
+
+function resizeWeekFlags(flags: boolean[], totalWeeks: number): boolean[] {
+  const next = [...flags];
+  while (next.length < totalWeeks) next.push(false);
+  return next.slice(0, Math.max(totalWeeks, 0));
+}
+
+function fitPhaseDraftsToTotalWeeks(
+  phases: PhaseDraft[],
+  targetWeeks: number,
+  mesocycleLengthWeeks: number
+): PhaseDraft[] {
+  if (targetWeeks <= 0) return phases;
+  if (phases.length === 0) {
+    return suggestedPhaseDrafts(targetWeeks, mesocycleLengthWeeks);
+  }
+
+  const fitted = fitPhasesToTotalWeeks(
+    phasesToSeasonInput(phases),
+    targetWeeks,
+    mesocycleLengthWeeks
+  );
+  const prevById = new Map(phases.filter((p) => p.id).map((p) => [p.id!, p] as const));
+
+  return fitted.map((phase) => {
+    const prev = phase.id ? prevById.get(phase.id) : undefined;
+    if (!prev) {
+      return {
+        name: phase.name,
+        sortOrder: phase.sortOrder,
+        weekCount: phase.weekCount,
+        phaseKind: phase.phaseKind,
+        color: phase.color ?? "#38bdf8",
+        focusMode: phase.focusMode,
+        phaseFocus: phase.phaseFocus ?? null,
+        swimSessionsPerWeek: phase.swimSessionsPerWeek,
+        bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+        runSessionsPerWeek: phase.runSessionsPerWeek,
+        mesocycles: defaultMesocycleDrafts(
+          phase.name,
+          phase.weekCount,
+          mesocycleLengthWeeks
+        ),
+      };
+    }
+    const weekCountChanged = prev.weekCount !== phase.weekCount;
+    return {
+      ...prev,
+      sortOrder: phase.sortOrder,
+      weekCount: phase.weekCount,
+      name: phase.name,
+      mesocycles: weekCountChanged
+        ? defaultMesocycleDrafts(phase.name, phase.weekCount, mesocycleLengthWeeks)
+        : prev.mesocycles,
+    };
   });
 }
 
@@ -221,6 +280,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
   const [mesocycleLengthWeeks, setMesocycleLengthWeeks] = useState(4);
   const [phases, setPhases] = useState<PhaseDraft[]>([]);
   const [totalWeeks, setTotalWeeks] = useState(0);
+  const [phasesAutoAdjusted, setPhasesAutoAdjusted] = useState(false);
 
   const [startHours, setStartHours] = useState(8);
   const [peakHours, setPeakHours] = useState(12);
@@ -309,6 +369,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     );
     setUnlinkedCalendarRaces(season.unlinkedRaceSessions ?? []);
     setPendingRemovals([]);
+    setPhasesAutoAdjusted(false);
   }, []);
 
   const loadSeason = useCallback(async () => {
@@ -345,6 +406,78 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
   const phaseWeekTotal = useMemo(
     () => phases.reduce((sum, p) => sum + p.weekCount, 0),
     [phases]
+  );
+
+  const applySeasonBoundsFromDates = useCallback(
+    (nextStart: string, nextEnd: string) => {
+      if (!nextStart || !nextEnd) return;
+      const bounds = buildSeasonDateBounds(
+        parseDateKey(nextStart),
+        parseDateKey(nextEnd)
+      );
+      setTotalWeeks(bounds.totalWeeks);
+      setPhases((prev) => {
+        if (prev.length === 0) return prev;
+        const sum = phaseWeekTotal(prev);
+        if (sum === bounds.totalWeeks) {
+          setDeLoadWeekFlags((flags) => resizeWeekFlags(flags, bounds.totalWeeks));
+          setLongRideWeekFlags((flags) => resizeWeekFlags(flags, bounds.totalWeeks));
+          setLongRunWeekFlags((flags) => resizeWeekFlags(flags, bounds.totalWeeks));
+          return prev;
+        }
+        const fitted = fitPhaseDraftsToTotalWeeks(
+          prev,
+          bounds.totalWeeks,
+          mesocycleLengthWeeks
+        );
+        setPhasesAutoAdjusted(true);
+        const deLoad = defaultDeLoadFlags(
+          fitted,
+          mesocycleLengthWeeks,
+          bounds.totalWeeks,
+          deLoadEveryNWeeks
+        );
+        setDeLoadWeekFlags(deLoad);
+        setLongRideWeekFlags(
+          defaultLongFlagsForPlan(
+            fitted,
+            mesocycleLengthWeeks,
+            bounds.totalWeeks,
+            deLoad
+          )
+        );
+        setLongRunWeekFlags(
+          defaultLongFlagsForPlan(
+            fitted,
+            mesocycleLengthWeeks,
+            bounds.totalWeeks,
+            deLoad
+          )
+        );
+        return fitted;
+      });
+    },
+    [deLoadEveryNWeeks, mesocycleLengthWeeks]
+  );
+
+  const changeStartDate = useCallback(
+    (value: string) => {
+      setStartDate(value);
+      if (value && endDate) {
+        applySeasonBoundsFromDates(value, endDate);
+      }
+    },
+    [applySeasonBoundsFromDates, endDate]
+  );
+
+  const changeEndDate = useCallback(
+    (value: string) => {
+      setEndDate(value);
+      if (startDate && value) {
+        applySeasonBoundsFromDates(startDate, value);
+      }
+    },
+    [applySeasonBoundsFromDates, startDate]
   );
 
   function updatePhase(index: number, patch: Partial<PhaseDraft>) {
@@ -634,22 +767,40 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
   function applySeasonResponse(season: SeasonData) {
     setSeasonId(season.id);
     setTotalWeeks(season.totalWeeks);
+    setPhasesAutoAdjusted(false);
     if (season.phases.length > 0) {
       const normalized = normalizePhasesFromApi(season.phases, season.mesocycleLengthWeeks);
       setPhases(normalized);
       const storedFlags = flagsFromSeason(season);
-      if (storedFlags) {
-        setDeLoadWeekFlags(storedFlags);
-      } else {
-        setDeLoadWeekFlags(
-          defaultDeLoadFlags(
-            normalized,
-            season.mesocycleLengthWeeks,
-            season.totalWeeks,
-            season.deLoadEveryNWeeks
-          )
+      const deLoad =
+        storedFlags ??
+        defaultDeLoadFlags(
+          normalized,
+          season.mesocycleLengthWeeks,
+          season.totalWeeks,
+          season.deLoadEveryNWeeks
         );
-      }
+      setDeLoadWeekFlags(deLoad);
+      setLongRideWeekFlags(
+        season.longRideWeekFlags?.length === season.totalWeeks
+          ? season.longRideWeekFlags
+          : defaultLongFlagsForPlan(
+              normalized,
+              season.mesocycleLengthWeeks,
+              season.totalWeeks,
+              deLoad
+            )
+      );
+      setLongRunWeekFlags(
+        season.longRunWeekFlags?.length === season.totalWeeks
+          ? season.longRunWeekFlags
+          : defaultLongFlagsForPlan(
+              normalized,
+              season.mesocycleLengthWeeks,
+              season.totalWeeks,
+              deLoad
+            )
+      );
     }
   }
 
@@ -1049,9 +1200,10 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     name,
     setName,
     startDate,
-    setStartDate,
+    setStartDate: changeStartDate,
     endDate,
-    setEndDate,
+    setEndDate: changeEndDate,
+    phasesAutoAdjusted,
     aRace,
     setARace,
     bRaces,

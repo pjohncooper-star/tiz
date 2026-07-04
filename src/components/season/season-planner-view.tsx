@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui";
 import { PlanTizChart } from "@/components/plan-tiz-chart";
 import { SeasonPlannerShell } from "@/components/season/season-planner-shell";
+import { WeeklyVolumeChart } from "@/components/season/weekly-volume-chart";
 import {
   DISCIPLINE_LABELS,
   focusLabel,
@@ -131,11 +132,6 @@ export function SeasonPlannerView() {
     void load();
   }, [load]);
 
-  const maxHours = useMemo(
-    () => Math.max(...weeks.map((w) => w.totalHours), 1),
-    [weeks]
-  );
-
   const totalPlannedHours = useMemo(
     () => Math.round(weeks.reduce((s, w) => s + w.totalHours, 0) * 10) / 10,
     [weeks]
@@ -200,30 +196,15 @@ export function SeasonPlannerView() {
       </Card>
 
       <Card title="Weekly volume">
-        <div className="flex items-end gap-0.5" style={{ height: "8rem" }}>
-          {weeks.map((week) => {
-            const phase = phaseForWeekIndex(season.phases, week.weekIndex);
-            const heightPct = (week.totalHours / maxHours) * 100;
-            return (
-              <button
-                key={week.weekIndex}
-                type="button"
-                onClick={() => setSelectedWeek(week.weekIndex)}
-                className={`min-w-0 flex-1 rounded-t transition-opacity ${
-                  selectedWeek === week.weekIndex ? "ring-2 ring-sky-500 ring-offset-1" : ""
-                } ${week.isDeLoadWeek ? "opacity-60" : ""}`}
-                style={{
-                  height: `${heightPct}%`,
-                  backgroundColor: phase?.color ?? "#38bdf8",
-                }}
-                title={`W${week.weekIndex + 1}: ${week.totalHours}h`}
-              />
-            );
-          })}
-        </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          Click a bar to inspect that week. Shaded bars are de-load weeks.
-        </p>
+        <WeeklyVolumeChart
+          weeks={weeks}
+          phases={season.phases}
+          startDate={season.startDate}
+          goalEvents={season.goalEvents}
+          primaryGoalEvent={season.primaryGoalEvent}
+          selectedWeek={selectedWeek}
+          onSelectWeek={setSelectedWeek}
+        />
       </Card>
 
       {currentWeek && (

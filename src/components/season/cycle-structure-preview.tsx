@@ -5,6 +5,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { GoalEventDraft, PhaseDraft } from "@/components/season/season-settings-types";
 import { parseDateKey } from "@/lib/dates";
 import { buildPreviewRaceMarkers } from "@/lib/plan/season/preview-race-markers";
+import { RaceMarkerOverlay } from "@/components/season/race-marker-overlay";
+import { SeasonMonthTicks } from "@/components/season/season-month-ticks";
 import {
   monthTicksForWeeks,
   weekStartDateForIndex,
@@ -22,12 +24,6 @@ type CycleStructurePreviewProps = {
   bRaces?: GoalEventDraft[];
   cRaces?: GoalEventDraft[];
   onResizeBoundary?: (boundaryIndex: number, boundaryWeekIndex: number) => void;
-};
-
-const RACE_PRIORITY_STYLES: Record<"A" | "B" | "C", string> = {
-  A: "bg-amber-500 text-white ring-amber-600/80",
-  B: "bg-sky-500 text-white ring-sky-600/80",
-  C: "bg-zinc-400 text-white ring-zinc-500/80 dark:bg-zinc-500",
 };
 
 function toPhaseInput(phases: PhaseDraft[]): SeasonPhaseInput[] {
@@ -143,20 +139,7 @@ export function CycleStructurePreview({
     <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950/40">
       <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Season preview</p>
 
-      {raceMarkers.length > 0 && (
-        <div className="relative h-5">
-          {raceMarkers.map((race) => (
-            <span
-              key={race.key}
-              className={`absolute top-0 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full text-[10px] font-bold ring-1 ${RACE_PRIORITY_STYLES[race.priority]}`}
-              style={{ left: `${race.positionFraction * 100}%` }}
-              title={race.tooltip}
-            >
-              {race.priority}
-            </span>
-          ))}
-        </div>
-      )}
+      <RaceMarkerOverlay markers={raceMarkers} />
 
       <div
         ref={trackRef}
@@ -250,17 +233,7 @@ export function CycleStructurePreview({
       )}
 
       {seasonStart != null && monthTicks.length > 0 && (
-        <div className="relative h-4 border-t border-zinc-200 pt-1 text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:border-zinc-800">
-          {monthTicks.map((tick) => (
-            <span
-              key={`${tick.label}-${tick.weekIndex}`}
-              className="absolute top-1 whitespace-nowrap"
-              style={{ left: `${(tick.weekIndex / displayWeeks) * 100}%` }}
-            >
-              {tick.label}
-            </span>
-          ))}
-        </div>
+        <SeasonMonthTicks ticks={monthTicks} displayWeeks={displayWeeks} />
       )}
 
       <div className="relative h-3">

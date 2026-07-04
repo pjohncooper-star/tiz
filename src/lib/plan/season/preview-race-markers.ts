@@ -1,10 +1,11 @@
-import type { GoalEventDraft } from "@/components/season/season-settings-types";
+import {
+  formatGoalDisciplines,
+  type Discipline,
+  type GoalEventDraft,
+} from "@/components/season/season-settings-types";
 import { parseDateKey } from "@/lib/dates";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
-import {
-  formatDisciplineGoalTimesSummary,
-  resolveEstimatedDurationMinutes,
-} from "@/lib/plan/season/goal-event-times";
+import { resolveEstimatedDurationMinutes } from "@/lib/plan/season/goal-event-times";
 import { raceTimelineFraction } from "@/lib/plan/season/season-dates";
 
 export type PreviewRaceMarker = {
@@ -14,36 +15,62 @@ export type PreviewRaceMarker = {
   positionFraction: number;
 };
 
+export type RaceMarkerEventInput = {
+  name: string;
+  date: string;
+  priority: "A" | "B" | "C";
+  disciplines: Discipline[];
+  estimatedDurationMinutes?: number | null;
+  swimGoalMinutes?: number | null;
+  bikeGoalMinutes?: number | null;
+  runGoalMinutes?: number | null;
+};
+
 function raceTooltip(event: GoalEventDraft): string {
-  const name = event.name.trim();
-  const legSummary = formatDisciplineGoalTimesSummary(event.disciplines, event);
+  const parts = [event.name.trim()];
+  if (event.disciplines.length > 0) {
+    parts.push(formatGoalDisciplines(event.disciplines));
+  }
   const minutes = resolveEstimatedDurationMinutes(event);
-  const duration =
-    legSummary ?? (minutes != null ? formatGoalTimeDisplay(minutes) : null);
-  return duration ? `${name} · ${duration}` : name;
+  if (minutes != null && minutes > 0) {
+    parts.push(formatGoalTimeDisplay(minutes));
+  }
+  return parts.join(" · ");
 }
 
-function markersForPriority(
-  priority: "A" | "B" | "C",
-  events: GoalEventDraft[],
+export function buildRaceMarkersFromGoalEvents(
   seasonStart: Date,
-  displayWeeks: number
+  displayWeeks: number,
+  events: RaceMarkerEventInput[]
 ): PreviewRaceMarker[] {
   return events
-    .map((event, index) => {
-      if (!event.date || !event.name.trim()) return null;
-      return {
-        key: `${priority}-${index}-${event.date}`,
-        priority,
-        tooltip: raceTooltip(event),
-        positionFraction: raceTimelineFraction(
-          seasonStart,
-          parseDateKey(event.date),
-          displayWeeks
-        ),
-      };
-    })
-    .filter((marker): marker is PreviewRaceMarker => marker != null);
+    .filter((event) => event.date && event.name.trim())
+    .map((event, index) => ({
+      key: `${event.priority}-${index}-${event.date}`,
+      priority: event.priority,
+      tooltip: raceTooltip(event),
+      positionFraction: raceTimelineFraction(
+        seasonStart,
+        parseDateKey(event.date),
+        displayWeeks
+      ),
+    }));
+}
+
+export function goalEventsForRaceMarkers(
+  primaryGoalEvent:
+    | (Omit<RaceMarkerEventInput, "priority"> & { priority?: "A" | "B" | "C" })
+    | null
+    | undefined,
+  goalEvents: RaceMarkerEventInput[] | undefined
+): RaceMarkerEventInput[] {
+  if (goalEvents && goalEvents.length > 0) {
+    return goalEvents;
+  }
+  if (primaryGoalEvent?.date && primaryGoalEvent.name.trim()) {
+    return [{ ...primaryGoalEvent, priority: primaryGoalEvent.priority ?? "A" }];
+  }
+  return [];
 }
 
 export function buildPreviewRaceMarkers(
@@ -53,13 +80,15 @@ export function buildPreviewRaceMarkers(
   bRaces: GoalEventDraft[],
   cRaces: GoalEventDraft[]
 ): PreviewRaceMarker[] {
-  const aMarkers =
-    aRace?.date && aRace.name.trim()
-      ? markersForPriority("A", [aRace], seasonStart, displayWeeks)
-      : [];
-  return [
-    ...aMarkers,
-    ...markersForPriority("B", bRaces, seasonStart, displayWeeks),
-    ...markersForPriority("C", cRaces, seasonStart, displayWeeks),
-  ];
+  const events: RaceMarkerEventInput[] = [];
+  if (aRace?.date && aRace.name.trim()) {
+    events.push({ ...aRace, priority: "A" });
+  }
+  for (const race of bRaces) {
+    if (race.date && race.name.trim()) events.push({ ...race, priority: "B" });
+  }
+  for (const race of cRaces) {
+    if (race.date && race.name.trim()) events.push({ ...race, priority: "C" });
+  }
+  return buildRaceMarkersFromGoalEvents(seasonStart, displayWeeks, events);
 }

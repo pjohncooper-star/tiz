@@ -8,13 +8,14 @@ import {
 import { db } from "@/lib/db";
 import { calendarDateFromDb } from "@/lib/dates";
 import { defaultVolumeMesocycleMode } from "./phase-volume-ramp";
-import { suggestPhasesForWeeks } from "./default-phases";
+import { phaseWeekTotal, suggestPhasesForWeeks } from "./default-phases";
 import {
   mesocycleLayoutFingerprint,
   parseDeLoadWeekFlags,
 } from "./de-load-cadence";
 import { parseLongWeekFlags } from "./long-session-schedule";
 import { resolveMesocycles } from "./phase-split";
+import { fitPhasesToTotalWeeks } from "./phase-week-fit";
 import { recomputeSeasonWeeks } from "./recompute";
 import {
   buildSeasonDateBounds,
@@ -39,6 +40,12 @@ export type { GoalEventWriteInput };
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function sliceWeekFlags(flags: boolean[] | null, totalWeeks: number): boolean[] | null {
+  if (!flags) return null;
+  if (flags.length <= totalWeeks) return flags;
+  return flags.slice(0, totalWeeks);
 }
 
 export type CreateSeasonPlanInput = {
@@ -504,31 +511,40 @@ export async function updateSeasonPlan(
   const bounds = buildSeasonDateBounds(startDate, endDate);
   await assertNoSeasonOverlap(athleteId, bounds.startDate, bounds.endDate, seasonPlanId);
 
-  const phases: SeasonPhaseInput[] =
+  let phases: SeasonPhaseInput[] =
     input.phases ??
     dbPhasesToSeasonInput(existing.phases);
 
   const mesocycleLengthWeeks =
     input.mesocycleLengthWeeks ?? existing.mesocycleLengthWeeks;
 
+  let phasesAutoFitted = false;
+  if (!input.phases && phaseWeekTotal(phases) !== bounds.totalWeeks) {
+    phases = fitPhasesToTotalWeeks(phases, bounds.totalWeeks, mesocycleLengthWeeks);
+    phasesAutoFitted = true;
+  }
+
   const newMesocycles = resolveMesocycles(phases, mesocycleLengthWeeks);
 
   let deLoadWeekFlags: boolean[] | null =
     input.deLoadWeekFlags !== undefined
       ? input.deLoadWeekFlags
-      : parseDeLoadWeekFlags(existing.deLoadWeekFlags);
+      : sliceWeekFlags(
+          parseDeLoadWeekFlags(existing.deLoadWeekFlags),
+          bounds.totalWeeks
+        );
 
   let longRideWeekFlags: boolean[] | null =
     input.longRideWeekFlags !== undefined
       ? input.longRideWeekFlags
-      : parseLongWeekFlags(existing.longRideWeekFlags);
+      : sliceWeekFlags(parseLongWeekFlags(existing.longRideWeekFlags), bounds.totalWeeks);
 
   let longRunWeekFlags: boolean[] | null =
     input.longRunWeekFlags !== undefined
       ? input.longRunWeekFlags
-      : parseLongWeekFlags(existing.longRunWeekFlags);
+      : sliceWeekFlags(parseLongWeekFlags(existing.longRunWeekFlags), bounds.totalWeeks);
 
-  if (input.phases) {
+  if (input.phases || phasesAutoFitted) {
     const existingMesocycles = resolveMesocycles(
       dbPhasesToSeasonInput(existing.phases),
       mesocycleLengthWeeks
