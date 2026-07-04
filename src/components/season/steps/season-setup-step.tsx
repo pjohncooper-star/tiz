@@ -28,6 +28,7 @@ export function SeasonSetupStep({ state }: SeasonSettingsStepProps) {
     importCalendarRace,
     phasesAutoAdjusted,
     totalWeeks,
+    disciplineSettings,
   } = state;
 
   return (
@@ -55,7 +56,13 @@ export function SeasonSetupStep({ state }: SeasonSettingsStepProps) {
           )}
         </div>
 
-        <GoalRaceEditor priority="A" required value={aRace} onChange={setARace} />
+        <GoalRaceEditor
+          priority="A"
+          required
+          value={aRace}
+          onChange={setARace}
+          disciplineSettings={disciplineSettings}
+        />
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -74,6 +81,7 @@ export function SeasonSetupStep({ state }: SeasonSettingsStepProps) {
               value={race}
               onChange={(next) => updateBRace(i, next)}
               onRemove={(deleteFromCalendar) => removeBRace(i, deleteFromCalendar)}
+              disciplineSettings={disciplineSettings}
             />
           ))}
         </div>
@@ -95,6 +103,7 @@ export function SeasonSetupStep({ state }: SeasonSettingsStepProps) {
               value={race}
               onChange={(next) => updateCRace(i, next)}
               onRemove={(deleteFromCalendar) => removeCRace(i, deleteFromCalendar)}
+              disciplineSettings={disciplineSettings}
             />
           ))}
         </div>

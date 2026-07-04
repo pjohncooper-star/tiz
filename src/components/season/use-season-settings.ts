@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import {
   disciplineFocusesForPhase,
   emptyGoalEventDraft,
@@ -262,6 +263,7 @@ function goalEventPayload(race: GoalEventDraft) {
 
 export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOptions) {
   const router = useRouter();
+  const { disciplineSettings } = useDisciplineSettings();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1203,6 +1205,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     seasonId,
     name,
     setName,
+    disciplineSettings,
     startDate,
     setStartDate: changeStartDate,
     endDate,

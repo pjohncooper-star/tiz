@@ -4,6 +4,8 @@ import { Card } from "@/components/ui";
 import { formatGoalDisciplines, type Discipline, type EventPriority } from "@/components/season/season-settings-types";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
 import { formatDisciplineGoalTimesSummary } from "@/lib/plan/season/goal-event-times";
+import { formatGoalRaceDistance } from "@/lib/plan/season/goal-race-distance";
+import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 
 export type GoalEventSummary = {
   id: string;
@@ -39,6 +41,8 @@ type SeasonPlannerShellProps = {
 };
 
 export function SeasonPlannerShell({ season, children }: SeasonPlannerShellProps) {
+  const { disciplineSettings } = useDisciplineSettings();
+
   return (
     <div className="space-y-6">
       <div>
@@ -99,7 +103,12 @@ export function SeasonPlannerShell({ season, children }: SeasonPlannerShellProps
                       event.estimatedDurationMinutes != null ||
                       formatDisciplineGoalTimesSummary(event.disciplines, event)) && (
                       <span className="block text-xs text-zinc-500">
-                        {event.distanceMeters != null && `${Math.round(event.distanceMeters)} m`}
+                        {event.distanceMeters != null &&
+                          formatGoalRaceDistance(
+                            event.distanceMeters,
+                            event.disciplines,
+                            disciplineSettings
+                          )}
                         {event.distanceMeters != null &&
                           (event.estimatedDurationMinutes != null ||
                             formatDisciplineGoalTimesSummary(event.disciplines, event)) &&

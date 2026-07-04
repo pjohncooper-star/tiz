@@ -13,9 +13,20 @@ import {
 import { Button, Input, Label } from "@/components/ui";
 import { GoalTimeInput } from "@/components/goal-time-input";
 import {
+  goalRaceDistanceDiscipline,
+  goalRaceDistanceInputLabel,
+  goalRaceDistanceInputToMeters,
+  goalRaceDistanceMetersToInput,
+} from "@/lib/plan/season/goal-race-distance";
+import {
   goalMinutesForDiscipline,
   setDisciplineGoalMinutes,
 } from "@/lib/plan/season/goal-event-times";
+import {
+  DEFAULT_DISCIPLINE_UNIT_SETTINGS,
+  type DisciplineUnitSettings,
+} from "@/lib/units/discipline-settings";
+import type { PlanDiscipline } from "@/lib/plan/session";
 
 type GoalRaceEditorProps = {
   priority: EventPriority;
@@ -23,6 +34,7 @@ type GoalRaceEditorProps = {
   onChange: (next: GoalEventDraft) => void;
   onRemove?: (deleteFromCalendar: boolean) => void;
   required?: boolean;
+  disciplineSettings?: Record<PlanDiscipline, DisciplineUnitSettings>;
 };
 
 export function GoalRaceEditor({
@@ -31,6 +43,7 @@ export function GoalRaceEditor({
   onChange,
   onRemove,
   required,
+  disciplineSettings = DEFAULT_DISCIPLINE_UNIT_SETTINGS,
 }: GoalRaceEditorProps) {
   function update(patch: Partial<GoalEventDraft>) {
     onChange({ ...value, ...patch });
@@ -55,6 +68,13 @@ export function GoalRaceEditor({
 
   const multisport = value.disciplines.length > 1;
   const sortedDisciplines = sortDisciplines(value.disciplines);
+  const distanceLabel = goalRaceDistanceInputLabel(value.disciplines, disciplineSettings);
+  const distanceUnitDiscipline = goalRaceDistanceDiscipline(value.disciplines);
+  const distanceInput = goalRaceDistanceMetersToInput(
+    value.distanceMeters,
+    value.disciplines,
+    disciplineSettings
+  );
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -119,21 +139,30 @@ export function GoalRaceEditor({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label>Distance (meters, optional)</Label>
+            <Label>{distanceLabel} (optional)</Label>
             <Input
               type="number"
               min={0}
-              step={100}
-              value={value.distanceMeters ?? ""}
+              step="any"
+              value={distanceInput}
               onChange={(e) =>
                 update({
-                  distanceMeters: e.target.value ? Number(e.target.value) : null,
+                  distanceMeters: goalRaceDistanceInputToMeters(
+                    e.target.value,
+                    value.disciplines,
+                    disciplineSettings
+                  ),
                 })
               }
-              placeholder="Optional"
+              placeholder={
+                value.disciplines.includes("SWIM") && value.disciplines.length === 1
+                  ? "1500"
+                  : "26.2"
+              }
             />
             <p className="mt-1 text-xs text-zinc-500">
-              Total event distance in meters. Per-leg distances coming later.
+              Uses your {DISCIPLINE_LABELS[distanceUnitDiscipline as Discipline].toLowerCase()}{" "}
+              distance units from settings.
             </p>
           </div>
           {!multisport && (
