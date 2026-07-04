@@ -27,7 +27,11 @@ import {
   type MesocycleDraft,
 } from "@/lib/plan/season/mesocycle-draft";
 import { markDeLoadWeeksPerMesocycle } from "@/lib/plan/season/de-load-cadence";
-import { defaultPhaseForKind, phaseWeekTotal, suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
+import {
+  defaultPhaseForKind,
+  phaseWeekTotal as sumPhaseWeeks,
+  suggestPhasesForWeeks,
+} from "@/lib/plan/season/default-phases";
 import { fitPhasesToTotalWeeks } from "@/lib/plan/season/phase-week-fit";
 import { goalEventTimesForApi } from "@/lib/plan/season/goal-event-times";
 import {
@@ -418,7 +422,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
       setTotalWeeks(bounds.totalWeeks);
       setPhases((prev) => {
         if (prev.length === 0) return prev;
-        const sum = phaseWeekTotal(prev);
+        const sum = sumPhaseWeeks(prev);
         if (sum === bounds.totalWeeks) {
           setDeLoadWeekFlags((flags) => resizeWeekFlags(flags, bounds.totalWeeks));
           setLongRideWeekFlags((flags) => resizeWeekFlags(flags, bounds.totalWeeks));
