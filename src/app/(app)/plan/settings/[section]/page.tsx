@@ -1,10 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { SeasonSettingsSection } from "@/components/season/season-settings-section";
 import { SeasonPlanChrome } from "@/components/season/season-plan-chrome";
 import { sectionSlugToStep, sectionTitleForStep } from "@/components/season/season-settings-types";
 import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { isSimpleSeasonPlannerEnabled, useSimpleSeasonPlannerOnly } from "@/lib/features";
 import { hasSetupCompleteSeason } from "@/lib/plan/season/season-plan.server";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,10 @@ type PageProps = {
 };
 
 export default async function SeasonSettingsPage({ params }: PageProps) {
+  if (isSimpleSeasonPlannerEnabled() && useSimpleSeasonPlannerOnly()) {
+    redirect("/plan");
+  }
+
   const session = await requireAthlete();
   const athlete = await db.athlete.findUnique({ where: { id: session.user.athleteId! } });
   if (athlete && athlete.onboardingStep !== "COMPLETE") {

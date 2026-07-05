@@ -1,0 +1,87 @@
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import {
+  buildPhaseSpansFromDb,
+  defaultSimpleRampDefaults,
+  recalculateSimpleVolumes,
+  type SimpleWeekVolume,
+} from "./simple-ramp";
+
+function week(
+  weekIndex: number,
+  swimHours: number,
+  bikeHours: number,
+  runHours: number,
+  isRestWeek = false
+): SimpleWeekVolume {
+  return {
+    weekIndex,
+    isRestWeek,
+    swimHours,
+    bikeHours,
+    runHours,
+    totalHours: swimHours + bikeHours + runHours,
+  };
+}
+
+describe("recalculateSimpleVolumes", () => {
+  const defaults = defaultSimpleRampDefaults();
+
+  it("ramps one step from previous week", () => {
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2)];
+    const result = recalculateSimpleVolumes(weeks, [], defaults);
+    assert.equal(result[1]!.bikeHours, 4.2);
+  });
+
+  it("skips rest week when finding ramp base", () => {
+    const weeks = [
+      week(0, 2, 4, 2),
+      week(1, 2, 4.2, 2.1),
+      week(2, 1, 2, 1, true),
+      week(3, 2, 4, 2),
+    ];
+    const result = recalculateSimpleVolumes(weeks, [], defaults);
+    assert.equal(result[2]!.bikeHours, 2);
+    assert.equal(result[3]!.bikeHours, 4.41);
+  });
+
+  it("does not overwrite rest week volumes", () => {
+    const weeks = [week(0, 2, 4, 2), week(1, 1, 2.5, 1, true)];
+    const result = recalculateSimpleVolumes(weeks, [], defaults);
+    assert.equal(result[1]!.bikeHours, 2.5);
+  });
+
+  it("respects ramp-off phase per discipline", () => {
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2)];
+    const phases = buildPhaseSpansFromDb([
+      {
+        sortOrder: 0,
+        weekCount: 1,
+        rampSwimEnabled: true,
+        rampBikeEnabled: true,
+        rampRunEnabled: true,
+      },
+      {
+        sortOrder: 1,
+        weekCount: 1,
+        rampSwimEnabled: true,
+        rampBikeEnabled: false,
+        rampRunEnabled: true,
+      },
+    ]);
+    const result = recalculateSimpleVolumes(weeks, phases, defaults);
+    assert.equal(result[1]!.bikeHours, 4);
+    assert.equal(result[1]!.runHours, 2.1);
+  });
+
+  it("caps at peak hours", () => {
+    const cappedDefaults: SimpleRampDefaults = {
+      swim: { startHours: 2, peakHours: 4, ratePercent: 50 },
+      bike: { startHours: 3.9, peakHours: 4, ratePercent: 50 },
+      run: { startHours: 2, peakHours: 4, ratePercent: 50 },
+    };
+    const weeks = [week(0, 3.9, 3.9, 3.9), week(1, 2, 2, 2)];
+    const result = recalculateSimpleVolumes(weeks, [], cappedDefaults);
+    assert.equal(result[1]!.bikeHours, 4);
+  });
+});

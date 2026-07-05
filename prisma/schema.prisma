@@ -455,6 +455,15 @@ model SeasonPlan {
   swimSplitPercent         Float?
   bikeSplitPercent         Float?
   runSplitPercent          Float?
+  swimStartHours           Float?
+  swimPeakHours            Float?
+  swimRampPercent          Float?
+  bikeStartHours           Float?
+  bikePeakHours            Float?
+  bikeRampPercent          Float?
+  runStartHours            Float?
+  runPeakHours             Float?
+  runRampPercent           Float?
   maxRampPercent           Float          @default(10)
   deLoadEveryNWeeks        Int            @default(4)
   deLoadWeekFlags          Json?
@@ -540,6 +549,9 @@ model SeasonPhase {
   runStartHours        Float?
   runEndHours          Float?
   runRampPercent       Float?
+  rampSwimEnabled      Boolean    @default(true)
+  rampBikeEnabled      Boolean    @default(true)
+  rampRunEnabled       Boolean    @default(true)
   longRideStartMin     Int?
   longRideEndMin       Int?
   longRunStartMin      Int?

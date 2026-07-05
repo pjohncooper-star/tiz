@@ -422,3 +422,62 @@ export const updateWorkoutComponentSchema = z
     steps: stepsPayloadSchema.optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
+
+const simpleDisciplineRampSchema = z.object({
+  startHours: z.number().nonnegative(),
+  peakHours: z.number().nonnegative(),
+  ratePercent: z.number().min(0).max(100),
+});
+
+export const simpleRampDefaultsSchema = z.object({
+  swim: simpleDisciplineRampSchema,
+  bike: simpleDisciplineRampSchema,
+  run: simpleDisciplineRampSchema,
+});
+
+export const simplePhaseSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1),
+  color: z.string().min(1),
+  startWeekIndex: z.number().int().nonnegative(),
+  endWeekIndex: z.number().int().nonnegative(),
+  rampEnabled: z.object({
+    swim: z.boolean(),
+    bike: z.boolean(),
+    run: z.boolean(),
+  }),
+});
+
+export const simpleWeekSchema = z.object({
+  weekIndex: z.number().int().nonnegative(),
+  isRestWeek: z.boolean(),
+  swimHours: z.number().nonnegative(),
+  bikeHours: z.number().nonnegative(),
+  runHours: z.number().nonnegative(),
+});
+
+export const createSimpleSeasonSchema = z.object({
+  name: z.string().min(1),
+  startDate: z.string().regex(DATE_KEY),
+  endDate: z.string().regex(DATE_KEY),
+  rampDefaults: simpleRampDefaultsSchema.optional(),
+  goalEvent: seasonGoalEventSchema.optional(),
+  bGoalEvents: z.array(seasonGoalEventSchema).optional(),
+  cGoalEvents: z.array(seasonGoalEventSchema).optional(),
+});
+
+export const updateSimpleSeasonSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    startDate: z.string().regex(DATE_KEY).optional(),
+    endDate: z.string().regex(DATE_KEY).optional(),
+    rampDefaults: simpleRampDefaultsSchema.optional(),
+    phases: z.array(simplePhaseSchema).optional(),
+    weeks: z.array(simpleWeekSchema).optional(),
+    recalculate: z.boolean().optional(),
+    goalEvent: seasonGoalEventSchema.optional(),
+    bGoalEvents: z.array(seasonGoalEventSchema).optional(),
+    cGoalEvents: z.array(seasonGoalEventSchema).optional(),
+    removedGoalEvents: z.array(removedGoalEventSchema).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
