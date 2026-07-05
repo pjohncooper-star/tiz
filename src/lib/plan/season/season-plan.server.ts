@@ -6,7 +6,7 @@ import {
   type SportTemplate,
 } from "@prisma/client";
 import { db } from "@/lib/db";
-import { calendarDateFromDb } from "@/lib/dates";
+import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import { defaultVolumeMesocycleMode } from "./phase-volume-ramp";
 import { phaseWeekTotal, suggestPhasesForWeeks } from "./default-phases";
 import {
@@ -20,7 +20,6 @@ import { recomputeSeasonWeeks } from "./recompute";
 import {
   buildSeasonDateBounds,
   deriveSeasonStatus,
-  findOverlappingSeason,
   seasonRangesOverlap,
 } from "./season-dates";
 import {
@@ -122,6 +121,16 @@ export type UpdateSeasonPlanInput = {
   setupComplete?: boolean;
 };
 
+const seasonPlanDetailInclude = {
+  primaryGoalEvent: true,
+  phases: {
+    orderBy: { sortOrder: "asc" as const },
+    include: { disciplines: true, mesocycles: { orderBy: { index: "asc" as const } } },
+  },
+  weeks: { orderBy: { weekIndex: "asc" as const } },
+  goalEvents: true,
+};
+
 export async function getCurrentSeasonPlan(athleteId: string) {
   const active = await db.seasonPlan.findFirst({
     where: { athleteId, status: "ACTIVE", setupComplete: true },
@@ -175,31 +184,51 @@ export async function listSeasonPlansForAthlete(athleteId: string) {
 export async function getSeasonPlanById(athleteId: string, seasonPlanId: string) {
   return db.seasonPlan.findFirst({
     where: { id: seasonPlanId, athleteId },
-    include: {
-      primaryGoalEvent: true,
-      phases: {
-        orderBy: { sortOrder: "asc" },
-        include: { disciplines: true, mesocycles: { orderBy: { index: "asc" } } },
-      },
-      weeks: { orderBy: { weekIndex: "asc" } },
-      goalEvents: true,
-    },
+    include: seasonPlanDetailInclude,
   });
 }
 
-export async function assertNoSeasonOverlap(
+/** Most recent non-archived season — used by the simple planner (includes drafts and incomplete plans). */
+export async function getSimplePlannerSeason(athleteId: string, seasonPlanId?: string | null) {
+  if (seasonPlanId) {
+    return getSeasonPlanById(athleteId, seasonPlanId);
+  }
+  return db.seasonPlan.findFirst({
+    where: { athleteId, status: { not: "ARCHIVED" } },
+    orderBy: { startDate: "desc" },
+    include: seasonPlanDetailInclude,
+  });
+}
+
+export type OverlappingSeasonSummary = {
+  id: string;
+  name: string;
+  startDate: Date;
+  endDate: Date;
+  setupComplete: boolean;
+  status: SeasonStatus;
+};
+
+export async function findOverlappingSeasonPlans(
   athleteId: string,
   startDate: Date,
   endDate: Date,
   excludeSeasonPlanId?: string
-): Promise<void> {
+): Promise<OverlappingSeasonSummary[]> {
   const existing = await db.seasonPlan.findMany({
     where: {
       athleteId,
       status: { not: "ARCHIVED" },
       ...(excludeSeasonPlanId ? { id: { not: excludeSeasonPlanId } } : {}),
     },
-    select: { id: true, startDate: true, endDate: true },
+    select: {
+      id: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      setupComplete: true,
+      status: true,
+    },
   });
 
   const candidate = {
@@ -208,18 +237,41 @@ export async function assertNoSeasonOverlap(
     endDate,
   };
 
-  const overlap = findOverlappingSeason(
-    candidate,
-    existing.map((s) => ({
-      id: s.id,
-      startDate: calendarDateFromDb(s.startDate),
-      endDate: calendarDateFromDb(s.endDate),
-    }))
+  return existing.filter((season) =>
+    seasonRangesOverlap(candidate, {
+      id: season.id,
+      startDate: calendarDateFromDb(season.startDate),
+      endDate: calendarDateFromDb(season.endDate),
+    })
+  );
+}
+
+export async function assertNoSeasonOverlap(
+  athleteId: string,
+  startDate: Date,
+  endDate: Date,
+  excludeSeasonPlanId?: string
+): Promise<void> {
+  const overlapping = await findOverlappingSeasonPlans(
+    athleteId,
+    startDate,
+    endDate,
+    excludeSeasonPlanId
   );
 
-  if (overlap) {
-    throw new Error("Season dates overlap an existing season for this athlete");
+  if (overlapping.length > 0) {
+    throw new Error(formatSeasonOverlapError(overlapping));
   }
+}
+
+export function formatSeasonOverlapError(overlapping: OverlappingSeasonSummary[]): string {
+  const listed = overlapping
+    .map(
+      (season) =>
+        `${season.name} (${formatDateKey(season.startDate)} → ${formatDateKey(season.endDate)})`
+    )
+    .join("; ");
+  return `Season dates overlap an existing season: ${listed}. Open it from Plan, archive it under All seasons, or choose different dates.`;
 }
 
 type DbPhaseWithMesocycles = NonNullable<

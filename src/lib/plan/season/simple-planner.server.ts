@@ -11,6 +11,8 @@ import {
 } from "./goal-events-sync";
 import {
   assertNoSeasonOverlap,
+  findOverlappingSeasonPlans,
+  formatSeasonOverlapError,
   getSeasonPlanById,
   type SeasonPlanSummary,
 } from "./season-plan.server";
@@ -198,7 +200,29 @@ function defaultPhaseKind(_name: string): PhaseKind {
 
 export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   const bounds = buildSeasonDateBounds(input.startDate, input.endDate);
-  await assertNoSeasonOverlap(input.athleteId, bounds.startDate, bounds.endDate);
+  const overlapping = await findOverlappingSeasonPlans(
+    input.athleteId,
+    bounds.startDate,
+    bounds.endDate
+  );
+
+  if (overlapping.length === 1 && !overlapping[0]!.setupComplete) {
+    return updateSimpleSeasonPlan(input.athleteId, overlapping[0]!.id, {
+      name: input.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      rampDefaults: input.rampDefaults,
+      phases: [],
+      recalculate: true,
+      goalEvent: input.goalEvent,
+      bGoalEvents: input.bGoalEvents,
+      cGoalEvents: input.cGoalEvents,
+    });
+  }
+
+  if (overlapping.length > 0) {
+    throw new Error(formatSeasonOverlapError(overlapping));
+  }
 
   const defaults = input.rampDefaults ?? defaultSimpleRampDefaults();
   const rampFields = rampDefaultsToPlanFields(defaults);

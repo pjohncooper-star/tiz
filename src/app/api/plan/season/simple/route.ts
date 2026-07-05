@@ -7,10 +7,11 @@ import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
   createSimpleSeasonPlan,
   serializeSimpleSeasonPlan,
+  updateSimpleSeasonPlan,
 } from "@/lib/plan/season/simple-planner.server";
 import {
-  getCurrentSeasonPlan,
   getSeasonPlanById,
+  getSimplePlannerSeason,
 } from "@/lib/plan/season/season-plan.server";
 
 export async function GET(request: Request) {
@@ -25,9 +26,7 @@ export async function GET(request: Request) {
   }
 
   const seasonId = new URL(request.url).searchParams.get("seasonId");
-  const plan = seasonId
-    ? await getSeasonPlanById(athleteId, seasonId)
-    : await getCurrentSeasonPlan(athleteId);
+  const plan = await getSimplePlannerSeason(athleteId, seasonId);
 
   if (!plan) {
     return NextResponse.json({ season: null });
