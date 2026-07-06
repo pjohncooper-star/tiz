@@ -7,7 +7,7 @@ ALTER TABLE "SeasonPhase"
 WITH ranked AS (
   SELECT
     id,
-    SUM(weekCount) OVER (
+    SUM("weekCount") OVER (
       PARTITION BY "seasonPlanId"
       ORDER BY "sortOrder"
       ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING

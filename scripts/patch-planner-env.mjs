@@ -86,8 +86,11 @@ for (const [key, value] of Object.entries({ ...REQUIRED, ...DISABLE })) {
   console.log(`  ${key}=${value}`);
 }
 console.log("\nRestart the dev server: npm run dev");
-console.log("\nAlso ensure you are on the planner branch and ran the migration:");
+console.log("\nAlso ensure you are on the planner branch and ran the migrations:");
 console.log("  git checkout cursor/simple-season-planner-9d6b");
 console.log(
   "  npx prisma db execute --file prisma/migrations/manual_simple_season_planner.sql --schema prisma/schema.prisma"
+);
+console.log(
+  "  npx prisma db execute --file prisma/migrations/manual_phase_start_week.sql --schema prisma/schema.prisma"
 );
