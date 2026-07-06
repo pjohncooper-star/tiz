@@ -10,7 +10,6 @@ import {
 import { formatWeekDateRange } from "@/components/simple-planner/simple-planner-timeline";
 import {
   buildGutterSegments,
-  phaseForWeekIndex,
   resizePhaseBottom,
   resizePhaseTop,
   weekIsAssigned,
@@ -224,7 +223,7 @@ export function SimplePlannerWeekTable({
         dragging ? "select-none" : ""
       }`}
     >
-      <table className="min-w-full text-sm">
+      <table className="min-w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
             <th className="w-28 px-2 py-2" />
@@ -260,19 +259,14 @@ export function SimplePlannerWeekTable({
 
             const phase = displayPhases.find((item) => item.id === segment.phase.id) ?? segment.phase;
             const bandWeeks = weeks.filter(
-              (week) => phaseForWeekIndex(displayPhases, week.weekIndex)?.id === phase.id
+              (week) =>
+                week.weekIndex >= phase.startWeekIndex && week.weekIndex <= phase.endWeekIndex
             );
-            const expandedRowCount = bandWeeks.reduce(
-              (sum, week) => sum + 1 + (expanded.has(week.weekIndex) ? DISCIPLINES.length : 0),
-              0
-            );
-
             return (
               <PhaseBandRows
                 key={phase.id ?? phase.name}
                 phase={phase}
                 weeks={bandWeeks}
-                rowSpan={expandedRowCount}
                 selected={selectedPhaseId === phase.id}
                 isDragging={dragging?.phaseId === phase.id}
                 expanded={expanded}
@@ -323,61 +317,104 @@ function UnassignedGutter({
 
 function PhaseBandGutter({
   phase,
+  position,
+  showLabel,
+  showTopHandle,
+  showBottomHandle,
   selected,
   isDragging,
   onSelect,
   onDragStart,
 }: {
   phase: SimplePhase;
+  position: "only" | "first" | "middle" | "last";
+  showLabel: boolean;
+  showTopHandle: boolean;
+  showBottomHandle: boolean;
   selected: boolean;
   isDragging: boolean;
   onSelect: () => void;
   onDragStart: (edge: "top" | "bottom", clientY: number) => void;
 }) {
+  const roundedClass =
+    position === "only"
+      ? "rounded-md"
+      : position === "first"
+        ? "rounded-t-md"
+        : position === "last"
+          ? "rounded-b-md"
+          : "";
+  const borderClass =
+    position === "only"
+      ? "border-2"
+      : position === "first"
+        ? "border-x-2 border-t-2"
+        : position === "last"
+          ? "border-x-2 border-b-2"
+          : "border-x-2";
+
   return (
     <div
-      className={`relative flex h-full min-h-full flex-col rounded-md border-2 transition ${
+      className={`relative flex min-h-[2.5rem] flex-col ${roundedClass} ${borderClass} transition ${
         selected || isDragging ? "border-sky-500" : "border-transparent"
-      }`}
+      } ${position === "middle" || position === "last" ? "-mt-px" : ""}`}
       style={{ backgroundColor: `${phase.color}33` }}
     >
-      <button
-        type="button"
-        aria-label="Resize phase start"
-        className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
-        style={{ touchAction: "none" }}
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onDragStart("top", event.clientY);
-        }}
-      />
-      <button
-        type="button"
-        onClick={onSelect}
-        className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 py-2 text-center"
-      >
-        <span
-          className="mb-1 h-2 w-2 rounded-full"
-          style={{ backgroundColor: phase.color }}
+      {showTopHandle && (
+        <button
+          type="button"
+          aria-label="Resize phase start"
+          className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+          style={{ touchAction: "none" }}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDragStart("top", event.clientY);
+          }}
         />
-        <span className="text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">
-          {phase.name}
-        </span>
-      </button>
-      <button
-        type="button"
-        aria-label="Resize phase end"
-        className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
-        style={{ touchAction: "none" }}
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onDragStart("bottom", event.clientY);
-        }}
-      />
+      )}
+      {showLabel ? (
+        <button
+          type="button"
+          onClick={onSelect}
+          className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 py-2 text-center"
+        >
+          <span
+            className="mb-1 h-2 w-2 rounded-full"
+            style={{ backgroundColor: phase.color }}
+          />
+          <span className="text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">
+            {phase.name}
+          </span>
+        </button>
+      ) : (
+        <div className="flex-1" aria-hidden />
+      )}
+      {showBottomHandle && (
+        <button
+          type="button"
+          aria-label="Resize phase end"
+          className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+          style={{ touchAction: "none" }}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDragStart("bottom", event.clientY);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+function phaseBandGutterPosition(
+  gutterRowIndex: number,
+  gutterRowCount: number
+): "only" | "first" | "middle" | "last" {
+  if (gutterRowCount === 1) return "only";
+  if (gutterRowIndex === 0) return "first";
+  if (gutterRowIndex === gutterRowCount - 1) return "last";
+  return "middle";
 }
 
 function WeekRowGroup({
@@ -444,7 +481,6 @@ function WeekRowGroup({
 function PhaseBandRows({
   phase,
   weeks,
-  rowSpan,
   selected,
   isDragging,
   expanded,
@@ -456,7 +492,6 @@ function PhaseBandRows({
 }: {
   phase: SimplePhase;
   weeks: SimpleWeek[];
-  rowSpan: number;
   selected: boolean;
   isDragging: boolean;
   expanded: Set<number>;
@@ -466,63 +501,97 @@ function PhaseBandRows({
   onUpdateWeek: (weekIndex: number, patch: Partial<SimpleWeek>) => void;
   onDragStart: (edge: "top" | "bottom", clientY: number) => void;
 }) {
+  const gutterRowCount = weeks.reduce(
+    (count, week) => count + 1 + (expanded.has(week.weekIndex) ? DISCIPLINES.length : 0),
+    0
+  );
+  let gutterRowIndex = 0;
+
   return (
     <>
-      {weeks.map((week, index) => (
-        <Fragment key={week.weekIndex}>
-          <tr
-            id={`week-row-${week.weekIndex}`}
-            data-week-index={week.weekIndex}
-            className={`border-b border-zinc-100 dark:border-zinc-800 ${
-              week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
-            } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
-          >
-            {index === 0 && (
-              <td rowSpan={rowSpan} className="w-28 px-2 py-2 align-top">
+      {weeks.map((week, index) => {
+        const isLastWeek = index === weeks.length - 1;
+        const weekExpanded = expanded.has(week.weekIndex);
+        const mainGutterIndex = gutterRowIndex;
+        gutterRowIndex += 1;
+
+        return (
+          <Fragment key={week.weekIndex}>
+            <tr
+              id={`week-row-${week.weekIndex}`}
+              data-week-index={week.weekIndex}
+              className={`border-b border-zinc-100 dark:border-zinc-800 ${
+                week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
+              } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
+            >
+              <td className="w-28 px-2 py-0 align-top">
                 <PhaseBandGutter
                   phase={phase}
+                  position={phaseBandGutterPosition(mainGutterIndex, gutterRowCount)}
+                  showLabel={index === 0}
+                  showTopHandle={index === 0}
+                  showBottomHandle={isLastWeek && !weekExpanded}
                   selected={selected}
                   isDragging={isDragging}
                   onSelect={onSelectPhase}
                   onDragStart={onDragStart}
                 />
               </td>
-            )}
-            <WeekCells
-              week={week}
-              expanded={expanded.has(week.weekIndex)}
-              onToggle={() => onToggleExpanded(week.weekIndex)}
-              onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
-            />
-          </tr>
-          {expanded.has(week.weekIndex) &&
-            DISCIPLINES.map((discipline) => (
-              <tr
-                key={`${week.weekIndex}-${discipline.key}`}
-                data-week-index={week.weekIndex}
-                className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
-              >
-                <td colSpan={3} className="px-3 py-1 pl-16 text-zinc-500">
-                  {discipline.label}
-                </td>
-                <td className="px-3 py-1 text-right">
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    className="ml-auto w-24 text-right"
-                    value={week[discipline.key]}
-                    onChange={(event) =>
-                      onUpdateWeek(week.weekIndex, {
-                        [discipline.key]: Number(event.target.value),
-                      })
-                    }
-                  />
-                </td>
-              </tr>
-            ))}
-        </Fragment>
-      ))}
+              <WeekCells
+                week={week}
+                expanded={weekExpanded}
+                onToggle={() => onToggleExpanded(week.weekIndex)}
+                onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
+              />
+            </tr>
+            {weekExpanded &&
+              DISCIPLINES.map((discipline, disciplineIndex) => {
+                const expandedGutterIndex = gutterRowIndex;
+                gutterRowIndex += 1;
+                const isLastGutterRow = expandedGutterIndex === gutterRowCount - 1;
+
+                return (
+                  <tr
+                    key={`${week.weekIndex}-${discipline.key}`}
+                    data-week-index={week.weekIndex}
+                    className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
+                  >
+                    <td className="w-28 px-2 py-0 align-top">
+                      <PhaseBandGutter
+                        phase={phase}
+                        position={phaseBandGutterPosition(expandedGutterIndex, gutterRowCount)}
+                        showLabel={false}
+                        showTopHandle={false}
+                        showBottomHandle={isLastGutterRow}
+                        selected={selected}
+                        isDragging={isDragging}
+                        onSelect={onSelectPhase}
+                        onDragStart={onDragStart}
+                      />
+                    </td>
+                    <td colSpan={3} className="px-3 py-1 pl-16 text-zinc-500">
+                      {discipline.label}
+                    </td>
+                    <td className="px-3 py-1 text-right">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="ml-auto w-24 text-right"
+                        value={week[discipline.key]}
+                        onChange={(event) =>
+                          onUpdateWeek(week.weekIndex, {
+                            [discipline.key]: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+          </Fragment>
+        );
+      })}
     </>
   );
 }
