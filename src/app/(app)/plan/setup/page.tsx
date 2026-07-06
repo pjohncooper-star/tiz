@@ -3,13 +3,24 @@ import { Suspense } from "react";
 import { SeasonSetupWizard } from "@/components/season/season-setup-wizard";
 import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
 import { db } from "@/lib/db";
-import { isSimpleSeasonPlannerEnabled, useSimpleSeasonPlannerOnly } from "@/lib/features";
+import {
+  isAdvancedSeasonPlannerEnabled,
+  isSimpleSeasonPlannerEnabled,
+} from "@/lib/features";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlanSetupPage() {
-  if (isSimpleSeasonPlannerEnabled() && useSimpleSeasonPlannerOnly()) {
-    redirect("/plan");
+export default async function PlanSetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ seasonId?: string }>;
+}) {
+  const { seasonId } = await searchParams;
+
+  if (isSimpleSeasonPlannerEnabled()) {
+    if (!isAdvancedSeasonPlannerEnabled() || !seasonId) {
+      redirect(seasonId ? `/plan?seasonId=${encodeURIComponent(seasonId)}` : "/plan");
+    }
   }
 
   const session = await requireAthlete();

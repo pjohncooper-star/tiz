@@ -2,8 +2,13 @@
  * Plan builder: anchor workouts on /plan (interim until season planner rebuild).
  * Enable with FEATURE_PLAN_BUILDER=true in .env
  */
+function envFlag(name: string): boolean {
+  const value = process.env[name]?.trim().toLowerCase();
+  return value === "true" || value === "1";
+}
+
 export function isPlanBuilderEnabled(): boolean {
-  return process.env.FEATURE_PLAN_BUILDER === "true";
+  return envFlag("FEATURE_PLAN_BUILDER");
 }
 
 /**
@@ -11,7 +16,7 @@ export function isPlanBuilderEnabled(): boolean {
  * Enable with FEATURE_SIMPLE_SEASON_PLANNER=true in .env
  */
 export function isSimpleSeasonPlannerEnabled(): boolean {
-  return process.env.FEATURE_SIMPLE_SEASON_PLANNER === "true";
+  return envFlag("FEATURE_SIMPLE_SEASON_PLANNER");
 }
 
 /**
@@ -19,7 +24,7 @@ export function isSimpleSeasonPlannerEnabled(): boolean {
  * Enable with FEATURE_ADVANCED_SEASON_PLANNER=true in .env
  */
 export function isAdvancedSeasonPlannerEnabled(): boolean {
-  return process.env.FEATURE_ADVANCED_SEASON_PLANNER === "true";
+  return envFlag("FEATURE_ADVANCED_SEASON_PLANNER");
 }
 
 /**
