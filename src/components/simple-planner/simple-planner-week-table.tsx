@@ -1,13 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { Button, Input } from "@/components/ui";
-import { phaseForWeek, type SimplePhase, type SimpleWeek } from "./simple-planner-types";
-import { formatWeekDateRange } from "./simple-planner-timeline";
+import { useCallback, useMemo, useState } from "react";
+import { Input } from "@/components/ui";
+import {
+  createPhaseAtWeek,
+  type SimplePhase,
+  type SimpleWeek,
+} from "@/components/simple-planner/simple-planner-types";
+import { formatWeekDateRange } from "@/components/simple-planner/simple-planner-timeline";
+import {
+  buildGutterSegments,
+  phaseForWeekIndex,
+  resizePhaseBottom,
+  resizePhaseTop,
+  weekIsAssigned,
+} from "@/lib/plan/season/phase-span-utils";
 
 type SimplePlannerWeekTableProps = {
   weeks: SimpleWeek[];
   phases: SimplePhase[];
+  selectedPhaseId: string | null;
+  onSelectPhase: (phaseId: string | null) => void;
   onWeeksChange: (weeks: SimpleWeek[]) => void;
   onPhasesChange: (phases: SimplePhase[]) => void;
   highlightedWeekIndex: number | null;
@@ -22,193 +35,294 @@ const DISCIPLINES = [
 export function SimplePlannerWeekTable({
   weeks,
   phases,
+  selectedPhaseId,
+  onSelectPhase,
   onWeeksChange,
   onPhasesChange,
   highlightedWeekIndex,
 }: SimplePlannerWeekTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const [editingPhase, setEditingPhase] = useState<SimplePhase | null>(null);
+  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<{
+    phaseId: string;
+    edge: "top" | "bottom";
+    pointerWeek: number;
+  } | null>(null);
 
-  function toggleExpanded(weekIndex: number) {
+  const gutterSegments = useMemo(() => buildGutterSegments(weeks, phases), [weeks, phases]);
+
+  const toggleExpanded = useCallback((weekIndex: number) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(weekIndex)) next.delete(weekIndex);
       else next.add(weekIndex);
       return next;
     });
-  }
+  }, []);
 
-  function updateWeek(weekIndex: number, patch: Partial<SimpleWeek>) {
-    onWeeksChange(
-      weeks.map((week) => {
-        if (week.weekIndex !== weekIndex) return week;
-        const swimHours = patch.swimHours ?? week.swimHours;
-        const bikeHours = patch.bikeHours ?? week.bikeHours;
-        const runHours = patch.runHours ?? week.runHours;
-        return {
-          ...week,
-          ...patch,
-          swimHours,
-          bikeHours,
-          runHours,
-          totalHours: round(swimHours + bikeHours + runHours),
-        };
-      })
-    );
-  }
+  const updateWeek = useCallback(
+    (weekIndex: number, patch: Partial<SimpleWeek>) => {
+      onWeeksChange(
+        weeks.map((week) => {
+          if (week.weekIndex !== weekIndex) return week;
+          const swimHours = patch.swimHours ?? week.swimHours;
+          const bikeHours = patch.bikeHours ?? week.bikeHours;
+          const runHours = patch.runHours ?? week.runHours;
+          return {
+            ...week,
+            ...patch,
+            swimHours,
+            bikeHours,
+            runHours,
+            totalHours: round(swimHours + bikeHours + runHours),
+          };
+        })
+      );
+    },
+    [onWeeksChange, weeks]
+  );
 
-  function updatePhase(updated: SimplePhase) {
-    onPhasesChange(
-      phases.map((phase) =>
-        (phase.id ?? phase.name) === (updated.id ?? updated.name) ? updated : phase
-      )
-    );
-    setEditingPhase(null);
-  }
+  const addPhaseAtWeek = useCallback(
+    (weekIndex: number) => {
+      if (weekIsAssigned(phases, weekIndex)) return;
+      const next = createPhaseAtWeek(weekIndex, phases.length + 1);
+      onPhasesChange([...phases, next]);
+      onSelectPhase(next.id ?? null);
+    },
+    [onPhasesChange, onSelectPhase, phases]
+  );
 
-  function addPhase() {
-    const lastEnd = phases.reduce((max, phase) => Math.max(max, phase.endWeekIndex), -1);
-    const startWeekIndex = Math.min(lastEnd + 1, weeks.length - 1);
-    const endWeekIndex = Math.min(startWeekIndex + 3, weeks.length - 1);
-    onPhasesChange([
-      ...phases,
-      {
-        name: `Phase ${phases.length + 1}`,
-        color: "#38bdf8",
-        startWeekIndex,
-        endWeekIndex,
-        rampEnabled: { swim: true, bike: true, run: true },
-      },
-    ]);
-  }
+  const updatePhase = useCallback(
+    (updated: SimplePhase) => {
+      onPhasesChange(
+        phases.map((phase) =>
+          (phase.id ?? phase.name) === (updated.id ?? updated.name) ? updated : phase
+        )
+      );
+    },
+    [onPhasesChange, phases]
+  );
 
-  function removePhase(phase: SimplePhase) {
-    onPhasesChange(
-      phases.filter((item) => (item.id ?? item.name) !== (phase.id ?? phase.name))
-    );
-    setEditingPhase(null);
-  }
+  const handleDragMove = useCallback(
+    (pointerWeek: number) => {
+      if (!dragging) return;
+      const phase = phases.find((item) => item.id === dragging.phaseId);
+      if (!phase) return;
+
+      if (dragging.edge === "top") {
+        updatePhase(resizePhaseTop(phase, phases, weeks.length, pointerWeek));
+      } else {
+        updatePhase(resizePhaseBottom(phase, phases, weeks.length, pointerWeek));
+      }
+    },
+    [dragging, phases, updatePhase, weeks.length]
+  );
 
   return (
-    <div className="space-y-3">
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
-              <th className="px-3 py-2">Phase</th>
-              <th className="px-3 py-2">Rest</th>
-              <th className="px-3 py-2">Wk</th>
-              <th className="px-3 py-2">Dates</th>
-              <th className="px-3 py-2 text-right">Total h</th>
-            </tr>
-          </thead>
-          <tbody>
-            {weeks.map((week) => {
-              const phase = phaseForWeek(phases, week.weekIndex);
-              const isExpanded = expanded.has(week.weekIndex);
-              const highlighted = highlightedWeekIndex === week.weekIndex;
+    <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <th className="w-28 px-2 py-2" />
+            <th className="px-3 py-2">Rest</th>
+            <th className="px-3 py-2">Wk</th>
+            <th className="px-3 py-2">Dates</th>
+            <th className="px-3 py-2 text-right">Total h</th>
+          </tr>
+        </thead>
+        <tbody
+          onPointerMove={(event) => {
+            if (!dragging) return;
+            const row = (event.target as HTMLElement).closest("tr[data-week-index]");
+            if (!row) return;
+            const weekIndex = Number(row.getAttribute("data-week-index"));
+            if (!Number.isNaN(weekIndex)) handleDragMove(weekIndex);
+          }}
+          onPointerUp={() => setDragging(null)}
+          onPointerLeave={() => setDragging(null)}
+        >
+          {gutterSegments.map((segment) => {
+            if (segment.kind === "unassigned") {
+              const week = weeks.find((item) => item.weekIndex === segment.weekIndex)!;
               return (
-                <WeekRows
-                  key={week.weekIndex}
+                <WeekRowGroup
+                  key={`unassigned-${week.weekIndex}`}
                   week={week}
-                  phase={phase}
-                  isExpanded={isExpanded}
-                  highlighted={highlighted}
+                  gutter={
+                    <UnassignedGutter
+                      weekIndex={week.weekIndex}
+                      visible={hoveredWeek === week.weekIndex}
+                      onHover={setHoveredWeek}
+                      onAdd={() => addPhaseAtWeek(week.weekIndex)}
+                    />
+                  }
+                  expanded={expanded.has(week.weekIndex)}
+                  highlighted={highlightedWeekIndex === week.weekIndex}
                   onToggle={() => toggleExpanded(week.weekIndex)}
-                  onEditPhase={() => phase && setEditingPhase(phase)}
                   onUpdateWeek={(patch) => updateWeek(week.weekIndex, patch)}
                 />
               );
-            })}
-          </tbody>
-        </table>
-      </div>
+            }
 
-      <Button type="button" variant="secondary" onClick={addPhase}>
-        Add phase
-      </Button>
+            const phase = segment.phase;
+            const bandWeeks = weeks.filter((week) =>
+              phaseForWeekIndex(phases, week.weekIndex)?.id === phase.id
+            );
+            const expandedRowCount = bandWeeks.reduce(
+              (sum, week) => sum + 1 + (expanded.has(week.weekIndex) ? DISCIPLINES.length : 0),
+              0
+            );
 
-      {editingPhase && (
-        <PhaseEditorPanel
-          phase={editingPhase}
-          totalWeeks={weeks.length}
-          onSave={updatePhase}
-          onDelete={() => removePhase(editingPhase)}
-          onClose={() => setEditingPhase(null)}
-        />
-      )}
+            return (
+              <PhaseBandRows
+                key={phase.id ?? phase.name}
+                phase={phase}
+                weeks={bandWeeks}
+                rowSpan={expandedRowCount}
+                selected={selectedPhaseId === phase.id}
+                expanded={expanded}
+                highlightedWeekIndex={highlightedWeekIndex}
+                onSelectPhase={() => onSelectPhase(phase.id ?? null)}
+                onToggleExpanded={toggleExpanded}
+                onUpdateWeek={updateWeek}
+                onDragStart={(edge) =>
+                  phase.id &&
+                  setDragging({ phaseId: phase.id, edge, pointerWeek: phase.startWeekIndex })
+                }
+              />
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function WeekRows({
-  week,
+function UnassignedGutter({
+  weekIndex,
+  visible,
+  onHover,
+  onAdd,
+}: {
+  weekIndex: number;
+  visible: boolean;
+  onHover: (weekIndex: number | null) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div
+      className="flex h-full min-h-[2.5rem] items-center justify-center"
+      onMouseEnter={() => onHover(weekIndex)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <button
+        type="button"
+        onClick={onAdd}
+        className={`flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-zinc-300 text-lg leading-none text-zinc-500 transition hover:border-sky-500 hover:text-sky-600 dark:border-zinc-600 ${
+          visible ? "opacity-100" : "opacity-0 md:opacity-0"
+        } ${visible ? "md:opacity-100" : "md:group-hover:opacity-100"}`}
+        aria-label={`Add phase at week ${weekIndex + 1}`}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+function PhaseBandGutter({
   phase,
-  isExpanded,
+  selected,
+  onSelect,
+  onDragStart,
+}: {
+  phase: SimplePhase;
+  selected: boolean;
+  onSelect: () => void;
+  onDragStart: (edge: "top" | "bottom") => void;
+}) {
+  return (
+    <div
+      className={`relative flex h-full min-h-full flex-col rounded-md border-2 transition ${
+        selected ? "border-sky-500" : "border-transparent"
+      }`}
+      style={{ backgroundColor: `${phase.color}33` }}
+    >
+      <button
+        type="button"
+        aria-label="Resize phase start"
+        className="hidden h-2 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          onDragStart("top");
+        }}
+      />
+      <button
+        type="button"
+        onClick={onSelect}
+        className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 py-2 text-center"
+      >
+        <span
+          className="mb-1 h-2 w-2 rounded-full"
+          style={{ backgroundColor: phase.color }}
+        />
+        <span className="text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">
+          {phase.name}
+        </span>
+      </button>
+      <button
+        type="button"
+        aria-label="Resize phase end"
+        className="hidden h-2 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          onDragStart("bottom");
+        }}
+      />
+    </div>
+  );
+}
+
+function WeekRowGroup({
+  week,
+  gutter,
+  expanded,
   highlighted,
   onToggle,
-  onEditPhase,
   onUpdateWeek,
 }: {
   week: SimpleWeek;
-  phase: SimplePhase | null;
-  isExpanded: boolean;
+  gutter: React.ReactNode;
+  expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
-  onEditPhase: () => void;
   onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
 }) {
   return (
     <>
       <tr
         id={`week-row-${week.weekIndex}`}
-        className={`border-b border-zinc-100 dark:border-zinc-800 ${
+        data-week-index={week.weekIndex}
+        className={`group border-b border-zinc-100 dark:border-zinc-800 ${
           week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
         } ${highlighted ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
       >
-        <td className="px-3 py-2">
-          {phase ? (
-            <button
-              type="button"
-              onClick={onEditPhase}
-              className="rounded px-2 py-1 text-xs font-medium text-white"
-              style={{ backgroundColor: phase.color }}
-            >
-              {phase.name}
-            </button>
-          ) : (
-            <span className="text-xs text-zinc-400">—</span>
-          )}
-        </td>
-        <td className="px-3 py-2">
-          <input
-            type="checkbox"
-            checked={week.isRestWeek}
-            onChange={(event) => onUpdateWeek({ isRestWeek: event.target.checked })}
-            aria-label={`Rest week ${week.weekIndex + 1}`}
-          />
-        </td>
-        <td className="px-3 py-2">
-          <button
-            type="button"
-            onClick={onToggle}
-            className="font-medium text-sky-600 dark:text-sky-400"
-          >
-            {isExpanded ? "▼" : "▶"} {week.weekIndex + 1}
-          </button>
-        </td>
-        <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">
-          {formatWeekDateRange(week.weekStartDate)}
-        </td>
-        <td className="px-3 py-2 text-right font-medium">{week.totalHours}</td>
+        <td className="px-2 py-2 align-middle">{gutter}</td>
+        <WeekCells
+          week={week}
+          expanded={expanded}
+          onToggle={onToggle}
+          onUpdateWeek={onUpdateWeek}
+        />
       </tr>
-      {isExpanded &&
+      {expanded &&
         DISCIPLINES.map((discipline) => (
           <tr
             key={`${week.weekIndex}-${discipline.key}`}
+            data-week-index={week.weekIndex}
             className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
           >
-            <td colSpan={4} className="px-3 py-1 pl-16 text-zinc-500">
+            <td />
+            <td colSpan={3} className="px-3 py-1 pl-16 text-zinc-500">
               {discipline.label}
             </td>
             <td className="px-3 py-1 text-right">
@@ -229,115 +343,129 @@ function WeekRows({
   );
 }
 
-function round(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
-function PhaseEditorPanel({
+function PhaseBandRows({
   phase,
-  totalWeeks,
-  onSave,
-  onDelete,
-  onClose,
+  weeks,
+  rowSpan,
+  selected,
+  expanded,
+  highlightedWeekIndex,
+  onSelectPhase,
+  onToggleExpanded,
+  onUpdateWeek,
+  onDragStart,
 }: {
   phase: SimplePhase;
-  totalWeeks: number;
-  onSave: (phase: SimplePhase) => void;
-  onDelete: () => void;
-  onClose: () => void;
+  weeks: SimpleWeek[];
+  rowSpan: number;
+  selected: boolean;
+  expanded: Set<number>;
+  highlightedWeekIndex: number | null;
+  onSelectPhase: () => void;
+  onToggleExpanded: (weekIndex: number) => void;
+  onUpdateWeek: (weekIndex: number, patch: Partial<SimpleWeek>) => void;
+  onDragStart: (edge: "top" | "bottom") => void;
 }) {
-  const [draft, setDraft] = useState(phase);
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-        <h3 className="text-lg font-semibold">Phase</h3>
-        <div className="mt-4 space-y-3">
-          <label className="block text-sm">
-            Label
-            <Input
-              className="mt-1"
-              value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-            />
-          </label>
-          <label className="block text-sm">
-            Color
-            <Input
-              className="mt-1"
-              type="color"
-              value={draft.color}
-              onChange={(event) => setDraft({ ...draft, color: event.target.value })}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block text-sm">
-              From week
-              <Input
-                className="mt-1"
-                type="number"
-                min={1}
-                max={totalWeeks}
-                value={draft.startWeekIndex + 1}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    startWeekIndex: Math.max(0, Number(event.target.value) - 1),
-                  })
-                }
+    <>
+      {weeks.map((week, index) => (
+        <tr
+          key={week.weekIndex}
+          id={`week-row-${week.weekIndex}`}
+          data-week-index={week.weekIndex}
+          className={`border-b border-zinc-100 dark:border-zinc-800 ${
+            week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
+          } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
+        >
+          {index === 0 && (
+            <td rowSpan={rowSpan} className="w-28 px-2 py-2 align-top">
+              <PhaseBandGutter
+                phase={phase}
+                selected={selected}
+                onSelect={onSelectPhase}
+                onDragStart={onDragStart}
               />
-            </label>
-            <label className="block text-sm">
-              To week
-              <Input
-                className="mt-1"
-                type="number"
-                min={1}
-                max={totalWeeks}
-                value={draft.endWeekIndex + 1}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    endWeekIndex: Math.min(totalWeeks - 1, Number(event.target.value) - 1),
-                  })
-                }
-              />
-            </label>
-          </div>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Ramp by discipline</legend>
-            {(["swim", "bike", "run"] as const).map((discipline) => (
-              <label key={discipline} className="flex items-center gap-2 text-sm capitalize">
-                <input
-                  type="checkbox"
-                  checked={draft.rampEnabled[discipline]}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      rampEnabled: {
-                        ...draft.rampEnabled,
-                        [discipline]: event.target.checked,
-                      },
-                    })
-                  }
-                />
-                {discipline} ramp on
-              </label>
-            ))}
-          </fieldset>
-        </div>
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button type="button" onClick={() => onSave(draft)}>
-            Done
-          </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" variant="secondary" onClick={onDelete}>
-            Delete phase
-          </Button>
-        </div>
-      </div>
-    </div>
+            </td>
+          )}
+          <WeekCells
+            week={week}
+            expanded={expanded.has(week.weekIndex)}
+            onToggle={() => onToggleExpanded(week.weekIndex)}
+            onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
+          />
+        </tr>
+      ))}
+      {weeks.flatMap((week) =>
+        expanded.has(week.weekIndex)
+          ? DISCIPLINES.map((discipline) => (
+              <tr
+                key={`${week.weekIndex}-${discipline.key}`}
+                data-week-index={week.weekIndex}
+                className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
+              >
+                <td colSpan={3} className="px-3 py-1 pl-16 text-zinc-500">
+                  {discipline.label}
+                </td>
+                <td className="px-3 py-1 text-right">
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    className="ml-auto w-24 text-right"
+                    value={week[discipline.key]}
+                    onChange={(event) =>
+                      onUpdateWeek(week.weekIndex, {
+                        [discipline.key]: Number(event.target.value),
+                      })
+                    }
+                  />
+                </td>
+              </tr>
+            ))
+          : []
+      )}
+    </>
   );
+}
+
+function WeekCells({
+  week,
+  expanded,
+  onToggle,
+  onUpdateWeek,
+}: {
+  week: SimpleWeek;
+  expanded: boolean;
+  onToggle: () => void;
+  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
+}) {
+  return (
+    <>
+      <td className="px-3 py-2">
+        <input
+          type="checkbox"
+          checked={week.isRestWeek}
+          onChange={(event) => onUpdateWeek({ isRestWeek: event.target.checked })}
+          aria-label={`Rest week ${week.weekIndex + 1}`}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="font-medium text-sky-600 dark:text-sky-400"
+        >
+          {expanded ? "▼" : "▶"} {week.weekIndex + 1}
+        </button>
+      </td>
+      <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">
+        {formatWeekDateRange(week.weekStartDate)}
+      </td>
+      <td className="px-3 py-2 text-right font-medium">{week.totalHours}</td>
+    </>
+  );
+}
+
+function round(value: number): number {
+  return Math.round(value * 10) / 10;
 }

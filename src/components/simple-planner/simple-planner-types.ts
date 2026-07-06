@@ -1,4 +1,7 @@
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
+import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
+
+export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
 
 export type SimpleGoalEvent = {
   id?: string;
@@ -19,6 +22,7 @@ export type SimplePhase = {
     bike: boolean;
     run: boolean;
   };
+  goal: string | null;
 };
 
 export type SimpleWeek = {
@@ -45,8 +49,6 @@ export type SimpleSeason = {
   primaryGoalEvent: SimpleGoalEvent | null;
 };
 
-export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
-
 export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   return {
     name: "",
@@ -56,53 +58,26 @@ export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   };
 }
 
-export function defaultPhase(totalWeeks: number, index: number): SimplePhase {
-  const span = Math.max(1, Math.floor(totalWeeks / 3));
-  const startWeekIndex = Math.min(index * span, totalWeeks - 1);
-  const endWeekIndex = Math.min(startWeekIndex + span - 1, totalWeeks - 1);
+export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase {
   return {
-    name: `Phase ${index + 1}`,
+    id: newPhaseId(),
+    name: `Phase ${index}`,
     color: PHASE_COLORS[index % PHASE_COLORS.length] ?? "#38bdf8",
-    startWeekIndex,
-    endWeekIndex,
+    startWeekIndex: weekIndex,
+    endWeekIndex: weekIndex,
     rampEnabled: { swim: true, bike: true, run: true },
+    goal: null,
   };
 }
 
-export function phaseForWeek(phases: SimplePhase[], weekIndex: number): SimplePhase | null {
-  return (
-    phases.find(
-      (phase) => weekIndex >= phase.startWeekIndex && weekIndex <= phase.endWeekIndex
-    ) ?? null
-  );
-}
-
-export type TableSegment = {
-  phase: SimplePhase | null;
-  weeks: SimpleWeek[];
-};
-
-export function buildTableSegments(weeks: SimpleWeek[], phases: SimplePhase[]): TableSegment[] {
-  const segments: TableSegment[] = [];
-  let index = 0;
-
-  while (index < weeks.length) {
-    const week = weeks[index]!;
-    const phase = phaseForWeek(phases, week.weekIndex);
-    const phaseKey = phase?.id ?? phase?.name ?? null;
-    const group: SimpleWeek[] = [];
-
-    while (index < weeks.length) {
-      const current = weeks[index]!;
-      const currentPhase = phaseForWeek(phases, current.weekIndex);
-      const currentKey = currentPhase?.id ?? currentPhase?.name ?? null;
-      if (currentKey !== phaseKey) break;
-      group.push(current);
-      index += 1;
-    }
-
-    segments.push({ phase, weeks: group });
-  }
-
-  return segments;
+export function createEmptyPhase(index: number): SimplePhase {
+  return {
+    id: newPhaseId(),
+    name: `Phase ${index}`,
+    color: PHASE_COLORS[index % PHASE_COLORS.length] ?? "#38bdf8",
+    startWeekIndex: -1,
+    endWeekIndex: -1,
+    rampEnabled: { swim: true, bike: true, run: true },
+    goal: null,
+  };
 }

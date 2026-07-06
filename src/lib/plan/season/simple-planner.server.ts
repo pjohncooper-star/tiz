@@ -46,6 +46,7 @@ export type SimplePhaseWrite = {
   startWeekIndex: number;
   endWeekIndex: number;
   rampEnabled: Record<SimpleDiscipline, boolean>;
+  goal?: string | null;
 };
 
 export type SimpleWeekWrite = {
@@ -106,18 +107,26 @@ function rampDefaultsToPlanFields(defaults: SimpleRampDefaults) {
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
   return [...phases]
-    .sort((a, b) => a.startWeekIndex - b.startWeekIndex)
-    .map((phase, sortOrder) => ({
-      id: phase.id ?? cuid(),
-      name: phase.name.trim() || `Phase ${sortOrder + 1}`,
-      sortOrder,
-      weekCount: phase.endWeekIndex - phase.startWeekIndex + 1,
-      startWeekIndex: phase.startWeekIndex,
-      color: phase.color || "#38bdf8",
-      rampSwimEnabled: phase.rampEnabled.swim,
-      rampBikeEnabled: phase.rampEnabled.bike,
-      rampRunEnabled: phase.rampEnabled.run,
-    }));
+    .sort((a, b) => {
+      const aStart = a.startWeekIndex < 0 ? Number.MAX_SAFE_INTEGER : a.startWeekIndex;
+      const bStart = b.startWeekIndex < 0 ? Number.MAX_SAFE_INTEGER : b.startWeekIndex;
+      return aStart - bStart;
+    })
+    .map((phase, sortOrder) => {
+      const assigned = phase.startWeekIndex >= 0 && phase.endWeekIndex >= phase.startWeekIndex;
+      return {
+        id: phase.id ?? cuid(),
+        name: phase.name.trim() || `Phase ${sortOrder + 1}`,
+        sortOrder,
+        weekCount: assigned ? phase.endWeekIndex - phase.startWeekIndex + 1 : 0,
+        startWeekIndex: assigned ? phase.startWeekIndex : -1,
+        color: phase.color || "#38bdf8",
+        rampSwimEnabled: phase.rampEnabled.swim,
+        rampBikeEnabled: phase.rampEnabled.bike,
+        rampRunEnabled: phase.rampEnabled.run,
+        coachNotes: phase.goal?.trim() || null,
+      };
+    });
 }
 
 function buildInitialWeeks(totalWeeks: number, defaults: SimpleRampDefaults): SimpleWeekVolume[] {
@@ -187,11 +196,13 @@ function weeksFromDb(
 }
 
 function phaseSpansFromWrites(phases: SimplePhaseWrite[]): SimplePhaseSpan[] {
-  return phases.map((phase) => ({
-    startWeekIndex: phase.startWeekIndex,
-    endWeekIndex: phase.endWeekIndex,
-    rampEnabled: phase.rampEnabled,
-  }));
+  return phases
+    .filter((phase) => phase.startWeekIndex >= 0 && phase.endWeekIndex >= phase.startWeekIndex)
+    .map((phase) => ({
+      startWeekIndex: phase.startWeekIndex,
+      endWeekIndex: phase.endWeekIndex,
+      rampEnabled: phase.rampEnabled,
+    }));
 }
 
 function defaultPhaseKind(_name: string): PhaseKind {
@@ -381,8 +392,10 @@ export async function updateSimpleSeasonPlan(
             name: phase.name,
             sortOrder: phase.sortOrder,
             weekCount: phase.weekCount,
+            startWeekIndex: phase.startWeekIndex,
             phaseKind: defaultPhaseKind(phase.name),
             color: phase.color,
+            coachNotes: phase.coachNotes,
             rampSwimEnabled: phase.rampSwimEnabled,
             rampBikeEnabled: phase.rampBikeEnabled,
             rampRunEnabled: phase.rampRunEnabled,
@@ -459,9 +472,17 @@ export function serializeSimpleSeasonPlan(
   const phases = [...plan.phases]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((phase) => {
-      const startWeekIndex = cursor;
-      const endWeekIndex = cursor + phase.weekCount - 1;
-      cursor += phase.weekCount;
+      const hasStoredStart = "startWeekIndex" in phase && phase.startWeekIndex >= 0;
+      const assigned = phase.weekCount > 0;
+      const startWeekIndex = assigned
+        ? hasStoredStart
+          ? phase.startWeekIndex
+          : cursor
+        : -1;
+      const endWeekIndex = assigned ? startWeekIndex + phase.weekCount - 1 : -1;
+      if (assigned && !hasStoredStart) {
+        cursor += phase.weekCount;
+      }
       return {
         id: phase.id,
         name: phase.name,
@@ -473,6 +494,7 @@ export function serializeSimpleSeasonPlan(
           bike: phase.rampBikeEnabled,
           run: phase.rampRunEnabled,
         },
+        goal: phase.coachNotes ?? null,
       };
     });
 

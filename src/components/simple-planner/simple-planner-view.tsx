@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
+import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
 import {
@@ -40,6 +41,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
 
   const [createMode, setCreateMode] = useState(false);
   const [draftName, setDraftName] = useState("2026 Season");
@@ -315,6 +317,16 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         />
       </Card>
 
+      <Card title="Phases">
+        <SimplePlannerPhasesPane
+          phases={season.phases}
+          totalWeeks={season.totalWeeks}
+          selectedPhaseId={selectedPhaseId}
+          onSelectPhase={setSelectedPhaseId}
+          onPhasesChange={(phases) => setSeason({ ...season, phases })}
+        />
+      </Card>
+
       <Card title="Ramp defaults">
         <RampDefaultsEditor
           value={season.rampDefaults}
@@ -335,6 +347,8 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         <SimplePlannerWeekTable
           weeks={season.weeks}
           phases={season.phases}
+          selectedPhaseId={selectedPhaseId}
+          onSelectPhase={setSelectedPhaseId}
           highlightedWeekIndex={selectedWeekIndex}
           onWeeksChange={(weeks) => setSeason({ ...season, weeks })}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}

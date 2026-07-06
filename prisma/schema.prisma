@@ -528,6 +528,7 @@ model SeasonPhase {
   name               String
   sortOrder          Int
   weekCount          Int
+  startWeekIndex     Int        @default(0)
   phaseKind          PhaseKind
   color              String     @default("#38bdf8")
   coachNotes         String?

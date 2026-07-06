@@ -435,18 +435,27 @@ export const simpleRampDefaultsSchema = z.object({
   run: simpleDisciplineRampSchema,
 });
 
-export const simplePhaseSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1),
-  color: z.string().min(1),
-  startWeekIndex: z.number().int().nonnegative(),
-  endWeekIndex: z.number().int().nonnegative(),
-  rampEnabled: z.object({
-    swim: z.boolean(),
-    bike: z.boolean(),
-    run: z.boolean(),
-  }),
-});
+export const simplePhaseSchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().min(1),
+    color: z.string().min(1),
+    startWeekIndex: z.number().int(),
+    endWeekIndex: z.number().int(),
+    rampEnabled: z.object({
+      swim: z.boolean(),
+      bike: z.boolean(),
+      run: z.boolean(),
+    }),
+    goal: z.string().nullable().optional(),
+  })
+  .refine(
+    (phase) =>
+      (phase.startWeekIndex < 0 && phase.endWeekIndex < 0) ||
+      (phase.startWeekIndex >= 0 &&
+        phase.endWeekIndex >= phase.startWeekIndex),
+    { message: "Invalid phase week span" }
+  );
 
 export const simpleWeekSchema = z.object({
   weekIndex: z.number().int().nonnegative(),

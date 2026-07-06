@@ -8,6 +8,7 @@ import {
   goalEventsForRaceMarkers,
 } from "@/lib/plan/season/preview-race-markers";
 import { monthTicksForWeeks } from "@/lib/plan/season/season-dates";
+import { isAssignedPhase, phaseForWeekIndex } from "@/lib/plan/season/phase-span-utils";
 import type { SimpleGoalEvent, SimplePhase, SimpleWeek } from "./simple-planner-types";
 
 type SimplePlannerTimelineProps = {
@@ -49,11 +50,10 @@ export function SimplePlannerTimeline({
   );
 
   function phaseColor(weekIndex: number): string {
-    const phase = phases.find(
-      (item) => weekIndex >= item.startWeekIndex && weekIndex <= item.endWeekIndex
-    );
-    return phase?.color ?? "#94a3b8";
+    return phaseForWeekIndex(phases, weekIndex)?.color ?? "#94a3b8";
   }
+
+  const assignedPhases = useMemo(() => phases.filter(isAssignedPhase), [phases]);
 
   return (
     <div className="space-y-3">
@@ -117,7 +117,7 @@ export function SimplePlannerTimeline({
       )}
 
       <div className="relative h-4">
-        {phases.map((phase) => {
+        {assignedPhases.map((phase) => {
           const widthPct =
             ((phase.endWeekIndex - phase.startWeekIndex + 1) / displayWeeks) * 100;
           const leftPct = (phase.startWeekIndex / displayWeeks) * 100;
