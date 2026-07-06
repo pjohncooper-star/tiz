@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui";
 import {
   createPhaseAtWeek,
@@ -26,11 +26,45 @@ type SimplePlannerWeekTableProps = {
   highlightedWeekIndex: number | null;
 };
 
+type DragState = {
+  phaseId: string;
+  edge: "top" | "bottom";
+};
+
+type DragPreview = {
+  phaseId: string;
+  startWeekIndex: number;
+  endWeekIndex: number;
+};
+
 const DISCIPLINES = [
   { key: "swimHours" as const, label: "Swim" },
   { key: "bikeHours" as const, label: "Bike" },
   { key: "runHours" as const, label: "Run" },
 ];
+
+function weekIndexFromPointer(clientY: number): number | null {
+  const rows = document.querySelectorAll<HTMLTableRowElement>("tbody tr[data-week-index]");
+  let nearest: { weekIndex: number; distance: number } | null = null;
+
+  for (const row of rows) {
+    const weekIndex = Number(row.dataset.weekIndex);
+    if (Number.isNaN(weekIndex)) continue;
+
+    const rect = row.getBoundingClientRect();
+    if (clientY >= rect.top && clientY <= rect.bottom) {
+      return weekIndex;
+    }
+
+    const distance =
+      clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0;
+    if (!nearest || distance < nearest.distance) {
+      nearest = { weekIndex, distance };
+    }
+  }
+
+  return nearest?.weekIndex ?? null;
+}
 
 export function SimplePlannerWeekTable({
   weeks,
@@ -43,13 +77,33 @@ export function SimplePlannerWeekTable({
 }: SimplePlannerWeekTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
-  const [dragging, setDragging] = useState<{
-    phaseId: string;
-    edge: "top" | "bottom";
-    pointerWeek: number;
-  } | null>(null);
+  const [dragging, setDragging] = useState<DragState | null>(null);
+  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
 
-  const gutterSegments = useMemo(() => buildGutterSegments(weeks, phases), [weeks, phases]);
+  const phasesRef = useRef(phases);
+  phasesRef.current = phases;
+  const weeksLengthRef = useRef(weeks.length);
+  weeksLengthRef.current = weeks.length;
+  const dragPreviewRef = useRef(dragPreview);
+  dragPreviewRef.current = dragPreview;
+
+  const displayPhases = useMemo(() => {
+    if (!dragPreview) return phases;
+    return phases.map((phase) =>
+      phase.id === dragPreview.phaseId
+        ? {
+            ...phase,
+            startWeekIndex: dragPreview.startWeekIndex,
+            endWeekIndex: dragPreview.endWeekIndex,
+          }
+        : phase
+    );
+  }, [dragPreview, phases]);
+
+  const gutterSegments = useMemo(
+    () => buildGutterSegments(weeks, displayPhases),
+    [displayPhases, weeks]
+  );
 
   const toggleExpanded = useCallback((weekIndex: number) => {
     setExpanded((prev) => {
@@ -92,34 +146,84 @@ export function SimplePlannerWeekTable({
     [onPhasesChange, onSelectPhase, phases]
   );
 
-  const updatePhase = useCallback(
-    (updated: SimplePhase) => {
-      onPhasesChange(
-        phases.map((phase) =>
-          (phase.id ?? phase.name) === (updated.id ?? updated.name) ? updated : phase
-        )
-      );
-    },
-    [onPhasesChange, phases]
-  );
+  const applyDragAtWeek = useCallback((pointerWeek: number, drag: DragState) => {
+    const phase = phasesRef.current.find((item) => item.id === drag.phaseId);
+    if (!phase) return;
 
-  const handleDragMove = useCallback(
-    (pointerWeek: number) => {
-      if (!dragging) return;
-      const phase = phases.find((item) => item.id === dragging.phaseId);
-      if (!phase) return;
+    const resized =
+      drag.edge === "top"
+        ? resizePhaseTop(phase, phasesRef.current, weeksLengthRef.current, pointerWeek)
+        : resizePhaseBottom(phase, phasesRef.current, weeksLengthRef.current, pointerWeek);
 
-      if (dragging.edge === "top") {
-        updatePhase(resizePhaseTop(phase, phases, weeks.length, pointerWeek));
-      } else {
-        updatePhase(resizePhaseBottom(phase, phases, weeks.length, pointerWeek));
+    setDragPreview({
+      phaseId: drag.phaseId,
+      startWeekIndex: resized.startWeekIndex,
+      endWeekIndex: resized.endWeekIndex,
+    });
+  }, []);
+
+  const startDrag = useCallback(
+    (phaseId: string, edge: "top" | "bottom", clientY: number) => {
+      const drag = { phaseId, edge };
+      setDragging(drag);
+      const pointerWeek = weekIndexFromPointer(clientY);
+      if (pointerWeek !== null) {
+        applyDragAtWeek(pointerWeek, drag);
       }
     },
-    [dragging, phases, updatePhase, weeks.length]
+    [applyDragAtWeek]
   );
 
+  useEffect(() => {
+    if (!dragging) return;
+    const activeDrag = dragging;
+
+    function finishDrag() {
+      const preview = dragPreviewRef.current;
+      if (preview) {
+        onPhasesChange(
+          phasesRef.current.map((phase) =>
+            phase.id === preview.phaseId
+              ? {
+                  ...phase,
+                  startWeekIndex: preview.startWeekIndex,
+                  endWeekIndex: preview.endWeekIndex,
+                }
+              : phase
+          )
+        );
+      }
+      setDragging(null);
+      setDragPreview(null);
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      const pointerWeek = weekIndexFromPointer(event.clientY);
+      if (pointerWeek === null) return;
+      applyDragAtWeek(pointerWeek, activeDrag);
+    }
+
+    function onPointerEnd() {
+      finishDrag();
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, [applyDragAtWeek, dragging, onPhasesChange]);
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+    <div
+      className={`overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800 ${
+        dragging ? "select-none" : ""
+      }`}
+    >
       <table className="min-w-full text-sm">
         <thead>
           <tr className="border-b border-zinc-200 bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -130,17 +234,7 @@ export function SimplePlannerWeekTable({
             <th className="px-3 py-2 text-right">Total h</th>
           </tr>
         </thead>
-        <tbody
-          onPointerMove={(event) => {
-            if (!dragging) return;
-            const row = (event.target as HTMLElement).closest("tr[data-week-index]");
-            if (!row) return;
-            const weekIndex = Number(row.getAttribute("data-week-index"));
-            if (!Number.isNaN(weekIndex)) handleDragMove(weekIndex);
-          }}
-          onPointerUp={() => setDragging(null)}
-          onPointerLeave={() => setDragging(null)}
-        >
+        <tbody>
           {gutterSegments.map((segment) => {
             if (segment.kind === "unassigned") {
               const week = weeks.find((item) => item.weekIndex === segment.weekIndex)!;
@@ -164,9 +258,9 @@ export function SimplePlannerWeekTable({
               );
             }
 
-            const phase = segment.phase;
-            const bandWeeks = weeks.filter((week) =>
-              phaseForWeekIndex(phases, week.weekIndex)?.id === phase.id
+            const phase = displayPhases.find((item) => item.id === segment.phase.id) ?? segment.phase;
+            const bandWeeks = weeks.filter(
+              (week) => phaseForWeekIndex(displayPhases, week.weekIndex)?.id === phase.id
             );
             const expandedRowCount = bandWeeks.reduce(
               (sum, week) => sum + 1 + (expanded.has(week.weekIndex) ? DISCIPLINES.length : 0),
@@ -180,15 +274,13 @@ export function SimplePlannerWeekTable({
                 weeks={bandWeeks}
                 rowSpan={expandedRowCount}
                 selected={selectedPhaseId === phase.id}
+                isDragging={dragging?.phaseId === phase.id}
                 expanded={expanded}
                 highlightedWeekIndex={highlightedWeekIndex}
                 onSelectPhase={() => onSelectPhase(phase.id ?? null)}
                 onToggleExpanded={toggleExpanded}
                 onUpdateWeek={updateWeek}
-                onDragStart={(edge) =>
-                  phase.id &&
-                  setDragging({ phaseId: phase.id, edge, pointerWeek: phase.startWeekIndex })
-                }
+                onDragStart={(edge, clientY) => phase.id && startDrag(phase.id, edge, clientY)}
               />
             );
           })}
@@ -232,28 +324,32 @@ function UnassignedGutter({
 function PhaseBandGutter({
   phase,
   selected,
+  isDragging,
   onSelect,
   onDragStart,
 }: {
   phase: SimplePhase;
   selected: boolean;
+  isDragging: boolean;
   onSelect: () => void;
-  onDragStart: (edge: "top" | "bottom") => void;
+  onDragStart: (edge: "top" | "bottom", clientY: number) => void;
 }) {
   return (
     <div
       className={`relative flex h-full min-h-full flex-col rounded-md border-2 transition ${
-        selected ? "border-sky-500" : "border-transparent"
+        selected || isDragging ? "border-sky-500" : "border-transparent"
       }`}
       style={{ backgroundColor: `${phase.color}33` }}
     >
       <button
         type="button"
         aria-label="Resize phase start"
-        className="hidden h-2 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+        className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+        style={{ touchAction: "none" }}
         onPointerDown={(event) => {
           event.preventDefault();
-          onDragStart("top");
+          event.stopPropagation();
+          onDragStart("top", event.clientY);
         }}
       />
       <button
@@ -272,10 +368,12 @@ function PhaseBandGutter({
       <button
         type="button"
         aria-label="Resize phase end"
-        className="hidden h-2 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+        className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+        style={{ touchAction: "none" }}
         onPointerDown={(event) => {
           event.preventDefault();
-          onDragStart("bottom");
+          event.stopPropagation();
+          onDragStart("bottom", event.clientY);
         }}
       />
     </div>
@@ -348,6 +446,7 @@ function PhaseBandRows({
   weeks,
   rowSpan,
   selected,
+  isDragging,
   expanded,
   highlightedWeekIndex,
   onSelectPhase,
@@ -359,45 +458,45 @@ function PhaseBandRows({
   weeks: SimpleWeek[];
   rowSpan: number;
   selected: boolean;
+  isDragging: boolean;
   expanded: Set<number>;
   highlightedWeekIndex: number | null;
   onSelectPhase: () => void;
   onToggleExpanded: (weekIndex: number) => void;
   onUpdateWeek: (weekIndex: number, patch: Partial<SimpleWeek>) => void;
-  onDragStart: (edge: "top" | "bottom") => void;
+  onDragStart: (edge: "top" | "bottom", clientY: number) => void;
 }) {
   return (
     <>
       {weeks.map((week, index) => (
-        <tr
-          key={week.weekIndex}
-          id={`week-row-${week.weekIndex}`}
-          data-week-index={week.weekIndex}
-          className={`border-b border-zinc-100 dark:border-zinc-800 ${
-            week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
-          } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
-        >
-          {index === 0 && (
-            <td rowSpan={rowSpan} className="w-28 px-2 py-2 align-top">
-              <PhaseBandGutter
-                phase={phase}
-                selected={selected}
-                onSelect={onSelectPhase}
-                onDragStart={onDragStart}
-              />
-            </td>
-          )}
-          <WeekCells
-            week={week}
-            expanded={expanded.has(week.weekIndex)}
-            onToggle={() => onToggleExpanded(week.weekIndex)}
-            onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
-          />
-        </tr>
-      ))}
-      {weeks.flatMap((week) =>
-        expanded.has(week.weekIndex)
-          ? DISCIPLINES.map((discipline) => (
+        <Fragment key={week.weekIndex}>
+          <tr
+            id={`week-row-${week.weekIndex}`}
+            data-week-index={week.weekIndex}
+            className={`border-b border-zinc-100 dark:border-zinc-800 ${
+              week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
+            } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
+          >
+            {index === 0 && (
+              <td rowSpan={rowSpan} className="w-28 px-2 py-2 align-top">
+                <PhaseBandGutter
+                  phase={phase}
+                  selected={selected}
+                  isDragging={isDragging}
+                  onSelect={onSelectPhase}
+                  onDragStart={onDragStart}
+                />
+              </td>
+            )}
+            <WeekCells
+              week={week}
+              expanded={expanded.has(week.weekIndex)}
+              onToggle={() => onToggleExpanded(week.weekIndex)}
+              onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
+            />
+          </tr>
+          {expanded.has(week.weekIndex) &&
+            DISCIPLINES.map((discipline) => (
               <tr
                 key={`${week.weekIndex}-${discipline.key}`}
                 data-week-index={week.weekIndex}
@@ -421,9 +520,9 @@ function PhaseBandRows({
                   />
                 </td>
               </tr>
-            ))
-          : []
-      )}
+            ))}
+        </Fragment>
+      ))}
     </>
   );
 }
