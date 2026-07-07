@@ -24,6 +24,7 @@ import {
 import {
   buildPhaseSpansFromDb,
   defaultSimpleRampDefaults,
+  rampDefaultsToPlanFields,
   recalculateSimpleVolumes,
   resolveSimpleRampDefaults,
   type SimpleDiscipline,
@@ -31,13 +32,19 @@ import {
   type SimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
+import {
+  defaultZoneRampDefaults,
+  parseZoneRampDefaults,
+  recalculateSimpleZoneMinutes,
+  type SimpleWeekWithZones,
+  type ZoneRampDefaultsByDiscipline,
+} from "./simple-tiz";
+import { parseTargetZones, type ZoneMinutes } from "@/lib/workout/steps";
 import { roundHours } from "./volume-curve";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
 }
-
-const EMPTY_ZONE_MINUTES = {} as Prisma.InputJsonValue;
 
 export type SimplePhaseWrite = {
   id?: string;
@@ -55,6 +62,10 @@ export type SimpleWeekWrite = {
   swimHours: number;
   bikeHours: number;
   runHours: number;
+  swimDistanceMeters?: number | null;
+  runDistanceMeters?: number | null;
+  zoneMinutes?: ZoneMinutes;
+  zoneMinutesOverridden?: boolean;
 };
 
 export type CreateSimpleSeasonInput = {
@@ -63,6 +74,7 @@ export type CreateSimpleSeasonInput = {
   startDate: Date;
   endDate: Date;
   rampDefaults?: SimpleRampDefaults;
+  zoneRampDefaults?: ZoneRampDefaultsByDiscipline;
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
@@ -73,6 +85,7 @@ export type UpdateSimpleSeasonInput = {
   startDate?: Date;
   endDate?: Date;
   rampDefaults?: SimpleRampDefaults;
+  zoneRampDefaults?: ZoneRampDefaultsByDiscipline;
   phases?: SimplePhaseWrite[];
   weeks?: SimpleWeekWrite[];
   recalculate?: boolean;
@@ -81,29 +94,6 @@ export type UpdateSimpleSeasonInput = {
   cGoalEvents?: GoalEventWriteInput[];
   removedGoalEvents?: RemovedGoalEventInput[];
 };
-
-function rampDefaultsToPlanFields(defaults: SimpleRampDefaults) {
-  const totalStart = roundHours(
-    defaults.swim.startHours + defaults.bike.startHours + defaults.run.startHours
-  );
-  const totalPeak = roundHours(
-    defaults.swim.peakHours + defaults.bike.peakHours + defaults.run.peakHours
-  );
-  return {
-    startHours: totalStart,
-    peakHours: totalPeak,
-    maxRampPercent: defaults.bike.ratePercent,
-    swimStartHours: defaults.swim.startHours,
-    swimPeakHours: defaults.swim.peakHours,
-    swimRampPercent: defaults.swim.ratePercent,
-    bikeStartHours: defaults.bike.startHours,
-    bikePeakHours: defaults.bike.peakHours,
-    bikeRampPercent: defaults.bike.ratePercent,
-    runStartHours: defaults.run.startHours,
-    runPeakHours: defaults.run.peakHours,
-    runRampPercent: defaults.run.ratePercent,
-  };
-}
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
   return [...phases]
@@ -129,7 +119,26 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
     });
 }
 
-function buildInitialWeeks(totalWeeks: number, defaults: SimpleRampDefaults): SimpleWeekVolume[] {
+function toWeekWithZones(week: SimpleWeekVolume & {
+  zoneMinutes?: ZoneMinutes;
+  zoneMinutesOverridden?: boolean;
+}): SimpleWeekWithZones {
+  return {
+    weekIndex: week.weekIndex,
+    isRestWeek: week.isRestWeek,
+    swimHours: week.swimHours,
+    bikeHours: week.bikeHours,
+    runHours: week.runHours,
+    zoneMinutes: week.zoneMinutes ?? {},
+    zoneMinutesOverridden: week.zoneMinutesOverridden,
+  };
+}
+
+function buildInitialWeeks(
+  totalWeeks: number,
+  defaults: SimpleRampDefaults,
+  zoneDefaults: ZoneRampDefaultsByDiscipline
+): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }> {
   const weeks: SimpleWeekVolume[] = Array.from({ length: totalWeeks }, (_, weekIndex) => ({
     weekIndex,
     isRestWeek: false,
@@ -139,37 +148,60 @@ function buildInitialWeeks(totalWeeks: number, defaults: SimpleRampDefaults): Si
     totalHours: roundHours(
       defaults.swim.startHours + defaults.bike.startHours + defaults.run.startHours
     ),
+    swimDistanceMeters:
+      defaults.swim.mode === "DISTANCE" ? defaults.swim.startDistanceMeters : null,
+    runDistanceMeters:
+      defaults.run.mode === "DISTANCE" ? defaults.run.startDistanceMeters : null,
   }));
-  return recalculateSimpleVolumes(weeks, [], defaults);
+
+  const volumeWeeks = recalculateSimpleVolumes(weeks, [], defaults);
+  const zoneWeeks = recalculateSimpleZoneMinutes(
+    volumeWeeks.map((week) => toWeekWithZones(week)),
+    [],
+    zoneDefaults
+  );
+
+  return volumeWeeks.map((week, index) => ({
+    ...week,
+    zoneMinutes: zoneWeeks[index]!.zoneMinutes,
+    zoneMinutesOverridden: false,
+  }));
 }
 
 function mergeWeekWrites(
-  existingWeeks: SimpleWeekVolume[],
+  existingWeeks: Array<
+    SimpleWeekVolume & { zoneMinutes?: ZoneMinutes; zoneMinutesOverridden?: boolean }
+  >,
   writes: SimpleWeekWrite[] | undefined,
   totalWeeks: number,
-  seasonStart: Date,
   defaults: SimpleRampDefaults
-): SimpleWeekVolume[] {
+): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }> {
   const byIndex = new Map<number, SimpleWeekWrite>();
   for (const write of writes ?? []) {
     byIndex.set(write.weekIndex, write);
   }
 
-  const weeks: SimpleWeekVolume[] = [];
+  const weeks: Array<
+    SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }
+  > = [];
   for (let weekIndex = 0; weekIndex < totalWeeks; weekIndex++) {
     const write = byIndex.get(weekIndex);
     const prior = existingWeeks[weekIndex];
+    const swimHours = write?.swimHours ?? prior?.swimHours ?? defaults.swim.startHours;
+    const bikeHours = write?.bikeHours ?? prior?.bikeHours ?? defaults.bike.startHours;
+    const runHours = write?.runHours ?? prior?.runHours ?? defaults.run.startHours;
     weeks.push({
       weekIndex,
       isRestWeek: write?.isRestWeek ?? prior?.isRestWeek ?? false,
-      swimHours: write?.swimHours ?? prior?.swimHours ?? defaults.swim.startHours,
-      bikeHours: write?.bikeHours ?? prior?.bikeHours ?? defaults.bike.startHours,
-      runHours: write?.runHours ?? prior?.runHours ?? defaults.run.startHours,
-      totalHours: roundHours(
-        (write?.swimHours ?? prior?.swimHours ?? defaults.swim.startHours) +
-          (write?.bikeHours ?? prior?.bikeHours ?? defaults.bike.startHours) +
-          (write?.runHours ?? prior?.runHours ?? defaults.run.startHours)
-      ),
+      swimHours,
+      bikeHours,
+      runHours,
+      totalHours: roundHours(swimHours + bikeHours + runHours),
+      swimDistanceMeters: write?.swimDistanceMeters ?? prior?.swimDistanceMeters ?? null,
+      runDistanceMeters: write?.runDistanceMeters ?? prior?.runDistanceMeters ?? null,
+      zoneMinutes: write?.zoneMinutes ?? prior?.zoneMinutes ?? {},
+      zoneMinutesOverridden:
+        write?.zoneMinutesOverridden ?? prior?.zoneMinutesOverridden ?? false,
     });
   }
   return weeks;
@@ -183,8 +215,12 @@ function weeksFromDb(
     bikeHours: number;
     runHours: number;
     totalHours: number;
+    swimDistanceMeters: number | null;
+    runDistanceMeters: number | null;
+    zoneMinutes: unknown;
+    zoneMinutesOverridden: boolean;
   }[]
-): SimpleWeekVolume[] {
+): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }> {
   return weeks.map((week) => ({
     weekIndex: week.weekIndex,
     isRestWeek: week.isDeLoadWeek,
@@ -192,6 +228,10 @@ function weeksFromDb(
     bikeHours: week.bikeHours,
     runHours: week.runHours,
     totalHours: week.totalHours,
+    swimDistanceMeters: week.swimDistanceMeters,
+    runDistanceMeters: week.runDistanceMeters,
+    zoneMinutes: parseTargetZones(week.zoneMinutes),
+    zoneMinutesOverridden: week.zoneMinutesOverridden,
   }));
 }
 
@@ -209,6 +249,30 @@ function defaultPhaseKind(_name: string): PhaseKind {
   return "BASE";
 }
 
+function recalculateWeeks(
+  weeks: Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }>,
+  phaseSpans: SimplePhaseSpan[],
+  rampDefaults: SimpleRampDefaults,
+  zoneRampDefaults: ZoneRampDefaultsByDiscipline
+) {
+  const volumeWeeks = recalculateSimpleVolumes(weeks, phaseSpans, rampDefaults);
+  const zoneWeeks = recalculateSimpleZoneMinutes(
+    volumeWeeks.map((week, index) => ({
+      ...toWeekWithZones(week),
+      zoneMinutes: weeks[index]!.zoneMinutes,
+      zoneMinutesOverridden: weeks[index]!.zoneMinutesOverridden,
+    })),
+    phaseSpans,
+    zoneRampDefaults
+  );
+
+  return volumeWeeks.map((week, index) => ({
+    ...week,
+    zoneMinutes: zoneWeeks[index]!.zoneMinutes,
+    zoneMinutesOverridden: weeks[index]!.zoneMinutesOverridden,
+  }));
+}
+
 export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   const bounds = buildSeasonDateBounds(input.startDate, input.endDate);
   const overlapping = await findOverlappingSeasonPlans(
@@ -223,6 +287,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       startDate: input.startDate,
       endDate: input.endDate,
       rampDefaults: input.rampDefaults,
+      zoneRampDefaults: input.zoneRampDefaults,
       phases: [],
       recalculate: true,
       goalEvent: input.goalEvent,
@@ -236,8 +301,9 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   }
 
   const defaults = input.rampDefaults ?? defaultSimpleRampDefaults();
+  const zoneDefaults = input.zoneRampDefaults ?? defaultZoneRampDefaults();
   const rampFields = rampDefaultsToPlanFields(defaults);
-  const computedWeeks = buildInitialWeeks(bounds.totalWeeks, defaults);
+  const computedWeeks = buildInitialWeeks(bounds.totalWeeks, defaults, zoneDefaults);
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
 
@@ -255,6 +321,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         mesocycleLengthWeeks: 4,
         deLoadEveryNWeeks: 4,
         deLoadVolumePercent: 60,
+        zoneRampDefaultsByDiscipline: zoneDefaults as Prisma.InputJsonValue,
         ...rampFields,
       },
     });
@@ -271,7 +338,10 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
           swimHours: week.swimHours,
           bikeHours: week.bikeHours,
           runHours: week.runHours,
-          zoneMinutes: EMPTY_ZONE_MINUTES,
+          swimDistanceMeters: week.swimDistanceMeters,
+          runDistanceMeters: week.runDistanceMeters,
+          zoneMinutes: week.zoneMinutes as Prisma.InputJsonValue,
+          zoneMinutesOverridden: week.zoneMinutesOverridden,
           swimSessions: 0,
           bikeSessions: 0,
           runSessions: 0,
@@ -328,11 +398,21 @@ export async function updateSimpleSeasonPlan(
       swimSplitPercent: existing.swimSplitPercent,
       bikeSplitPercent: existing.bikeSplitPercent,
       runSplitPercent: existing.runSplitPercent,
+      swimPlanningMode: existing.swimPlanningMode,
+      runPlanningMode: existing.runPlanningMode,
+      swimReferencePaceSeconds: existing.swimReferencePaceSeconds,
+      runReferencePaceSeconds: existing.runReferencePaceSeconds,
+      swimStartDistanceMeters: existing.swimStartDistanceMeters,
+      swimPeakDistanceMeters: existing.swimPeakDistanceMeters,
+      runStartDistanceMeters: existing.runStartDistanceMeters,
+      runPeakDistanceMeters: existing.runPeakDistanceMeters,
     });
 
-  const rampFields = input.rampDefaults
-    ? rampDefaultsToPlanFields(defaults)
-    : undefined;
+  const zoneDefaults =
+    input.zoneRampDefaults ??
+    parseZoneRampDefaults(existing.zoneRampDefaultsByDiscipline);
+
+  const rampFields = input.rampDefaults ? rampDefaultsToPlanFields(defaults) : undefined;
 
   const phaseWrites = input.phases;
   const phaseDbRows = phaseWrites ? phaseWritesToDb(phaseWrites) : null;
@@ -344,12 +424,11 @@ export async function updateSimpleSeasonPlan(
     weeksFromDb(existing.weeks),
     input.weeks,
     bounds.totalWeeks,
-    bounds.startDate,
     defaults
   );
 
   if (input.recalculate) {
-    weeks = recalculateSimpleVolumes(weeks, phaseSpans, defaults);
+    weeks = recalculateWeeks(weeks, phaseSpans, defaults, zoneDefaults);
   }
 
   const status =
@@ -380,6 +459,9 @@ export async function updateSimpleSeasonPlan(
         status,
         setupComplete: true,
         ...(rampFields ?? {}),
+        ...(input.zoneRampDefaults
+          ? { zoneRampDefaultsByDiscipline: zoneDefaults as Prisma.InputJsonValue }
+          : {}),
       },
     });
 
@@ -416,7 +498,10 @@ export async function updateSimpleSeasonPlan(
           swimHours: week.swimHours,
           bikeHours: week.bikeHours,
           runHours: week.runHours,
-          zoneMinutes: EMPTY_ZONE_MINUTES,
+          swimDistanceMeters: week.swimDistanceMeters,
+          runDistanceMeters: week.runDistanceMeters,
+          zoneMinutes: week.zoneMinutes as Prisma.InputJsonValue,
+          zoneMinutesOverridden: week.zoneMinutesOverridden,
           swimSessions: 0,
           bikeSessions: 0,
           runSessions: 0,
@@ -468,6 +553,7 @@ export function serializeSimpleSeasonPlan(
   plan: NonNullable<Awaited<ReturnType<typeof getSeasonPlanById>>>
 ) {
   const defaults = resolveSimpleRampDefaults(plan);
+  const zoneRampDefaults = parseZoneRampDefaults(plan.zoneRampDefaultsByDiscipline);
   let cursor = 0;
   const phases = [...plan.phases]
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -506,6 +592,7 @@ export function serializeSimpleSeasonPlan(
     totalWeeks: plan.totalWeeks,
     status: plan.status,
     rampDefaults: defaults,
+    zoneRampDefaults,
     phases,
     weeks: plan.weeks.map((week) => ({
       weekIndex: week.weekIndex,
@@ -515,6 +602,10 @@ export function serializeSimpleSeasonPlan(
       bikeHours: week.bikeHours,
       runHours: week.runHours,
       totalHours: week.totalHours,
+      swimDistanceMeters: week.swimDistanceMeters,
+      runDistanceMeters: week.runDistanceMeters,
+      zoneMinutes: parseTargetZones(week.zoneMinutes),
+      zoneMinutesOverridden: week.zoneMinutesOverridden,
     })),
     goalEvents: plan.goalEvents.map((event) => ({
       id: event.id,

@@ -424,9 +424,33 @@ export const updateWorkoutComponentSchema = z
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
 
 const simpleDisciplineRampSchema = z.object({
+  mode: z.enum(["HOURS", "DISTANCE"]).optional(),
   startHours: z.number().nonnegative(),
   peakHours: z.number().nonnegative(),
   ratePercent: z.number().min(0).max(100),
+  startDistanceMeters: z.number().nonnegative().optional(),
+  peakDistanceMeters: z.number().nonnegative().optional(),
+  referencePaceSeconds: z.number().positive().optional(),
+});
+
+const zoneMinuteRampSchema = z.object({
+  startMinutes: z.number().nonnegative(),
+  peakMinutes: z.number().nonnegative(),
+  ratePercent: z.number().min(0).max(100),
+});
+
+const disciplineZoneRampSchema = z.object({
+  z1: zoneMinuteRampSchema,
+  z2: zoneMinuteRampSchema,
+  z3: zoneMinuteRampSchema,
+  z4: zoneMinuteRampSchema,
+  z5: zoneMinuteRampSchema,
+});
+
+export const zoneRampDefaultsSchema = z.object({
+  SWIM: disciplineZoneRampSchema,
+  BIKE: disciplineZoneRampSchema,
+  RUN: disciplineZoneRampSchema,
 });
 
 export const simpleRampDefaultsSchema = z.object({
@@ -463,6 +487,10 @@ export const simpleWeekSchema = z.object({
   swimHours: z.number().nonnegative(),
   bikeHours: z.number().nonnegative(),
   runHours: z.number().nonnegative(),
+  swimDistanceMeters: z.number().nonnegative().nullable().optional(),
+  runDistanceMeters: z.number().nonnegative().nullable().optional(),
+  zoneMinutes: z.record(z.string(), z.number().nonnegative()).optional(),
+  zoneMinutesOverridden: z.boolean().optional(),
 });
 
 export const createSimpleSeasonSchema = z.object({
@@ -481,6 +509,7 @@ export const updateSimpleSeasonSchema = z
     startDate: z.string().regex(DATE_KEY).optional(),
     endDate: z.string().regex(DATE_KEY).optional(),
     rampDefaults: simpleRampDefaultsSchema.optional(),
+    zoneRampDefaults: zoneRampDefaultsSchema.optional(),
     phases: z.array(simplePhaseSchema).optional(),
     weeks: z.array(simpleWeekSchema).optional(),
     recalculate: z.boolean().optional(),

@@ -8,6 +8,7 @@ import {
   serializeSimpleSeasonPlan,
   updateSimpleSeasonPlan,
 } from "@/lib/plan/season/simple-planner.server";
+import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -64,7 +65,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       name: data.name,
       startDate: data.startDate ? parseDateKey(data.startDate) : undefined,
       endDate: data.endDate ? parseDateKey(data.endDate) : undefined,
-      rampDefaults: data.rampDefaults,
+      rampDefaults: data.rampDefaults
+        ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
+        : undefined,
+      zoneRampDefaults: data.zoneRampDefaults,
       phases: data.phases,
       weeks: data.weeks,
       recalculate: data.recalculate,

@@ -16,6 +16,19 @@ import {
 } from "@/components/simple-planner/simple-planner-types";
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
+  defaultZoneRampDefaults,
+  type ZoneRampDefaultsByDiscipline,
+} from "@/lib/plan/season/simple-tiz";
+import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
+import {
+  distanceDisplayToMeters,
+  distanceMetersToDisplay,
+  hoursFromDisciplineDistance,
+  paceCanonicalToDisplay,
+  paceDisplayToCanonical,
+  paceInputLabelFor,
+} from "@/components/simple-planner/simple-planner-volume-display";
+import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
   sortDisciplines,
@@ -60,7 +73,19 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason | null };
-    setSeason(data.season);
+    setSeason(
+      data.season
+        ? {
+            ...data.season,
+            zoneRampDefaults:
+              data.season.zoneRampDefaults ?? defaultZoneRampDefaults(),
+            weeks: data.season.weeks.map((week) => ({
+              ...week,
+              zoneMinutes: week.zoneMinutes ?? {},
+            })),
+          }
+        : null
+    );
     setCreateMode(!data.season);
     setLoading(false);
   }, [seasonIdParam]);
@@ -114,6 +139,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         startDate: draftDates.startDate,
         endDate: draftDates.endDate,
         rampDefaults: defaultSimpleRampDefaults(),
+        zoneRampDefaults: defaultZoneRampDefaults(),
       }),
     });
     setSaving(false);
@@ -123,10 +149,66 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };
-    setSeason(data.season);
+    setSeason({
+      ...data.season,
+      zoneRampDefaults: data.season.zoneRampDefaults ?? defaultZoneRampDefaults(),
+      weeks: data.season.weeks.map((week) => ({
+        ...week,
+        zoneMinutes: week.zoneMinutes ?? {},
+      })),
+    });
     setCreateMode(false);
   }
 
+  const { disciplineSettings } = useDisciplineSettings();
+
+  function serializeWeeksForSave(weeks: SimpleSeason["weeks"]) {
+    return weeks.map(
+      ({ weekStartDate: _d, totalHours: _t, ...week }) => week
+    );
+  }
+
+  function savePayload(extra: Record<string, unknown> = {}) {
+    if (!season) return extra;
+    const aRace = season.primaryGoalEvent ?? racesByPriority.a;
+    const bRaces = season.goalEvents.filter((event) => event.priority === "B");
+    const cRaces = season.goalEvents.filter((event) => event.priority === "C");
+    return {
+      name: season.name,
+      startDate: season.startDate,
+      endDate: season.endDate,
+      rampDefaults: season.rampDefaults,
+      zoneRampDefaults: season.zoneRampDefaults,
+      phases: season.phases,
+      weeks: serializeWeeksForSave(season.weeks),
+      goalEvent:
+        aRace.name && aRace.date
+          ? {
+              id: aRace.id,
+              name: aRace.name,
+              date: aRace.date,
+              disciplines: aRace.disciplines,
+            }
+          : undefined,
+      bGoalEvents: bRaces
+        .filter((race) => race.name && race.date)
+        .map(({ id, name, date, disciplines }) => ({
+          id,
+          name,
+          date,
+          disciplines,
+        })),
+      cGoalEvents: cRaces
+        .filter((race) => race.name && race.date)
+        .map(({ id, name, date, disciplines }) => ({
+          id,
+          name,
+          date,
+          disciplines,
+        })),
+      ...extra,
+    };
+  }
   function handleSelectWeek(weekIndex: number) {
     setSelectedWeekIndex(weekIndex);
     document
@@ -210,44 +292,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           <Button
             type="button"
             disabled={saving}
-            onClick={() => {
-              const bRaces = season.goalEvents.filter((event) => event.priority === "B");
-              const cRaces = season.goalEvents.filter((event) => event.priority === "C");
-              const aRace = season.primaryGoalEvent ?? racesByPriority.a;
-              void saveSeason({
-                name: season.name,
-                startDate: season.startDate,
-                endDate: season.endDate,
-                rampDefaults: season.rampDefaults,
-                phases: season.phases,
-                weeks: season.weeks.map(({ weekStartDate: _d, totalHours: _t, ...week }) => week),
-                goalEvent:
-                  aRace.name && aRace.date
-                    ? {
-                        id: aRace.id,
-                        name: aRace.name,
-                        date: aRace.date,
-                        disciplines: aRace.disciplines,
-                      }
-                    : undefined,
-                bGoalEvents: bRaces
-                  .filter((race) => race.name && race.date)
-                  .map(({ id, name, date, disciplines }) => ({
-                    id,
-                    name,
-                    date,
-                    disciplines,
-                  })),
-                cGoalEvents: cRaces
-                  .filter((race) => race.name && race.date)
-                  .map(({ id, name, date, disciplines }) => ({
-                    id,
-                    name,
-                    date,
-                    disciplines,
-                  })),
-              });
-            }}
+            onClick={() => void saveSeason(savePayload())}
           >
             {saving ? "Saving…" : "Save"}
           </Button>
@@ -330,15 +375,18 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       <Card title="Ramp defaults">
         <RampDefaultsEditor
           value={season.rampDefaults}
+          disciplineSettings={disciplineSettings}
           onChange={(rampDefaults) => setSeason({ ...season, rampDefaults })}
-          onRecalculate={() =>
-            void saveSeason({
-              rampDefaults: season.rampDefaults,
-              phases: season.phases,
-              weeks: season.weeks.map(({ weekStartDate: _d, totalHours: _t, ...week }) => week),
-              recalculate: true,
-            })
-          }
+          onRecalculate={() => void saveSeason(savePayload({ recalculate: true }))}
+          saving={saving}
+        />
+      </Card>
+
+      <Card title="Zone ramp defaults">
+        <ZoneRampDefaultsEditor
+          value={season.zoneRampDefaults}
+          onChange={(zoneRampDefaults) => setSeason({ ...season, zoneRampDefaults })}
+          onRecalculate={() => void saveSeason(savePayload({ recalculate: true }))}
           saving={saving}
         />
       </Card>
@@ -347,6 +395,8 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         <SimplePlannerWeekTable
           weeks={season.weeks}
           phases={season.phases}
+          rampDefaults={season.rampDefaults}
+          disciplineSettings={disciplineSettings}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
           highlightedWeekIndex={selectedWeekIndex}
@@ -360,20 +410,32 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
 
 function RampDefaultsEditor({
   value,
+  disciplineSettings,
   onChange,
   onRecalculate,
   saving,
 }: {
   value: SimpleRampDefaults;
+  disciplineSettings: ReturnType<typeof useDisciplineSettings>["disciplineSettings"];
   onChange: (value: SimpleRampDefaults) => void;
   onRecalculate: () => void;
   saving: boolean;
 }) {
   const rows = [
-    { key: "swim" as const, label: "Swim" },
-    { key: "bike" as const, label: "Bike" },
-    { key: "run" as const, label: "Run" },
+    { key: "swim" as const, label: "Swim", paceDiscipline: "SWIM" as const },
+    { key: "bike" as const, label: "Bike", paceDiscipline: null },
+    { key: "run" as const, label: "Run", paceDiscipline: "RUN" as const },
   ];
+
+  function updateDiscipline(
+    key: "swim" | "bike" | "run",
+    patch: Partial<SimpleRampDefaults["swim"]>
+  ) {
+    onChange({
+      ...value,
+      [key]: { ...value[key], ...patch },
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -382,75 +444,171 @@ function RampDefaultsEditor({
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
               <th className="pb-2 pr-4">Discipline</th>
-              <th className="pb-2 pr-4">Start h/wk</th>
-              <th className="pb-2 pr-4">Peak h/wk</th>
-              <th className="pb-2">Rate / wk</th>
+              <th className="pb-2 pr-4">Mode</th>
+              <th className="pb-2 pr-4">Start</th>
+              <th className="pb-2 pr-4">Peak</th>
+              <th className="pb-2 pr-4">Rate / wk</th>
+              <th className="pb-2">Pace</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.key} className="border-t border-zinc-100 dark:border-zinc-800">
-                <td className="py-2 pr-4 font-medium">{row.label}</td>
-                <td className="py-2 pr-4">
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    className="w-24"
-                    value={value[row.key].startHours}
-                    onChange={(event) =>
-                      onChange({
-                        ...value,
-                        [row.key]: {
-                          ...value[row.key],
-                          startHours: Number(event.target.value),
-                        },
-                      })
-                    }
-                  />
-                </td>
-                <td className="py-2 pr-4">
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    className="w-24"
-                    value={value[row.key].peakHours}
-                    onChange={(event) =>
-                      onChange({
-                        ...value,
-                        [row.key]: {
-                          ...value[row.key],
-                          peakHours: Number(event.target.value),
-                        },
-                      })
-                    }
-                  />
-                </td>
-                <td className="py-2">
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      max="100"
-                      className="w-20"
-                      value={value[row.key].ratePercent}
-                      onChange={(event) =>
-                        onChange({
-                          ...value,
-                          [row.key]: {
-                            ...value[row.key],
+            {rows.map((row) => {
+              const def = value[row.key];
+              const distanceMode = row.key !== "bike" && def.mode === "DISTANCE";
+              return (
+                <tr key={row.key} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="py-2 pr-4 font-medium">{row.label}</td>
+                  <td className="py-2 pr-4">
+                    {row.key === "bike" ? (
+                      <span className="text-zinc-500">Hours</span>
+                    ) : (
+                      <select
+                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        value={def.mode}
+                        onChange={(event) =>
+                          updateDiscipline(row.key, {
+                            mode: event.target.value as "HOURS" | "DISTANCE",
+                          })
+                        }
+                      >
+                        <option value="HOURS">Hours</option>
+                        <option value="DISTANCE">Distance</option>
+                      </select>
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">
+                    {distanceMode && row.paceDiscipline ? (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-28"
+                        value={distanceMetersToDisplay(
+                          def.startDistanceMeters,
+                          row.paceDiscipline,
+                          disciplineSettings
+                        )}
+                        onChange={(event) => {
+                          const meters = distanceDisplayToMeters(
+                            event.target.value,
+                            row.paceDiscipline!,
+                            disciplineSettings
+                          );
+                          if (meters == null) return;
+                          updateDiscipline(row.key, {
+                            startDistanceMeters: meters,
+                            startHours: hoursFromDisciplineDistance(
+                              row.paceDiscipline!,
+                              meters,
+                              def
+                            ),
+                          });
+                        }}
+                      />
+                    ) : (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-24"
+                        value={def.startHours}
+                        onChange={(event) =>
+                          updateDiscipline(row.key, {
+                            startHours: Number(event.target.value),
+                          })
+                        }
+                      />
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">
+                    {distanceMode && row.paceDiscipline ? (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-28"
+                        value={distanceMetersToDisplay(
+                          def.peakDistanceMeters,
+                          row.paceDiscipline,
+                          disciplineSettings
+                        )}
+                        onChange={(event) => {
+                          const meters = distanceDisplayToMeters(
+                            event.target.value,
+                            row.paceDiscipline!,
+                            disciplineSettings
+                          );
+                          if (meters == null) return;
+                          updateDiscipline(row.key, {
+                            peakDistanceMeters: meters,
+                            peakHours: hoursFromDisciplineDistance(
+                              row.paceDiscipline!,
+                              meters,
+                              def
+                            ),
+                          });
+                        }}
+                      />
+                    ) : (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        className="w-24"
+                        value={def.peakHours}
+                        onChange={(event) =>
+                          updateDiscipline(row.key, {
+                            peakHours: Number(event.target.value),
+                          })
+                        }
+                      />
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <div className="flex items-center gap-1">
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        className="w-20"
+                        value={def.ratePercent}
+                        onChange={(event) =>
+                          updateDiscipline(row.key, {
                             ratePercent: Number(event.target.value),
-                          },
-                        })
-                      }
-                    />
-                    <span className="text-zinc-500">%</span>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                          })
+                        }
+                      />
+                      <span className="text-zinc-500">%</span>
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    {row.paceDiscipline ? (
+                      <Input
+                        className="w-28"
+                        placeholder={paceInputLabelFor(row.paceDiscipline, disciplineSettings)}
+                        value={paceCanonicalToDisplay(
+                          def.referencePaceSeconds,
+                          row.paceDiscipline,
+                          disciplineSettings
+                        )}
+                        onChange={(event) => {
+                          const seconds = paceDisplayToCanonical(
+                            event.target.value,
+                            row.paceDiscipline!,
+                            disciplineSettings
+                          );
+                          if (seconds == null) return;
+                          updateDiscipline(row.key, { referencePaceSeconds: seconds });
+                        }}
+                      />
+                    ) : (
+                      <span className="text-zinc-400">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -458,7 +616,134 @@ function RampDefaultsEditor({
         Recalculate ramp weeks
       </Button>
       <p className="text-xs text-zinc-500">
-        Updates auto-calculated weeks only. Rest weeks and ramp-off phases stay manual.
+        Updates auto-calculated weeks only. Rest weeks, ramp-off phases, and overridden zone weeks
+        stay manual.
+      </p>
+    </div>
+  );
+}
+
+function ZoneRampDefaultsEditor({
+  value,
+  onChange,
+  onRecalculate,
+  saving,
+}: {
+  value: ZoneRampDefaultsByDiscipline;
+  onChange: (value: ZoneRampDefaultsByDiscipline) => void;
+  onRecalculate: () => void;
+  saving: boolean;
+}) {
+  const disciplines = [
+    { key: "SWIM" as const, label: "Swim" },
+    { key: "BIKE" as const, label: "Bike" },
+    { key: "RUN" as const, label: "Run" },
+  ];
+  const zones = [1, 2, 3, 4, 5] as const;
+
+  return (
+    <div className="space-y-4">
+      {disciplines.map((discipline) => (
+        <div key={discipline.key} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <h3 className="mb-3 text-sm font-semibold">{discipline.label}</h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+                  <th className="pb-2 pr-4">Zone</th>
+                  <th className="pb-2 pr-4">Start min</th>
+                  <th className="pb-2 pr-4">Peak min</th>
+                  <th className="pb-2">Rate / wk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {zones.map((zone) => {
+                  const key = `z${zone}` as const;
+                  const row = value[discipline.key][key];
+                  return (
+                    <tr key={zone} className="border-t border-zinc-100 dark:border-zinc-800">
+                      <td className="py-2 pr-4 font-medium">Z{zone}</td>
+                      <td className="py-2 pr-4">
+                        <Input
+                          type="number"
+                          step="1"
+                          min="0"
+                          className="w-24"
+                          value={row.startMinutes}
+                          onChange={(event) =>
+                            onChange({
+                              ...value,
+                              [discipline.key]: {
+                                ...value[discipline.key],
+                                [key]: {
+                                  ...row,
+                                  startMinutes: Number(event.target.value),
+                                },
+                              },
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="py-2 pr-4">
+                        <Input
+                          type="number"
+                          step="1"
+                          min="0"
+                          className="w-24"
+                          value={row.peakMinutes}
+                          onChange={(event) =>
+                            onChange({
+                              ...value,
+                              [discipline.key]: {
+                                ...value[discipline.key],
+                                [key]: {
+                                  ...row,
+                                  peakMinutes: Number(event.target.value),
+                                },
+                              },
+                            })
+                          }
+                        />
+                      </td>
+                      <td className="py-2">
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            className="w-20"
+                            value={row.ratePercent}
+                            onChange={(event) =>
+                              onChange({
+                                ...value,
+                                [discipline.key]: {
+                                  ...value[discipline.key],
+                                  [key]: {
+                                    ...row,
+                                    ratePercent: Number(event.target.value),
+                                  },
+                                },
+                              })
+                            }
+                          />
+                          <span className="text-zinc-500">%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+      <Button type="button" variant="secondary" disabled={saving} onClick={onRecalculate}>
+        Recalculate zone minutes
+      </Button>
+      <p className="text-xs text-zinc-500">
+        Zone minutes ramp in parallel with volume. Edit minutes directly in the weekly table; those
+        weeks are preserved on recalculate.
       </p>
     </div>
   );

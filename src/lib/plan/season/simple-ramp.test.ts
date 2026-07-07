@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildDisciplineRampDefaults,
   buildPhaseSpansFromDb,
   defaultSimpleRampDefaults,
   recalculateSimpleVolumes,
@@ -75,11 +76,28 @@ describe("recalculateSimpleVolumes", () => {
   });
 
   it("caps at peak hours", () => {
-    const cappedDefaults: SimpleRampDefaults = {
-      swim: { startHours: 2, peakHours: 4, ratePercent: 50 },
-      bike: { startHours: 3.9, peakHours: 4, ratePercent: 50 },
-      run: { startHours: 2, peakHours: 4, ratePercent: 50 },
-    };
+    const cappedDefaults = defaultSimpleRampDefaults();
+    cappedDefaults.swim = buildDisciplineRampDefaults({
+      mode: "HOURS",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 50,
+      paceDiscipline: "SWIM",
+    });
+    cappedDefaults.bike = buildDisciplineRampDefaults({
+      mode: "HOURS",
+      startHours: 3.9,
+      peakHours: 4,
+      ratePercent: 50,
+      paceDiscipline: "RUN",
+    });
+    cappedDefaults.run = buildDisciplineRampDefaults({
+      mode: "HOURS",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 50,
+      paceDiscipline: "RUN",
+    });
     const weeks = [week(0, 3.9, 3.9, 3.9), week(1, 2, 2, 2)];
     const result = recalculateSimpleVolumes(weeks, [], cappedDefaults);
     assert.equal(result[1]!.bikeHours, 4);

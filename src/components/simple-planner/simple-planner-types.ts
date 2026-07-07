@@ -1,5 +1,7 @@
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
+import type { ZoneRampDefaultsByDiscipline } from "@/lib/plan/season/simple-tiz";
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
+import type { ZoneMinutes } from "@/lib/workout/steps";
 
 export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
 
@@ -33,6 +35,10 @@ export type SimpleWeek = {
   bikeHours: number;
   runHours: number;
   totalHours: number;
+  swimDistanceMeters?: number | null;
+  runDistanceMeters?: number | null;
+  zoneMinutes: ZoneMinutes;
+  zoneMinutesOverridden?: boolean;
 };
 
 export type SimpleSeason = {
@@ -43,6 +49,7 @@ export type SimpleSeason = {
   totalWeeks: number;
   status: string;
   rampDefaults: SimpleRampDefaults;
+  zoneRampDefaults: ZoneRampDefaultsByDiscipline;
   phases: SimplePhase[];
   weeks: SimpleWeek[];
   goalEvents: SimpleGoalEvent[];
