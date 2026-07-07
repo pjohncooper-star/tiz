@@ -4,12 +4,25 @@ import { zoneKey } from "@/lib/workout/steps";
 import {
   clampZoneMinutesToVolume,
   defaultZoneRampDefaults,
+  parseDisciplineZoneMinutes,
   recalculateSimpleZoneMinutes,
   zoneMinutesBudget,
   zoneMinutesExceedsVolume,
 } from "./simple-tiz";
 
 describe("simple-tiz", () => {
+  it("parses discipline-prefixed zone minute keys", () => {
+    const parsed = parseDisciplineZoneMinutes({
+      "RUN-4": 40,
+      "SWIM-2": 20,
+      "4": 99,
+      "invalid": 10,
+    });
+    assert.equal(parsed[zoneKey("RUN", 4)], 40);
+    assert.equal(parsed[zoneKey("SWIM", 2)], 20);
+    assert.equal(parsed["4"], undefined);
+  });
+
   it("ramps zone minutes week over week", () => {
     const zoneDefaults = defaultZoneRampDefaults();
     zoneDefaults.RUN.z2 = { startMinutes: 30, peakMinutes: 90, ratePercent: 10 };

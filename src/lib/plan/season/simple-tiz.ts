@@ -102,6 +102,22 @@ export function parseZoneRampDefaults(raw: unknown): ZoneRampDefaultsByDisciplin
   return defaults;
 }
 
+const DISCIPLINE_ZONE_KEY = /^(SWIM|BIKE|RUN)-([1-7])$/;
+
+/** Parse season-week zone minutes keyed by discipline, e.g. RUN-4. */
+export function parseDisciplineZoneMinutes(raw: unknown): ZoneMinutes {
+  if (!raw || typeof raw !== "object") return {};
+  const totals: ZoneMinutes = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes < 0) continue;
+    if (DISCIPLINE_ZONE_KEY.test(key)) {
+      totals[key] = minutes;
+    }
+  }
+  return totals;
+}
+
 export function zoneMinutesForDiscipline(
   zoneMinutes: ZoneMinutes,
   discipline: TriDiscipline

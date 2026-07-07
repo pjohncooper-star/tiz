@@ -35,12 +35,13 @@ import {
 import { fitSimplePhasesToTotalWeeks } from "./phase-span-utils";
 import {
   defaultZoneRampDefaults,
+  parseDisciplineZoneMinutes,
   parseZoneRampDefaults,
   recalculateSimpleZoneMinutes,
   type SimpleWeekWithZones,
   type ZoneRampDefaultsByDiscipline,
 } from "./simple-tiz";
-import { parseTargetZones, type ZoneMinutes } from "@/lib/workout/steps";
+import { type ZoneMinutes } from "@/lib/workout/steps";
 import { roundHours } from "./volume-curve";
 
 function cuid(): string {
@@ -232,7 +233,7 @@ function weeksFromDb(
     totalHours: week.totalHours,
     swimDistanceMeters: week.swimDistanceMeters,
     runDistanceMeters: week.runDistanceMeters,
-    zoneMinutes: parseTargetZones(week.zoneMinutes),
+    zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
     zoneMinutesOverridden: week.zoneMinutesOverridden,
   }));
 }
@@ -616,7 +617,7 @@ export function serializeSimpleSeasonPlan(
       totalHours: week.totalHours,
       swimDistanceMeters: week.swimDistanceMeters,
       runDistanceMeters: week.runDistanceMeters,
-      zoneMinutes: parseTargetZones(week.zoneMinutes),
+      zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
       zoneMinutesOverridden: week.zoneMinutesOverridden,
     })),
     goalEvents: plan.goalEvents.map((event) => ({
