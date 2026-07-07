@@ -152,7 +152,7 @@ function rampMinuteValue(
     return week.zoneMinutes[zoneMinutesKey] ?? defaults.startMinutes;
   }
   if (!isRampOnForDiscipline(phase, simpleDiscipline)) {
-    return week.zoneMinutes[zoneMinutesKey] ?? defaults.startMinutes;
+    return roundMinutes(defaults.startMinutes);
   }
 
   const baseIndex = rampBaseWeekIndex(

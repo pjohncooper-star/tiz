@@ -72,6 +72,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       phases: data.phases,
       weeks: data.weeks,
       recalculate: data.recalculate,
+      resetZoneOverrides: data.resetZoneOverrides,
       goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),

@@ -24,10 +24,9 @@ import {
   distanceDisplayToMeters,
   distanceMetersToDisplay,
   hoursFromDisciplineDistance,
-  paceCanonicalToDisplay,
-  paceDisplayToCanonical,
-  paceInputLabelFor,
+  PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
+import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
 import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
@@ -35,6 +34,38 @@ import {
   toggleGoalDiscipline,
   type Discipline,
 } from "@/components/season/season-settings-types";
+
+function normalizeSeason(season: SimpleSeason): SimpleSeason {
+  return {
+    ...season,
+    zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
+    weeks: season.weeks.map((week) => ({
+      ...week,
+      zoneMinutes: week.zoneMinutes ?? {},
+    })),
+  };
+}
+
+function buildPrimaryGoalEventPayload(
+  aRace: SimpleGoalEvent,
+  fallbackDate: string
+): { id?: string; name: string; date: string; disciplines: SimpleGoalEvent["disciplines"] } | undefined {
+  if (aRace.id) {
+    return {
+      id: aRace.id,
+      name: aRace.name.trim() || "A race",
+      date: aRace.date || fallbackDate,
+      disciplines: aRace.disciplines.length > 0 ? aRace.disciplines : ["RUN"],
+    };
+  }
+  if (!aRace.name.trim() || !aRace.date) return undefined;
+  return {
+    id: aRace.id,
+    name: aRace.name.trim(),
+    date: aRace.date,
+    disciplines: aRace.disciplines,
+  };
+}
 
 function defaultSeasonDates() {
   const start = new Date();
@@ -73,19 +104,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason | null };
-    setSeason(
-      data.season
-        ? {
-            ...data.season,
-            zoneRampDefaults:
-              data.season.zoneRampDefaults ?? defaultZoneRampDefaults(),
-            weeks: data.season.weeks.map((week) => ({
-              ...week,
-              zoneMinutes: week.zoneMinutes ?? {},
-            })),
-          }
-        : null
-    );
+    setSeason(data.season ? normalizeSeason(data.season) : null);
     setCreateMode(!data.season);
     setLoading(false);
   }, [seasonIdParam]);
@@ -125,7 +144,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };
-    setSeason(data.season);
+    setSeason(normalizeSeason(data.season));
   }
 
   async function handleCreateSeason() {
@@ -149,14 +168,14 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };
-    setSeason({
+    setSeason(normalizeSeason({
       ...data.season,
       zoneRampDefaults: data.season.zoneRampDefaults ?? defaultZoneRampDefaults(),
       weeks: data.season.weeks.map((week) => ({
         ...week,
         zoneMinutes: week.zoneMinutes ?? {},
       })),
-    });
+    }));
     setCreateMode(false);
   }
 
@@ -181,15 +200,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       zoneRampDefaults: season.zoneRampDefaults,
       phases: season.phases,
       weeks: serializeWeeksForSave(season.weeks),
-      goalEvent:
-        aRace.name && aRace.date
-          ? {
-              id: aRace.id,
-              name: aRace.name,
-              date: aRace.date,
-              disciplines: aRace.disciplines,
-            }
-          : undefined,
+      goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
       bGoalEvents: bRaces
         .filter((race) => race.name && race.date)
         .map(({ id, name, date, disciplines }) => ({
@@ -316,7 +327,23 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
               <Input
                 type="date"
                 value={season.startDate}
-                onChange={(event) => setSeason({ ...season, startDate: event.target.value })}
+                onChange={(event) =>
+                  setSeason((current) =>
+                    current
+                      ? normalizeSeason({
+                          ...current,
+                          ...applySimpleSeasonDateBounds({
+                            startDate: event.target.value,
+                            endDate: current.endDate,
+                            totalWeeks: current.totalWeeks,
+                            phases: current.phases,
+                            weeks: current.weeks,
+                            rampDefaults: current.rampDefaults,
+                          }),
+                        })
+                      : current
+                  )
+                }
               />
             </div>
             <div>
@@ -324,7 +351,23 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
               <Input
                 type="date"
                 value={season.endDate}
-                onChange={(event) => setSeason({ ...season, endDate: event.target.value })}
+                onChange={(event) =>
+                  setSeason((current) =>
+                    current
+                      ? normalizeSeason({
+                          ...current,
+                          ...applySimpleSeasonDateBounds({
+                            startDate: current.startDate,
+                            endDate: event.target.value,
+                            totalWeeks: current.totalWeeks,
+                            phases: current.phases,
+                            weeks: current.weeks,
+                            rampDefaults: current.rampDefaults,
+                          }),
+                        })
+                      : current
+                  )
+                }
               />
             </div>
           </div>
@@ -386,7 +429,9 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         <ZoneRampDefaultsEditor
           value={season.zoneRampDefaults}
           onChange={(zoneRampDefaults) => setSeason({ ...season, zoneRampDefaults })}
-          onRecalculate={() => void saveSeason(savePayload({ recalculate: true }))}
+          onRecalculate={() =>
+            void saveSeason(savePayload({ recalculate: true, resetZoneOverrides: true }))
+          }
           saving={saving}
         />
       </Card>
@@ -584,23 +629,14 @@ function RampDefaultsEditor({
                   </td>
                   <td className="py-2">
                     {row.paceDiscipline ? (
-                      <Input
-                        className="w-28"
-                        placeholder={paceInputLabelFor(row.paceDiscipline, disciplineSettings)}
-                        value={paceCanonicalToDisplay(
-                          def.referencePaceSeconds,
-                          row.paceDiscipline,
-                          disciplineSettings
-                        )}
-                        onChange={(event) => {
-                          const seconds = paceDisplayToCanonical(
-                            event.target.value,
-                            row.paceDiscipline!,
-                            disciplineSettings
-                          );
-                          if (seconds == null) return;
-                          updateDiscipline(row.key, { referencePaceSeconds: seconds });
-                        }}
+                      <PlannerPaceInput
+                        className="w-28 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        value={def.referencePaceSeconds}
+                        discipline={row.paceDiscipline}
+                        disciplineSettings={disciplineSettings}
+                        onChange={(seconds) =>
+                          updateDiscipline(row.key, { referencePaceSeconds: seconds })
+                        }
                       />
                     ) : (
                       <span className="text-zinc-400">—</span>

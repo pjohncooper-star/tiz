@@ -153,6 +153,25 @@ export type GutterSegment =
   | { kind: "band"; phase: SimplePhase; rowCount: number }
   | { kind: "unassigned"; weekIndex: number; rowCount: number };
 
+/** Clamp or unassign phases when season length changes. */
+export function fitSimplePhasesToTotalWeeks(
+  phases: SimplePhase[],
+  totalWeeks: number
+): SimplePhase[] {
+  const maxIndex = Math.max(totalWeeks - 1, 0);
+  return phases.map((phase) => {
+    if (!isAssignedPhase(phase)) return phase;
+    if (phase.startWeekIndex > maxIndex) {
+      return { ...phase, startWeekIndex: -1, endWeekIndex: -1 };
+    }
+    const endWeekIndex = Math.min(phase.endWeekIndex, maxIndex);
+    if (endWeekIndex < phase.startWeekIndex) {
+      return { ...phase, startWeekIndex: -1, endWeekIndex: -1 };
+    }
+    return { ...phase, endWeekIndex };
+  });
+}
+
 export function buildGutterSegments(weeks: { weekIndex: number }[], phases: SimplePhase[]): GutterSegment[] {
   const segments: GutterSegment[] = [];
   let index = 0;

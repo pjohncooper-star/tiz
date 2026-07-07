@@ -32,6 +32,7 @@ import {
   type SimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
+import { fitSimplePhasesToTotalWeeks } from "./phase-span-utils";
 import {
   defaultZoneRampDefaults,
   parseZoneRampDefaults,
@@ -89,6 +90,7 @@ export type UpdateSimpleSeasonInput = {
   phases?: SimplePhaseWrite[];
   weeks?: SimpleWeekWrite[];
   recalculate?: boolean;
+  resetZoneOverrides?: boolean;
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
@@ -414,7 +416,13 @@ export async function updateSimpleSeasonPlan(
 
   const rampFields = input.rampDefaults ? rampDefaultsToPlanFields(defaults) : undefined;
 
-  const phaseWrites = input.phases;
+  let phaseWrites = input.phases;
+  if (phaseWrites && bounds.totalWeeks !== existing.totalWeeks) {
+    phaseWrites = fitSimplePhasesToTotalWeeks(
+      phaseWrites.map((phase) => ({ ...phase, goal: phase.goal ?? null })),
+      bounds.totalWeeks
+    );
+  }
   const phaseDbRows = phaseWrites ? phaseWritesToDb(phaseWrites) : null;
   const phaseSpans = phaseWrites
     ? phaseSpansFromWrites(phaseWrites)
@@ -426,6 +434,10 @@ export async function updateSimpleSeasonPlan(
     bounds.totalWeeks,
     defaults
   );
+
+  if (input.resetZoneOverrides) {
+    weeks = weeks.map((week) => ({ ...week, zoneMinutesOverridden: false }));
+  }
 
   if (input.recalculate) {
     weeks = recalculateWeeks(weeks, phaseSpans, defaults, zoneDefaults);

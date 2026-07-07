@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { hoursFromDistancePace } from "@/lib/plan/season/distance-pace-rollup";
 import type { DisciplineRampDefaults, SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
@@ -137,4 +140,61 @@ export function disciplinePlanningMode(
   rampDefaults: SimpleRampDefaults
 ) {
   return rampDefaults[discipline].mode;
+}
+
+export function PlannerPaceInput({
+  value,
+  discipline,
+  disciplineSettings,
+  onChange,
+  className,
+}: {
+  value: number;
+  discipline: "SWIM" | "RUN";
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  onChange: (seconds: number) => void;
+  className?: string;
+}) {
+  const [text, setText] = useState(() => paceCanonicalToDisplay(value, discipline, disciplineSettings));
+  const focusedRef = useRef(false);
+
+  useEffect(() => {
+    if (focusedRef.current) return;
+    setText(paceCanonicalToDisplay(value, discipline, disciplineSettings));
+  }, [value, discipline, disciplineSettings]);
+
+  function commit(nextText: string) {
+    const trimmed = nextText.trim();
+    if (!trimmed) return;
+    const seconds = paceDisplayToCanonical(trimmed, discipline, disciplineSettings);
+    if (seconds == null) {
+      setText(paceCanonicalToDisplay(value, discipline, disciplineSettings));
+      return;
+    }
+    onChange(seconds);
+    setText(paceCanonicalToDisplay(seconds, discipline, disciplineSettings));
+  }
+
+  return (
+    <input
+      type="text"
+      className={className}
+      placeholder={paceInputLabelFor(discipline, disciplineSettings)}
+      value={text}
+      onChange={(event) => setText(event.target.value)}
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
+      onBlur={() => {
+        focusedRef.current = false;
+        commit(text);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          (event.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+    />
+  );
 }

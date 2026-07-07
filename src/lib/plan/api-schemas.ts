@@ -513,6 +513,7 @@ export const updateSimpleSeasonSchema = z
     phases: z.array(simplePhaseSchema).optional(),
     weeks: z.array(simpleWeekSchema).optional(),
     recalculate: z.boolean().optional(),
+    resetZoneOverrides: z.boolean().optional(),
     goalEvent: seasonGoalEventSchema.optional(),
     bGoalEvents: z.array(seasonGoalEventSchema).optional(),
     cGoalEvents: z.array(seasonGoalEventSchema).optional(),
