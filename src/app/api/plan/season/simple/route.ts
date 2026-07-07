@@ -9,10 +9,8 @@ import {
   serializeSimpleSeasonPlan,
   updateSimpleSeasonPlan,
 } from "@/lib/plan/season/simple-planner.server";
-import {
-  getSeasonPlanById,
-  getSimplePlannerSeason,
-} from "@/lib/plan/season/season-plan.server";
+import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
+import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 
 export async function GET(request: Request) {
   if (!isSimpleSeasonPlannerEnabled()) {
@@ -66,7 +64,9 @@ export async function POST(request: Request) {
       name: data.name,
       startDate: parseDateKey(data.startDate),
       endDate: parseDateKey(data.endDate),
-      rampDefaults: data.rampDefaults,
+      rampDefaults: data.rampDefaults
+        ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
+        : undefined,
       goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
