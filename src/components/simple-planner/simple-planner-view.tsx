@@ -27,6 +27,7 @@ import {
   PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
+import { ZoneRampPillRow } from "@/components/simple-planner/zone-pill";
 import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
@@ -659,22 +660,6 @@ function RampDefaultsEditor({
   );
 }
 
-const ZONE_COLORS: Record<number, { pill: string; dot: string }> = {
-  1: { pill: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", dot: "bg-sky-400" },
-  2: { pill: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", dot: "bg-green-400" },
-  3: { pill: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300", dot: "bg-yellow-400" },
-  4: { pill: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", dot: "bg-orange-400" },
-  5: { pill: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", dot: "bg-red-400" },
-};
-
-export function zonePillClass(zone: number): string {
-  return ZONE_COLORS[zone]?.pill ?? "bg-zinc-100 text-zinc-600";
-}
-
-export function zoneDotClass(zone: number): string {
-  return ZONE_COLORS[zone]?.dot ?? "bg-zinc-400";
-}
-
 function ZoneRampDefaultsEditor({
   value,
   onChange,
@@ -715,59 +700,27 @@ function ZoneRampDefaultsEditor({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
             {discipline.label}
           </p>
-          <div className="space-y-1">
-            <div className="grid grid-cols-[4rem_1fr_1fr_1fr] items-center gap-2 px-1 text-[10px] uppercase tracking-wide text-zinc-400">
-              <span>Zone</span>
-              <span>Start min</span>
-              <span>Peak min</span>
-              <span>Rate %/wk</span>
-            </div>
+          <div className="space-y-1.5">
             {zones.map((zone) => {
               const key = `z${zone}` as const;
               const row = value[discipline.key][key];
               return (
-                <div
+                <ZoneRampPillRow
                   key={zone}
-                  className="grid grid-cols-[4rem_1fr_1fr_1fr] items-center gap-2"
-                >
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${zonePillClass(zone)}`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${zoneDotClass(zone)}`} />
-                    Z{zone}
-                  </span>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    value={row.startMinutes}
-                    onChange={(event) =>
-                      updateZone(discipline.key, zone, { startMinutes: Number(event.target.value) })
-                    }
-                  />
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    value={row.peakMinutes}
-                    onChange={(event) =>
-                      updateZone(discipline.key, zone, { peakMinutes: Number(event.target.value) })
-                    }
-                  />
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    value={row.ratePercent}
-                    onChange={(event) =>
-                      updateZone(discipline.key, zone, { ratePercent: Number(event.target.value) })
-                    }
-                  />
-                </div>
+                  zone={zone}
+                  startMinutes={row.startMinutes}
+                  peakMinutes={row.peakMinutes}
+                  ratePercent={row.ratePercent}
+                  onStartChange={(startMinutes) =>
+                    updateZone(discipline.key, zone, { startMinutes })
+                  }
+                  onPeakChange={(peakMinutes) =>
+                    updateZone(discipline.key, zone, { peakMinutes })
+                  }
+                  onRateChange={(ratePercent) =>
+                    updateZone(discipline.key, zone, { ratePercent })
+                  }
+                />
               );
             })}
           </div>
