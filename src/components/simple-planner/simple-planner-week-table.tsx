@@ -7,6 +7,7 @@ import {
   distanceMetersToDisplay,
   hoursFromDisciplineDistance,
 } from "@/components/simple-planner/simple-planner-volume-display";
+import { zoneDotClass, zonePillClass } from "@/components/simple-planner/simple-planner-view";
 import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
 import {
   createPhaseAtWeek,
@@ -774,13 +775,18 @@ function DisciplineExpandedCells({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {[1, 2, 3, 4, 5].map((zone) => (
-              <label key={zone} className="flex items-center gap-1 text-xs text-zinc-500">
-                Z{zone}
-                <Input
+              <label key={zone} className="flex items-center gap-1">
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${zonePillClass(zone)}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${zoneDotClass(zone)}`} />
+                  Z{zone}
+                </span>
+                <input
                   type="number"
                   step="1"
                   min="0"
-                  className="w-16 text-right"
+                  className="w-14 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-right text-sm dark:border-zinc-700 dark:bg-zinc-900"
                   value={getZoneMinute(week.zoneMinutes, discipline.discipline, zone)}
                   onChange={(event) =>
                     onUpdateWeek({

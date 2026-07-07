@@ -659,6 +659,22 @@ function RampDefaultsEditor({
   );
 }
 
+const ZONE_COLORS: Record<number, { pill: string; dot: string }> = {
+  1: { pill: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300", dot: "bg-sky-400" },
+  2: { pill: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", dot: "bg-green-400" },
+  3: { pill: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300", dot: "bg-yellow-400" },
+  4: { pill: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300", dot: "bg-orange-400" },
+  5: { pill: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", dot: "bg-red-400" },
+};
+
+export function zonePillClass(zone: number): string {
+  return ZONE_COLORS[zone]?.pill ?? "bg-zinc-100 text-zinc-600";
+}
+
+export function zoneDotClass(zone: number): string {
+  return ZONE_COLORS[zone]?.dot ?? "bg-zinc-400";
+}
+
 function ZoneRampDefaultsEditor({
   value,
   onChange,
@@ -677,100 +693,83 @@ function ZoneRampDefaultsEditor({
   ];
   const zones = [1, 2, 3, 4, 5] as const;
 
+  function updateZone(
+    discipline: "SWIM" | "BIKE" | "RUN",
+    zone: typeof zones[number],
+    patch: Partial<{ startMinutes: number; peakMinutes: number; ratePercent: number }>
+  ) {
+    const key = `z${zone}` as const;
+    onChange({
+      ...value,
+      [discipline]: {
+        ...value[discipline],
+        [key]: { ...value[discipline][key], ...patch },
+      },
+    });
+  }
+
   return (
     <div className="space-y-4">
       {disciplines.map((discipline) => (
-        <div key={discipline.key} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-          <h3 className="mb-3 text-sm font-semibold">{discipline.label}</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
-                  <th className="pb-2 pr-4">Zone</th>
-                  <th className="pb-2 pr-4">Start min</th>
-                  <th className="pb-2 pr-4">Peak min</th>
-                  <th className="pb-2">Rate / wk</th>
-                </tr>
-              </thead>
-              <tbody>
-                {zones.map((zone) => {
-                  const key = `z${zone}` as const;
-                  const row = value[discipline.key][key];
-                  return (
-                    <tr key={zone} className="border-t border-zinc-100 dark:border-zinc-800">
-                      <td className="py-2 pr-4 font-medium">Z{zone}</td>
-                      <td className="py-2 pr-4">
-                        <Input
-                          type="number"
-                          step="1"
-                          min="0"
-                          className="w-24"
-                          value={row.startMinutes}
-                          onChange={(event) =>
-                            onChange({
-                              ...value,
-                              [discipline.key]: {
-                                ...value[discipline.key],
-                                [key]: {
-                                  ...row,
-                                  startMinutes: Number(event.target.value),
-                                },
-                              },
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="py-2 pr-4">
-                        <Input
-                          type="number"
-                          step="1"
-                          min="0"
-                          className="w-24"
-                          value={row.peakMinutes}
-                          onChange={(event) =>
-                            onChange({
-                              ...value,
-                              [discipline.key]: {
-                                ...value[discipline.key],
-                                [key]: {
-                                  ...row,
-                                  peakMinutes: Number(event.target.value),
-                                },
-                              },
-                            })
-                          }
-                        />
-                      </td>
-                      <td className="py-2">
-                        <div className="flex items-center gap-1">
-                          <Input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            max="100"
-                            className="w-20"
-                            value={row.ratePercent}
-                            onChange={(event) =>
-                              onChange({
-                                ...value,
-                                [discipline.key]: {
-                                  ...value[discipline.key],
-                                  [key]: {
-                                    ...row,
-                                    ratePercent: Number(event.target.value),
-                                  },
-                                },
-                              })
-                            }
-                          />
-                          <span className="text-zinc-500">%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div key={discipline.key}>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            {discipline.label}
+          </p>
+          <div className="space-y-1">
+            <div className="grid grid-cols-[4rem_1fr_1fr_1fr] items-center gap-2 px-1 text-[10px] uppercase tracking-wide text-zinc-400">
+              <span>Zone</span>
+              <span>Start min</span>
+              <span>Peak min</span>
+              <span>Rate %/wk</span>
+            </div>
+            {zones.map((zone) => {
+              const key = `z${zone}` as const;
+              const row = value[discipline.key][key];
+              return (
+                <div
+                  key={zone}
+                  className="grid grid-cols-[4rem_1fr_1fr_1fr] items-center gap-2"
+                >
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${zonePillClass(zone)}`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${zoneDotClass(zone)}`} />
+                    Z{zone}
+                  </span>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    value={row.startMinutes}
+                    onChange={(event) =>
+                      updateZone(discipline.key, zone, { startMinutes: Number(event.target.value) })
+                    }
+                  />
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    value={row.peakMinutes}
+                    onChange={(event) =>
+                      updateZone(discipline.key, zone, { peakMinutes: Number(event.target.value) })
+                    }
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                    value={row.ratePercent}
+                    onChange={(event) =>
+                      updateZone(discipline.key, zone, { ratePercent: Number(event.target.value) })
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
