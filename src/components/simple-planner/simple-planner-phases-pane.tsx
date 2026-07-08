@@ -59,8 +59,7 @@ export function SimplePlannerPhasesPane({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Phases</h2>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Button type="button" variant="secondary" onClick={addEmptyPhase}>
           + Add phase
         </Button>
@@ -216,6 +215,37 @@ function PhaseDetailEditor({
           </select>
         </div>
       </div>
+
+      <fieldset className="mt-4 space-y-2">
+        <legend className="text-sm font-medium">Sessions per week</legend>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {(
+            [
+              { key: "swimSessionsPerWeek" as const, label: "Swim" },
+              { key: "bikeSessionsPerWeek" as const, label: "Bike" },
+              { key: "runSessionsPerWeek" as const, label: "Run" },
+              { key: "strengthSessionsPerWeek" as const, label: "Strength" },
+            ] as const
+          ).map((field) => (
+            <div key={field.key}>
+              <Label>{field.label}</Label>
+              <Input
+                type="number"
+                min={0}
+                max={7}
+                className="mt-1"
+                value={phase[field.key]}
+                onChange={(event) =>
+                  onChange({
+                    ...phase,
+                    [field.key]: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+          ))}
+        </div>
+      </fieldset>
 
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Ramp by discipline</legend>

@@ -471,6 +471,10 @@ export const simplePhaseSchema = z
       bike: z.boolean(),
       run: z.boolean(),
     }),
+    swimSessionsPerWeek: z.number().int().min(0).max(7),
+    bikeSessionsPerWeek: z.number().int().min(0).max(7),
+    runSessionsPerWeek: z.number().int().min(0).max(7),
+    strengthSessionsPerWeek: z.number().int().min(0).max(7),
     goal: z.string().nullable().optional(),
   })
   .refine(

@@ -548,9 +548,10 @@ model SeasonPhase {
   coachNotes         String?
   focusMode          FocusMode  @default(PHASE)
   phaseFocus         PhaseFocus?
-  swimSessionsPerWeek  Int      @default(3)
-  bikeSessionsPerWeek  Int      @default(4)
-  runSessionsPerWeek   Int      @default(3)
+  swimSessionsPerWeek      Int      @default(3)
+  bikeSessionsPerWeek      Int      @default(4)
+  runSessionsPerWeek       Int      @default(3)
+  strengthSessionsPerWeek  Int      @default(2)
   volumeMesocycleMode  VolumeMesocycleMode @default(INCREASE)
   volumeStartHours     Float?
   volumeEndHours       Float?

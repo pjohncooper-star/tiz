@@ -55,6 +55,10 @@ export type SimplePhaseWrite = {
   startWeekIndex: number;
   endWeekIndex: number;
   rampEnabled: Record<SimpleDiscipline, boolean>;
+  swimSessionsPerWeek: number;
+  bikeSessionsPerWeek: number;
+  runSessionsPerWeek: number;
+  strengthSessionsPerWeek: number;
   goal?: string | null;
 };
 
@@ -117,6 +121,10 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         rampSwimEnabled: phase.rampEnabled.swim,
         rampBikeEnabled: phase.rampEnabled.bike,
         rampRunEnabled: phase.rampEnabled.run,
+        swimSessionsPerWeek: Math.max(0, Math.round(phase.swimSessionsPerWeek)),
+        bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
+        runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
+        strengthSessionsPerWeek: Math.max(0, Math.round(phase.strengthSessionsPerWeek)),
         coachNotes: phase.goal?.trim() || null,
       };
     });
@@ -494,6 +502,10 @@ export async function updateSimpleSeasonPlan(
             rampSwimEnabled: phase.rampSwimEnabled,
             rampBikeEnabled: phase.rampBikeEnabled,
             rampRunEnabled: phase.rampRunEnabled,
+            swimSessionsPerWeek: phase.swimSessionsPerWeek,
+            bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+            runSessionsPerWeek: phase.runSessionsPerWeek,
+            strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
           },
         });
       }
@@ -593,6 +605,10 @@ export function serializeSimpleSeasonPlan(
           bike: phase.rampBikeEnabled,
           run: phase.rampRunEnabled,
         },
+        swimSessionsPerWeek: phase.swimSessionsPerWeek,
+        bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+        runSessionsPerWeek: phase.runSessionsPerWeek,
+        strengthSessionsPerWeek: phase.strengthSessionsPerWeek ?? 2,
         goal: phase.coachNotes ?? null,
       };
     });

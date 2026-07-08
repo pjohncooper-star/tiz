@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
@@ -9,6 +9,7 @@ import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planne
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
 import {
   emptyRace,
+  DEFAULT_PHASE_SESSIONS,
   type SimpleGoalEvent,
   type SimplePhase,
   type SimpleSeason,
@@ -40,11 +41,65 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
   return {
     ...season,
     zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
+    phases: season.phases.map((phase) => ({
+      ...phase,
+      swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
+      bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
+      runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
+      strengthSessionsPerWeek:
+        phase.strengthSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.strengthSessionsPerWeek,
+    })),
     weeks: season.weeks.map((week) => ({
       ...week,
       zoneMinutes: week.zoneMinutes ?? {},
     })),
   };
+}
+
+type PlannerSectionId =
+  | "season"
+  | "races"
+  | "timeline"
+  | "phases"
+  | "ramps"
+  | "zoneRamps"
+  | "weeklyVolume";
+
+const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
+  season: true,
+  races: false,
+  timeline: true,
+  phases: false,
+  ramps: false,
+  zoneRamps: false,
+  weeklyVolume: true,
+};
+
+function CollapsibleSection({
+  title,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-5 py-4 text-left"
+        aria-expanded={expanded}
+      >
+        <span className="text-xs text-zinc-400">{expanded ? "▼" : "▶"}</span>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">{title}</h2>
+      </button>
+      {expanded ? <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">{children}</div> : null}
+    </section>
+  );
 }
 
 function buildPrimaryGoalEventPayload(
@@ -87,6 +142,14 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
   const [error, setError] = useState<string | null>(null);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState(DEFAULT_SECTION_EXPANDED);
+
+  const toggleSection = useCallback((sectionId: PlannerSectionId) => {
+    setExpandedSections((current) => ({
+      ...current,
+      [sectionId]: !current[sectionId],
+    }));
+  }, []);
 
   const [createMode, setCreateMode] = useState(false);
   const [draftName, setDraftName] = useState("2026 Season");
@@ -178,6 +241,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       })),
     }));
     setCreateMode(false);
+    setExpandedSections(DEFAULT_SECTION_EXPANDED);
   }
 
   const { disciplineSettings } = useDisciplineSettings();
@@ -313,7 +377,11 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <Card title="Season">
+      <CollapsibleSection
+        title="Season"
+        expanded={expandedSections.season}
+        onToggle={() => toggleSection("season")}
+      >
         <div className="space-y-4">
           <div>
             <Label>Season name</Label>
@@ -373,9 +441,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
             </div>
           </div>
         </div>
-      </Card>
+      </CollapsibleSection>
 
-      <Card title="Races">
+      <CollapsibleSection
+        title="Races"
+        expanded={expandedSections.races}
+        onToggle={() => toggleSection("races")}
+      >
         <RaceSection
           aRace={racesByPriority.a}
           bRaces={racesByPriority.b}
@@ -392,9 +464,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
             });
           }}
         />
-      </Card>
+      </CollapsibleSection>
 
-      <Card title="Timeline">
+      <CollapsibleSection
+        title="Timeline"
+        expanded={expandedSections.timeline}
+        onToggle={() => toggleSection("timeline")}
+      >
         <SimplePlannerTimeline
           seasonStart={season.startDate}
           weeks={season.weeks}
@@ -404,9 +480,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           selectedWeekIndex={selectedWeekIndex}
           onSelectWeek={handleSelectWeek}
         />
-      </Card>
+      </CollapsibleSection>
 
-      <Card title="Phases">
+      <CollapsibleSection
+        title="Phases"
+        expanded={expandedSections.phases}
+        onToggle={() => toggleSection("phases")}
+      >
         <SimplePlannerPhasesPane
           phases={season.phases}
           totalWeeks={season.totalWeeks}
@@ -414,9 +494,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           onSelectPhase={setSelectedPhaseId}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
         />
-      </Card>
+      </CollapsibleSection>
 
-      <Card title="Ramp defaults">
+      <CollapsibleSection
+        title="Ramp defaults"
+        expanded={expandedSections.ramps}
+        onToggle={() => toggleSection("ramps")}
+      >
         <RampDefaultsEditor
           value={season.rampDefaults}
           disciplineSettings={disciplineSettings}
@@ -424,9 +508,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           onRecalculate={() => void saveSeason(savePayload({ recalculate: true }))}
           saving={saving}
         />
-      </Card>
+      </CollapsibleSection>
 
-      <Card title="Zone ramp defaults">
+      <CollapsibleSection
+        title="Zone ramp defaults"
+        expanded={expandedSections.zoneRamps}
+        onToggle={() => toggleSection("zoneRamps")}
+      >
         <ZoneRampDefaultsEditor
           value={season.zoneRampDefaults}
           onChange={(zoneRampDefaults) => setSeason({ ...season, zoneRampDefaults })}
@@ -435,9 +523,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           }
           saving={saving}
         />
-      </Card>
+      </CollapsibleSection>
 
-      <Card title="Weekly volume">
+      <CollapsibleSection
+        title="Weekly volume"
+        expanded={expandedSections.weeklyVolume}
+        onToggle={() => toggleSection("weeklyVolume")}
+      >
         <SimplePlannerWeekTable
           weeks={season.weeks}
           phases={season.phases}
@@ -449,7 +541,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           onWeeksChange={(weeks) => setSeason({ ...season, weeks })}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
         />
-      </Card>
+      </CollapsibleSection>
     </div>
   );
 }

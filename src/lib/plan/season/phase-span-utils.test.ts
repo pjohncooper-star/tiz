@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { SimplePhase } from "@/components/simple-planner/simple-planner-types";
+import { DEFAULT_PHASE_SESSIONS } from "@/components/simple-planner/simple-planner-types";
 import {
   buildGutterSegments,
   clampPhaseResize,
@@ -21,6 +22,7 @@ function phase(
     startWeekIndex: start,
     endWeekIndex: end,
     rampEnabled: { swim: true, bike: true, run: true },
+    ...DEFAULT_PHASE_SESSIONS,
     goal: null,
   };
 }

@@ -390,7 +390,7 @@ function PhaseBandGutter({
 
   return (
     <div
-      className={`relative flex min-h-[2.5rem] flex-col ${roundedClass} ${borderClass} transition ${
+      className={`relative flex h-full min-h-[2.5rem] flex-col ${roundedClass} ${borderClass} transition ${
         selected || isDragging ? "border-sky-500" : "border-transparent"
       } ${position === "middle" || position === "last" ? "-mt-px" : ""}`}
       style={{ backgroundColor: `${phase.color}33` }}
@@ -442,13 +442,13 @@ function PhaseBandGutter({
   );
 }
 
-function phaseBandGutterPosition(
-  gutterRowIndex: number,
-  gutterRowCount: number
+function phaseWeekGutterPosition(
+  weekIndex: number,
+  weekCount: number
 ): "only" | "first" | "middle" | "last" {
-  if (gutterRowCount === 1) return "only";
-  if (gutterRowIndex === 0) return "first";
-  if (gutterRowIndex === gutterRowCount - 1) return "last";
+  if (weekCount === 1) return "only";
+  if (weekIndex === 0) return "first";
+  if (weekIndex === weekCount - 1) return "last";
   return "middle";
 }
 
@@ -471,6 +471,8 @@ function WeekRowGroup({
   onToggle: () => void;
   onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
 }) {
+  const rowSpan = expanded ? 1 + DISCIPLINES.length : 1;
+
   return (
     <>
       <tr
@@ -480,7 +482,9 @@ function WeekRowGroup({
           week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
         } ${highlighted ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
       >
-        <td className="px-2 py-2 align-middle">{gutter}</td>
+        <td rowSpan={rowSpan} className="px-2 py-2 align-top">
+          {gutter}
+        </td>
         <WeekCells
           week={week}
           expanded={expanded}
@@ -530,19 +534,12 @@ function PhaseBandRows({
   onUpdateWeek: (weekIndex: number, patch: Partial<SimpleWeek>) => void;
   onDragStart: (edge: "top" | "bottom", clientY: number) => void;
 }) {
-  const gutterRowCount = weeks.reduce(
-    (count, week) => count + 1 + (expanded.has(week.weekIndex) ? DISCIPLINES.length : 0),
-    0
-  );
-  let gutterRowIndex = 0;
-
   return (
     <>
       {weeks.map((week, index) => {
         const isLastWeek = index === weeks.length - 1;
         const weekExpanded = expanded.has(week.weekIndex);
-        const mainGutterIndex = gutterRowIndex;
-        gutterRowIndex += 1;
+        const rowSpan = weekExpanded ? 1 + DISCIPLINES.length : 1;
 
         return (
           <Fragment key={week.weekIndex}>
@@ -553,13 +550,13 @@ function PhaseBandRows({
                 week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
               } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
             >
-              <td className="w-28 px-2 py-0 align-top">
+              <td rowSpan={rowSpan} className="w-28 px-2 py-0 align-top">
                 <PhaseBandGutter
                   phase={phase}
-                  position={phaseBandGutterPosition(mainGutterIndex, gutterRowCount)}
+                  position={phaseWeekGutterPosition(index, weeks.length)}
                   showLabel={index === 0}
                   showTopHandle={index === 0}
-                  showBottomHandle={isLastWeek && !weekExpanded}
+                  showBottomHandle={isLastWeek}
                   selected={selected}
                   isDragging={isDragging}
                   onSelect={onSelectPhase}
@@ -574,40 +571,21 @@ function PhaseBandRows({
               />
             </tr>
             {weekExpanded &&
-              DISCIPLINES.map((discipline) => {
-                const expandedGutterIndex = gutterRowIndex;
-                gutterRowIndex += 1;
-                const isLastGutterRow = expandedGutterIndex === gutterRowCount - 1;
-
-                return (
-                  <tr
-                    key={`${week.weekIndex}-${discipline.key}`}
-                    data-week-index={week.weekIndex}
-                    className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
-                  >
-                    <td className="w-28 px-2 py-0 align-top">
-                      <PhaseBandGutter
-                        phase={phase}
-                        position={phaseBandGutterPosition(expandedGutterIndex, gutterRowCount)}
-                        showLabel={false}
-                        showTopHandle={false}
-                        showBottomHandle={isLastGutterRow}
-                        selected={selected}
-                        isDragging={isDragging}
-                        onSelect={onSelectPhase}
-                        onDragStart={onDragStart}
-                      />
-                    </td>
-                    <DisciplineExpandedCells
-                      week={week}
-                      discipline={discipline}
-                      rampDefaults={rampDefaults}
-                      disciplineSettings={disciplineSettings}
-                      onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
-                    />
-                  </tr>
-                );
-              })}
+              DISCIPLINES.map((discipline) => (
+                <tr
+                  key={`${week.weekIndex}-${discipline.key}`}
+                  data-week-index={week.weekIndex}
+                  className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
+                >
+                  <DisciplineExpandedCells
+                    week={week}
+                    discipline={discipline}
+                    rampDefaults={rampDefaults}
+                    disciplineSettings={disciplineSettings}
+                    onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
+                  />
+                </tr>
+              ))}
           </Fragment>
         );
       })}
@@ -673,7 +651,6 @@ function DisciplineExpandedRow({
       data-week-index={week.weekIndex}
       className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
     >
-      <td />
       <DisciplineExpandedCells
         week={week}
         discipline={discipline}

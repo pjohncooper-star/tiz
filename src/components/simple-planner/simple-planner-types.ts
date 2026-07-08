@@ -5,6 +5,13 @@ import type { ZoneMinutes } from "@/lib/workout/steps";
 
 export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
 
+export const DEFAULT_PHASE_SESSIONS = {
+  swimSessionsPerWeek: 3,
+  bikeSessionsPerWeek: 4,
+  runSessionsPerWeek: 3,
+  strengthSessionsPerWeek: 2,
+} as const;
+
 export type SimpleGoalEvent = {
   id?: string;
   name: string;
@@ -24,6 +31,10 @@ export type SimplePhase = {
     bike: boolean;
     run: boolean;
   };
+  swimSessionsPerWeek: number;
+  bikeSessionsPerWeek: number;
+  runSessionsPerWeek: number;
+  strengthSessionsPerWeek: number;
   goal: string | null;
 };
 
@@ -73,6 +84,7 @@ export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase
     startWeekIndex: weekIndex,
     endWeekIndex: weekIndex,
     rampEnabled: { swim: true, bike: true, run: true },
+    ...DEFAULT_PHASE_SESSIONS,
     goal: null,
   };
 }
@@ -85,6 +97,7 @@ export function createEmptyPhase(index: number): SimplePhase {
     startWeekIndex: -1,
     endWeekIndex: -1,
     rampEnabled: { swim: true, bike: true, run: true },
+    ...DEFAULT_PHASE_SESSIONS,
     goal: null,
   };
 }
