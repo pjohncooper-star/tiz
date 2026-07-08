@@ -10,6 +10,7 @@ import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-plann
 import {
   emptyRace,
   DEFAULT_PHASE_SESSIONS,
+  DEFAULT_PHASE_INTENSE_DAYS,
   type SimpleGoalEvent,
   type SimplePhase,
   type SimpleSeason,
@@ -48,6 +49,12 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
       runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
       strengthSessionsPerWeek:
         phase.strengthSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.strengthSessionsPerWeek,
+      swimIntenseDaysPerWeek:
+        phase.swimIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.swimIntenseDaysPerWeek,
+      bikeIntenseDaysPerWeek:
+        phase.bikeIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.bikeIntenseDaysPerWeek,
+      runIntenseDaysPerWeek:
+        phase.runIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.runIntenseDaysPerWeek,
     })),
     weeks: season.weeks.map((week) => ({
       ...week,

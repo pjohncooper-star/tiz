@@ -11,6 +11,7 @@ import {
 } from "date-fns";
 import { CalendarDayColumn } from "@/components/calendar/calendar-day-column";
 import { CalendarWeekSummary } from "@/components/calendar/calendar-week-summary";
+import { WorkoutPalette } from "@/components/calendar/workout-palette";
 import {
   WEEK_DAY_HEADER_ROW_CLASS,
   WEEK_DAY_ROW_CLASS,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/plan/calendar/day-activities";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
@@ -35,6 +37,7 @@ type CalendarWeekRowProps = {
   currentWeekStart: string;
   sessions: CalendarPlannedSession[];
   activities: CalendarWeekActivity[];
+  weekTarget?: CalendarWeekTarget | null;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   workoutShadingSettings: WorkoutShadingSettings;
   workoutShadingTarget: WorkoutShadingTarget;
@@ -49,6 +52,7 @@ export function CalendarWeekRow({
   currentWeekStart,
   sessions,
   activities,
+  weekTarget,
   disciplineSettings,
   workoutShadingSettings,
   workoutShadingTarget,
@@ -103,6 +107,8 @@ export function CalendarWeekRow({
         )}
       </h2>
 
+      {weekTarget ? <WorkoutPalette weekTarget={weekTarget} sessions={sessions} /> : null}
+
       <div className={WEEK_DAY_HEADER_ROW_CLASS}>
         {DAY_HEADERS.map((h, i) => (
           <div
@@ -146,6 +152,7 @@ export function CalendarWeekRow({
       <CalendarWeekSummary
         sessions={sessions}
         activities={activities}
+        weekTarget={weekTarget ?? null}
         weekStart={weekStart}
         currentWeekStart={currentWeekStart}
         disciplineSettings={disciplineSettings}

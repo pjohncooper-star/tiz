@@ -12,6 +12,7 @@ import { recordedActivityWhere } from "@/lib/import/classify";
 import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
+import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
 import {
   calendarDateFromDb,
   endDateKey,
@@ -202,6 +203,8 @@ export default async function CalendarPage({
   const maxDate = activityDates.length > 0 ? activityDates[0] : null;
 
   const weekActivities = serializeCalendarActivities(activities);
+  const weekStarts = weekStartsInRange(from, to);
+  const weekTargets = await getCalendarWeekTargets(athleteId, weekStarts);
 
   const initialData = {
     sessions: serializePlannedSessions(
@@ -211,7 +214,8 @@ export default async function CalendarPage({
       primarySignals
     ),
     activities: weekActivities,
-    weekStarts: weekStartsInRange(from, to),
+    weekStarts,
+    weekTargets,
   };
 
   return (

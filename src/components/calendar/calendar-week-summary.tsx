@@ -10,6 +10,7 @@ import {
   formatSummaryDuration,
   formatTotalDistanceSummary,
   maxZoneBarMinutes,
+  remainingZoneArray,
   sportZoneTotals,
   summarizeWeekCompletedActivities,
   summarizeWeekCompletedSessions,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/plan/calendar/week-summary";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
+import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { formatZoneMinutes } from "@/lib/workout/steps";
@@ -628,9 +630,129 @@ function CollapsedCombinedMetrics({
   );
 }
 
+const TARGET_DISCIPLINE_LABELS: Record<string, string> = {
+  SWIM: "Swim",
+  BIKE: "Bike",
+  RUN: "Run",
+};
+
+function formatTargetHours(hours: number): string {
+  if (hours <= 0) return "—";
+  return `${formatDisplayNumber(hours, 1)} h`;
+}
+
+function WeekTargetSection({
+  weekTarget,
+  plannedSummary,
+}: {
+  weekTarget: CalendarWeekTarget;
+  plannedSummary: WeekPlannedSummary;
+}) {
+  const rows = weekTarget.byDiscipline
+    .map((entry) => {
+      const targetZones = sportZoneTotals(entry.discipline, entry.zoneMinutes);
+      const plannedRow = plannedSummary.bySport.find(
+        (r) => r.discipline === entry.discipline
+      );
+      const plannedZones = plannedRow
+        ? sportZoneTotals(entry.discipline, plannedRow.zoneMinutes)
+        : [0, 0, 0, 0, 0];
+      const remaining = remainingZoneArray(targetZones, plannedZones);
+      return {
+        discipline: entry.discipline,
+        hours: entry.hours,
+        sessionsPerWeek: entry.sessionsPerWeek,
+        intenseDaysPerWeek: entry.intenseDaysPerWeek,
+        targetZones,
+        remaining,
+      };
+    })
+    .filter(
+      (row) =>
+        row.hours > 0 ||
+        row.targetZones.some((z) => z > 0) ||
+        row.remaining.some((z) => z > 0)
+    );
+
+  const hasData = rows.length > 0 || weekTarget.totalHours > 0;
+  if (!hasData) return null;
+
+  return (
+    <div className="rounded-md border border-zinc-200 bg-white/90 p-3 dark:border-zinc-700 dark:bg-zinc-950/60">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 dark:border-zinc-800">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">
+          Season target
+        </span>
+        <span className="flex items-center gap-2 text-xs">
+          {weekTarget.phase ? (
+            <span className="inline-flex items-center gap-1 text-zinc-600 dark:text-zinc-300">
+              <span
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: weekTarget.phase.color }}
+                aria-hidden
+              />
+              {weekTarget.phase.name}
+            </span>
+          ) : null}
+          {weekTarget.isRestWeek ? (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/60 dark:text-amber-200">
+              Rest week
+            </span>
+          ) : null}
+          <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+            {formatTargetHours(weekTarget.totalHours)}
+          </span>
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <div className="hidden grid-cols-[4.5rem_3.5rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 text-[10px] font-medium uppercase tracking-wide text-zinc-400 sm:grid">
+          <span>Sport</span>
+          <span className="text-right">Hours</span>
+          <span>Target TiZ</span>
+          <span>Zone budget left</span>
+        </div>
+        {rows.map((row) => {
+          const maxMinutes = maxZoneBarMinutes(row.targetZones, row.remaining);
+          const label = TARGET_DISCIPLINE_LABELS[row.discipline] ?? row.discipline;
+          return (
+            <div
+              key={row.discipline}
+              className="grid grid-cols-1 gap-1.5 border-t border-zinc-200 pt-2 first:border-t-0 first:pt-0 sm:grid-cols-[4.5rem_3.5rem_minmax(0,1fr)_minmax(0,1fr)] sm:items-center sm:gap-3 dark:border-zinc-800"
+            >
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                {label}
+                {row.intenseDaysPerWeek > 0 ? (
+                  <span className="ml-1 text-[10px] font-normal text-zinc-400">
+                    {row.intenseDaysPerWeek} hard
+                  </span>
+                ) : null}
+              </span>
+              <span className="text-xs tabular-nums text-zinc-700 sm:text-right dark:text-zinc-200">
+                {formatTargetHours(row.hours)}
+              </span>
+              <TizBarWithTooltip
+                zoneMinutes={row.targetZones}
+                maxMinutes={maxMinutes}
+                title={`${label} target TiZ`}
+              />
+              <TizBarWithTooltip
+                zoneMinutes={row.remaining}
+                maxMinutes={maxMinutes}
+                title={`${label} zone budget remaining`}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 type CalendarWeekSummaryProps = {
   sessions: CalendarPlannedSession[];
   activities: CalendarWeekActivity[];
+  weekTarget?: CalendarWeekTarget | null;
   weekStart: string;
   currentWeekStart: string;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
@@ -640,6 +762,7 @@ type CalendarWeekSummaryProps = {
 export function CalendarWeekSummary({
   sessions,
   activities,
+  weekTarget,
   weekStart,
   currentWeekStart,
   disciplineSettings,
@@ -662,8 +785,9 @@ export function CalendarWeekSummary({
 
   const hasPlanned = weekSummaryHasData(plannedSummary);
   const hasCompleted = completedSummary ? weekSummaryHasData(completedSummary) : false;
+  const hasTarget = !!weekTarget;
 
-  if (!hasPlanned && !hasCompleted) return null;
+  if (!hasPlanned && !hasCompleted && !hasTarget) return null;
 
   const plannedPills = buildCollapsedWeekSummaryPills(plannedSummary, disciplineSettings);
   const completedPills = completedSummary
@@ -695,12 +819,20 @@ export function CalendarWeekSummary({
           hasCompleted={hasCompleted}
         />
       ) : (
-        <div className="mt-3">
-          <CombinedExpandedMetricsSection
-            plannedSummary={hasPlanned ? plannedSummary : null}
-            completedSummary={hasCompleted ? completedSummary : null}
-            disciplineSettings={disciplineSettings}
-          />
+        <div className="mt-3 space-y-2">
+          {weekTarget ? (
+            <WeekTargetSection
+              weekTarget={weekTarget}
+              plannedSummary={plannedSummary}
+            />
+          ) : null}
+          {hasPlanned || hasCompleted ? (
+            <CombinedExpandedMetricsSection
+              plannedSummary={hasPlanned ? plannedSummary : null}
+              completedSummary={hasCompleted ? completedSummary : null}
+              disciplineSettings={disciplineSettings}
+            />
+          ) : null}
         </div>
       )}
     </div>

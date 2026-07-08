@@ -6,23 +6,54 @@ import {
 } from "./simple-phase-notes";
 
 describe("simple-phase-notes", () => {
-  it("reads plain-text coach notes as goal with default strength", () => {
+  it("reads plain-text coach notes as goal with defaults", () => {
     assert.deepEqual(parsePhaseCoachNotes("Aerobic base"), {
       goal: "Aerobic base",
       strengthSessionsPerWeek: 2,
+      swimIntenseDaysPerWeek: 1,
+      bikeIntenseDaysPerWeek: 1,
+      runIntenseDaysPerWeek: 1,
     });
   });
 
-  it("round-trips strength in JSON coach notes", () => {
-    const serialized = serializePhaseCoachNotes("Build", 3);
-    assert.equal(serialized, JSON.stringify({ goal: "Build", strengthSessionsPerWeek: 3 }));
+  it("round-trips strength and intense days in JSON coach notes", () => {
+    const serialized = serializePhaseCoachNotes({
+      goal: "Build",
+      strengthSessionsPerWeek: 3,
+      swimIntenseDaysPerWeek: 1,
+      bikeIntenseDaysPerWeek: 2,
+      runIntenseDaysPerWeek: 1,
+    });
     assert.deepEqual(parsePhaseCoachNotes(serialized), {
       goal: "Build",
       strengthSessionsPerWeek: 3,
+      swimIntenseDaysPerWeek: 1,
+      bikeIntenseDaysPerWeek: 2,
+      runIntenseDaysPerWeek: 1,
     });
   });
 
-  it("keeps plain-text goals when strength is default", () => {
-    assert.equal(serializePhaseCoachNotes("Taper focus", 2), "Taper focus");
+  it("keeps plain-text goals when everything is default", () => {
+    assert.equal(
+      serializePhaseCoachNotes({
+        goal: "Taper focus",
+        strengthSessionsPerWeek: 2,
+        swimIntenseDaysPerWeek: 1,
+        bikeIntenseDaysPerWeek: 1,
+        runIntenseDaysPerWeek: 1,
+      }),
+      "Taper focus"
+    );
+  });
+
+  it("still reads legacy strength-only JSON payloads", () => {
+    const legacy = JSON.stringify({ goal: "Build", strengthSessionsPerWeek: 3 });
+    assert.deepEqual(parsePhaseCoachNotes(legacy), {
+      goal: "Build",
+      strengthSessionsPerWeek: 3,
+      swimIntenseDaysPerWeek: 1,
+      bikeIntenseDaysPerWeek: 1,
+      runIntenseDaysPerWeek: 1,
+    });
   });
 });

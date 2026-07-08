@@ -248,6 +248,39 @@ function PhaseDetailEditor({
       </fieldset>
 
       <fieldset className="mt-4 space-y-2">
+        <legend className="text-sm font-medium">Intense days per week</legend>
+        <p className="text-xs text-zinc-500">
+          Days with zone 3+ work, per discipline. Used to split TiZ across generated workouts.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {(
+            [
+              { key: "swimIntenseDaysPerWeek" as const, label: "Swim" },
+              { key: "bikeIntenseDaysPerWeek" as const, label: "Bike" },
+              { key: "runIntenseDaysPerWeek" as const, label: "Run" },
+            ] as const
+          ).map((field) => (
+            <div key={field.key}>
+              <Label>{field.label}</Label>
+              <Input
+                type="number"
+                min={0}
+                max={7}
+                className="mt-1"
+                value={phase[field.key]}
+                onChange={(event) =>
+                  onChange({
+                    ...phase,
+                    [field.key]: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Ramp by discipline</legend>
         {(["swim", "bike", "run"] as const).map((discipline) => (
           <label key={discipline} className="flex items-center gap-2 text-sm capitalize">

@@ -1,19 +1,18 @@
 import { NextResponse } from "next/server";
+import { endOfWeek, format, startOfWeek } from "date-fns";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { recordedActivityWhere } from "@/lib/import/classify";
-import { endDateKey, parseDateKey } from "@/lib/dates";
+import { parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
-import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
-import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
+import { summarizeWeekPlannedSessions } from "@/lib/plan/calendar/week-summary";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { PoolSize } from "@/lib/units/discipline-settings";
 
-const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Week target + other-session planned zone minutes for the builder budget readout. */
 export async function GET(request: Request) {
   const session = await auth();
   const athleteId = session?.user?.athleteId;
@@ -22,24 +21,23 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
-  if (!from || !to || !DATE_KEY.test(from) || !DATE_KEY.test(to)) {
-    return NextResponse.json({ error: "from and to (yyyy-MM-dd) required" }, { status: 400 });
+  const date = url.searchParams.get("date");
+  const excludeSessionId = url.searchParams.get("excludeSessionId");
+  if (!date || !DATE_KEY.test(date)) {
+    return NextResponse.json({ error: "date (yyyy-MM-dd) required" }, { status: 400 });
   }
 
-  const fromDate = parseDateKey(from);
-  const toDate = parseDateKey(to);
-  const toDateEnd = endDateKey(to);
-  if (toDate < fromDate) {
-    return NextResponse.json({ error: "to must be on or after from" }, { status: 400 });
-  }
+  const weekStart = startOfWeek(parseDateKey(date), WEEK_OPTS);
+  const weekEnd = endOfWeek(weekStart, WEEK_OPTS);
+  const weekStartKey = format(weekStart, "yyyy-MM-dd");
 
-  const [plannedSessions, activities, disciplineSettings] = await Promise.all([
+  const [targets, plannedSessions, disciplineSettings] = await Promise.all([
+    getCalendarWeekTargets(athleteId, [weekStartKey]),
     db.plannedSession.findMany({
       where: {
         athleteId,
-        scheduledDate: { gte: fromDate, lte: toDate },
+        scheduledDate: { gte: weekStart, lte: weekEnd },
+        ...(excludeSessionId ? { id: { not: excludeSessionId } } : {}),
       },
       include: {
         structuredWorkout: true,
@@ -60,16 +58,6 @@ export async function GET(request: Request) {
           },
         },
       },
-      orderBy: [{ scheduledDate: "asc" }, { title: "asc" }],
-    }),
-    db.syncedActivity.findMany({
-      where: {
-        athleteId,
-        startTime: { gte: fromDate, lte: toDateEnd },
-        ...recordedActivityWhere,
-      },
-      include: { zoneBreakdowns: { where: { isCanonical: true } } },
-      orderBy: { startTime: "asc" },
     }),
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
   ]);
@@ -77,28 +65,23 @@ export async function GET(request: Request) {
   const displayUnits = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.displayUnit])
   ) as Partial<Record<string, DisplayUnit>>;
-
+  const defaultPoolSizes = Object.fromEntries(
+    disciplineSettings.map((s) => [s.discipline, s.poolSize])
+  ) as Partial<Record<PlanDiscipline, PoolSize | null>>;
   const primarySignals = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.primarySignal])
   );
 
-  const defaultPoolSizes = Object.fromEntries(
-    disciplineSettings.map((s) => [s.discipline, s.poolSize])
-  ) as Partial<Record<PlanDiscipline, PoolSize | null>>;
-
-  const weekActivities = serializeCalendarActivities(activities);
-  const weekStarts = weekStartsInRange(from, to);
-  const weekTargets = await getCalendarWeekTargets(athleteId, weekStarts);
+  const serialized = serializePlannedSessions(
+    plannedSessions,
+    displayUnits,
+    defaultPoolSizes,
+    primarySignals
+  );
+  const summary = summarizeWeekPlannedSessions(serialized);
 
   return NextResponse.json({
-    sessions: serializePlannedSessions(
-      plannedSessions,
-      displayUnits,
-      defaultPoolSizes,
-      primarySignals
-    ),
-    activities: weekActivities,
-    weekStarts,
-    weekTargets,
+    weekTarget: targets[0] ?? null,
+    plannedZoneMinutes: summary.total.zoneMinutes,
   });
 }

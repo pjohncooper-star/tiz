@@ -63,6 +63,9 @@ export type SimplePhaseWrite = {
   bikeSessionsPerWeek: number;
   runSessionsPerWeek: number;
   strengthSessionsPerWeek: number;
+  swimIntenseDaysPerWeek: number;
+  bikeIntenseDaysPerWeek: number;
+  runIntenseDaysPerWeek: number;
   goal?: string | null;
 };
 
@@ -128,7 +131,13 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         swimSessionsPerWeek: Math.max(0, Math.round(phase.swimSessionsPerWeek)),
         bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
         runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
-        coachNotes: serializePhaseCoachNotes(phase.goal, phase.strengthSessionsPerWeek),
+        coachNotes: serializePhaseCoachNotes({
+          goal: phase.goal ?? null,
+          strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
+          swimIntenseDaysPerWeek: phase.swimIntenseDaysPerWeek,
+          bikeIntenseDaysPerWeek: phase.bikeIntenseDaysPerWeek,
+          runIntenseDaysPerWeek: phase.runIntenseDaysPerWeek,
+        }),
       };
     });
 }
@@ -612,6 +621,9 @@ export function serializeSimpleSeasonPlan(
         bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
         runSessionsPerWeek: phase.runSessionsPerWeek,
         strengthSessionsPerWeek: notes.strengthSessionsPerWeek,
+        swimIntenseDaysPerWeek: notes.swimIntenseDaysPerWeek,
+        bikeIntenseDaysPerWeek: notes.bikeIntenseDaysPerWeek,
+        runIntenseDaysPerWeek: notes.runIntenseDaysPerWeek,
         goal: notes.goal,
       };
     });

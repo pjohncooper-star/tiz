@@ -285,6 +285,11 @@ export function maxZoneBarMinutes(...zoneLists: number[][]): number {
   return max || 1;
 }
 
+/** Per-zone remaining budget = target − planned, floored at 0. */
+export function remainingZoneArray(target: number[], planned: number[]): number[] {
+  return target.map((minutes, i) => Math.max(0, minutes - (planned[i] ?? 0)));
+}
+
 export type CollapsedSummaryPill = {
   id: string;
   label: string;

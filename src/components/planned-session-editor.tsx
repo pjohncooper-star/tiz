@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PlannedSessionStats } from "@/components/planned-session-stats";
 import { PoolSizeSlider } from "@/components/pool-size-slider";
 import { WorkoutTreeEditor } from "@/components/workout-tree-editor";
+import { SessionZoneBudget } from "@/components/session-zone-budget";
 import {
   emptyZoneMinuteValues,
   fitZoneMinuteValuesToDuration,
@@ -690,6 +691,12 @@ export function PlannedSessionEditor({
               onChange={setWorkoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
               primarySignal={primarySignal}
+            />
+            <SessionZoneBudget
+              sessionId={sessionId}
+              scheduledDate={scheduledDate}
+              discipline={discipline}
+              workoutTree={workoutTree}
             />
             <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <Button type="button" variant="secondary" onClick={handleRemoveWorkout}>

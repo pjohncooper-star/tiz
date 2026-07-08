@@ -1,7 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { SimplePhase } from "@/components/simple-planner/simple-planner-types";
-import { DEFAULT_PHASE_SESSIONS } from "@/components/simple-planner/simple-planner-types";
+import {
+  DEFAULT_PHASE_INTENSE_DAYS,
+  DEFAULT_PHASE_SESSIONS,
+} from "@/components/simple-planner/simple-planner-types";
 import {
   buildGutterSegments,
   clampPhaseResize,
@@ -23,6 +26,7 @@ function phase(
     endWeekIndex: end,
     rampEnabled: { swim: true, bike: true, run: true },
     ...DEFAULT_PHASE_SESSIONS,
+    ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
   };
 }
@@ -62,6 +66,8 @@ describe("phase-span-utils", () => {
       startWeekIndex: -1,
       endWeekIndex: -1,
       rampEnabled: { swim: true, bike: true, run: true },
+      ...DEFAULT_PHASE_SESSIONS,
+      ...DEFAULT_PHASE_INTENSE_DAYS,
       goal: null,
     };
     assert.equal(isAssignedPhase(empty), false);

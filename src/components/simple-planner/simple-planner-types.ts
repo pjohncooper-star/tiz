@@ -12,6 +12,12 @@ export const DEFAULT_PHASE_SESSIONS = {
   strengthSessionsPerWeek: 2,
 } as const;
 
+export const DEFAULT_PHASE_INTENSE_DAYS = {
+  swimIntenseDaysPerWeek: 1,
+  bikeIntenseDaysPerWeek: 1,
+  runIntenseDaysPerWeek: 1,
+} as const;
+
 export type SimpleGoalEvent = {
   id?: string;
   name: string;
@@ -35,6 +41,9 @@ export type SimplePhase = {
   bikeSessionsPerWeek: number;
   runSessionsPerWeek: number;
   strengthSessionsPerWeek: number;
+  swimIntenseDaysPerWeek: number;
+  bikeIntenseDaysPerWeek: number;
+  runIntenseDaysPerWeek: number;
   goal: string | null;
 };
 
@@ -85,6 +94,7 @@ export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase
     endWeekIndex: weekIndex,
     rampEnabled: { swim: true, bike: true, run: true },
     ...DEFAULT_PHASE_SESSIONS,
+    ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
   };
 }
@@ -98,6 +108,7 @@ export function createEmptyPhase(index: number): SimplePhase {
     endWeekIndex: -1,
     rampEnabled: { swim: true, bike: true, run: true },
     ...DEFAULT_PHASE_SESSIONS,
+    ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
   };
 }
