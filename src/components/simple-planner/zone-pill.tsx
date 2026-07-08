@@ -39,7 +39,7 @@ function zoneInputClass(zone: number): string {
 }
 
 const PILL_INPUT =
-  "w-full min-w-0 border-0 bg-white/70 px-1.5 py-0.5 text-right text-sm font-medium text-inherit shadow-none ring-0 focus:outline-none focus:ring-1 focus:ring-current/30 dark:bg-black/25 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+  "min-w-[2.25rem] w-10 border-0 bg-transparent px-0.5 py-0 text-right text-sm font-semibold text-inherit shadow-none ring-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
 function ZoneLabel({ zone }: { zone: number }) {
   return (
@@ -58,10 +58,9 @@ type ZonePillInputProps = {
   min?: number;
   max?: number;
   step?: number | string;
-  inputWidth?: string;
 };
 
-/** Single zone pill with embedded minutes (or other) value. */
+/** Single zone pill with embedded minutes (or other) value inside the same oval. */
 export function ZonePillInput({
   zone,
   value,
@@ -70,25 +69,22 @@ export function ZonePillInput({
   min = 0,
   max,
   step = 1,
-  inputWidth = "w-12",
 }: ZonePillInputProps) {
   return (
     <label
-      className={`inline-flex items-center gap-1.5 rounded-full py-0.5 pl-2 pr-1 ${zonePillClass(zone)}`}
+      className={`inline-flex min-w-[5.75rem] items-center gap-1 rounded-full px-3 py-1 ${zonePillClass(zone)}`}
     >
       <ZoneLabel zone={zone} />
-      <span className={`inline-flex items-center gap-0.5 rounded-full bg-white/50 pr-1.5 dark:bg-black/20 ${inputWidth}`}>
-        <input
-          type="number"
-          step={step}
-          min={min}
-          max={max}
-          className={`${PILL_INPUT} ${zoneInputClass(zone)}`}
-          value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
-        />
-        {suffix ? <span className="pr-0.5 text-[10px] font-medium opacity-70">{suffix}</span> : null}
-      </span>
+      <input
+        type="number"
+        step={step}
+        min={min}
+        max={max}
+        className={`${PILL_INPUT} ${zoneInputClass(zone)}`}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      {suffix ? <span className="shrink-0 text-[10px] font-medium opacity-75">{suffix}</span> : null}
     </label>
   );
 }
@@ -115,21 +111,19 @@ function ZonePillField({
   step = 1,
 }: ZonePillFieldProps) {
   return (
-    <label className="inline-flex min-w-0 flex-1 items-center gap-1 text-[10px] font-medium">
-      <span className="shrink-0 opacity-70">{label}</span>
-      <span className="inline-flex min-w-0 flex-1 items-center rounded-full bg-white/50 pr-1 dark:bg-black/20">
-        <input
-          type="number"
-          step={step}
-          min={min}
-          max={max}
-          className={`${PILL_INPUT} ${zoneInputClass(zone)}`}
-          value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
-        />
-        {suffix ? <span className="shrink-0 pr-1 opacity-70">{suffix}</span> : null}
-      </span>
-    </label>
+    <span className="inline-flex min-w-0 flex-1 items-center gap-1 border-l border-current/20 pl-3 text-[10px] font-medium first:border-l-0 first:pl-0">
+      <span className="shrink-0 opacity-75">{label}</span>
+      <input
+        type="number"
+        step={step}
+        min={min}
+        max={max}
+        className={`${PILL_INPUT} min-w-[2rem] flex-1 ${zoneInputClass(zone)}`}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      {suffix ? <span className="shrink-0 opacity-75">{suffix}</span> : null}
+    </span>
   );
 }
 
@@ -143,7 +137,7 @@ type ZoneRampPillRowProps = {
   onRateChange: (value: number) => void;
 };
 
-/** One zone-colored pill row with start, peak, and rate fields inside. */
+/** One wide zone-colored pill with start, peak, and rate fields inside the same oval. */
 export function ZoneRampPillRow({
   zone,
   startMinutes,
@@ -155,7 +149,7 @@ export function ZoneRampPillRow({
 }: ZoneRampPillRowProps) {
   return (
     <div
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full px-3 py-1.5 sm:flex-nowrap ${zonePillClass(zone)}`}
+      className={`flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-full px-4 py-1.5 sm:flex-nowrap ${zonePillClass(zone)}`}
     >
       <ZoneLabel zone={zone} />
       <ZonePillField zone={zone} label="Start" value={startMinutes} onChange={onStartChange} suffix="m" />
