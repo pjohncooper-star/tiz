@@ -43,6 +43,10 @@ import {
 } from "./simple-tiz";
 import { type ZoneMinutes } from "@/lib/workout/steps";
 import { roundHours } from "./volume-curve";
+import {
+  parsePhaseCoachNotes,
+  serializePhaseCoachNotes,
+} from "./simple-phase-notes";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
@@ -124,8 +128,7 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         swimSessionsPerWeek: Math.max(0, Math.round(phase.swimSessionsPerWeek)),
         bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
         runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
-        strengthSessionsPerWeek: Math.max(0, Math.round(phase.strengthSessionsPerWeek)),
-        coachNotes: phase.goal?.trim() || null,
+        coachNotes: serializePhaseCoachNotes(phase.goal, phase.strengthSessionsPerWeek),
       };
     });
 }
@@ -505,7 +508,6 @@ export async function updateSimpleSeasonPlan(
             swimSessionsPerWeek: phase.swimSessionsPerWeek,
             bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
             runSessionsPerWeek: phase.runSessionsPerWeek,
-            strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
           },
         });
       }
@@ -594,6 +596,7 @@ export function serializeSimpleSeasonPlan(
       if (assigned && !hasStoredStart) {
         cursor += phase.weekCount;
       }
+      const notes = parsePhaseCoachNotes(phase.coachNotes);
       return {
         id: phase.id,
         name: phase.name,
@@ -608,8 +611,8 @@ export function serializeSimpleSeasonPlan(
         swimSessionsPerWeek: phase.swimSessionsPerWeek,
         bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
         runSessionsPerWeek: phase.runSessionsPerWeek,
-        strengthSessionsPerWeek: phase.strengthSessionsPerWeek ?? 2,
-        goal: phase.coachNotes ?? null,
+        strengthSessionsPerWeek: notes.strengthSessionsPerWeek,
+        goal: notes.goal,
       };
     });
 

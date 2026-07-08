@@ -163,7 +163,10 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       : "/api/plan/season/simple";
     const res = await fetch(url);
     if (!res.ok) {
-      setError("Could not load season plan.");
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setError(
+        typeof body?.error === "string" ? body.error : "Could not load season plan."
+      );
       setLoading(false);
       return;
     }

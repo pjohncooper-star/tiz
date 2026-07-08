@@ -24,13 +24,20 @@ export async function GET(request: Request) {
   }
 
   const seasonId = new URL(request.url).searchParams.get("seasonId");
-  const plan = await getSimplePlannerSeason(athleteId, seasonId);
 
-  if (!plan) {
-    return NextResponse.json({ season: null });
+  try {
+    const plan = await getSimplePlannerSeason(athleteId, seasonId);
+
+    if (!plan) {
+      return NextResponse.json({ season: null });
+    }
+
+    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+  } catch (err) {
+    console.error("GET /api/plan/season/simple failed", err);
+    const message = err instanceof Error ? err.message : "Could not load season plan";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
 }
 
 export async function POST(request: Request) {

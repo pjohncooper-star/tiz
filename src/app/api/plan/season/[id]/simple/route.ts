@@ -25,12 +25,19 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const plan = await getSeasonPlanById(athleteId, id);
-  if (!plan) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
-  return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+  try {
+    const plan = await getSeasonPlanById(athleteId, id);
+    if (!plan) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+  } catch (err) {
+    console.error(`GET /api/plan/season/${id}/simple failed`, err);
+    const message = err instanceof Error ? err.message : "Could not load season plan";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
