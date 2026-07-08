@@ -350,27 +350,11 @@ function UnassignedGutter({
   );
 }
 
-function PhaseBandGutter({
-  phase,
-  position,
-  showLabel,
-  showTopHandle,
-  showBottomHandle,
-  selected,
-  isDragging,
-  onSelect,
-  onDragStart,
-}: {
-  phase: SimplePhase;
-  position: "only" | "first" | "middle" | "last";
-  showLabel: boolean;
-  showTopHandle: boolean;
-  showBottomHandle: boolean;
-  selected: boolean;
-  isDragging: boolean;
-  onSelect: () => void;
-  onDragStart: (edge: "top" | "bottom", clientY: number) => void;
-}) {
+function phaseBandGutterClasses(
+  position: "only" | "first" | "middle" | "last",
+  selected: boolean,
+  isDragging: boolean
+) {
   const roundedClass =
     position === "only"
       ? "rounded-md"
@@ -388,57 +372,92 @@ function PhaseBandGutter({
           ? "border-x-2 border-b-2"
           : "border-x-2";
 
+  return {
+    roundedClass,
+    borderClass: `${borderClass} transition ${
+      selected || isDragging ? "border-sky-500" : "border-transparent"
+    } ${position === "middle" || position === "last" ? "-mt-px" : ""}`,
+  };
+}
+
+function PhaseBandGutterCell({
+  phase,
+  rowSpan,
+  position,
+  showLabel,
+  showTopHandle,
+  showBottomHandle,
+  selected,
+  isDragging,
+  onSelect,
+  onDragStart,
+}: {
+  phase: SimplePhase;
+  rowSpan: number;
+  position: "only" | "first" | "middle" | "last";
+  showLabel: boolean;
+  showTopHandle: boolean;
+  showBottomHandle: boolean;
+  selected: boolean;
+  isDragging: boolean;
+  onSelect: () => void;
+  onDragStart: (edge: "top" | "bottom", clientY: number) => void;
+}) {
+  const { roundedClass, borderClass } = phaseBandGutterClasses(position, selected, isDragging);
+
   return (
-    <div
-      className={`relative flex h-full min-h-[2.5rem] flex-col ${roundedClass} ${borderClass} transition ${
-        selected || isDragging ? "border-sky-500" : "border-transparent"
-      } ${position === "middle" || position === "last" ? "-mt-px" : ""}`}
-      style={{ backgroundColor: `${phase.color}33` }}
-    >
-      {showTopHandle && (
-        <button
-          type="button"
-          aria-label="Resize phase start"
-          className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
-          style={{ touchAction: "none" }}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onDragStart("top", event.clientY);
-          }}
-        />
-      )}
-      {showLabel ? (
-        <button
-          type="button"
-          onClick={onSelect}
-          className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 py-2 text-center"
-        >
-          <span
-            className="mb-1 h-2 w-2 rounded-full"
-            style={{ backgroundColor: phase.color }}
+    <td rowSpan={rowSpan} className="relative w-28 p-0 align-top">
+      <div
+        aria-hidden
+        className={`absolute inset-0 ${roundedClass} ${borderClass}`}
+        style={{ backgroundColor: `${phase.color}33` }}
+      />
+      <div className="relative z-[1] flex min-h-[2.5rem] flex-col">
+        {showTopHandle && (
+          <button
+            type="button"
+            aria-label="Resize phase start"
+            className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-t bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+            style={{ touchAction: "none" }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDragStart("top", event.clientY);
+            }}
           />
-          <span className="text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">
-            {phase.name}
-          </span>
-        </button>
-      ) : (
-        <div className="flex-1" aria-hidden />
-      )}
-      {showBottomHandle && (
-        <button
-          type="button"
-          aria-label="Resize phase end"
-          className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
-          style={{ touchAction: "none" }}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onDragStart("bottom", event.clientY);
-          }}
-        />
-      )}
-    </div>
+        )}
+        {showLabel ? (
+          <button
+            type="button"
+            onClick={onSelect}
+            className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 py-2 text-center"
+          >
+            <span
+              className="mb-1 h-2 w-2 rounded-full"
+              style={{ backgroundColor: phase.color }}
+            />
+            <span className="text-[10px] font-semibold leading-tight text-zinc-700 dark:text-zinc-200">
+              {phase.name}
+            </span>
+          </button>
+        ) : (
+          <div className="flex-1" aria-hidden />
+        )}
+        {showBottomHandle && (
+          <button
+            type="button"
+            aria-label="Resize phase end"
+            className="hidden h-3 w-full shrink-0 cursor-ns-resize rounded-b bg-zinc-400/40 hover:bg-sky-500/60 md:block"
+            style={{ touchAction: "none" }}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onDragStart("bottom", event.clientY);
+            }}
+          />
+        )}
+      </div>
+    </td>
   );
 }
 
@@ -550,19 +569,18 @@ function PhaseBandRows({
                 week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
               } ${highlightedWeekIndex === week.weekIndex ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
             >
-              <td rowSpan={rowSpan} className="w-28 px-2 py-0 align-top">
-                <PhaseBandGutter
-                  phase={phase}
-                  position={phaseWeekGutterPosition(index, weeks.length)}
-                  showLabel={index === 0}
-                  showTopHandle={index === 0}
-                  showBottomHandle={isLastWeek}
-                  selected={selected}
-                  isDragging={isDragging}
-                  onSelect={onSelectPhase}
-                  onDragStart={onDragStart}
-                />
-              </td>
+              <PhaseBandGutterCell
+                phase={phase}
+                rowSpan={rowSpan}
+                position={phaseWeekGutterPosition(index, weeks.length)}
+                showLabel={index === 0}
+                showTopHandle={index === 0}
+                showBottomHandle={isLastWeek}
+                selected={selected}
+                isDragging={isDragging}
+                onSelect={onSelectPhase}
+                onDragStart={onDragStart}
+              />
               <WeekCells
                 week={week}
                 expanded={weekExpanded}
