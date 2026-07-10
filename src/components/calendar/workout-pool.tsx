@@ -2,7 +2,7 @@
 
 import { PoolLibrarySection } from "@/components/calendar/pool-library-section";
 import { useMemo, useState } from "react";
-import { useDraggable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { computeHardZoneBudgets, hasHardZoneBudget } from "@/lib/plan/calendar/pool-budgets";
@@ -11,6 +11,10 @@ import {
   type PoolDiscipline,
   type UnscheduledChip,
 } from "@/lib/plan/calendar/unscheduled-chips";
+import {
+  unscheduledAttachmentLabel,
+  type UnscheduledAttachment,
+} from "@/lib/plan/calendar/pool-unscheduled-attachment";
 import {
   combinedZoneTotals,
   linkedActivityIdsExcludedFromCompletedRollup,
@@ -27,8 +31,10 @@ import {
   type GeneratedWorkout,
 } from "@/lib/plan/calendar/generate-workouts";
 import {
+  poolArmedUnscheduledDragId,
   poolSuggestedDragId,
   poolUnscheduledDragId,
+  poolUnscheduledDropId,
 } from "@/lib/plan/workout-builder-dnd";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import {
@@ -66,25 +72,78 @@ function PoolSection({
   );
 }
 
-function UnscheduledChipCard({ chip }: { chip: UnscheduledChip }) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: poolUnscheduledDragId(chip.id),
-    data: { type: "pool-unscheduled", chip },
+function UnscheduledChipCard({
+  chip,
+  attachment,
+  selectedDateKey,
+  onClearAttachment,
+}: {
+  chip: UnscheduledChip;
+  attachment?: UnscheduledAttachment;
+  selectedDateKey: string | null;
+  onClearAttachment?: (chipId: string) => void;
+}) {
+  const armed = !!attachment;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    isDragging,
+  } = useDraggable({
+    id: armed ? poolArmedUnscheduledDragId(chip.id) : poolUnscheduledDragId(chip.id),
+    data: armed
+      ? { type: "pool-armed-unscheduled", chip, attachment }
+      : { type: "pool-unscheduled", chip },
   });
+
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: poolUnscheduledDropId(chip.id),
+    data: { type: "pool-unscheduled-drop", chip, selectedDateKey },
+  });
+
+  const setNodeRef = (node: HTMLElement | null) => {
+    setDragRef(node);
+    setDropRef(node);
+  };
 
   return (
     <div
       ref={setNodeRef}
-      className={`inline-flex items-center gap-1.5 rounded-full border border-dashed border-zinc-300 bg-white px-2.5 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-900 ${
-        isDragging ? "opacity-50" : ""
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+        armed
+          ? "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
+          : "border-dashed border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-900"
+      } ${isDragging ? "opacity-50" : ""} ${
+        isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
       }`}
     >
       <span className="font-medium text-zinc-700 dark:text-zinc-200">{chip.label}</span>
       <span className="text-zinc-400">×1</span>
+      {armed ? (
+        <>
+          <span className="truncate text-zinc-500">· {unscheduledAttachmentLabel(attachment)}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClearAttachment?.(chip.id);
+            }}
+            className="shrink-0 text-zinc-400 hover:text-zinc-600"
+            aria-label="Clear attached workout"
+          >
+            ×
+          </button>
+        </>
+      ) : null}
       <button
         type="button"
-        className="cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-        aria-label={`Drag unscheduled ${chip.label}`}
+        className="shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
+        aria-label={
+          armed
+            ? `Drag ${chip.label} with workout to a day`
+            : `Drag unscheduled ${chip.label}`
+        }
         {...listeners}
         {...attributes}
       >
@@ -263,6 +322,9 @@ export type WorkoutPoolProps = {
   activities: CalendarWeekActivity[];
   weekStart: string;
   currentWeekStart: string;
+  selectedDateKey: string | null;
+  armedUnscheduled: Record<string, UnscheduledAttachment>;
+  onClearArmedUnscheduled: (chipId: string) => void;
 };
 
 export function WorkoutPool({
@@ -271,10 +333,13 @@ export function WorkoutPool({
   activities,
   weekStart,
   currentWeekStart,
+  selectedDateKey,
+  armedUnscheduled,
+  onClearArmedUnscheduled,
 }: WorkoutPoolProps) {
   const unscheduled = useMemo(
-    () => computeUnscheduledChips(weekTarget, sessions),
-    [weekTarget, sessions]
+    () => computeUnscheduledChips(weekStart, weekTarget, sessions),
+    [weekStart, weekTarget, sessions]
   );
 
   const budgets = useMemo(
@@ -318,12 +383,22 @@ export function WorkoutPool({
       <div className="space-y-4">
         <PoolSection
           title="Unscheduled"
-          hint="Sessions in your weekly budget not yet on the calendar. Drag onto a day."
+          hint={
+            selectedDateKey
+              ? "Drop a workout on a chip to place on the selected day, or drag a chip to another day."
+              : "Drop a workout on a chip, then drag it to a day — or select a day first for instant place."
+          }
         >
           {unscheduled.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {unscheduled.map((chip) => (
-                <UnscheduledChipCard key={chip.id} chip={chip} />
+                <UnscheduledChipCard
+                  key={chip.id}
+                  chip={chip}
+                  attachment={armedUnscheduled[chip.id]}
+                  selectedDateKey={selectedDateKey}
+                  onClearAttachment={onClearArmedUnscheduled}
+                />
               ))}
             </div>
           ) : (

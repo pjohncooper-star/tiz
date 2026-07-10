@@ -4,6 +4,8 @@ export const ASSEMBLED_WORKOUT_DRAG_ID = "assembled-workout";
 export const SEASON_PALETTE_DRAG_PREFIX = "season-palette:";
 
 export const POOL_UNSCHEDULED_DRAG_PREFIX = "pool-unscheduled:";
+export const POOL_ARMED_UNSCHEDULED_DRAG_PREFIX = "pool-armed-unscheduled:";
+export const POOL_UNSCHEDULED_DROP_PREFIX = "pool-unscheduled-drop:";
 export const POOL_SUGGESTED_DRAG_PREFIX = "pool-suggested:";
 export const POOL_LIBRARY_DRAG_PREFIX = "pool-library:";
 
@@ -17,6 +19,22 @@ export function poolSuggestedDragId(cardId: string): string {
 
 export function poolUnscheduledDragId(chipId: string): string {
   return `${POOL_UNSCHEDULED_DRAG_PREFIX}${chipId}`;
+}
+
+export function poolArmedUnscheduledDragId(chipId: string): string {
+  return `${POOL_ARMED_UNSCHEDULED_DRAG_PREFIX}${chipId}`;
+}
+
+export function poolUnscheduledDropId(chipId: string): string {
+  return `${POOL_UNSCHEDULED_DROP_PREFIX}${chipId}`;
+}
+
+export function isPoolUnscheduledDrop(id: string | number): boolean {
+  return String(id).startsWith(POOL_UNSCHEDULED_DROP_PREFIX);
+}
+
+export function isPoolArmedUnscheduledDrag(id: string | number): boolean {
+  return String(id).startsWith(POOL_ARMED_UNSCHEDULED_DRAG_PREFIX);
 }
 
 export function poolLibraryDragId(templateId: string): string {

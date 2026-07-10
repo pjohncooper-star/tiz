@@ -59,7 +59,7 @@ function session(
 
 describe("unscheduled-chips", () => {
   it("returns chips for session budget minus scheduled count", () => {
-    const chips = computeUnscheduledChips(baseWeekTarget(), [
+    const chips = computeUnscheduledChips("2026-07-06", baseWeekTarget(), [
       session("SWIM"),
       session("SWIM"),
       session("BIKE"),
@@ -78,6 +78,7 @@ describe("unscheduled-chips", () => {
 
   it("does not count race sessions toward the scheduled total", () => {
     const chips = computeUnscheduledChips(
+      "2026-07-06",
       baseWeekTarget({
         strengthSessionsPerWeek: 0,
         byDiscipline: [
@@ -98,6 +99,7 @@ describe("unscheduled-chips", () => {
 
   it("returns no chips when over-scheduled", () => {
     const chips = computeUnscheduledChips(
+      "2026-07-06",
       baseWeekTarget({
         strengthSessionsPerWeek: 0,
         byDiscipline: [

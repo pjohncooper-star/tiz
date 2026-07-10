@@ -28,6 +28,7 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
+import type { UnscheduledAttachment } from "@/lib/plan/calendar/pool-unscheduled-attachment";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -45,6 +46,8 @@ type CalendarWeekRowProps = {
   activeDragId: string | null;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
   isCurrentWeek?: boolean;
+  armedUnscheduled: Record<string, UnscheduledAttachment>;
+  onClearArmedUnscheduled: (chipId: string) => void;
 };
 
 export function CalendarWeekRow({
@@ -60,6 +63,8 @@ export function CalendarWeekRow({
   activeDragId,
   scrollAnchorRef,
   isCurrentWeek,
+  armedUnscheduled,
+  onClearArmedUnscheduled,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -116,6 +121,9 @@ export function CalendarWeekRow({
               activities={activities}
               weekStart={weekStart}
               currentWeekStart={currentWeekStart}
+              selectedDateKey={selectedDateKey}
+              armedUnscheduled={armedUnscheduled}
+              onClearArmedUnscheduled={onClearArmedUnscheduled}
             />
           </div>
         ) : null}

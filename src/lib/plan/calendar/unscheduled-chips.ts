@@ -49,6 +49,7 @@ function sessionBudgetForDiscipline(
  * to place on the calendar grid.
  */
 export function computeUnscheduledChips(
+  weekStart: string,
   weekTarget: CalendarWeekTarget,
   sessions: CalendarPlannedSession[]
 ): UnscheduledChip[] {
@@ -63,7 +64,7 @@ export function computeUnscheduledChips(
 
     for (let i = 0; i < remaining; i++) {
       chips.push({
-        id: `unscheduled-${discipline}-${i}`,
+        id: `unscheduled-${weekStart}-${discipline}-${i}`,
         discipline,
         label,
       });
