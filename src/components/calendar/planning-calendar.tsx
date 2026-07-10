@@ -29,6 +29,13 @@ import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { totalZoneMinutes, WORKOUT_TREE_VERSION } from "@/lib/workout/steps";
 import type { GeneratedWorkout } from "@/lib/plan/calendar/generate-workouts";
+import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
+import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
+import {
+  unscheduledDisciplinesMatch,
+  type UnscheduledAttachment,
+} from "@/lib/plan/calendar/pool-unscheduled-attachment";
+import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
 import {
   parseActivityDragId,
   parseSessionLinkDropId,
@@ -99,6 +106,9 @@ export function PlanningCalendar({
   const [applyWeekStart, setApplyWeekStart] = useState(currentWeekStart);
   const [applyHasSessions, setApplyHasSessions] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [armedUnscheduled, setArmedUnscheduled] = useState<
+    Record<string, UnscheduledAttachment>
+  >({});
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
@@ -114,6 +124,19 @@ export function PlanningCalendar({
   const workoutBuilder = useWorkoutBuilder({
     onApplied: () => void handleRefresh(),
   });
+
+  const clearArmedUnscheduled = useCallback((chipId: string) => {
+    setArmedUnscheduled((prev) => {
+      if (!(chipId in prev)) return prev;
+      const next = { ...prev };
+      delete next[chipId];
+      return next;
+    });
+  }, []);
+
+  const armUnscheduled = useCallback((chipId: string, attachment: UnscheduledAttachment) => {
+    setArmedUnscheduled((prev) => ({ ...prev, [chipId]: attachment }));
+  }, []);
 
   const sortedWeeks = useMemo(
     () => [...data.weekStarts].sort(),
@@ -338,9 +361,63 @@ export function PlanningCalendar({
 
     if (await workoutBuilder.handleDragEnd(event)) return;
 
-    if (active.data.current?.type === "season-palette-workout") {
-      await handlePaletteDrop(
+    if (over.data.current?.type === "pool-unscheduled-drop") {
+      const chip = over.data.current.chip as UnscheduledChip;
+      const selectedDateKey =
+        (over.data.current.selectedDateKey as string | null | undefined) ?? null;
+
+      if (active.data.current?.type === "pool-library-template") {
+        await handleUnscheduledAttachmentCombo(chip, {
+          kind: "library",
+          template: active.data.current.template as PoolLibraryTemplate,
+        }, selectedDateKey);
+        return;
+      }
+
+      if (
+        active.data.current?.type === "season-palette-workout" ||
+        active.data.current?.type === "pool-suggested-workout"
+      ) {
+        await handleUnscheduledAttachmentCombo(chip, {
+          kind: "suggested",
+          workout: active.data.current.workout as GeneratedWorkout,
+        }, selectedDateKey);
+        return;
+      }
+      return;
+    }
+
+    if (active.data.current?.type === "pool-armed-unscheduled") {
+      await handleArmedUnscheduledDrop(
+        active.data.current.chip as UnscheduledChip,
+        active.data.current.attachment as UnscheduledAttachment,
+        over.data.current
+      );
+      return;
+    }
+
+    if (
+      active.data.current?.type === "season-palette-workout" ||
+      active.data.current?.type === "pool-suggested-workout"
+    ) {
+      await handleSuggestedPoolDrop(
         active.data.current.workout as GeneratedWorkout,
+        over.data.current
+      );
+      return;
+    }
+
+    if (active.data.current?.type === "pool-unscheduled") {
+      await handleUnscheduledPoolDrop(
+        active.data.current.chip as UnscheduledChip,
+        over.data.current
+      );
+      return;
+    }
+
+    if (active.data.current?.type === "pool-library-template") {
+      await handleLibraryPoolDrop(
+        active.data.current.template as PoolLibraryTemplate,
         over.data.current
       );
       return;
@@ -411,10 +488,11 @@ export function PlanningCalendar({
         title: workout.label,
       }),
     });
-    if (!res.ok) return;
+    if (!res.ok) return false;
     const data = (await res.json().catch(() => ({}))) as { session?: { id?: string } };
     const id = data.session?.id;
-    if (id) await attachStepsToSession(id, workout.tree);
+    if (!id) return false;
+    return attachStepsToSession(id, workout.tree);
   }
 
   async function mergePrimingIntoSession(sessionId: string, workout: GeneratedWorkout) {
@@ -439,7 +517,144 @@ export function PlanningCalendar({
     });
   }
 
-  async function handlePaletteDrop(
+  async function placeUnscheduledAttachment(
+    dateKey: string,
+    attachment: UnscheduledAttachment
+  ): Promise<boolean> {
+    if (attachment.kind === "library") {
+      return createSessionWithTemplate(dateKey, attachment.template);
+    }
+    return createSessionWithWorkout(dateKey, attachment.workout);
+  }
+
+  async function handleUnscheduledAttachmentCombo(
+    chip: UnscheduledChip,
+    attachment: UnscheduledAttachment,
+    selectedDateKey: string | null
+  ) {
+    if (!unscheduledDisciplinesMatch(chip.discipline, attachment)) {
+      alert("Workout discipline does not match unscheduled session");
+      return;
+    }
+
+    if (selectedDateKey) {
+      const ok = await placeUnscheduledAttachment(selectedDateKey, attachment);
+      if (ok) {
+        clearArmedUnscheduled(chip.id);
+        await handleRefresh();
+      }
+      return;
+    }
+
+    armUnscheduled(chip.id, attachment);
+  }
+
+  async function handleArmedUnscheduledDrop(
+    chip: UnscheduledChip,
+    attachment: UnscheduledAttachment,
+    overData: Record<string, unknown> | undefined
+  ) {
+    if (overData?.type !== "day") return;
+    const dateKey = overData?.dateKey as string | undefined;
+    if (!dateKey) return;
+    const ok = await placeUnscheduledAttachment(dateKey, attachment);
+    if (ok) {
+      clearArmedUnscheduled(chip.id);
+      await handleRefresh();
+    }
+  }
+
+  async function createUnscheduledSession(dateKey: string, chip: UnscheduledChip) {
+    const res = await fetch(`/api/plan/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scheduledDate: dateKey,
+        discipline: chip.discipline,
+        title: unscheduledSessionTitle(chip.discipline),
+      }),
+    });
+    return res.ok;
+  }
+
+  async function handleUnscheduledPoolDrop(
+    chip: UnscheduledChip,
+    overData: Record<string, unknown> | undefined
+  ) {
+    if (overData?.type !== "day") return;
+    const dateKey = overData?.dateKey as string | undefined;
+    if (!dateKey) return;
+    const ok = await createUnscheduledSession(dateKey, chip);
+    if (ok) await handleRefresh();
+  }
+
+  async function applyTemplateToSession(sessionId: string, templateId: string): Promise<boolean> {
+    const res = await fetch(`/api/plan/sessions/${sessionId}/apply-workout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workoutTemplateId: templateId }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(data.error ?? "Could not apply workout");
+      return false;
+    }
+    return true;
+  }
+
+  async function createSessionWithTemplate(dateKey: string, template: PoolLibraryTemplate) {
+    const res = await fetch(`/api/plan/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scheduledDate: dateKey,
+        discipline: template.discipline,
+        title: template.name,
+      }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json().catch(() => ({}))) as { session?: { id?: string } };
+    const id = data.session?.id;
+    if (!id) return false;
+    return applyTemplateToSession(id, template.templateId);
+  }
+
+  async function handleLibraryPoolDrop(
+    template: PoolLibraryTemplate,
+    overData: Record<string, unknown> | undefined
+  ) {
+    const overType = overData?.type;
+    if (overType === "session-workout") {
+      if (overData?.source === "RACE") {
+        alert("Cannot apply workout to a race session");
+        return;
+      }
+      const sessionDiscipline = overData?.discipline as string | undefined;
+      if (sessionDiscipline && sessionDiscipline !== template.discipline) {
+        alert("Workout discipline does not match session");
+        return;
+      }
+      const sessionId = overData?.sessionId as string | undefined;
+      if (!sessionId) return;
+      if (
+        overData?.hasStructuredWorkout &&
+        !confirm("Replace existing structured workout on this session?")
+      ) {
+        return;
+      }
+      const ok = await applyTemplateToSession(sessionId, template.templateId);
+      if (ok) await handleRefresh();
+      return;
+    }
+    if (overType === "day") {
+      const dateKey = overData?.dateKey as string | undefined;
+      if (!dateKey) return;
+      const ok = await createSessionWithTemplate(dateKey, template);
+      if (ok) await handleRefresh();
+    }
+  }
+
+  async function handleSuggestedPoolDrop(
     workout: GeneratedWorkout,
     overData: Record<string, unknown> | undefined
   ) {
@@ -559,6 +774,7 @@ export function PlanningCalendar({
   }
 
   async function handleRefresh() {
+    setArmedUnscheduled({});
     await reloadCalendarData();
   }
 
@@ -677,6 +893,8 @@ export function PlanningCalendar({
               onSessionCreated={handleRefresh}
               activeDragId={activeDragId}
               isCurrentWeek={weekStart === currentWeekStart}
+              armedUnscheduled={armedUnscheduled}
+              onClearArmedUnscheduled={clearArmedUnscheduled}
             />
           ))}
         </div>

@@ -40,6 +40,8 @@ function baseSession(
     completedTargetPaceSeconds: null,
     completedZones: null,
     workoutProfile: null,
+    sessionRole: "MODERATE",
+    displaySessionRole: "MODERATE",
     ...overrides,
   };
 }

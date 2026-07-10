@@ -1,6 +1,8 @@
 import type { Discipline } from "@prisma/client";
 import { db } from "@/lib/db";
 import { parseWorkoutTree } from "@/lib/workout/steps";
+import { roleFromStructuredWorkout } from "@/lib/plan/session-role";
+import { sessionPlannedZoneRollup } from "@/lib/plan/rollup";
 import { serializeTemplateSteps } from "@/lib/workout/workout-folder-library";
 
 export async function applyWorkoutTemplateToSession(
@@ -79,6 +81,19 @@ export async function applyWorkoutTemplateToSession(
         appliedAt: new Date(),
       },
     });
+
+    if (existing.sessionRole === "MODERATE") {
+      const rollup = sessionPlannedZoneRollup(existing.discipline, {
+        structuredSteps: treeJson,
+      });
+      const inferredRole = roleFromStructuredWorkout(rollup.zones, existing.discipline);
+      if (inferredRole) {
+        await tx.plannedSession.update({
+          where: { id: sessionId },
+          data: { sessionRole: inferredRole },
+        });
+      }
+    }
 
     return tx.plannedSession.findFirst({
       where: { id: sessionId, athleteId },

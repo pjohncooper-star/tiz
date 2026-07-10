@@ -125,6 +125,13 @@ enum PlannedSessionSource {
   RACE
 }
 
+enum SessionRole {
+  EASY
+  MODERATE
+  INTENSITY
+  LONG
+}
+
 enum Weekday {
   MON
   TUE
@@ -425,6 +432,7 @@ model AnchorWorkout {
   targetSpeedMps    Float?
   targetPaceSeconds Float?
   targetZones       Json?
+  sessionRole       SessionRole @default(MODERATE)
   steps             Json?
   effectiveFrom     DateTime   @db.Date
   effectiveUntil    DateTime?  @db.Date
@@ -664,6 +672,7 @@ model PlannedSession {
   completedTargetSpeedMps  Float?
   completedTargetPaceSeconds Float?
   completedZones           Json?
+  sessionRole              SessionRole          @default(MODERATE)
 
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   anchorWorkout        AnchorWorkout?              @relation(fields: [anchorWorkoutId], references: [id], onDelete: SetNull)
@@ -828,6 +837,7 @@ model WeeklyScheduleTemplateItem {
   durationMinutes Int?
   distanceMeters  Float?
   poolSize        PoolSize?
+  sessionRole     SessionRole @default(MODERATE)
   sortOrder       Int        @default(0)
 
   template         WeeklyScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)

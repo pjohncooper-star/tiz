@@ -19,6 +19,9 @@ import {
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { workoutHref } from "@/lib/plan/workout-href";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
+import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
+import { nextSessionRole, sessionRoleAccentClass, sessionRoleShowsBadge } from "@/lib/plan/session-role";
+import type { SessionRole } from "@prisma/client";
 
 type CalendarSessionCardProps = {
   session: CalendarPlannedSession;
@@ -27,6 +30,7 @@ type CalendarSessionCardProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   isDragging?: boolean;
   onDeleted?: () => void;
+  onUpdated?: () => void;
   showLinkDropTarget?: boolean;
   showWorkoutDropTarget?: boolean;
 };
@@ -47,6 +51,7 @@ export function CalendarSessionCard({
   disciplineSettings,
   isDragging,
   onDeleted,
+  onUpdated,
   showLinkDropTarget = false,
   showWorkoutDropTarget = false,
 }: CalendarSessionCardProps) {
@@ -72,6 +77,7 @@ export function CalendarSessionCard({
   });
 
   const [deleting, setDeleting] = useState(false);
+  const [updatingRole, setUpdatingRole] = useState(false);
 
   const style = transform
     ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
@@ -80,7 +86,7 @@ export function CalendarSessionCard({
   const cardClassName =
     session.source === "RACE"
       ? `${sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget)} border-amber-400/80 bg-amber-50/50 dark:border-amber-600/50 dark:bg-amber-950/20`
-      : sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget);
+      : `${sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget)} ${sessionRoleAccentClass(session.displaySessionRole)}`;
 
   const linked = session.linkedActivity;
   const canAcceptLink = showLinkDropTarget && !linked;
@@ -96,6 +102,28 @@ export function CalendarSessionCard({
   const pillClassName = linked
     ? "rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
     : "rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium uppercase text-sky-800 dark:bg-sky-900 dark:text-sky-200";
+
+  async function handleRoleCycle() {
+    if (updatingRole || session.source === "RACE") return;
+    const current =
+      session.sessionRole !== "MODERATE" ? session.sessionRole : session.displaySessionRole;
+    const nextRole = nextSessionRole(current as SessionRole);
+    setUpdatingRole(true);
+    try {
+      const res = await fetch(`/api/plan/sessions/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionRole: nextRole }),
+      });
+      if (!res.ok) {
+        alert("Could not update session role");
+        return;
+      }
+      onUpdated?.();
+    } finally {
+      setUpdatingRole(false);
+    }
+  }
 
   async function handleDelete(e: React.MouseEvent) {
     e.preventDefault();
@@ -147,6 +175,28 @@ export function CalendarSessionCard({
             <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
               <span className={pillClassName}>{disciplineLabel(session.discipline)}</span>
+              {session.source !== "RACE" ? (
+                sessionRoleShowsBadge(session.displaySessionRole as SessionRole) ? (
+                  <SessionRoleBadge
+                    role={session.displaySessionRole as SessionRole}
+                    interactive
+                    onClick={() => void handleRoleCycle()}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded px-1 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleRoleCycle();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    Set role
+                  </button>
+                )
+              ) : null}
               {session.discipline === "SWIM" && poolSize ? (
                 <span className={poolSizePillClassName}>{poolSize}</span>
               ) : null}

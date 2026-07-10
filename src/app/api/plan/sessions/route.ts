@@ -6,11 +6,13 @@ import { parseDateKey } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { defaultSessionTitle } from "@/lib/plan/session";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
+import { inferSessionRole } from "@/lib/plan/session-role";
 import { hasTargetZones } from "@/lib/plan/session-target-zones";
 import {
   nullableMetric,
   planDisciplineSchema,
   planSessionMetricsSchema,
+  sessionRoleSchema,
   goalEventDisciplineSchema,
 } from "@/lib/plan/api-schemas";
 import { createRaceSessionsOnCalendar } from "@/lib/plan/race-calendar-sync";
@@ -27,6 +29,7 @@ const createSchema = z
     source: z.enum(["FLEXIBLE", "RACE"]).optional(),
     estimatedDurationMinutes: z.number().int().positive().nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).optional(),
+    sessionRole: sessionRoleSchema.optional(),
   })
   .merge(planSessionMetricsSchema)
   .refine((d) => d.discipline != null || (d.disciplines?.length ?? 0) > 0, {
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
     poolSize,
     source,
     estimatedDurationMinutes,
+    sessionRole: sessionRoleInput,
   } = parsed.data;
 
   const scheduled = parseDateKey(scheduledDate);
@@ -103,6 +107,14 @@ export async function POST(request: Request) {
     zonesJson
   );
 
+  const sessionRole =
+    sessionRoleInput ??
+    inferSessionRole({
+      title: sessionTitle,
+      discipline: resolvedDiscipline,
+      durationMinutes: nullableMetric(estimatedDurationMinutes) ?? null,
+    });
+
   const plannedSession = await db.plannedSession.create({
     data: {
       athleteId,
@@ -112,6 +124,7 @@ export async function POST(request: Request) {
       notes: notes || null,
       targetZones: zonesJson,
       zoneAllocationMissing,
+      sessionRole,
       distanceMeters: nullableMetric(distanceMeters) ?? null,
       targetSpeedMps: resolvedDiscipline === "BIKE" ? nullableMetric(targetSpeedMps) ?? null : null,
       targetPaceSeconds:

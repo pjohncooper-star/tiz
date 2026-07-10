@@ -11,7 +11,7 @@ import {
 } from "date-fns";
 import { CalendarDayColumn } from "@/components/calendar/calendar-day-column";
 import { CalendarWeekSummary } from "@/components/calendar/calendar-week-summary";
-import { WorkoutPalette } from "@/components/calendar/workout-palette";
+import { WorkoutPool } from "@/components/calendar/workout-pool";
 import {
   WEEK_DAY_HEADER_ROW_CLASS,
   WEEK_DAY_ROW_CLASS,
@@ -28,6 +28,7 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
+import type { UnscheduledAttachment } from "@/lib/plan/calendar/pool-unscheduled-attachment";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -45,6 +46,8 @@ type CalendarWeekRowProps = {
   activeDragId: string | null;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
   isCurrentWeek?: boolean;
+  armedUnscheduled: Record<string, UnscheduledAttachment>;
+  onClearArmedUnscheduled: (chipId: string) => void;
 };
 
 export function CalendarWeekRow({
@@ -60,6 +63,8 @@ export function CalendarWeekRow({
   activeDragId,
   scrollAnchorRef,
   isCurrentWeek,
+  armedUnscheduled,
+  onClearArmedUnscheduled,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -107,46 +112,63 @@ export function CalendarWeekRow({
         )}
       </h2>
 
-      {weekTarget ? <WorkoutPalette weekTarget={weekTarget} sessions={sessions} /> : null}
-
-      <div className={WEEK_DAY_HEADER_ROW_CLASS}>
-        {DAY_HEADERS.map((h, i) => (
-          <div
-            key={h}
-            className={weekDayColumnClass(weekDays[i] === selectedDateKey)}
-          >
-            {h}
-          </div>
-        ))}
-      </div>
-
-      <div className={WEEK_DAY_ROW_CLASS}>
-        {weekDays.map((dateKey) => {
-          const daySessions = sessionsByDay.get(dateKey) ?? [];
-          const linkedIds = linkedActivityIdsFromSessions(daySessions);
-          const activityGroups = filterUnlinkedActivityGroups(
-            groupWeekActivities(activitiesByDay.get(dateKey) ?? []),
-            linkedIds
-          );
-
-          return (
-            <CalendarDayColumn
-              key={dateKey}
-              dateKey={dateKey}
-              sessions={daySessions}
-              activityGroups={activityGroups}
-              weekDays={weekDays}
-              disciplineSettings={disciplineSettings}
-              workoutShadingSettings={workoutShadingSettings}
-              workoutShadingTarget={workoutShadingTarget}
-              onSessionCreated={onSessionCreated}
-              activeDragId={activeDragId}
-              isSelected={selectedDateKey === dateKey}
-              onSelectDay={() => setSelectedDateKey(dateKey)}
-              onClearSelection={() => setSelectedDateKey(null)}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+        {weekTarget ? (
+          <div className="xl:w-60 xl:shrink-0">
+            <WorkoutPool
+              weekTarget={weekTarget}
+              sessions={sessions}
+              activities={activities}
+              weekStart={weekStart}
+              currentWeekStart={currentWeekStart}
+              selectedDateKey={selectedDateKey}
+              armedUnscheduled={armedUnscheduled}
+              onClearArmedUnscheduled={onClearArmedUnscheduled}
             />
-          );
-        })}
+          </div>
+        ) : null}
+
+        <div className="min-w-0 flex-1">
+          <div className={WEEK_DAY_HEADER_ROW_CLASS}>
+            {DAY_HEADERS.map((h, i) => (
+              <div
+                key={h}
+                className={weekDayColumnClass(weekDays[i] === selectedDateKey)}
+              >
+                {h}
+              </div>
+            ))}
+          </div>
+
+          <div className={WEEK_DAY_ROW_CLASS}>
+            {weekDays.map((dateKey) => {
+              const daySessions = sessionsByDay.get(dateKey) ?? [];
+              const linkedIds = linkedActivityIdsFromSessions(daySessions);
+              const activityGroups = filterUnlinkedActivityGroups(
+                groupWeekActivities(activitiesByDay.get(dateKey) ?? []),
+                linkedIds
+              );
+
+              return (
+                <CalendarDayColumn
+                  key={dateKey}
+                  dateKey={dateKey}
+                  sessions={daySessions}
+                  activityGroups={activityGroups}
+                  weekDays={weekDays}
+                  disciplineSettings={disciplineSettings}
+                  workoutShadingSettings={workoutShadingSettings}
+                  workoutShadingTarget={workoutShadingTarget}
+                  onSessionCreated={onSessionCreated}
+                  activeDragId={activeDragId}
+                  isSelected={selectedDateKey === dateKey}
+                  onSelectDay={() => setSelectedDateKey(dateKey)}
+                  onClearSelection={() => setSelectedDateKey(null)}
+                />
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <CalendarWeekSummary

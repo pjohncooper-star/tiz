@@ -42,6 +42,7 @@ export type WeeklyTemplateItem = {
   durationMinutes: number | null;
   distanceMeters: number | null;
   poolSize: "SCY" | "SCM" | "LCM" | null;
+  sessionRole: "EASY" | "MODERATE" | "INTENSITY" | "LONG";
   sortOrder: number;
 };
 
