@@ -11,7 +11,7 @@ import {
 } from "date-fns";
 import { CalendarDayColumn } from "@/components/calendar/calendar-day-column";
 import { CalendarWeekSummary } from "@/components/calendar/calendar-week-summary";
-import { WorkoutPalette } from "@/components/calendar/workout-palette";
+import { WorkoutPool } from "@/components/calendar/workout-pool";
 import {
   WEEK_DAY_HEADER_ROW_CLASS,
   WEEK_DAY_ROW_CLASS,
@@ -107,46 +107,60 @@ export function CalendarWeekRow({
         )}
       </h2>
 
-      {weekTarget ? <WorkoutPalette weekTarget={weekTarget} sessions={sessions} /> : null}
-
-      <div className={WEEK_DAY_HEADER_ROW_CLASS}>
-        {DAY_HEADERS.map((h, i) => (
-          <div
-            key={h}
-            className={weekDayColumnClass(weekDays[i] === selectedDateKey)}
-          >
-            {h}
-          </div>
-        ))}
-      </div>
-
-      <div className={WEEK_DAY_ROW_CLASS}>
-        {weekDays.map((dateKey) => {
-          const daySessions = sessionsByDay.get(dateKey) ?? [];
-          const linkedIds = linkedActivityIdsFromSessions(daySessions);
-          const activityGroups = filterUnlinkedActivityGroups(
-            groupWeekActivities(activitiesByDay.get(dateKey) ?? []),
-            linkedIds
-          );
-
-          return (
-            <CalendarDayColumn
-              key={dateKey}
-              dateKey={dateKey}
-              sessions={daySessions}
-              activityGroups={activityGroups}
-              weekDays={weekDays}
-              disciplineSettings={disciplineSettings}
-              workoutShadingSettings={workoutShadingSettings}
-              workoutShadingTarget={workoutShadingTarget}
-              onSessionCreated={onSessionCreated}
-              activeDragId={activeDragId}
-              isSelected={selectedDateKey === dateKey}
-              onSelectDay={() => setSelectedDateKey(dateKey)}
-              onClearSelection={() => setSelectedDateKey(null)}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+        {weekTarget ? (
+          <div className="xl:w-60 xl:shrink-0">
+            <WorkoutPool
+              weekTarget={weekTarget}
+              sessions={sessions}
+              activities={activities}
+              weekStart={weekStart}
+              currentWeekStart={currentWeekStart}
             />
-          );
-        })}
+          </div>
+        ) : null}
+
+        <div className="min-w-0 flex-1">
+          <div className={WEEK_DAY_HEADER_ROW_CLASS}>
+            {DAY_HEADERS.map((h, i) => (
+              <div
+                key={h}
+                className={weekDayColumnClass(weekDays[i] === selectedDateKey)}
+              >
+                {h}
+              </div>
+            ))}
+          </div>
+
+          <div className={WEEK_DAY_ROW_CLASS}>
+            {weekDays.map((dateKey) => {
+              const daySessions = sessionsByDay.get(dateKey) ?? [];
+              const linkedIds = linkedActivityIdsFromSessions(daySessions);
+              const activityGroups = filterUnlinkedActivityGroups(
+                groupWeekActivities(activitiesByDay.get(dateKey) ?? []),
+                linkedIds
+              );
+
+              return (
+                <CalendarDayColumn
+                  key={dateKey}
+                  dateKey={dateKey}
+                  sessions={daySessions}
+                  activityGroups={activityGroups}
+                  weekDays={weekDays}
+                  disciplineSettings={disciplineSettings}
+                  workoutShadingSettings={workoutShadingSettings}
+                  workoutShadingTarget={workoutShadingTarget}
+                  onSessionCreated={onSessionCreated}
+                  activeDragId={activeDragId}
+                  isSelected={selectedDateKey === dateKey}
+                  onSelectDay={() => setSelectedDateKey(dateKey)}
+                  onClearSelection={() => setSelectedDateKey(null)}
+                />
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <CalendarWeekSummary

@@ -29,6 +29,8 @@ import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { totalZoneMinutes, WORKOUT_TREE_VERSION } from "@/lib/workout/steps";
 import type { GeneratedWorkout } from "@/lib/plan/calendar/generate-workouts";
+import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
+import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
 import {
   parseActivityDragId,
   parseSessionLinkDropId,
@@ -338,9 +340,20 @@ export function PlanningCalendar({
 
     if (await workoutBuilder.handleDragEnd(event)) return;
 
-    if (active.data.current?.type === "season-palette-workout") {
-      await handlePaletteDrop(
+    if (
+      active.data.current?.type === "season-palette-workout" ||
+      active.data.current?.type === "pool-suggested-workout"
+    ) {
+      await handleSuggestedPoolDrop(
         active.data.current.workout as GeneratedWorkout,
+        over.data.current
+      );
+      return;
+    }
+
+    if (active.data.current?.type === "pool-unscheduled") {
+      await handleUnscheduledPoolDrop(
+        active.data.current.chip as UnscheduledChip,
         over.data.current
       );
       return;
@@ -439,7 +452,31 @@ export function PlanningCalendar({
     });
   }
 
-  async function handlePaletteDrop(
+  async function createUnscheduledSession(dateKey: string, chip: UnscheduledChip) {
+    const res = await fetch(`/api/plan/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scheduledDate: dateKey,
+        discipline: chip.discipline,
+        title: unscheduledSessionTitle(chip.discipline),
+      }),
+    });
+    return res.ok;
+  }
+
+  async function handleUnscheduledPoolDrop(
+    chip: UnscheduledChip,
+    overData: Record<string, unknown> | undefined
+  ) {
+    if (overData?.type !== "day") return;
+    const dateKey = overData?.dateKey as string | undefined;
+    if (!dateKey) return;
+    const ok = await createUnscheduledSession(dateKey, chip);
+    if (ok) await handleRefresh();
+  }
+
+  async function handleSuggestedPoolDrop(
     workout: GeneratedWorkout,
     overData: Record<string, unknown> | undefined
   ) {
