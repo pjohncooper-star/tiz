@@ -54,6 +54,8 @@ function session(
     completedTargetPaceSeconds: null,
     completedZones: null,
     workoutProfile: null,
+    sessionRole: "MODERATE",
+    displaySessionRole: "MODERATE",
   };
 }
 

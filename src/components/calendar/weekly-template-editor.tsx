@@ -21,6 +21,7 @@ import {
   weekDayColumnClass,
 } from "@/components/calendar/week-day-layout";
 import type { WeeklyTemplate, WeeklyTemplateItem } from "@/components/calendar/types";
+import { SESSION_ROLE_LABELS, SESSION_ROLES } from "@/lib/plan/session-role";
 
 const WEEKDAYS: WeeklyTemplateItem["weekday"][] = [
   "MON",
@@ -83,6 +84,7 @@ function newDraft(weekday: WeeklyTemplateItem["weekday"]): TemplateItemDraft {
     durationMinutes: null,
     distanceMeters: null,
     poolSize: null,
+    sessionRole: "MODERATE",
     sortOrder: 0,
   };
 }
@@ -90,6 +92,7 @@ function newDraft(weekday: WeeklyTemplateItem["weekday"]): TemplateItemDraft {
 function draftsFromTemplate(template: WeeklyTemplate): TemplateItemDraft[] {
   return template.items.map((item) => ({
     ...item,
+    sessionRole: item.sessionRole ?? "MODERATE",
     key: item.id ?? `t_${item.weekday}_${item.sortOrder}_${Math.random().toString(36).slice(2, 5)}`,
   }));
 }
@@ -172,6 +175,24 @@ function TemplateDayColumn({
                   value={row.title}
                   onChange={(e) => onUpdate(row.key, { title: e.target.value })}
                 />
+              </div>
+              <div className="mb-1.5">
+                <span className={FIELD_LABEL}>Role</span>
+                <select
+                  className={COMPACT_FIELD}
+                  value={row.sessionRole}
+                  onChange={(e) =>
+                    onUpdate(row.key, {
+                      sessionRole: e.target.value as WeeklyTemplateItem["sessionRole"],
+                    })
+                  }
+                >
+                  {SESSION_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {SESSION_ROLE_LABELS[role]}
+                    </option>
+                  ))}
+                </select>
               </div>
               {row.discipline === "SWIM" ? (
                 <div className="mb-1.5">
@@ -326,6 +347,7 @@ export function WeeklyTemplateEditor() {
         durationMinutes: row.durationMinutes,
         distanceMeters: row.distanceMeters,
         poolSize: row.discipline === "SWIM" ? row.poolSize : null,
+        sessionRole: row.sessionRole,
         sortOrder: index,
       }));
     });

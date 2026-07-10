@@ -123,6 +123,8 @@ function calendarSession(
     completedTargetPaceSeconds: overrides.completedTargetPaceSeconds ?? null,
     completedZones: overrides.completedZones ?? null,
     workoutProfile: overrides.workoutProfile ?? null,
+    sessionRole: overrides.sessionRole ?? "MODERATE",
+    displaySessionRole: overrides.displaySessionRole ?? "MODERATE",
   };
 }
 

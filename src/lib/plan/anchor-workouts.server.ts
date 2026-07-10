@@ -84,6 +84,7 @@ export async function materializeAnchorsForWeek(athleteId: string, weekStart: Da
         distanceMeters: anchor.distanceMeters,
         targetSpeedMps: anchor.targetSpeedMps,
         targetPaceSeconds: anchor.targetPaceSeconds,
+        sessionRole: anchor.sessionRole,
         source: "ANCHORED_INSTANCE",
       },
       update: {
@@ -92,6 +93,7 @@ export async function materializeAnchorsForWeek(athleteId: string, weekStart: Da
         distanceMeters: anchor.distanceMeters,
         targetSpeedMps: anchor.targetSpeedMps,
         targetPaceSeconds: anchor.targetPaceSeconds,
+        sessionRole: anchor.sessionRole,
       },
     });
   }

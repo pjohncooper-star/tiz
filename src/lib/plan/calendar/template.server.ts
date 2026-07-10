@@ -1,8 +1,9 @@
-import type { Discipline, Weekday, PoolSize } from "@prisma/client";
+import type { Discipline, Weekday, PoolSize, SessionRole } from "@prisma/client";
 import { normalizeWeekStart, parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { weekdayToDate } from "@/lib/plan/calendar/weekday-to-date";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
+import { inferSessionRole } from "@/lib/plan/session-role";
 import { addDays, addWeeks, format, parseISO, startOfWeek } from "date-fns";
 
 export type ApplyTemplateMode = "clear_week" | "clear_template_days" | "merge";
@@ -14,6 +15,7 @@ export type WeeklyTemplateItemInput = {
   durationMinutes?: number | null;
   distanceMeters?: number | null;
   poolSize?: PoolSize | null;
+  sessionRole?: SessionRole;
   sortOrder?: number;
 };
 
@@ -28,6 +30,7 @@ export type WeeklyTemplateDto = {
     durationMinutes: number | null;
     distanceMeters: number | null;
     poolSize: PoolSize | null;
+    sessionRole: SessionRole;
     sortOrder: number;
   }>;
 };
@@ -59,6 +62,7 @@ function serializeTemplate(template: {
     durationMinutes: number | null;
     distanceMeters: number | null;
     poolSize: PoolSize | null;
+    sessionRole: SessionRole;
     sortOrder: number;
   }>;
 }): WeeklyTemplateDto {
@@ -73,6 +77,7 @@ function serializeTemplate(template: {
       durationMinutes: item.durationMinutes,
       distanceMeters: item.distanceMeters,
       poolSize: item.poolSize,
+      sessionRole: item.sessionRole,
       sortOrder: item.sortOrder,
     })),
   };
@@ -101,6 +106,11 @@ export async function replaceWeeklyTemplate(
           durationMinutes: item.durationMinutes ?? null,
           distanceMeters: item.distanceMeters ?? null,
           poolSize: item.discipline === "SWIM" ? (item.poolSize ?? null) : null,
+          sessionRole: item.sessionRole ?? inferSessionRole({
+            title: item.title.trim(),
+            discipline: item.discipline,
+            durationMinutes: item.durationMinutes ?? null,
+          }),
           sortOrder: item.sortOrder ?? index,
         })),
       });
@@ -173,6 +183,14 @@ export async function applyWeeklyTemplate(
         targetZones
       );
 
+      const sessionRole =
+        item.sessionRole ??
+        inferSessionRole({
+          title: item.title,
+          discipline: item.discipline,
+          durationMinutes: item.durationMinutes,
+        });
+
       await tx.plannedSession.create({
         data: {
           athleteId,
@@ -183,6 +201,7 @@ export async function applyWeeklyTemplate(
           poolSize: item.discipline === "SWIM" ? item.poolSize : null,
           source: "TEMPLATE",
           weeklyTemplateItemId: item.id,
+          sessionRole,
           targetZones,
           zoneAllocationMissing,
         },

@@ -11,6 +11,7 @@ import {
   planDisciplineSchema,
   planSessionCompletedMetricsSchema,
   planSessionMetricsSchema,
+  sessionRoleSchema,
   stepsPayloadSchema,
 } from "@/lib/plan/api-schemas";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
@@ -26,6 +27,7 @@ const updateSchema = z
     title: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).nullable().optional(),
+    sessionRole: sessionRoleSchema.optional(),
     steps: stepsPayloadSchema.optional(),
   })
   .merge(planSessionMetricsSchema)
@@ -86,6 +88,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     title,
     notes,
     targetZones,
+    sessionRole,
     steps,
     distanceMeters,
     targetSpeedMps,
@@ -174,6 +177,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(discipline !== undefined ? { discipline: discipline as Discipline } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),
+        ...(sessionRole !== undefined ? { sessionRole } : {}),
         zoneAllocationMissing,
         ...(distanceMeters !== undefined
           ? { distanceMeters: nullableMetric(distanceMeters) ?? null }

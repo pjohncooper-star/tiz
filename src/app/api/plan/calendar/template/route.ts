@@ -13,6 +13,7 @@ const templateItemSchema = z.object({
   durationMinutes: z.number().int().positive().nullable().optional(),
   distanceMeters: z.number().positive().nullable().optional(),
   poolSize: z.enum(["SCY", "SCM", "LCM"]).nullable().optional(),
+  sessionRole: z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]).optional(),
   sortOrder: z.number().int().nonnegative().optional(),
 });
 

@@ -120,6 +120,8 @@ export const planSessionCompletedMetricsSchema = z.object({
 
 export const planDisciplineSchema = z.enum(DISCIPLINES);
 
+export const sessionRoleSchema = z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]);
+
 export const anchorWorkoutTypeSchema = z.enum(["BIKE", "RUN", "SWIM", "STRENGTH"]);
 
 export function nullableMetric(value: number | null | undefined): number | null | undefined {

@@ -153,6 +153,7 @@ export function CalendarDayColumn({
                 showLinkDropTarget={activityDragActive}
                 showWorkoutDropTarget={workoutDragActive}
                 onDeleted={onSessionCreated}
+                onUpdated={onSessionCreated}
               />
             )
           )}

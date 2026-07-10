@@ -1,4 +1,4 @@
-import type { Discipline, DisplayUnit, PlannedSession, PoolSize, SignalType, SyncedActivity } from "@prisma/client";
+import type { Discipline, DisplayUnit, PlannedSession, PoolSize, SessionRole, SignalType, SyncedActivity } from "@prisma/client";
 import { format } from "date-fns";
 import { resolveActivityNumericMetrics } from "@/lib/activity/summary";
 import { calendarDateFromDb } from "@/lib/dates";
@@ -21,6 +21,7 @@ import {
   buildWorkoutProfile,
   defaultPrimarySignalForDiscipline,
 } from "@/lib/workout/workout-profile";
+import { resolveDisplaySessionRole } from "@/lib/plan/session-role";
 
 export type CalendarWorkoutProfile = {
   segments: Array<{
@@ -73,6 +74,8 @@ export type CalendarPlannedSession = {
   completedTargetPaceSeconds: number | null;
   completedZones: unknown;
   workoutProfile: CalendarWorkoutProfile | null;
+  sessionRole: SessionRole;
+  displaySessionRole: SessionRole;
 };
 
 type SessionRow = PlannedSession & {
@@ -202,6 +205,13 @@ export function serializePlannedSessions(
             unit,
             primarySignals
           );
+    const displaySessionRole = resolveDisplaySessionRole({
+      sessionRole: s.sessionRole,
+      title: s.title,
+      discipline: s.discipline,
+      durationMinutes: resolvedPlannedMinutes,
+      zoneMinutes: rollup.zones,
+    });
     return {
       id: s.id,
       scheduledDate: format(calendarDateFromDb(s.scheduledDate), "yyyy-MM-dd"),
@@ -227,6 +237,8 @@ export function serializePlannedSessions(
       completedTargetPaceSeconds: s.completedTargetPaceSeconds ?? null,
       completedZones: s.completedZones ?? null,
       workoutProfile,
+      sessionRole: s.sessionRole,
+      displaySessionRole,
     };
   });
 }
