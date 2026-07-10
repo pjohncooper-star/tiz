@@ -29,6 +29,7 @@ import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { totalZoneMinutes, WORKOUT_TREE_VERSION } from "@/lib/workout/steps";
 import type { GeneratedWorkout } from "@/lib/plan/calendar/generate-workouts";
+import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
 import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
 import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
 import {
@@ -359,6 +360,14 @@ export function PlanningCalendar({
       return;
     }
 
+    if (active.data.current?.type === "pool-library-template") {
+      await handleLibraryPoolDrop(
+        active.data.current.template as PoolLibraryTemplate,
+        over.data.current
+      );
+      return;
+    }
+
     if (active.data.current?.type === "activity") {
       const activityId = parseActivityDragId(active.id);
       const sessionId =
@@ -474,6 +483,72 @@ export function PlanningCalendar({
     if (!dateKey) return;
     const ok = await createUnscheduledSession(dateKey, chip);
     if (ok) await handleRefresh();
+  }
+
+  async function applyTemplateToSession(sessionId: string, templateId: string): Promise<boolean> {
+    const res = await fetch(`/api/plan/sessions/${sessionId}/apply-workout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workoutTemplateId: templateId }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(data.error ?? "Could not apply workout");
+      return false;
+    }
+    return true;
+  }
+
+  async function createSessionWithTemplate(dateKey: string, template: PoolLibraryTemplate) {
+    const res = await fetch(`/api/plan/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scheduledDate: dateKey,
+        discipline: template.discipline,
+        title: template.name,
+      }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json().catch(() => ({}))) as { session?: { id?: string } };
+    const id = data.session?.id;
+    if (!id) return false;
+    return applyTemplateToSession(id, template.templateId);
+  }
+
+  async function handleLibraryPoolDrop(
+    template: PoolLibraryTemplate,
+    overData: Record<string, unknown> | undefined
+  ) {
+    const overType = overData?.type;
+    if (overType === "session-workout") {
+      if (overData?.source === "RACE") {
+        alert("Cannot apply workout to a race session");
+        return;
+      }
+      const sessionDiscipline = overData?.discipline as string | undefined;
+      if (sessionDiscipline && sessionDiscipline !== template.discipline) {
+        alert("Workout discipline does not match session");
+        return;
+      }
+      const sessionId = overData?.sessionId as string | undefined;
+      if (!sessionId) return;
+      if (
+        overData?.hasStructuredWorkout &&
+        !confirm("Replace existing structured workout on this session?")
+      ) {
+        return;
+      }
+      const ok = await applyTemplateToSession(sessionId, template.templateId);
+      if (ok) await handleRefresh();
+      return;
+    }
+    if (overType === "day") {
+      const dateKey = overData?.dateKey as string | undefined;
+      if (!dateKey) return;
+      const ok = await createSessionWithTemplate(dateKey, template);
+      if (ok) await handleRefresh();
+    }
   }
 
   async function handleSuggestedPoolDrop(

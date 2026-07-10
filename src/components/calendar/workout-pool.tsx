@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { PoolLibrarySection } from "@/components/calendar/pool-library-section";
 import { useMemo, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
@@ -376,14 +376,11 @@ export function WorkoutPool({
           )}
         </PoolSection>
 
-        <PoolSection title="Library" hint="Saved workout templates (sidebar browse — coming next).">
-          <p className="text-[11px] text-zinc-500">
-            Browse and drag templates from{" "}
-            <Link href="/plan/library" className="text-sky-600 hover:underline dark:text-sky-400">
-              Plan → Library
-            </Link>
-            . In-pool folder tree is planned for the next iteration.
-          </p>
+        <PoolSection
+          title="Library"
+          hint="Saved templates from your workout library. Drag onto a day or session."
+        >
+          <PoolLibrarySection />
         </PoolSection>
 
         <WeekTizFooter
