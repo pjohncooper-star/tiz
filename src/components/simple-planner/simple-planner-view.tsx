@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
+import { SimplePlannerAnchorSection } from "@/components/simple-planner/simple-planner-anchor-section";
 import { SimplePlannerLongSessionSection } from "@/components/simple-planner/simple-planner-long-session-section";
 import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
@@ -121,6 +122,7 @@ type PlannerSectionId =
   | "zoneRamps"
   | "recovery"
   | "longSessions"
+  | "anchorWorkouts"
   | "weeklyVolume";
 
 const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
@@ -132,6 +134,7 @@ const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   zoneRamps: false,
   recovery: false,
   longSessions: false,
+  anchorWorkouts: false,
   weeklyVolume: true,
 };
 
@@ -605,6 +608,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         onToggle={() => toggleSection("phases")}
       >
         <SimplePlannerPhasesPane
+          seasonPlanId={season.id}
           phases={season.phases}
           totalWeeks={season.totalWeeks}
           selectedPhaseId={selectedPhaseId}
@@ -678,6 +682,18 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
             void saveSeason(savePayload({ recalculate: true }))
           }
           saving={saving}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Anchor workouts"
+        expanded={expandedSections.anchorWorkouts}
+        onToggle={() => toggleSection("anchorWorkouts")}
+      >
+        <SimplePlannerAnchorSection
+          seasonPlanId={season.id}
+          startDate={season.startDate}
+          phases={season.phases}
         />
       </CollapsibleSection>
 

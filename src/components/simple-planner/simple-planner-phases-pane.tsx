@@ -17,6 +17,7 @@ import {
 } from "@/lib/plan/season/phase-span-utils";
 
 type SimplePlannerPhasesPaneProps = {
+  seasonPlanId?: string;
   phases: SimplePhase[];
   totalWeeks: number;
   selectedPhaseId: string | null;
@@ -25,6 +26,7 @@ type SimplePlannerPhasesPaneProps = {
 };
 
 export function SimplePlannerPhasesPane({
+  seasonPlanId,
   phases,
   totalWeeks,
   selectedPhaseId,
@@ -45,8 +47,22 @@ export function SimplePlannerPhasesPane({
     );
   }
 
-  function deletePhase(phase: SimplePhase) {
+  async function deletePhase(phase: SimplePhase) {
     if (!phase.id) return;
+    let message = `Remove "${phase.name}" and merge its weeks into a neighbor?`;
+    if (seasonPlanId) {
+      const res = await fetch(
+        `/api/plan/anchors?seasonPlanId=${encodeURIComponent(seasonPlanId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { anchors: { seasonPhaseId: string | null }[] };
+        const anchorCount = data.anchors.filter((anchor) => anchor.seasonPhaseId === phase.id).length;
+        if (anchorCount > 0) {
+          message = `Remove "${phase.name}" and delete ${anchorCount} anchor workout${anchorCount === 1 ? "" : "s"}?`;
+        }
+      }
+    }
+    if (!window.confirm(message)) return;
     const next = deletePhaseWithMerge(covered, phase.id, totalWeeks);
     onPhasesChange(next);
     if (selectedPhaseId === phase.id) onSelectPhase(null);
@@ -117,7 +133,7 @@ export function SimplePlannerPhasesPane({
           phases={covered}
           totalWeeks={totalWeeks}
           onChange={updatePhase}
-          onDelete={() => deletePhase(selected)}
+          onDelete={() => void deletePhase(selected)}
         />
       )}
     </div>
