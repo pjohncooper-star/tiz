@@ -10,13 +10,23 @@
  * Fresh empty DB: prefer `npm run db:push` instead.
  */
 
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const migrationsDir = path.join(root, "prisma", "migrations");
+
+// Match Next.js: base .env, then .env.local overrides.
+for (const file of [".env", ".env.local"]) {
+  const envPath = path.join(root, file);
+  if (existsSync(envPath)) {
+    dotenv.config({ path: envPath, override: file === ".env.local" });
+  }
+}
 
 const SEASON_MIGRATIONS = [
   "manual_season_planner.sql",
@@ -59,7 +69,10 @@ if (seasonOnly) {
 }
 
 if (!process.env.DATABASE_URL) {
-  console.error("DATABASE_URL is not set. Add it to .env or your shell.");
+  console.error(
+    "DATABASE_URL is not set. Add it to .env (or .env.local) in the project root:"
+  );
+  console.error(`  ${path.join(root, ".env")}`);
   process.exit(1);
 }
 
@@ -69,7 +82,7 @@ function run(file) {
   const result = spawnSync(
     "npx",
     ["prisma", "db", "execute", "--file", fullPath, "--schema", "prisma/schema.prisma"],
-    { cwd: root, stdio: "inherit", shell: process.platform === "win32" }
+    { cwd: root, stdio: "inherit", shell: process.platform === "win32", env: process.env }
   );
   if (result.status !== 0) {
     console.error(`Failed: ${file}`);
@@ -86,5 +99,6 @@ const gen = spawnSync("npx", ["prisma", "generate"], {
   cwd: root,
   stdio: "inherit",
   shell: process.platform === "win32",
+  env: process.env,
 });
 process.exit(gen.status ?? 0);
