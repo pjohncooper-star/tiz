@@ -124,7 +124,7 @@ export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   return {
     name: "",
     date: "",
-    disciplines: priority === "A" ? ["SWIM", "BIKE", "RUN"] : ["RUN"],
+    disciplines: priority === "A" ? ["SWIM", "BIKE", "RUN"] : [],
     priority,
     distanceMeters: null,
     estimatedDurationMinutes: null,

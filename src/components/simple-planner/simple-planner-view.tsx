@@ -165,6 +165,29 @@ function CollapsibleSection({
   );
 }
 
+function formatSaveError(body: unknown): string {
+  if (typeof body !== "object" || body === null || !("error" in body)) {
+    return "Save failed.";
+  }
+  const error = (body as { error: unknown }).error;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error !== null) {
+    const flat = error as {
+      formErrors?: string[];
+      fieldErrors?: Record<string, string[] | unknown[]>;
+    };
+    const form = flat.formErrors?.filter(Boolean) ?? [];
+    if (form.length > 0) return form.join(" ");
+    for (const messages of Object.values(flat.fieldErrors ?? {})) {
+      if (Array.isArray(messages) && messages.length > 0) {
+        const first = messages[0];
+        if (typeof first === "string") return first;
+      }
+    }
+  }
+  return "Save failed. Check the browser Network tab for details.";
+}
+
 function buildPrimaryGoalEventPayload(
   aRace: SimpleGoalEvent,
   fallbackDate: string
@@ -269,8 +292,8 @@ export function SimplePlannerView() {
     });
     setSaving(false);
     if (!res.ok) {
-      const body = (await res.json()) as { error?: string };
-      setError(typeof body.error === "string" ? body.error : "Save failed.");
+      const body = (await res.json().catch(() => null)) as unknown;
+      setError(formatSaveError(body));
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };
@@ -352,9 +375,14 @@ export function SimplePlannerView() {
     if (!isGoalEventComplete(aRace)) {
       return "A-race name, date, and at least one discipline are required";
     }
-    const partial = season.goalEvents.find(isGoalEventPartial);
-    if (partial) return "Complete or remove partially filled B/C races";
-    const partialTimes = season.goalEvents.find(isGoalEventTimesPartial);
+    const enteredRaces = season.goalEvents.filter(
+      (race) => isGoalEventComplete(race) || isGoalEventPartial(race)
+    );
+    const partial = enteredRaces.find(isGoalEventPartial);
+    if (partial) {
+      return `Complete or remove partially filled ${partial.priority} race "${partial.name || "(unnamed)"}"`;
+    }
+    const partialTimes = enteredRaces.find(isGoalEventTimesPartial);
     if (partialTimes) {
       return "Enter a goal time for each selected discipline, or leave all blank";
     }
@@ -365,6 +393,7 @@ export function SimplePlannerView() {
     const raceError = validateRacesForSave();
     if (raceError) {
       setError(raceError);
+      setExpandedSections((current) => ({ ...current, races: true }));
       return;
     }
     await saveSeason(savePayload());
@@ -447,7 +476,11 @@ export function SimplePlannerView() {
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+          {error}
+        </p>
+      )}
 
       <CollapsibleSection
         title="Season"
