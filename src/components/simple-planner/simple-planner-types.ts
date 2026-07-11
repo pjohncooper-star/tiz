@@ -4,7 +4,7 @@ import type { RecoverySettings } from "@/lib/plan/season/recovery";
 import {
   DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS,
   type SimpleLongSessionDefaults,
-} from "@/lib/plan/season/simple-long-session";
+} from "@/lib/plan/season/simple-long-session-defaults";
 import type {
   GoalEventDraft,
   UnlinkedRaceSession,

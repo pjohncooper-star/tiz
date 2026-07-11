@@ -14,19 +14,13 @@ import type { SimpleRampDefaults } from "./simple-ramp";
 import { rampDefaultsToPlanFields } from "./simple-ramp";
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
 
-export type SimpleLongSessionDefaults = {
-  longRideStartMin: number;
-  longRidePeakMin: number;
-  longRunStartMin: number;
-  longRunPeakMin: number;
-};
+import {
+  DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS,
+  type SimpleLongSessionDefaults,
+} from "./simple-long-session-defaults";
 
-export const DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS: SimpleLongSessionDefaults = {
-  longRideStartMin: 60,
-  longRidePeakMin: 180,
-  longRunStartMin: 30,
-  longRunPeakMin: 90,
-};
+export type { SimpleLongSessionDefaults };
+export { DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS };
 
 export function resolveSimpleLongSessionDefaults(plan: {
   longRideStartMin?: number | null;
