@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseDateKey } from "@/lib/dates";
+import { updateSimpleSeasonSchema } from "@/lib/plan/api-schemas";
+import { parseGoalEventWrite, parseLinkCalendarRace } from "@/lib/plan/season/goal-event-api";
 import {
   archiveSeasonPlan,
   getSeasonPlanById,
-  updateSeasonPlan,
 } from "@/lib/plan/season/season-plan.server";
-import { updateSeasonPlanSchema } from "@/lib/plan/api-schemas";
-import { parseGoalEventWrite, parseLinkCalendarRace } from "@/lib/plan/season/goal-event-api";
-import { serializeSeasonPlan } from "@/lib/plan/season/serialize";
+import {
+  serializeSimpleSeasonPlan,
+  updateSimpleSeasonPlan,
+} from "@/lib/plan/season/simple-planner.server";
+import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -20,12 +23,19 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const plan = await getSeasonPlanById(athleteId, id);
-  if (!plan) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
-  return NextResponse.json({ season: await serializeSeasonPlan(plan) });
+  try {
+    const plan = await getSeasonPlanById(athleteId, id);
+    if (!plan) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ season: await serializeSimpleSeasonPlan(plan) });
+  } catch (err) {
+    console.error(`GET /api/plan/season/${id} failed`, err);
+    const message = err instanceof Error ? err.message : "Could not load season plan";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
@@ -44,7 +54,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = updateSeasonPlanSchema.safeParse(body);
+  const parsed = updateSimpleSeasonSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
@@ -52,40 +62,33 @@ export async function PATCH(request: Request, context: RouteContext) {
   const data = parsed.data;
 
   try {
-    const plan = await updateSeasonPlan(athleteId, id, {
+    const plan = await updateSimpleSeasonPlan(athleteId, id, {
       name: data.name,
       startDate: data.startDate ? parseDateKey(data.startDate) : undefined,
       endDate: data.endDate ? parseDateKey(data.endDate) : undefined,
-      sportTemplate: data.sportTemplate,
-      mesocycleLengthWeeks: data.mesocycleLengthWeeks,
+      rampDefaults: data.rampDefaults
+        ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
+        : undefined,
+      zoneRampDefaults: data.zoneRampDefaults,
       phases: data.phases,
-      startHours: data.startHours,
-      peakHours: data.peakHours,
-      swimSplitPercent: data.swimSplitPercent,
-      bikeSplitPercent: data.bikeSplitPercent,
-      runSplitPercent: data.runSplitPercent,
-      maxRampPercent: data.maxRampPercent,
-      longRideStartMin: data.longRideStartMin,
-      longRidePeakMin: data.longRidePeakMin,
-      longRunStartMin: data.longRunStartMin,
-      longRunPeakMin: data.longRunPeakMin,
-      longRideWeekFlags: data.longRideWeekFlags,
-      longRunWeekFlags: data.longRunWeekFlags,
-      deLoadEveryNWeeks: data.deLoadEveryNWeeks,
-      deLoadWeekFlags: data.deLoadWeekFlags,
-      deLoadVolumePercent: data.deLoadVolumePercent,
-      deLoadStrategy: data.deLoadStrategy,
-      reduceCountsOnDeLoad: data.reduceCountsOnDeLoad,
-      deLoadCountScalePercent: data.deLoadCountScalePercent,
-      setupComplete: data.setupComplete,
+      weeks: data.weeks,
+      recalculate: data.recalculate,
+      resetZoneOverrides: data.resetZoneOverrides,
       goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
       removedGoalEvents: data.removedGoalEvents,
       linkCalendarRaces: data.linkCalendarRaces?.map(parseLinkCalendarRace),
+      applyRecoveryCadence: data.applyRecoveryCadence,
+      recovery: data.recovery,
+      longSessionDefaults: data.longSessionDefaults,
     });
 
-    return NextResponse.json({ season: await serializeSeasonPlan(plan) });
+    if (!plan) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ season: await serializeSimpleSeasonPlan(plan) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update season";
     const status = message.includes("not found") ? 404 : 409;

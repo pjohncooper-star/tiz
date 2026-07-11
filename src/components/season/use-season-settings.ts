@@ -46,7 +46,6 @@ import {
   resolveDisciplineTargets,
   type DisciplineKey,
 } from "@/lib/plan/season/discipline-volume-ramp";
-import { recomputeSeasonWeeks } from "@/lib/plan/season/recompute";
 import { buildSeasonDateBounds } from "@/lib/plan/season/season-dates";
 import type { SeasonPhaseInput } from "@/lib/plan/season/types";
 import { parseDateKey } from "@/lib/dates";
@@ -1084,65 +1083,7 @@ export function useSeasonSettings({ seasonIdParam, mode }: UseSeasonSettingsOpti
     seasonSplit,
   ]);
 
-  const longSessionWeekPreview = useMemo(() => {
-    if (!startDate || !endDate || totalWeeks <= 0 || !cycleStructureValid) {
-      return [];
-    }
-    try {
-      return recomputeSeasonWeeks({
-        startDate: parseDateKey(startDate),
-        endDate: parseDateKey(endDate),
-        mesocycleLengthWeeks,
-        phases: phasesToSeasonInput(phases),
-        startHours,
-        peakHours,
-        swimSplitPercent,
-        bikeSplitPercent,
-        runSplitPercent,
-        maxRampPercent,
-        deLoadEveryNWeeks,
-        deLoadWeekFlags: deLoadFlagsForDisplay,
-        deLoadVolumePercent,
-        deLoadStrategy,
-        reduceCountsOnDeLoad,
-        longRideStartMin,
-        longRidePeakMin,
-        longRunStartMin,
-        longRunPeakMin,
-        longRideWeekFlags: longRideFlagsForDisplay,
-        longRunWeekFlags: longRunFlagsForDisplay,
-      }).weeks.map((week) => ({
-        longRideMinutes: week.longRideMinutes,
-        longRunMinutes: week.longRunMinutes,
-      }));
-    } catch {
-      return [];
-    }
-  }, [
-    startDate,
-    endDate,
-    totalWeeks,
-    cycleStructureValid,
-    mesocycleLengthWeeks,
-    phases,
-    startHours,
-    peakHours,
-    swimSplitPercent,
-    bikeSplitPercent,
-    runSplitPercent,
-    maxRampPercent,
-    deLoadEveryNWeeks,
-    deLoadFlagsForDisplay,
-    deLoadVolumePercent,
-    deLoadStrategy,
-    reduceCountsOnDeLoad,
-    longRideStartMin,
-    longRidePeakMin,
-    longRunStartMin,
-    longRunPeakMin,
-    longRideFlagsForDisplay,
-    longRunFlagsForDisplay,
-  ]);
+  const longSessionWeekPreview = useMemo(() => [], []);
 
   async function saveStep(step: number): Promise<boolean> {
     if (step === 0) return saveStep0();

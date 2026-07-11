@@ -191,7 +191,7 @@ function defaultSeasonDates() {
   };
 }
 
-export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boolean }) {
+export function SimplePlannerView() {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
@@ -221,8 +221,8 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
     setLoading(true);
     setError(null);
     const url = seasonIdParam
-      ? `/api/plan/season/simple?seasonId=${encodeURIComponent(seasonIdParam)}`
-      : "/api/plan/season/simple";
+      ? `/api/plan/season?seasonId=${encodeURIComponent(seasonIdParam)}`
+      : "/api/plan/season";
     const res = await fetch(url);
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -262,7 +262,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
     if (!season) return;
     setSaving(true);
     setError(null);
-    const res = await fetch(`/api/plan/season/${season.id}/simple`, {
+    const res = await fetch(`/api/plan/season/${season.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -281,7 +281,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
   async function handleCreateSeason() {
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/plan/season/simple", {
+    const res = await fetch("/api/plan/season", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -435,14 +435,6 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {showAdvancedLink && (
-            <Link
-              href={`/plan/setup?seasonId=${encodeURIComponent(season.id)}`}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Advanced settings
-            </Link>
-          )}
           <Link
             href="/plan/seasons"
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
