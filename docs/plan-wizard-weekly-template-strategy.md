@@ -1,8 +1,10 @@
 # Weekly template vs anchors — strategy (step 3)
 
-**Status:** **Option 2 confirmed** — season plan owns week layout per phase. Layout is **not** validated against step 2 days-per-discipline; gaps surface as **unscheduled workouts** on the calendar (V2).
+**Status:** **Option 2 confirmed** — season plan owns week layout per phase. Layout is **not** validated against session budgets; gaps surface as **unscheduled workouts** on the calendar (**shipped**).
 
-**Related:** [plan-wizard-screen-spec.md](./plan-wizard-screen-spec.md) step 3 · [plan-wizard-implementation-plan.md](./plan-wizard-implementation-plan.md) PR 4
+**Unified planner:** Session budgets and intense-day counts live in the **simple planner Phases pane** (`/plan`), not the advanced wizard. Calendar week targets read from `serializeSimpleSeasonPlan` only. See [season-planner-unified-plan.md](./season-planner-unified-plan.md).
+
+**Related:** [plan-wizard-screen-spec.md](./plan-wizard-screen-spec.md) step 3 · [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
 
 ---
 
@@ -20,19 +22,41 @@
 
 ## What exists today
 
-Three layers that barely talk to each other:
+```mermaid
+flowchart TB
+  subgraph unified [Simple planner — primary]
+    SP[Phases: sessions + intense days]
+    SW[SeasonWeek: hours + zoneMinutes]
+  end
+  subgraph calendar [Calendar]
+    WT[week-targets from simple serializer]
+    Pool[Workout pool: unscheduled + suggested + library]
+    Grid[PlannedSession grid]
+  end
+  subgraph legacy [Optional / manual]
+    Anchors[AnchorWorkout · materializeAnchorsForWeek]
+    Template[WeeklyScheduleTemplate · applyWeeklyTemplate]
+  end
+  SP --> WT
+  SW --> WT
+  WT --> Pool
+  WT --> Grid
+  Anchors --> Grid
+  Template -->|on demand per week| Grid
+  Pool --> Grid
+```
 
 | Layer | Model / code | Scope | Drives calendar? |
 |-------|----------------|-------|------------------|
-| **Season targets** | `SeasonWeek` via `recomputeSeasonWeeks` | Per season week | No — stored targets only (hours, session counts, zone minutes, long mins) |
-| **Anchor workouts** | `AnchorWorkout` · `materializeAnchorsForWeek` | Season or phase; effective date range | Yes — `PlannedSession` with `source: ANCHORED_INSTANCE` |
-| **Weekly template** | `WeeklyScheduleTemplate` · `applyWeeklyTemplate` | One per **athlete** (not per season) | Yes — on demand, per week — `source: TEMPLATE` |
+| **Season targets** | `SeasonWeek` via simple planner save + `recalculateSimpleVolumes` / `recalculateSimpleZoneMinutes` | Per season week | **Yes** — week targets, pool budget, TiZ footer |
+| **Phase intent** | `SeasonPhase` + `coachNotes` (sessions/week, intense days/week) | Per phase span | **Yes** — via `week-targets.server.ts` |
+| **Anchor workouts** | `AnchorWorkout` · `materializeAnchorsForWeek` | Season or phase; effective date range | Yes — when materialized |
+| **Weekly template** | `WeeklyScheduleTemplate` · `applyWeeklyTemplate` | One per **athlete** | Yes — on demand only; **not** season source of truth |
+| **Phase layout** | `SeasonPhaseLayoutItem` | Per phase | **Not built** — target schema |
 
-**Step 2 (v2)** sets the **weekly session budget** per discipline per phase (`swimSessionsPerWeek`, etc.) — stored on `SeasonWeek` after recompute.  
-**Step 3 (v2)** defines **what is actually on the calendar grid** (anchors + phase layout slots) — independent of whether it matches the budget.  
-**Step 4 (v2)** sets *how much* load per week (hours, ramp, de-load).  
-
-When V2 materializes sessions from layout, the calendar compares **scheduled** sessions vs **budget** and surfaces the difference as unscheduled workouts (see below).
+**Simple planner Phases pane** sets the **weekly session budget** and **intense day counts** per discipline.  
+**Phase layout (future)** defines **which weekdays** those sessions land on and their **sessionRole**.  
+**Weekly volume table** sets hours, de-load, and zone minutes per week.
 
 ---
 
@@ -40,28 +64,28 @@ When V2 materializes sessions from layout, the calendar compares **scheduled** s
 
 ```mermaid
 flowchart TB
-  subgraph inputs [Wizard_inputs]
-    S2[Step_2_session_budget]
-    S3[Step_3_phase_layout]
-    S4[Step_4_weekly_load]
+  subgraph inputs [Simple planner]
+    S1[Phases: session + intense day counts]
+    S2[Phase layout — future]
+    S3[Weekly volume + zone minutes]
   end
-  subgraph engine [V2_calendar_engine]
-    LAYOUT[Resolve_phase_layout]
-    MAT[Materialize_sessions]
-    GAP[Unscheduled_workout_pool]
+  subgraph engine [Calendar engine]
+    LAYOUT[Resolve phase layout]
+    MAT[Materialize sessions]
+    GAP[Unscheduled workout pool]
   end
-  subgraph output [Calendar_week_view]
-    PS[PlannedSession_rows]
-    POOL[Workout_pool_sidebar]
+  subgraph output [Calendar week view]
+    PS[PlannedSession rows]
+    POOL[Workout pool sidebar]
   end
-  S3 --> LAYOUT
+  S1 --> GAP
+  S2 --> LAYOUT
   LAYOUT --> MAT
   MAT --> PS
-  S2 --> GAP
   PS --> GAP
   GAP --> POOL
-  LIB[Workout_library] --> POOL
-  S4 --> MAT
+  LIB[Workout library] --> POOL
+  S3 --> POOL
 ```
 
 ### 1. Week layout (primary job — season-owned)
@@ -139,15 +163,15 @@ Step 3 names *when* and *what kind*; workout builder names *how* (intervals, ste
 
 ---
 
-## Wizard step 3 — phased delivery
+## Wizard step 3 — phased delivery (revised)
 
-| Phase | UX | Backend |
-|-------|-----|---------|
-| **P0 (v2 redesign)** | Scope toggle; `AnchorEditor`; link to calendar template; copy explaining anchors vs layout | No schema change |
-| **P1** | “Import from weekly template” → copies into draft phase layout (when schema exists) | `SeasonPhase` layout items |
-| **P2** | Phase layout editor in wizard (week grid per phase) | CRUD on season layout |
-| **P3** | Materialize layout → calendar sessions for season weeks | `materializeSeasonWeeks` orchestrator |
-| **V2 calendar** | **Workout pool** sidebar (unscheduled + library + week TiZ) | See [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md) |
+| Phase | UX | Backend | Status |
+|-------|-----|---------|--------|
+| **P0** | Anchors in advanced wizard; link to athlete template | Existing anchor API | Shipped (advanced only) |
+| **P1** | Anchors + “import preset” in **simple planner** | Same anchor API | Next |
+| **P2** | Phase layout editor in **simple planner Phases** | `SeasonPhaseLayoutItem` CRUD | Next |
+| **P3** | Materialize layout → calendar sessions | `materializeSeasonWeek` | Next |
+| **Calendar V2** | Workout pool sidebar | See [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md) | **V2a–V2c shipped** |
 
 ---
 
@@ -193,4 +217,8 @@ Fields can live on season plan or athlete settings; anchors already support `dis
 - [x] P0 wizard: anchors + link-only for athlete template
 - [ ] Schema shape for `SeasonPhase` layout items
 - [x] Unscheduled UI: **left sidebar** workout pool
-- [x] `sessionRole` enum: easy | moderate | intensity | long — [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
+- [x] `sessionRole` enum on sessions + calendar visuals
+- [x] Simple planner owns session budget + intense days + zone minutes
+- [ ] Schema shape for `SeasonPhase` layout items
+- [ ] Phase layout editor in simple planner
+- [ ] `materializeSeasonWeek` orchestrator
