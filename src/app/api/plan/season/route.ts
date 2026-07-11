@@ -64,17 +64,19 @@ export async function POST(request: Request) {
       rampDefaults: data.rampDefaults
         ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
         : undefined,
+      zoneRampDefaults: data.zoneRampDefaults,
       goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
     });
 
     if (!plan) {
+      console.error("POST /api/plan/season: plan missing after create", { athleteId });
       return NextResponse.json({ error: "Could not create season" }, { status: 500 });
     }
 
     return NextResponse.json(
-      { season: serializeSimpleSeasonPlan(plan) },
+      { season: await serializeSimpleSeasonPlan(plan) },
       { status: 201 }
     );
   } catch (err) {

@@ -317,8 +317,8 @@ export function SimplePlannerView() {
     });
     setSaving(false);
     if (!res.ok) {
-      const body = (await res.json()) as { error?: string };
-      setError(typeof body.error === "string" ? body.error : "Could not create season.");
+      const body = (await res.json().catch(() => null)) as unknown;
+      setError(formatSaveError(body) || "Could not create season.");
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };

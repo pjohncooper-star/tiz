@@ -533,6 +533,7 @@ export const createSimpleSeasonSchema = z.object({
   startDate: z.string().regex(DATE_KEY),
   endDate: z.string().regex(DATE_KEY),
   rampDefaults: simpleRampDefaultsSchema.optional(),
+  zoneRampDefaults: zoneRampDefaultsSchema.optional(),
   goalEvent: seasonGoalEventSchema.optional(),
   bGoalEvents: z.array(seasonGoalEventSchema).optional(),
   cGoalEvents: z.array(seasonGoalEventSchema).optional(),

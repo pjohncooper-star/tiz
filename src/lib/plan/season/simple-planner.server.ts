@@ -724,7 +724,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
 
-  return db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.seasonPlan.create({
       data: {
         id: seasonPlanId,
@@ -778,9 +778,9 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         cGoalEvents: input.cGoalEvents,
       });
     }
-
-    return getSeasonPlanById(input.athleteId, seasonPlanId);
   });
+
+  return getSeasonPlanById(input.athleteId, seasonPlanId);
 }
 
 export async function updateSimpleSeasonPlan(
@@ -993,7 +993,7 @@ export async function updateSimpleSeasonPlan(
       ? "ARCHIVED"
       : deriveSeasonStatus(bounds.startDate, bounds.endDate);
 
-  return db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     if (phaseDbRows) {
       await tx.seasonPhaseDiscipline.deleteMany({
         where: { phase: { seasonPlanId } },
@@ -1132,9 +1132,9 @@ export async function updateSimpleSeasonPlan(
         links: input.linkCalendarRaces,
       });
     }
-
-    return getSeasonPlanById(athleteId, seasonPlanId);
   });
+
+  return getSeasonPlanById(athleteId, seasonPlanId);
 }
 
 export async function serializeSimpleSeasonPlan(
