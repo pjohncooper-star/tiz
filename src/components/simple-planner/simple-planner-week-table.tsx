@@ -215,6 +215,8 @@ export function SimplePlannerWeekTable({
             <th className="px-3 py-2">Wk</th>
             <th className="px-3 py-2">Dates</th>
             <th className="px-3 py-2">Rest</th>
+            <th className="px-3 py-2 text-right">Ride</th>
+            <th className="px-3 py-2 text-right">Run</th>
             <th className="px-3 py-2 text-right">Total h</th>
           </tr>
         </thead>
@@ -496,6 +498,12 @@ function WeekCells({
           aria-label={`Recovery week ${week.weekIndex + 1}`}
         />
       </td>
+      <td className="px-3 py-2 text-right text-zinc-600 dark:text-zinc-400">
+        {week.longRideMinutes > 0 ? week.longRideMinutes : "—"}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-600 dark:text-zinc-400">
+        {week.longRunMinutes > 0 ? week.longRunMinutes : "—"}
+      </td>
       <td className="px-3 py-2 text-right font-medium">{week.totalHours}</td>
     </>
   );
@@ -589,7 +597,7 @@ function DisciplineExpandedCells({
 
   return (
     <>
-      <td colSpan={3} className="px-3 py-2 pl-16">
+      <td colSpan={5} className="px-3 py-2 pl-16">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
             <span className="w-12 text-zinc-500">{discipline.label}</span>

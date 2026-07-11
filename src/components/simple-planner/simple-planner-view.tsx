@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
+import { SimplePlannerLongSessionSection } from "@/components/simple-planner/simple-planner-long-session-section";
 import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
 import {
+  DEFAULT_LONG_SESSION_DEFAULTS,
   emptyRace,
   DEFAULT_PHASE_SESSIONS,
   DEFAULT_PHASE_INTENSE_DAYS,
@@ -62,6 +64,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
   return {
     ...season,
     recovery: season.recovery ?? DEFAULT_RECOVERY_SETTINGS,
+    longSessionDefaults: season.longSessionDefaults ?? DEFAULT_LONG_SESSION_DEFAULTS,
     unlinkedRaceSessions: season.unlinkedRaceSessions ?? [],
     zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
     phases: normalizePhasesToFullCoverage(
@@ -101,6 +104,8 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     weeks: season.weeks.map((week) => ({
       ...week,
       zoneMinutes: week.zoneMinutes ?? {},
+      longRideMinutes: week.longRideMinutes ?? 0,
+      longRunMinutes: week.longRunMinutes ?? 0,
     })),
     primaryGoalEvent: season.primaryGoalEvent ? mapGoal(season.primaryGoalEvent) : null,
     goalEvents: season.goalEvents.map(mapGoal),
@@ -115,6 +120,7 @@ type PlannerSectionId =
   | "ramps"
   | "zoneRamps"
   | "recovery"
+  | "longSessions"
   | "weeklyVolume";
 
 const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
@@ -125,6 +131,7 @@ const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   ramps: false,
   zoneRamps: false,
   recovery: false,
+  longSessions: false,
   weeklyVolume: true,
 };
 
@@ -324,6 +331,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       rampDefaults: season.rampDefaults,
       zoneRampDefaults: season.zoneRampDefaults,
       recovery: season.recovery,
+      longSessionDefaults: season.longSessionDefaults,
       phases: season.phases,
       weeks: serializeWeeksForSave(season.weeks),
       ...(goalEvent ? { goalEvent } : {}),
@@ -649,6 +657,25 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
                 recalculate: true,
               })
             )
+          }
+          saving={saving}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Long sessions"
+        expanded={expandedSections.longSessions}
+        onToggle={() => toggleSection("longSessions")}
+      >
+        <SimplePlannerLongSessionSection
+          longSessionDefaults={season.longSessionDefaults}
+          phases={season.phases}
+          weeks={season.weeks}
+          totalWeeks={season.totalWeeks}
+          rampDefaults={season.rampDefaults}
+          onChange={(longSessionDefaults) => setSeason({ ...season, longSessionDefaults })}
+          onRecalculate={() =>
+            void saveSeason(savePayload({ recalculate: true }))
           }
           saving={saving}
         />

@@ -1,6 +1,10 @@
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import type { ZoneRampDefaultsByDiscipline } from "@/lib/plan/season/simple-tiz";
 import type { RecoverySettings } from "@/lib/plan/season/recovery";
+import {
+  DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS,
+  type SimpleLongSessionDefaults,
+} from "@/lib/plan/season/simple-long-session";
 import type {
   GoalEventDraft,
   UnlinkedRaceSession,
@@ -27,6 +31,9 @@ export const DEFAULT_PHASE_INTENSE_DAYS = {
   bikeIntenseDaysPerWeek: 1,
   runIntenseDaysPerWeek: 1,
 } as const;
+
+export const DEFAULT_LONG_SESSION_DEFAULTS: SimpleLongSessionDefaults =
+  DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS;
 
 export const DEFAULT_PHASE_VOLUME_FIELDS = {
   volumeTrend: "INCREASE",
@@ -76,6 +83,8 @@ export type SimplePhase = {
   suppressRecovery: boolean;
 };
 
+export type { SimpleLongSessionDefaults };
+
 export type SimpleWeek = {
   weekIndex: number;
   weekStartDate: string;
@@ -89,6 +98,8 @@ export type SimpleWeek = {
   zoneMinutes: ZoneMinutes;
   zoneMinutesOverridden?: boolean;
   volumeOverridden?: boolean;
+  longRideMinutes: number;
+  longRunMinutes: number;
 };
 
 export type SimpleSeason = {
@@ -101,6 +112,7 @@ export type SimpleSeason = {
   rampDefaults: SimpleRampDefaults;
   zoneRampDefaults: ZoneRampDefaultsByDiscipline;
   recovery: RecoverySettings;
+  longSessionDefaults: SimpleLongSessionDefaults;
   unlinkedRaceSessions: UnlinkedRaceSession[];
   phases: SimplePhase[];
   weeks: SimpleWeek[];

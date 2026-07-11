@@ -167,7 +167,8 @@ function PhaseDetailEditor({
         Weeks: <span className="font-medium">{weekLabel}</span>
       </p>
       <p className="mt-1 text-xs text-zinc-500">
-        Drag phase boundaries in the week table to resize. Add phase splits the longest block.
+        Per-phase long-session cadence is set above. Recalculate in the Long sessions section to
+        update week values.
       </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 md:hidden">

@@ -461,6 +461,13 @@ export const simpleRampDefaultsSchema = z.object({
   run: simpleDisciplineRampSchema,
 });
 
+export const simpleLongSessionDefaultsSchema = z.object({
+  longRideStartMin: z.number().int().positive(),
+  longRidePeakMin: z.number().int().positive(),
+  longRunStartMin: z.number().int().positive(),
+  longRunPeakMin: z.number().int().positive(),
+});
+
 export const simplePhaseSchema = z
   .object({
     id: z.string().optional(),
@@ -517,6 +524,8 @@ export const simpleWeekSchema = z.object({
   zoneMinutes: z.record(z.string(), z.number().nonnegative()).optional(),
   zoneMinutesOverridden: z.boolean().optional(),
   volumeOverridden: z.boolean().optional(),
+  longRideMinutes: z.number().int().nonnegative().optional(),
+  longRunMinutes: z.number().int().nonnegative().optional(),
 });
 
 export const createSimpleSeasonSchema = z.object({
@@ -542,6 +551,7 @@ export const updateSimpleSeasonSchema = z
     resetZoneOverrides: z.boolean().optional(),
     applyRecoveryCadence: z.boolean().optional(),
     recovery: recoverySettingsSchema.partial().optional(),
+    longSessionDefaults: simpleLongSessionDefaultsSchema.optional(),
     goalEvent: seasonGoalEventSchema.optional(),
     bGoalEvents: z.array(seasonGoalEventSchema).optional(),
     cGoalEvents: z.array(seasonGoalEventSchema).optional(),

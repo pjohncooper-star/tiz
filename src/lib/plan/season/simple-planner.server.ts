@@ -36,6 +36,11 @@ import {
   type SimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
+import {
+  recalculateSimpleLongSessions,
+  resolveSimpleLongSessionDefaults,
+  type SimpleLongSessionDefaults,
+} from "./simple-long-session";
 import { normalizePhasesToFullCoverage } from "./phase-span-utils";
 import {
   clampZoneMinutesToVolume,
@@ -153,6 +158,7 @@ export type UpdateSimpleSeasonInput = {
   cGoalEvents?: GoalEventWriteInput[];
   removedGoalEvents?: RemovedGoalEventInput[];
   linkCalendarRaces?: LinkCalendarRaceInput[];
+  longSessionDefaults?: SimpleLongSessionDefaults;
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -254,17 +260,32 @@ function buildInitialWeeks(
     ...week,
     zoneMinutes: zoneWeeks[index]!.zoneMinutes,
     zoneMinutesOverridden: false,
+    longRideMinutes: 0,
+    longRunMinutes: 0,
   }));
 }
 
 function mergeWeekWrites(
   existingWeeks: Array<
-    SimpleWeekVolume & { zoneMinutes?: ZoneMinutes; zoneMinutesOverridden?: boolean }
+    SimpleWeekVolume & {
+      zoneMinutes?: ZoneMinutes;
+      zoneMinutesOverridden?: boolean;
+      longRideMinutes?: number;
+      longRunMinutes?: number;
+    }
   >,
   writes: SimpleWeekWrite[] | undefined,
   totalWeeks: number,
   defaults: SimpleRampDefaults
-): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }> {
+): Array<
+  SimpleWeekVolume & {
+    zoneMinutes: ZoneMinutes;
+    zoneMinutesOverridden: boolean;
+    volumeOverridden: boolean;
+    longRideMinutes: number;
+    longRunMinutes: number;
+  }
+> {
   const byIndex = new Map<number, SimpleWeekWrite>();
   for (const write of writes ?? []) {
     byIndex.set(write.weekIndex, write);
@@ -275,6 +296,8 @@ function mergeWeekWrites(
       zoneMinutes: ZoneMinutes;
       zoneMinutesOverridden: boolean;
       volumeOverridden: boolean;
+      longRideMinutes: number;
+      longRunMinutes: number;
     }
   > = [];
   for (let weekIndex = 0; weekIndex < totalWeeks; weekIndex++) {
@@ -296,6 +319,8 @@ function mergeWeekWrites(
       zoneMinutes: write?.zoneMinutes ?? prior?.zoneMinutes ?? {},
       zoneMinutesOverridden:
         write?.zoneMinutesOverridden ?? prior?.zoneMinutesOverridden ?? false,
+      longRideMinutes: prior?.longRideMinutes ?? 0,
+      longRunMinutes: prior?.longRunMinutes ?? 0,
     });
   }
   return weeks;
@@ -314,8 +339,18 @@ function weeksFromDb(
     zoneMinutes: unknown;
     zoneMinutesOverridden: boolean;
     volumeOverridden: boolean;
+    longRideMinutes: number;
+    longRunMinutes: number;
   }[]
-): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean; volumeOverridden: boolean }> {
+): Array<
+  SimpleWeekVolume & {
+    zoneMinutes: ZoneMinutes;
+    zoneMinutesOverridden: boolean;
+    volumeOverridden: boolean;
+    longRideMinutes: number;
+    longRunMinutes: number;
+  }
+> {
   return weeks.map((week) => ({
     weekIndex: week.weekIndex,
     isRestWeek: week.isDeLoadWeek,
@@ -328,6 +363,100 @@ function weeksFromDb(
     runDistanceMeters: week.runDistanceMeters,
     zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
     zoneMinutesOverridden: week.zoneMinutesOverridden,
+    longRideMinutes: week.longRideMinutes,
+    longRunMinutes: week.longRunMinutes,
+  }));
+}
+
+function simplePhasesFromDb(
+  phases: Array<{
+    id: string;
+    name: string;
+    color: string;
+    sortOrder: number;
+    weekCount: number;
+    startWeekIndex: number;
+    rampSwimEnabled: boolean;
+    rampBikeEnabled: boolean;
+    rampRunEnabled: boolean;
+    swimSessionsPerWeek: number;
+    bikeSessionsPerWeek: number;
+    runSessionsPerWeek: number;
+    volumeMesocycleMode: import("@prisma/client").VolumeMesocycleMode;
+    phaseKind: import("@prisma/client").PhaseKind;
+    coachNotes: string | null;
+  }>,
+  totalWeeks: number
+): import("@/components/simple-planner/simple-planner-types").SimplePhase[] {
+  let cursor = 0;
+  const mapped = [...phases]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((phase) => {
+      const hasStoredStart = phase.startWeekIndex >= 0;
+      const assigned = phase.weekCount > 0;
+      const startWeekIndex = assigned ? (hasStoredStart ? phase.startWeekIndex : cursor) : -1;
+      const endWeekIndex = assigned ? startWeekIndex + phase.weekCount - 1 : -1;
+      if (assigned && !hasStoredStart) cursor += phase.weekCount;
+      const notes = parsePhaseCoachNotes(phase.coachNotes);
+      const volume = resolvePhaseVolumeSettings({
+        volumeTrend:
+          notes.volumeTrend ?? volumeTrendFromDb(phase.volumeMesocycleMode, notes.isTaperVolume),
+        volumeTargetPercent: notes.volumeTargetPercent,
+        volumeTaperStartPercent: notes.volumeTaperStartPercent,
+        volumeTaperEndPercent: notes.volumeTaperEndPercent,
+        longSessionCadence: notes.longSessionCadence,
+        suppressRecovery: notes.suppressRecovery,
+        phaseKind: phase.phaseKind,
+        name: phase.name,
+      });
+      return {
+        id: phase.id,
+        name: phase.name,
+        color: phase.color,
+        startWeekIndex,
+        endWeekIndex,
+        rampEnabled: {
+          swim: phase.rampSwimEnabled,
+          bike: phase.rampBikeEnabled,
+          run: phase.rampRunEnabled,
+        },
+        swimSessionsPerWeek: phase.swimSessionsPerWeek,
+        bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+        runSessionsPerWeek: phase.runSessionsPerWeek,
+        strengthSessionsPerWeek: notes.strengthSessionsPerWeek,
+        swimIntenseDaysPerWeek: notes.swimIntenseDaysPerWeek,
+        bikeIntenseDaysPerWeek: notes.bikeIntenseDaysPerWeek,
+        runIntenseDaysPerWeek: notes.runIntenseDaysPerWeek,
+        goal: notes.goal,
+        volumeTrend: volume.volumeTrend,
+        volumeTargetPercent: volume.volumeTargetPercent,
+        volumeTaperStartPercent: volume.volumeTaperStartPercent,
+        volumeTaperEndPercent: volume.volumeTaperEndPercent,
+        longSessionCadence: volume.longSessionCadence,
+        suppressRecovery: volume.suppressRecovery,
+      };
+    });
+  return normalizePhasesToFullCoverage(mapped, totalWeeks);
+}
+
+function attachLongSessionsToWeeks<
+  T extends { weekIndex: number; isRestWeek: boolean },
+>(
+  weeks: T[],
+  phases: import("@/components/simple-planner/simple-planner-types").SimplePhase[],
+  longDefaults: SimpleLongSessionDefaults,
+  rampDefaults: SimpleRampDefaults
+): Array<T & { longRideMinutes: number; longRunMinutes: number }> {
+  const longSessions = recalculateSimpleLongSessions({
+    weeks,
+    phases,
+    longDefaults,
+    rampDefaults,
+  });
+  return weeks.map((week, index) => ({
+    ...week,
+    longRideMinutes: longSessions[index]?.longRideMinutes ?? 0,
+    longRunMinutes: longSessions[index]?.longRunMinutes ?? 0,
   }));
 }
 
@@ -446,7 +575,9 @@ function recalculateWeeks(
     SimpleWeekVolume & {
       zoneMinutes: ZoneMinutes;
       zoneMinutesOverridden: boolean;
-      volumeOverridden?: boolean;
+      volumeOverridden: boolean;
+      longRideMinutes: number;
+      longRunMinutes: number;
     }
   >,
   phaseSpans: SimplePhaseVolumeSpan[],
@@ -835,6 +966,13 @@ export async function updateSimpleSeasonPlan(
         bounds.totalWeeks
       );
 
+  const longDefaults = resolveSimpleLongSessionDefaults({
+    longRideStartMin: input.longSessionDefaults?.longRideStartMin ?? existing.longRideStartMin,
+    longRidePeakMin: input.longSessionDefaults?.longRidePeakMin ?? existing.longRidePeakMin,
+    longRunStartMin: input.longSessionDefaults?.longRunStartMin ?? existing.longRunStartMin,
+    longRunPeakMin: input.longSessionDefaults?.longRunPeakMin ?? existing.longRunPeakMin,
+  });
+
   if (input.recalculate) {
     weeks = recalculateWeeks(
       weeks,
@@ -844,6 +982,10 @@ export async function updateSimpleSeasonPlan(
       recoverySettings,
       suppressRecoveryWeeks
     );
+    const phasesForLong = phaseWrites
+      ? phaseWrites.map(toSimplePhase)
+      : simplePhasesFromDb(existing.phases, bounds.totalWeeks);
+    weeks = attachLongSessionsToWeeks(weeks, phasesForLong, longDefaults, defaults);
   }
 
   const status =
@@ -886,6 +1028,14 @@ export async function updateSimpleSeasonPlan(
               ...(input.recovery.sessionScalePercent !== undefined
                 ? { deLoadCountScalePercent: input.recovery.sessionScalePercent }
                 : {}),
+            }
+          : {}),
+        ...(input.longSessionDefaults
+          ? {
+              longRideStartMin: longDefaults.longRideStartMin,
+              longRidePeakMin: longDefaults.longRidePeakMin,
+              longRunStartMin: longDefaults.longRunStartMin,
+              longRunPeakMin: longDefaults.longRunPeakMin,
             }
           : {}),
       },
@@ -936,8 +1086,8 @@ export async function updateSimpleSeasonPlan(
           swimSessions: 0,
           bikeSessions: 0,
           runSessions: 0,
-          longRideMinutes: 0,
-          longRunMinutes: 0,
+          longRideMinutes: week.longRideMinutes,
+          longRunMinutes: week.longRunMinutes,
         },
       });
     }
@@ -1075,6 +1225,7 @@ export async function serializeSimpleSeasonPlan(
     rampDefaults: defaults,
     zoneRampDefaults,
     recovery: resolveRecoverySettings(plan),
+    longSessionDefaults: resolveSimpleLongSessionDefaults(plan),
     unlinkedRaceSessions,
     phases: normalizedPhases,
     weeks: plan.weeks.map((week) => ({
@@ -1090,6 +1241,8 @@ export async function serializeSimpleSeasonPlan(
       zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
       zoneMinutesOverridden: week.zoneMinutesOverridden,
       volumeOverridden: week.volumeOverridden,
+      longRideMinutes: week.longRideMinutes,
+      longRunMinutes: week.longRunMinutes,
     })),
     goalEvents: plan.goalEvents.map((event) => ({
       ...serializeGoalEvent(event),
