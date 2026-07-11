@@ -52,6 +52,29 @@ export function resolveRecoverySettings(plan: {
   };
 }
 
+/** Weeks where recovery/de-load should not be suggested or applied. */
+export function recoverySuppressedWeekIndices(
+  phases: Array<{
+    startWeekIndex: number;
+    endWeekIndex: number;
+    suppressRecovery: boolean;
+  }>,
+  totalWeeks: number
+): Set<number> {
+  const skip = new Set<number>();
+  for (const phase of phases) {
+    if (!phase.suppressRecovery) continue;
+    for (
+      let weekIndex = Math.max(0, phase.startWeekIndex);
+      weekIndex <= Math.min(totalWeeks - 1, phase.endWeekIndex);
+      weekIndex++
+    ) {
+      skip.add(weekIndex);
+    }
+  }
+  return skip;
+}
+
 /** Suggest recovery weeks on a repeating load:recovery cadence (default 3:1). */
 export function suggestRecoveryWeeks(
   totalWeeks: number,

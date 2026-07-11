@@ -3,6 +3,7 @@ import {
   distanceMetersFromHoursPace,
   hoursFromDistancePace,
 } from "./distance-pace-rollup";
+import type { SimplePhaseVolumeTrend } from "./phase-volume-settings";
 import { roundHours } from "./volume-curve";
 
 export type SimpleDiscipline = "swim" | "bike" | "run";
@@ -26,6 +27,13 @@ export type SimplePhaseSpan = {
   startWeekIndex: number;
   endWeekIndex: number;
   rampEnabled: Record<SimpleDiscipline, boolean>;
+};
+
+export type SimplePhaseVolumeSpan = SimplePhaseSpan & {
+  volumeTrend?: SimplePhaseVolumeTrend;
+  volumeTargetPercent?: number;
+  volumeTaperStartPercent?: number;
+  volumeTaperEndPercent?: number;
 };
 
 export type SimpleWeekVolume = {
@@ -254,19 +262,212 @@ export function syncDerivedDistanceOrHours(
   }
 }
 
+function lerpValue(start: number, end: number, t: number): number {
+  return start + (end - start) * t;
+}
+
+function resolvedVolumeTrend(phase: SimplePhaseVolumeSpan): SimplePhaseVolumeTrend {
+  return phase.volumeTrend ?? "INCREASE";
+}
+
+function resolvedTargetPercent(phase: SimplePhaseVolumeSpan): number {
+  return phase.volumeTargetPercent ?? 100;
+}
+
+function resolvedTaperStartPercent(phase: SimplePhaseVolumeSpan): number {
+  return phase.volumeTaperStartPercent ?? 70;
+}
+
+function resolvedTaperEndPercent(phase: SimplePhaseVolumeSpan): number {
+  return phase.volumeTaperEndPercent ?? 45;
+}
+
+function disciplineValueAtPhaseWeek(
+  trend: SimplePhaseVolumeTrend,
+  weekInPhase: number,
+  phaseWeekCount: number,
+  entry: number,
+  exit: number,
+  ratePercent: number
+): number {
+  if (phaseWeekCount <= 1) return exit;
+  if (trend === "HOLD") return exit;
+  if (trend === "TAPER" || trend === "DECREASE") {
+    const t = weekInPhase / (phaseWeekCount - 1);
+    return lerpValue(entry, exit, t);
+  }
+
+  let value = entry;
+  for (let step = 0; step < weekInPhase; step++) {
+    value = Math.min(value * (1 + ratePercent / 100), exit);
+  }
+  return value;
+}
+
+function applyPhaseAwareHourRamp(
+  weeks: SimpleWeekVolume[],
+  phases: SimplePhaseVolumeSpan[],
+  discipline: SimpleDiscipline,
+  def: Pick<DisciplineRampDefaults, "startHours" | "peakHours" | "ratePercent">
+): void {
+  const hoursKey = HOURS_KEY[discipline];
+  const sorted = [...phases].sort((a, b) => a.startWeekIndex - b.startWeekIndex);
+  let previousExit = def.startHours;
+
+  for (const phase of sorted) {
+    const trend = resolvedVolumeTrend(phase);
+    const target = def.peakHours * (resolvedTargetPercent(phase) / 100);
+    const phaseWeekCount = phase.endWeekIndex - phase.startWeekIndex + 1;
+
+    let entry = previousExit;
+    let exit = target;
+    if (trend === "TAPER") {
+      entry = def.peakHours * (resolvedTaperStartPercent(phase) / 100);
+      exit = def.peakHours * (resolvedTaperEndPercent(phase) / 100);
+    } else if (trend === "DECREASE") {
+      entry = previousExit;
+      exit = target;
+    } else if (trend === "HOLD") {
+      entry = target;
+      exit = target;
+    } else {
+      entry = previousExit;
+      exit = target;
+    }
+
+    for (let weekIndex = phase.startWeekIndex; weekIndex <= phase.endWeekIndex; weekIndex++) {
+      const week = weeks[weekIndex];
+      if (!week || week.isRestWeek || week.volumeOverridden) continue;
+      if (!isRampOnForDiscipline(phase, discipline)) continue;
+
+      const weekInPhase = weekIndex - phase.startWeekIndex;
+      week[hoursKey] = roundHours(
+        disciplineValueAtPhaseWeek(
+          trend,
+          weekInPhase,
+          phaseWeekCount,
+          entry,
+          exit,
+          def.ratePercent
+        )
+      );
+    }
+
+    const lastWeek = weeks[phase.endWeekIndex];
+    if (lastWeek && !lastWeek.isRestWeek) {
+      previousExit = lastWeek[hoursKey];
+    }
+  }
+}
+
+function applyPhaseAwareDistanceRamp(
+  weeks: SimpleWeekVolume[],
+  phases: SimplePhaseVolumeSpan[],
+  discipline: SimpleDiscipline,
+  def: Pick<
+    DisciplineRampDefaults,
+    "startDistanceMeters" | "peakDistanceMeters" | "ratePercent" | "referencePaceSeconds"
+  >
+): void {
+  const distanceKey = DISTANCE_KEY[discipline];
+  const hoursKey = HOURS_KEY[discipline];
+  const paceDiscipline = PACE_DISCIPLINE[discipline];
+  if (!distanceKey || !paceDiscipline) return;
+
+  const sorted = [...phases].sort((a, b) => a.startWeekIndex - b.startWeekIndex);
+  let previousExit = def.startDistanceMeters;
+
+  for (const phase of sorted) {
+    const trend = resolvedVolumeTrend(phase);
+    const target = def.peakDistanceMeters * (resolvedTargetPercent(phase) / 100);
+    const phaseWeekCount = phase.endWeekIndex - phase.startWeekIndex + 1;
+
+    let entry = previousExit;
+    let exit = target;
+    if (trend === "TAPER") {
+      entry = def.peakDistanceMeters * (resolvedTaperStartPercent(phase) / 100);
+      exit = def.peakDistanceMeters * (resolvedTaperEndPercent(phase) / 100);
+    } else if (trend === "DECREASE") {
+      entry = previousExit;
+      exit = target;
+    } else if (trend === "HOLD") {
+      entry = target;
+      exit = target;
+    } else {
+      entry = previousExit;
+      exit = target;
+    }
+
+    for (let weekIndex = phase.startWeekIndex; weekIndex <= phase.endWeekIndex; weekIndex++) {
+      const week = weeks[weekIndex];
+      if (!week || week.isRestWeek || week.volumeOverridden) continue;
+      if (!isRampOnForDiscipline(phase, discipline)) continue;
+
+      const weekInPhase = weekIndex - phase.startWeekIndex;
+      const meters = roundMeters(
+        disciplineValueAtPhaseWeek(
+          trend,
+          weekInPhase,
+          phaseWeekCount,
+          entry,
+          exit,
+          def.ratePercent
+        )
+      );
+      week[distanceKey] = meters;
+      week[hoursKey] = hoursFromDistancePace(paceDiscipline, meters, def.referencePaceSeconds);
+    }
+
+    const lastWeek = weeks[phase.endWeekIndex];
+    if (lastWeek && !lastWeek.isRestWeek) {
+      previousExit = lastWeek[distanceKey] ?? previousExit;
+    }
+  }
+}
+
+function hasPhaseVolumeSettings(phases: SimplePhaseVolumeSpan[]): boolean {
+  return phases.some(
+    (phase) =>
+      phase.volumeTrend != null ||
+      phase.volumeTargetPercent != null ||
+      phase.volumeTaperStartPercent != null ||
+      phase.volumeTaperEndPercent != null
+  );
+}
+
 export function recalculateSimpleVolumes(
   weeks: SimpleWeekVolume[],
-  phases: SimplePhaseSpan[],
+  phases: SimplePhaseVolumeSpan[],
   defaults: SimpleRampDefaults
 ): SimpleWeekVolume[] {
   const result = weeks.map((week) => ({ ...week }));
 
-  for (const discipline of SIMPLE_DISCIPLINES) {
-    const def = defaults[discipline];
-    if (disciplineMode(discipline, def) === "DISTANCE") {
-      applyDistanceRamp(result, phases, discipline, distanceRampDefaults(def));
-    } else {
-      applyHourRamp(result, phases, discipline, hourRampDefaults(def));
+  if (phases.length === 0) {
+    for (const discipline of SIMPLE_DISCIPLINES) {
+      const def = defaults[discipline];
+      if (disciplineMode(discipline, def) === "DISTANCE") {
+        applyDistanceRamp(result, phases, discipline, distanceRampDefaults(def));
+      } else {
+        applyHourRamp(result, phases, discipline, hourRampDefaults(def));
+      }
+    }
+  } else if (hasPhaseVolumeSettings(phases)) {
+    for (const discipline of SIMPLE_DISCIPLINES) {
+      const def = defaults[discipline];
+      if (disciplineMode(discipline, def) === "DISTANCE") {
+        applyPhaseAwareDistanceRamp(result, phases, discipline, distanceRampDefaults(def));
+      } else {
+        applyPhaseAwareHourRamp(result, phases, discipline, hourRampDefaults(def));
+      }
+    }
+  } else {
+    for (const discipline of SIMPLE_DISCIPLINES) {
+      const def = defaults[discipline];
+      if (disciplineMode(discipline, def) === "DISTANCE") {
+        applyDistanceRamp(result, phases, discipline, distanceRampDefaults(def));
+      } else {
+        applyHourRamp(result, phases, discipline, hourRampDefaults(def));
+      }
     }
   }
 

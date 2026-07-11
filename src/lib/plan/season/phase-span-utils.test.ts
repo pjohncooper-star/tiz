@@ -4,6 +4,7 @@ import type { SimplePhase } from "@/components/simple-planner/simple-planner-typ
 import {
   DEFAULT_PHASE_INTENSE_DAYS,
   DEFAULT_PHASE_SESSIONS,
+  DEFAULT_PHASE_VOLUME_FIELDS,
 } from "@/components/simple-planner/simple-planner-types";
 import {
   buildGutterSegments,
@@ -32,6 +33,7 @@ function phase(
     ...DEFAULT_PHASE_SESSIONS,
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
+    ...DEFAULT_PHASE_VOLUME_FIELDS,
   };
 }
 

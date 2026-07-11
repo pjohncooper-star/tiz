@@ -3,6 +3,11 @@
 import { Button, Input, Label } from "@/components/ui";
 import { type SimplePhase } from "@/components/simple-planner/simple-planner-types";
 import {
+  defaultVolumeSettingsForPhaseName,
+  type LongSessionCadence,
+  type SimplePhaseVolumeTrend,
+} from "@/lib/plan/season/phase-volume-settings";
+import {
   deletePhaseWithMerge,
   formatWeekRange,
   isAssignedPhase,
@@ -50,11 +55,21 @@ export function SimplePlannerPhasesPane({
   function addPhase() {
     const next = splitLongestPhase(covered, totalWeeks);
     if (next.length === covered.length) return;
-    onPhasesChange(next);
     const added = next.find(
       (phase) => !covered.some((item) => (item.id ?? item.name) === (phase.id ?? phase.name))
     );
-    onSelectPhase(added?.id ?? null);
+    const seeded = added
+      ? {
+          ...added,
+          ...defaultVolumeSettingsForPhaseName(added.name),
+        }
+      : null;
+    onPhasesChange(
+      seeded
+        ? next.map((phase) => (phase.id === seeded.id ? seeded : phase))
+        : next
+    );
+    onSelectPhase(seeded?.id ?? added?.id ?? null);
   }
 
   const assignedPhases = covered.filter(isAssignedPhase);
@@ -191,6 +206,114 @@ function PhaseDetailEditor({
           </select>
         </div>
       </div>
+
+      <fieldset className="mt-4 space-y-3">
+        <legend className="text-sm font-medium">Volume & recovery</legend>
+        <p className="text-xs text-zinc-500">
+          Replaces implicit phase-kind behavior. Volume target is percent of season peak hours.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Volume trend</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={phase.volumeTrend}
+              onChange={(event) =>
+                onChange({
+                  ...phase,
+                  volumeTrend: event.target.value as SimplePhaseVolumeTrend,
+                  ...(event.target.value === "TAPER" ? { suppressRecovery: true } : {}),
+                })
+              }
+            >
+              <option value="INCREASE">Increase</option>
+              <option value="HOLD">Hold</option>
+              <option value="DECREASE">Decrease</option>
+              <option value="TAPER">Taper</option>
+            </select>
+          </div>
+          <div>
+            <Label>Long-session cadence</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={phase.longSessionCadence}
+              onChange={(event) =>
+                onChange({
+                  ...phase,
+                  longSessionCadence: event.target.value as LongSessionCadence,
+                })
+              }
+            >
+              <option value="EVERY_WEEK">Every week</option>
+              <option value="EVERY_OTHER">Every other week</option>
+              <option value="NONE">None</option>
+            </select>
+          </div>
+        </div>
+        {phase.volumeTrend === "TAPER" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Taper start % of peak</Label>
+              <Input
+                type="number"
+                min={1}
+                max={150}
+                className="mt-1"
+                value={phase.volumeTaperStartPercent}
+                onChange={(event) =>
+                  onChange({
+                    ...phase,
+                    volumeTaperStartPercent: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <Label>Taper end % of peak</Label>
+              <Input
+                type="number"
+                min={1}
+                max={150}
+                className="mt-1"
+                value={phase.volumeTaperEndPercent}
+                onChange={(event) =>
+                  onChange({
+                    ...phase,
+                    volumeTaperEndPercent: Number(event.target.value),
+                  })
+                }
+              />
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Label>Volume target % of peak</Label>
+            <Input
+              type="number"
+              min={1}
+              max={150}
+              className="mt-1"
+              value={phase.volumeTargetPercent}
+              onChange={(event) =>
+                onChange({
+                  ...phase,
+                  volumeTargetPercent: Number(event.target.value),
+                })
+              }
+            />
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={phase.suppressRecovery}
+            onChange={(event) =>
+              onChange({ ...phase, suppressRecovery: event.target.checked })
+            }
+          />
+          Suppress recovery / de-load weeks in this phase
+        </label>
+      </fieldset>
 
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Sessions per week</legend>

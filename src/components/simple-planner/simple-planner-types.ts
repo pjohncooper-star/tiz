@@ -6,6 +6,11 @@ import type {
   UnlinkedRaceSession,
 } from "@/components/season/season-settings-types";
 import { suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
+import {
+  defaultVolumeSettingsForPhaseKind,
+  type LongSessionCadence,
+  type SimplePhaseVolumeTrend,
+} from "@/lib/plan/season/phase-volume-settings";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
 export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
@@ -22,6 +27,23 @@ export const DEFAULT_PHASE_INTENSE_DAYS = {
   bikeIntenseDaysPerWeek: 1,
   runIntenseDaysPerWeek: 1,
 } as const;
+
+export const DEFAULT_PHASE_VOLUME_FIELDS = {
+  volumeTrend: "INCREASE",
+  volumeTargetPercent: 100,
+  volumeTaperStartPercent: 70,
+  volumeTaperEndPercent: 45,
+  longSessionCadence: "EVERY_OTHER",
+  suppressRecovery: false,
+} as const satisfies Pick<
+  SimplePhase,
+  | "volumeTrend"
+  | "volumeTargetPercent"
+  | "volumeTaperStartPercent"
+  | "volumeTaperEndPercent"
+  | "longSessionCadence"
+  | "suppressRecovery"
+>;
 
 export type SimpleGoalEvent = GoalEventDraft & {
   priority: "A" | "B" | "C";
@@ -46,6 +68,12 @@ export type SimplePhase = {
   bikeIntenseDaysPerWeek: number;
   runIntenseDaysPerWeek: number;
   goal: string | null;
+  volumeTrend: SimplePhaseVolumeTrend;
+  volumeTargetPercent: number;
+  volumeTaperStartPercent: number;
+  volumeTaperEndPercent: number;
+  longSessionCadence: LongSessionCadence;
+  suppressRecovery: boolean;
 };
 
 export type SimpleWeek = {
@@ -113,6 +141,7 @@ export function createDefaultPhaseCoverage(totalWeeks: number): SimplePhase[] {
       ...DEFAULT_PHASE_SESSIONS,
       ...DEFAULT_PHASE_INTENSE_DAYS,
       goal: null,
+      ...DEFAULT_PHASE_VOLUME_FIELDS,
     },
   ];
 }
@@ -125,6 +154,7 @@ export function suggestSimplePhasesForWeeks(totalWeeks: number): SimplePhase[] {
     const startWeekIndex = cursor;
     const endWeekIndex = cursor + phase.weekCount - 1;
     cursor = endWeekIndex + 1;
+    const volume = defaultVolumeSettingsForPhaseKind(phase.phaseKind);
     return {
       id: newPhaseId(),
       name: phase.name,
@@ -135,6 +165,12 @@ export function suggestSimplePhasesForWeeks(totalWeeks: number): SimplePhase[] {
       ...DEFAULT_PHASE_SESSIONS,
       ...DEFAULT_PHASE_INTENSE_DAYS,
       goal: null,
+      volumeTrend: volume.volumeTrend,
+      volumeTargetPercent: volume.volumeTargetPercent,
+      volumeTaperStartPercent: volume.volumeTaperStartPercent,
+      volumeTaperEndPercent: volume.volumeTaperEndPercent,
+      longSessionCadence: volume.longSessionCadence,
+      suppressRecovery: volume.suppressRecovery,
     };
   });
 }
@@ -150,6 +186,7 @@ export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase
     ...DEFAULT_PHASE_SESSIONS,
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
+    ...DEFAULT_PHASE_VOLUME_FIELDS,
   };
 }
 

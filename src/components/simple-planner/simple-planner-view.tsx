@@ -46,6 +46,7 @@ import {
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
 import { DEFAULT_RECOVERY_SETTINGS, type RecoverySettings } from "@/lib/plan/season/recovery";
 import { normalizePhasesToFullCoverage } from "@/lib/plan/season/phase-span-utils";
+import { resolvePhaseVolumeSettings } from "@/lib/plan/season/phase-volume-settings";
 import { ZoneRampPillRow } from "@/components/simple-planner/zone-pill";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
@@ -64,20 +65,37 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     unlinkedRaceSessions: season.unlinkedRaceSessions ?? [],
     zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
     phases: normalizePhasesToFullCoverage(
-      season.phases.map((phase) => ({
-        ...phase,
-        swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
-        bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
-        runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
-        strengthSessionsPerWeek:
-          phase.strengthSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.strengthSessionsPerWeek,
-        swimIntenseDaysPerWeek:
-          phase.swimIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.swimIntenseDaysPerWeek,
-        bikeIntenseDaysPerWeek:
-          phase.bikeIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.bikeIntenseDaysPerWeek,
-        runIntenseDaysPerWeek:
-          phase.runIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.runIntenseDaysPerWeek,
-      })),
+      season.phases.map((phase) => {
+        const volume = resolvePhaseVolumeSettings({
+          volumeTrend: phase.volumeTrend,
+          volumeTargetPercent: phase.volumeTargetPercent,
+          volumeTaperStartPercent: phase.volumeTaperStartPercent,
+          volumeTaperEndPercent: phase.volumeTaperEndPercent,
+          longSessionCadence: phase.longSessionCadence,
+          suppressRecovery: phase.suppressRecovery,
+          name: phase.name,
+        });
+        return {
+          ...phase,
+          swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
+          bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
+          runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
+          strengthSessionsPerWeek:
+            phase.strengthSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.strengthSessionsPerWeek,
+          swimIntenseDaysPerWeek:
+            phase.swimIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.swimIntenseDaysPerWeek,
+          bikeIntenseDaysPerWeek:
+            phase.bikeIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.bikeIntenseDaysPerWeek,
+          runIntenseDaysPerWeek:
+            phase.runIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.runIntenseDaysPerWeek,
+          volumeTrend: volume.volumeTrend,
+          volumeTargetPercent: volume.volumeTargetPercent,
+          volumeTaperStartPercent: volume.volumeTaperStartPercent,
+          volumeTaperEndPercent: volume.volumeTaperEndPercent,
+          longSessionCadence: volume.longSessionCadence,
+          suppressRecovery: volume.suppressRecovery,
+        };
+      }),
       season.totalWeeks
     ),
     weeks: season.weeks.map((week) => ({

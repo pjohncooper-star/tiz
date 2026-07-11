@@ -1,4 +1,4 @@
-import { Prisma, type PhaseKind } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import {
@@ -32,7 +32,7 @@ import {
   resolveSimpleRampDefaults,
   syncDerivedDistanceOrHours,
   type SimpleDiscipline,
-  type SimplePhaseSpan,
+  type SimplePhaseVolumeSpan,
   type SimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
@@ -53,6 +53,14 @@ import {
   serializePhaseCoachNotes,
 } from "./simple-phase-notes";
 import {
+  inferPhaseKindFromVolumeSettings,
+  resolvePhaseVolumeSettings,
+  volumeMesocycleModeToDb,
+  volumeTrendFromDb,
+  type LongSessionCadence,
+  type SimplePhaseVolumeTrend,
+} from "./phase-volume-settings";
+import {
   serializeGoalEvent,
   serializeUnlinkedRaceSession,
 } from "./serialize";
@@ -63,6 +71,7 @@ import {
   DEFAULT_RECOVERY_SETTINGS,
   resolveRecoverySettings,
   suggestRecoveryWeeks,
+  recoverySuppressedWeekIndices,
   type RecoverySettings,
   type RecoveryZoneMode,
 } from "./recovery";
@@ -86,6 +95,12 @@ export type SimplePhaseWrite = {
   bikeIntenseDaysPerWeek: number;
   runIntenseDaysPerWeek: number;
   goal?: string | null;
+  volumeTrend?: SimplePhaseVolumeTrend;
+  volumeTargetPercent?: number;
+  volumeTaperStartPercent?: number;
+  volumeTaperEndPercent?: number;
+  longSessionCadence?: LongSessionCadence;
+  suppressRecovery?: boolean;
 };
 
 export type SimpleWeekWrite = {
@@ -149,6 +164,15 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
     })
     .map((phase, sortOrder) => {
       const assigned = phase.startWeekIndex >= 0 && phase.endWeekIndex >= phase.startWeekIndex;
+      const volume = resolvePhaseVolumeSettings({
+        volumeTrend: phase.volumeTrend,
+        volumeTargetPercent: phase.volumeTargetPercent,
+        volumeTaperStartPercent: phase.volumeTaperStartPercent,
+        volumeTaperEndPercent: phase.volumeTaperEndPercent,
+        longSessionCadence: phase.longSessionCadence,
+        suppressRecovery: phase.suppressRecovery,
+        name: phase.name,
+      });
       return {
         id: phase.id ?? cuid(),
         name: phase.name.trim() || `Phase ${sortOrder + 1}`,
@@ -162,12 +186,21 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         swimSessionsPerWeek: Math.max(0, Math.round(phase.swimSessionsPerWeek)),
         bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
         runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
+        volumeMesocycleMode: volumeMesocycleModeToDb(volume.volumeTrend),
+        phaseKind: inferPhaseKindFromVolumeSettings(volume),
         coachNotes: serializePhaseCoachNotes({
           goal: phase.goal ?? null,
           strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
           swimIntenseDaysPerWeek: phase.swimIntenseDaysPerWeek,
           bikeIntenseDaysPerWeek: phase.bikeIntenseDaysPerWeek,
           runIntenseDaysPerWeek: phase.runIntenseDaysPerWeek,
+          volumeTrend: volume.volumeTrend,
+          isTaperVolume: volume.volumeTrend === "TAPER",
+          volumeTargetPercent: volume.volumeTargetPercent,
+          volumeTaperStartPercent: volume.volumeTaperStartPercent,
+          volumeTaperEndPercent: volume.volumeTaperEndPercent,
+          longSessionCadence: volume.longSessionCadence,
+          suppressRecovery: volume.suppressRecovery,
         }),
       };
     });
@@ -298,18 +331,114 @@ function weeksFromDb(
   }));
 }
 
-function phaseSpansFromWrites(phases: SimplePhaseWrite[]): SimplePhaseSpan[] {
+function phaseSpansFromWrites(phases: SimplePhaseWrite[]): SimplePhaseVolumeSpan[] {
   return phases
     .filter((phase) => phase.startWeekIndex >= 0 && phase.endWeekIndex >= phase.startWeekIndex)
-    .map((phase) => ({
-      startWeekIndex: phase.startWeekIndex,
-      endWeekIndex: phase.endWeekIndex,
-      rampEnabled: phase.rampEnabled,
-    }));
+    .map((phase) => {
+      const volume = resolvePhaseVolumeSettings({
+        volumeTrend: phase.volumeTrend,
+        volumeTargetPercent: phase.volumeTargetPercent,
+        volumeTaperStartPercent: phase.volumeTaperStartPercent,
+        volumeTaperEndPercent: phase.volumeTaperEndPercent,
+        longSessionCadence: phase.longSessionCadence,
+        suppressRecovery: phase.suppressRecovery,
+        name: phase.name,
+      });
+      return {
+        startWeekIndex: phase.startWeekIndex,
+        endWeekIndex: phase.endWeekIndex,
+        rampEnabled: phase.rampEnabled,
+        volumeTrend: volume.volumeTrend,
+        volumeTargetPercent: volume.volumeTargetPercent,
+        volumeTaperStartPercent: volume.volumeTaperStartPercent,
+        volumeTaperEndPercent: volume.volumeTaperEndPercent,
+      };
+    });
 }
 
-function defaultPhaseKind(_name: string): PhaseKind {
-  return "BASE";
+function toSimplePhase(phase: SimplePhaseWrite): import("@/components/simple-planner/simple-planner-types").SimplePhase {
+  const volume = resolvePhaseVolumeSettings({
+    volumeTrend: phase.volumeTrend,
+    volumeTargetPercent: phase.volumeTargetPercent,
+    volumeTaperStartPercent: phase.volumeTaperStartPercent,
+    volumeTaperEndPercent: phase.volumeTaperEndPercent,
+    longSessionCadence: phase.longSessionCadence,
+    suppressRecovery: phase.suppressRecovery,
+    name: phase.name,
+  });
+  return {
+    id: phase.id,
+    name: phase.name,
+    color: phase.color,
+    startWeekIndex: phase.startWeekIndex,
+    endWeekIndex: phase.endWeekIndex,
+    rampEnabled: phase.rampEnabled,
+    swimSessionsPerWeek: phase.swimSessionsPerWeek,
+    bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+    runSessionsPerWeek: phase.runSessionsPerWeek,
+    strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
+    swimIntenseDaysPerWeek: phase.swimIntenseDaysPerWeek,
+    bikeIntenseDaysPerWeek: phase.bikeIntenseDaysPerWeek,
+    runIntenseDaysPerWeek: phase.runIntenseDaysPerWeek,
+    goal: phase.goal ?? null,
+    volumeTrend: volume.volumeTrend,
+    volumeTargetPercent: volume.volumeTargetPercent,
+    volumeTaperStartPercent: volume.volumeTaperStartPercent,
+    volumeTaperEndPercent: volume.volumeTaperEndPercent,
+    longSessionCadence: volume.longSessionCadence,
+    suppressRecovery: volume.suppressRecovery,
+  };
+}
+
+function buildPhaseVolumeSpansFromExisting(
+  phases: Array<{
+    sortOrder: number;
+    weekCount: number;
+    startWeekIndex: number;
+    rampSwimEnabled: boolean;
+    rampBikeEnabled: boolean;
+    rampRunEnabled: boolean;
+    volumeMesocycleMode: import("@prisma/client").VolumeMesocycleMode;
+    phaseKind: import("@prisma/client").PhaseKind;
+    coachNotes: string | null;
+    name: string;
+  }>
+): SimplePhaseVolumeSpan[] {
+  const sorted = [...phases].sort((a, b) => a.sortOrder - b.sortOrder);
+  let cursor = 0;
+  return sorted.map((phase) => {
+    const hasStoredStart = phase.startWeekIndex >= 0;
+    const startWeekIndex = hasStoredStart ? phase.startWeekIndex : cursor;
+    const endWeekIndex = startWeekIndex + Math.max(phase.weekCount, 1) - 1;
+    if (!hasStoredStart) cursor += phase.weekCount;
+
+    const notes = parsePhaseCoachNotes(phase.coachNotes);
+    const volume = resolvePhaseVolumeSettings({
+      volumeTrend:
+        notes.volumeTrend ?? volumeTrendFromDb(phase.volumeMesocycleMode, notes.isTaperVolume),
+      volumeTargetPercent: notes.volumeTargetPercent,
+      volumeTaperStartPercent: notes.volumeTaperStartPercent,
+      volumeTaperEndPercent: notes.volumeTaperEndPercent,
+      longSessionCadence: notes.longSessionCadence,
+      suppressRecovery: notes.suppressRecovery,
+      phaseKind: phase.phaseKind,
+      name: phase.name,
+    });
+
+    return {
+      startWeekIndex,
+      endWeekIndex,
+      rampEnabled: {
+        swim: phase.rampSwimEnabled,
+        bike: phase.rampBikeEnabled,
+        run: phase.rampRunEnabled,
+      },
+      volumeTrend: volume.volumeTrend,
+      volumeTargetPercent: volume.volumeTargetPercent,
+      volumeTaperStartPercent: volume.volumeTaperStartPercent,
+      volumeTaperEndPercent: volume.volumeTaperEndPercent,
+    };
+  });
 }
 
 function recalculateWeeks(
@@ -320,10 +449,11 @@ function recalculateWeeks(
       volumeOverridden?: boolean;
     }
   >,
-  phaseSpans: SimplePhaseSpan[],
+  phaseSpans: SimplePhaseVolumeSpan[],
   rampDefaults: SimpleRampDefaults,
   zoneRampDefaults: ZoneRampDefaultsByDiscipline,
-  recoverySettings: RecoverySettings
+  recoverySettings: RecoverySettings,
+  suppressRecoveryWeeks: ReadonlySet<number> = new Set()
 ) {
   const shadowVolume = weeks.map((week) => ({
     ...week,
@@ -341,6 +471,20 @@ function recalculateWeeks(
     }
 
     if (week.isRestWeek) {
+      if (suppressRecoveryWeeks.has(weekIndex)) {
+        const ramped = rampedVolume[weekIndex]!;
+        return {
+          ...week,
+          isRestWeek: false,
+          swimHours: ramped.swimHours,
+          bikeHours: ramped.bikeHours,
+          runHours: ramped.runHours,
+          totalHours: ramped.totalHours,
+          swimDistanceMeters: ramped.swimDistanceMeters,
+          runDistanceMeters: ramped.runDistanceMeters,
+        };
+      }
+
       const baseIndex = rampBaseWeekIndex(weeks, weekIndex);
       const baseline =
         baseIndex >= 0 ? rampedVolume[baseIndex]! : rampedVolume[weekIndex]!;
@@ -569,14 +713,14 @@ export async function updateSimpleSeasonPlan(
   let phaseWrites = input.phases;
   if (phaseWrites) {
     phaseWrites = normalizePhasesToFullCoverage(
-      phaseWrites.map((phase) => ({ ...phase, goal: phase.goal ?? null })),
+      phaseWrites.map(toSimplePhase),
       bounds.totalWeeks
     );
   }
   const phaseDbRows = phaseWrites ? phaseWritesToDb(phaseWrites) : null;
   const phaseSpans = phaseWrites
     ? phaseSpansFromWrites(phaseWrites)
-    : buildPhaseSpansFromDb(existing.phases);
+    : buildPhaseVolumeSpansFromExisting(existing.phases);
 
   let weeks = mergeWeekWrites(
     weeksFromDb(existing.weeks),
@@ -595,6 +739,49 @@ export async function updateSimpleSeasonPlan(
         .filter((week) => week.volumeOverridden || week.zoneMinutesOverridden)
         .map((week) => week.weekIndex)
     );
+    const phaseSuppressWeeks = phaseWrites
+      ? recoverySuppressedWeekIndices(
+          phaseWrites.map((phase) => ({
+            startWeekIndex: phase.startWeekIndex,
+            endWeekIndex: phase.endWeekIndex,
+            suppressRecovery: resolvePhaseVolumeSettings({
+              volumeTrend: phase.volumeTrend,
+              volumeTargetPercent: phase.volumeTargetPercent,
+              volumeTaperStartPercent: phase.volumeTaperStartPercent,
+              volumeTaperEndPercent: phase.volumeTaperEndPercent,
+              longSessionCadence: phase.longSessionCadence,
+              suppressRecovery: phase.suppressRecovery,
+              name: phase.name,
+            }).suppressRecovery,
+          })),
+          bounds.totalWeeks
+        )
+      : recoverySuppressedWeekIndices(
+          existing.phases.map((phase) => {
+            const notes = parsePhaseCoachNotes(phase.coachNotes);
+            const volume = resolvePhaseVolumeSettings({
+              volumeTrend:
+                notes.volumeTrend ??
+                volumeTrendFromDb(phase.volumeMesocycleMode, notes.isTaperVolume),
+              volumeTargetPercent: notes.volumeTargetPercent,
+              volumeTaperStartPercent: notes.volumeTaperStartPercent,
+              volumeTaperEndPercent: notes.volumeTaperEndPercent,
+              longSessionCadence: notes.longSessionCadence,
+              suppressRecovery: notes.suppressRecovery,
+              phaseKind: phase.phaseKind,
+              name: phase.name,
+            });
+            const start = phase.startWeekIndex >= 0 ? phase.startWeekIndex : 0;
+            return {
+              startWeekIndex: start,
+              endWeekIndex: start + Math.max(phase.weekCount, 1) - 1,
+              suppressRecovery: volume.suppressRecovery,
+            };
+          }),
+          bounds.totalWeeks
+        );
+    for (const weekIndex of phaseSuppressWeeks) skip.add(weekIndex);
+
     const suggested = suggestRecoveryWeeks(
       bounds.totalWeeks,
       recoverySettings.loadWeeks,
@@ -606,13 +793,56 @@ export async function updateSimpleSeasonPlan(
     }));
   }
 
+  const suppressRecoveryWeeks = phaseWrites
+    ? recoverySuppressedWeekIndices(
+        phaseWrites.map((phase) => ({
+          startWeekIndex: phase.startWeekIndex,
+          endWeekIndex: phase.endWeekIndex,
+          suppressRecovery: resolvePhaseVolumeSettings({
+            volumeTrend: phase.volumeTrend,
+            volumeTargetPercent: phase.volumeTargetPercent,
+            volumeTaperStartPercent: phase.volumeTaperStartPercent,
+            volumeTaperEndPercent: phase.volumeTaperEndPercent,
+            longSessionCadence: phase.longSessionCadence,
+            suppressRecovery: phase.suppressRecovery,
+            name: phase.name,
+          }).suppressRecovery,
+        })),
+        bounds.totalWeeks
+      )
+    : recoverySuppressedWeekIndices(
+        existing.phases.map((phase) => {
+          const notes = parsePhaseCoachNotes(phase.coachNotes);
+          const volume = resolvePhaseVolumeSettings({
+            volumeTrend:
+              notes.volumeTrend ??
+              volumeTrendFromDb(phase.volumeMesocycleMode, notes.isTaperVolume),
+            volumeTargetPercent: notes.volumeTargetPercent,
+            volumeTaperStartPercent: notes.volumeTaperStartPercent,
+            volumeTaperEndPercent: notes.volumeTaperEndPercent,
+            longSessionCadence: notes.longSessionCadence,
+            suppressRecovery: notes.suppressRecovery,
+            phaseKind: phase.phaseKind,
+            name: phase.name,
+          });
+          const start = phase.startWeekIndex >= 0 ? phase.startWeekIndex : 0;
+          return {
+            startWeekIndex: start,
+            endWeekIndex: start + Math.max(phase.weekCount, 1) - 1,
+            suppressRecovery: volume.suppressRecovery,
+          };
+        }),
+        bounds.totalWeeks
+      );
+
   if (input.recalculate) {
     weeks = recalculateWeeks(
       weeks,
       phaseSpans,
       defaults,
       zoneDefaults,
-      recoverySettings
+      recoverySettings,
+      suppressRecoveryWeeks
     );
   }
 
@@ -671,9 +901,10 @@ export async function updateSimpleSeasonPlan(
             sortOrder: phase.sortOrder,
             weekCount: phase.weekCount,
             startWeekIndex: phase.startWeekIndex,
-            phaseKind: defaultPhaseKind(phase.name),
+            phaseKind: phase.phaseKind,
             color: phase.color,
             coachNotes: phase.coachNotes,
+            volumeMesocycleMode: phase.volumeMesocycleMode,
             rampSwimEnabled: phase.rampSwimEnabled,
             rampBikeEnabled: phase.rampBikeEnabled,
             rampRunEnabled: phase.rampRunEnabled,
@@ -792,6 +1023,18 @@ export async function serializeSimpleSeasonPlan(
         cursor += phase.weekCount;
       }
       const notes = parsePhaseCoachNotes(phase.coachNotes);
+      const volume = resolvePhaseVolumeSettings({
+        volumeTrend:
+          notes.volumeTrend ??
+          volumeTrendFromDb(phase.volumeMesocycleMode, notes.isTaperVolume),
+        volumeTargetPercent: notes.volumeTargetPercent,
+        volumeTaperStartPercent: notes.volumeTaperStartPercent,
+        volumeTaperEndPercent: notes.volumeTaperEndPercent,
+        longSessionCadence: notes.longSessionCadence,
+        suppressRecovery: notes.suppressRecovery,
+        phaseKind: phase.phaseKind,
+        name: phase.name,
+      });
       return {
         id: phase.id,
         name: phase.name,
@@ -811,6 +1054,12 @@ export async function serializeSimpleSeasonPlan(
         bikeIntenseDaysPerWeek: notes.bikeIntenseDaysPerWeek,
         runIntenseDaysPerWeek: notes.runIntenseDaysPerWeek,
         goal: notes.goal,
+        volumeTrend: volume.volumeTrend,
+        volumeTargetPercent: volume.volumeTargetPercent,
+        volumeTaperStartPercent: volume.volumeTaperStartPercent,
+        volumeTaperEndPercent: volume.volumeTaperEndPercent,
+        longSessionCadence: volume.longSessionCadence,
+        suppressRecovery: volume.suppressRecovery,
       };
     });
 

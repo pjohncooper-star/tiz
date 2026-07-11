@@ -102,4 +102,39 @@ describe("recalculateSimpleVolumes", () => {
     const result = recalculateSimpleVolumes(weeks, [], cappedDefaults);
     assert.equal(result[1]!.bikeHours, 4);
   });
+
+  it("applies hold phase at target percent of peak", () => {
+    const defaults = defaultSimpleRampDefaults();
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2)];
+    const phases = [
+      {
+        startWeekIndex: 0,
+        endWeekIndex: 1,
+        rampEnabled: { swim: true, bike: true, run: true },
+        volumeTrend: "HOLD" as const,
+        volumeTargetPercent: 100,
+      },
+    ];
+    const result = recalculateSimpleVolumes(weeks, phases, defaults);
+    assert.equal(result[0]!.bikeHours, 8);
+    assert.equal(result[1]!.bikeHours, 8);
+  });
+
+  it("applies taper phase between start and end percent of peak", () => {
+    const defaults = defaultSimpleRampDefaults();
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2), week(2, 2, 4, 2)];
+    const phases = [
+      {
+        startWeekIndex: 0,
+        endWeekIndex: 2,
+        rampEnabled: { swim: true, bike: true, run: true },
+        volumeTrend: "TAPER" as const,
+        volumeTaperStartPercent: 70,
+        volumeTaperEndPercent: 45,
+      },
+    ];
+    const result = recalculateSimpleVolumes(weeks, phases, defaults);
+    assert.equal(result[0]!.bikeHours, 5.6);
+    assert.equal(result[2]!.bikeHours, 3.6);
+  });
 });

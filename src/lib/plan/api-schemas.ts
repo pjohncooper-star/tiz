@@ -481,6 +481,12 @@ export const simplePhaseSchema = z
     bikeIntenseDaysPerWeek: z.number().int().min(0).max(7),
     runIntenseDaysPerWeek: z.number().int().min(0).max(7),
     goal: z.string().nullable().optional(),
+    volumeTrend: z.enum(["INCREASE", "HOLD", "DECREASE", "TAPER"]).optional(),
+    volumeTargetPercent: z.number().min(1).max(150).optional(),
+    volumeTaperStartPercent: z.number().min(1).max(150).optional(),
+    volumeTaperEndPercent: z.number().min(1).max(150).optional(),
+    longSessionCadence: z.enum(["EVERY_WEEK", "EVERY_OTHER", "NONE"]).optional(),
+    suppressRecovery: z.boolean().optional(),
   })
   .refine(
     (phase) =>
