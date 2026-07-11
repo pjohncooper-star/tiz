@@ -20,7 +20,7 @@ const PHASE_COLORS: Record<PhaseKind, string> = {
   TAPER: "#22c55e",
 };
 
-const DEFAULT_FOCUS: Record<PhaseKind, SeasonPhaseInput["phaseFocus"]> = {
+export const DEFAULT_FOCUS: Record<PhaseKind, SeasonPhaseInput["phaseFocus"]> = {
   BASE: "AEROBIC_BASE",
   BUILD: "THRESHOLD",
   RACE_PREP: "RACE_SPECIFICITY",

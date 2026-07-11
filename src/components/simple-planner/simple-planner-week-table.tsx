@@ -1,27 +1,15 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui";
-import {
-  distanceDisplayToMeters,
-  distanceMetersToDisplay,
-  hoursFromDisciplineDistance,
-} from "@/components/simple-planner/simple-planner-volume-display";
-import { ZonePillInput } from "@/components/simple-planner/zone-pill";
-import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
 import {
   createPhaseAtWeek,
   type SimplePhase,
   type SimpleWeek,
 } from "@/components/simple-planner/simple-planner-types";
 import { formatWeekDateRange } from "@/components/simple-planner/simple-planner-timeline";
-import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
-  clampZoneMinutesToVolume,
   getZoneMinute,
-  setZoneMinute,
-  zoneMinutesBudget,
-  zoneMinutesExceedsVolume,
+  zoneMinutesForDiscipline,
 } from "@/lib/plan/season/simple-tiz";
 import {
   buildGutterSegments,
@@ -29,14 +17,10 @@ import {
   resizePhaseTop,
   weekIsAssigned,
 } from "@/lib/plan/season/phase-span-utils";
-import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
-import type { PlanDiscipline } from "@/lib/plan/session";
 
 type SimplePlannerWeekTableProps = {
   weeks: SimpleWeek[];
   phases: SimplePhase[];
-  rampDefaults: SimpleRampDefaults;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
   onWeeksChange: (weeks: SimpleWeek[]) => void;
@@ -87,8 +71,6 @@ function weekIndexFromPointer(clientY: number): number | null {
 export function SimplePlannerWeekTable({
   weeks,
   phases,
-  rampDefaults,
-  disciplineSettings,
   selectedPhaseId,
   onSelectPhase,
   onWeeksChange,
@@ -137,30 +119,7 @@ export function SimplePlannerWeekTable({
   const updateWeek = useCallback(
     (weekIndex: number, patch: Partial<SimpleWeek>) => {
       onWeeksChange(
-        weeks.map((week) => {
-          if (week.weekIndex !== weekIndex) return week;
-          const next = { ...week, ...patch };
-          const swimHours = next.swimHours;
-          const bikeHours = next.bikeHours;
-          const runHours = next.runHours;
-          const zoneMinutes = clampZoneMinutesToVolume({
-            weekIndex: next.weekIndex,
-            isRestWeek: next.isRestWeek,
-            swimHours,
-            bikeHours,
-            runHours,
-            zoneMinutes: next.zoneMinutes ?? {},
-            zoneMinutesOverridden: next.zoneMinutesOverridden,
-          });
-          return {
-            ...next,
-            swimHours,
-            bikeHours,
-            runHours,
-            zoneMinutes,
-            totalHours: round(swimHours + bikeHours + runHours),
-          };
-        })
+        weeks.map((week) => (week.weekIndex === weekIndex ? { ...week, ...patch } : week))
       );
     },
     [onWeeksChange, weeks]
@@ -272,8 +231,6 @@ export function SimplePlannerWeekTable({
                 <WeekRowGroup
                   key={`unassigned-${week.weekIndex}`}
                   week={week}
-                  rampDefaults={rampDefaults}
-                  disciplineSettings={disciplineSettings}
                   gutter={
                     <UnassignedGutter
                       weekIndex={week.weekIndex}
@@ -300,8 +257,6 @@ export function SimplePlannerWeekTable({
                 key={phase.id ?? phase.name}
                 phase={phase}
                 weeks={bandWeeks}
-                rampDefaults={rampDefaults}
-                disciplineSettings={disciplineSettings}
                 selected={selectedPhaseId === phase.id}
                 isDragging={dragging?.phaseId === phase.id}
                 expanded={expanded}
@@ -473,8 +428,6 @@ function phaseWeekGutterPosition(
 
 function WeekRowGroup({
   week,
-  rampDefaults,
-  disciplineSettings,
   gutter,
   expanded,
   highlighted,
@@ -482,8 +435,6 @@ function WeekRowGroup({
   onUpdateWeek,
 }: {
   week: SimpleWeek;
-  rampDefaults: SimpleRampDefaults;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   gutter: React.ReactNode;
   expanded: boolean;
   highlighted: boolean;
@@ -517,9 +468,6 @@ function WeekRowGroup({
             key={`${week.weekIndex}-${discipline.key}`}
             week={week}
             discipline={discipline}
-            rampDefaults={rampDefaults}
-            disciplineSettings={disciplineSettings}
-            onUpdateWeek={onUpdateWeek}
           />
         ))}
     </>
@@ -529,8 +477,6 @@ function WeekRowGroup({
 function PhaseBandRows({
   phase,
   weeks,
-  rampDefaults,
-  disciplineSettings,
   selected,
   isDragging,
   expanded,
@@ -542,8 +488,6 @@ function PhaseBandRows({
 }: {
   phase: SimplePhase;
   weeks: SimpleWeek[];
-  rampDefaults: SimpleRampDefaults;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   selected: boolean;
   isDragging: boolean;
   expanded: Set<number>;
@@ -595,13 +539,7 @@ function PhaseBandRows({
                   data-week-index={week.weekIndex}
                   className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
                 >
-                  <DisciplineExpandedCells
-                    week={week}
-                    discipline={discipline}
-                    rampDefaults={rampDefaults}
-                    disciplineSettings={disciplineSettings}
-                    onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
-                  />
+                  <DisciplineExpandedCells week={week} discipline={discipline} />
                 </tr>
               ))}
           </Fragment>
@@ -654,28 +592,16 @@ type DisciplineRowConfig = (typeof DISCIPLINES)[number];
 function DisciplineExpandedRow({
   week,
   discipline,
-  rampDefaults,
-  disciplineSettings,
-  onUpdateWeek,
 }: {
   week: SimpleWeek;
   discipline: DisciplineRowConfig;
-  rampDefaults: SimpleRampDefaults;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
 }) {
   return (
     <tr
       data-week-index={week.weekIndex}
       className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
     >
-      <DisciplineExpandedCells
-        week={week}
-        discipline={discipline}
-        rampDefaults={rampDefaults}
-        disciplineSettings={disciplineSettings}
-        onUpdateWeek={onUpdateWeek}
-      />
+      <DisciplineExpandedCells week={week} discipline={discipline} />
     </tr>
   );
 }
@@ -683,116 +609,24 @@ function DisciplineExpandedRow({
 function DisciplineExpandedCells({
   week,
   discipline,
-  rampDefaults,
-  disciplineSettings,
-  onUpdateWeek,
 }: {
   week: SimpleWeek;
   discipline: DisciplineRowConfig;
-  rampDefaults: SimpleRampDefaults;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
 }) {
-  const def = rampDefaults[discipline.simple];
-  const distanceMode =
-    discipline.distanceKey != null && def.mode === "DISTANCE";
-  const paceDiscipline =
-    discipline.discipline === "SWIM" ? "SWIM" : discipline.discipline === "RUN" ? "RUN" : null;
   const hours = week[discipline.key];
-  const distanceMeters = discipline.distanceKey ? week[discipline.distanceKey] : null;
-  const budget = zoneMinutesBudget(week, discipline.discipline, week.zoneMinutes);
-  const overBudget = zoneMinutesExceedsVolume(
-    week,
-    discipline.discipline,
-    week.zoneMinutes
-  );
-
-  function updateVolumeFromHours(nextHours: number) {
-    const patch: Partial<SimpleWeek> = { [discipline.key]: nextHours };
-    if (discipline.distanceKey && paceDiscipline && def.referencePaceSeconds > 0) {
-      patch[discipline.distanceKey] = Math.round(
-        distanceMetersFromHoursPace(paceDiscipline, nextHours, def.referencePaceSeconds)
-      );
-    }
-    onUpdateWeek(patch);
-  }
-
-  function updateVolumeFromDistance(input: string) {
-    if (!discipline.distanceKey || !paceDiscipline) return;
-    const meters = distanceDisplayToMeters(
-      input,
-      paceDiscipline,
-      disciplineSettings
-    );
-    if (meters == null) return;
-    onUpdateWeek({
-      [discipline.distanceKey]: meters,
-      [discipline.key]: hoursFromDisciplineDistance(paceDiscipline, meters, def),
-    });
-  }
+  const zoneTotal = zoneMinutesForDiscipline(week.zoneMinutes, discipline.discipline);
+  const z3 = getZoneMinute(week.zoneMinutes, discipline.discipline, 3);
 
   return (
     <>
-      <td colSpan={3} className="px-3 py-2 pl-16">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="w-12 text-zinc-500">{discipline.label}</span>
-            {distanceMode && discipline.distanceKey && paceDiscipline ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="w-28"
-                  value={distanceMetersToDisplay(distanceMeters, paceDiscipline, disciplineSettings)}
-                  onChange={(event) => updateVolumeFromDistance(event.target.value)}
-                />
-                <span className="text-xs text-zinc-500">{hours}h</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="w-24"
-                  value={hours}
-                  onChange={(event) => updateVolumeFromHours(Number(event.target.value))}
-                />
-                <span className="text-xs text-zinc-500">h/wk</span>
-                {discipline.distanceKey && paceDiscipline && distanceMeters ? (
-                  <span className="text-xs text-zinc-500">
-                    {distanceMetersToDisplay(distanceMeters, paceDiscipline, disciplineSettings)}
-                  </span>
-                ) : null}
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {[1, 2, 3, 4, 5].map((zone) => (
-              <ZonePillInput
-                key={zone}
-                zone={zone}
-                suffix="m"
-                value={getZoneMinute(week.zoneMinutes, discipline.discipline, zone)}
-                onChange={(minutes) =>
-                  onUpdateWeek({
-                    zoneMinutes: setZoneMinute(
-                      week.zoneMinutes,
-                      discipline.discipline,
-                      zone,
-                      minutes
-                    ),
-                    zoneMinutesOverridden: true,
-                  })
-                }
-              />
-            ))}
-            <span className={`text-xs ${overBudget ? "text-red-600" : "text-zinc-500"}`}>
-              {budget.used}m / {budget.cap}m
-            </span>
-          </div>
-        </div>
+      <td colSpan={3} className="px-3 py-2 pl-16 text-sm text-zinc-600 dark:text-zinc-400">
+        <span className="font-medium text-zinc-700 dark:text-zinc-300">{discipline.label}</span>
+        <span className="mx-2">·</span>
+        <span>{hours}h</span>
+        <span className="mx-2">·</span>
+        <span>
+          TiZ {Math.round(zoneTotal)}m (Z3 {Math.round(z3)}m)
+        </span>
       </td>
       <td className="px-3 py-2 text-right font-medium">{hours}</td>
     </>

@@ -435,24 +435,31 @@ const simpleDisciplineRampSchema = z.object({
   referencePaceSeconds: z.number().positive().optional(),
 });
 
-const zoneMinuteRampSchema = z.object({
-  startMinutes: z.number().nonnegative(),
-  peakMinutes: z.number().nonnegative(),
-  ratePercent: z.number().min(0).max(100),
+const zoneSplitPercentsSchema = z.object({
+  z1: z.number().min(0).max(100),
+  z2: z.number().min(0).max(100),
+  z3: z.number().min(0).max(100),
+  z4: z.number().min(0).max(100),
+  z5: z.number().min(0).max(100),
 });
 
-const disciplineZoneRampSchema = z.object({
-  z1: zoneMinuteRampSchema,
-  z2: zoneMinuteRampSchema,
-  z3: zoneMinuteRampSchema,
-  z4: zoneMinuteRampSchema,
-  z5: zoneMinuteRampSchema,
+const disciplineZoneSplitSchema = z.object({
+  mode: z.enum(["preset", "custom"]),
+  focus: phaseFocusSchema.optional(),
+  percents: zoneSplitPercentsSchema.optional(),
 });
 
-export const zoneRampDefaultsSchema = z.object({
-  SWIM: disciplineZoneRampSchema,
-  BIKE: disciplineZoneRampSchema,
-  RUN: disciplineZoneRampSchema,
+const phaseZoneSplitsSchema = z.object({
+  SWIM: disciplineZoneSplitSchema,
+  BIKE: disciplineZoneSplitSchema,
+  RUN: disciplineZoneSplitSchema,
+});
+
+export const phaseKindZoneDefaultsSchema = z.object({
+  BASE: phaseZoneSplitsSchema,
+  BUILD: phaseZoneSplitsSchema,
+  RACE_PREP: phaseZoneSplitsSchema,
+  TAPER: phaseZoneSplitsSchema,
 });
 
 export const simpleRampDefaultsSchema = z.object({
@@ -466,6 +473,7 @@ export const simplePhaseSchema = z
     id: z.string().optional(),
     name: z.string().min(1),
     color: z.string().min(1),
+    phaseKind: phaseKindSchema,
     startWeekIndex: z.number().int(),
     endWeekIndex: z.number().int(),
     rampEnabled: z.object({
@@ -481,6 +489,7 @@ export const simplePhaseSchema = z
     bikeIntenseDaysPerWeek: z.number().int().min(0).max(7),
     runIntenseDaysPerWeek: z.number().int().min(0).max(7),
     goal: z.string().nullable().optional(),
+    zoneSplits: phaseZoneSplitsSchema.nullable().optional(),
   })
   .refine(
     (phase) =>
@@ -498,8 +507,6 @@ export const simpleWeekSchema = z.object({
   runHours: z.number().nonnegative(),
   swimDistanceMeters: z.number().nonnegative().nullable().optional(),
   runDistanceMeters: z.number().nonnegative().nullable().optional(),
-  zoneMinutes: z.record(z.string(), z.number().nonnegative()).optional(),
-  zoneMinutesOverridden: z.boolean().optional(),
 });
 
 export const createSimpleSeasonSchema = z.object({
@@ -518,11 +525,10 @@ export const updateSimpleSeasonSchema = z
     startDate: z.string().regex(DATE_KEY).optional(),
     endDate: z.string().regex(DATE_KEY).optional(),
     rampDefaults: simpleRampDefaultsSchema.optional(),
-    zoneRampDefaults: zoneRampDefaultsSchema.optional(),
+    phaseKindZoneDefaults: phaseKindZoneDefaultsSchema.optional(),
     phases: z.array(simplePhaseSchema).optional(),
     weeks: z.array(simpleWeekSchema).optional(),
     recalculate: z.boolean().optional(),
-    resetZoneOverrides: z.boolean().optional(),
     goalEvent: seasonGoalEventSchema.optional(),
     bGoalEvents: z.array(seasonGoalEventSchema).optional(),
     cGoalEvents: z.array(seasonGoalEventSchema).optional(),

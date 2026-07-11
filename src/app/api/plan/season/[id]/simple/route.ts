@@ -75,11 +75,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       rampDefaults: data.rampDefaults
         ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
         : undefined,
-      zoneRampDefaults: data.zoneRampDefaults,
+      phaseKindZoneDefaults: data.phaseKindZoneDefaults,
       phases: data.phases,
       weeks: data.weeks,
       recalculate: data.recalculate,
-      resetZoneOverrides: data.resetZoneOverrides,
       goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),

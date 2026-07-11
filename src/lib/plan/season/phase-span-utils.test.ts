@@ -13,6 +13,8 @@ import {
   unassignedWeekRanges,
 } from "./phase-span-utils";
 
+import { defaultZoneSplitsForKind } from "./phase-zone-defaults";
+
 function phase(
   start: number,
   end: number,
@@ -22,12 +24,14 @@ function phase(
     id,
     name: "Base",
     color: "#38bdf8",
+    phaseKind: "BASE",
     startWeekIndex: start,
     endWeekIndex: end,
     rampEnabled: { swim: true, bike: true, run: true },
     ...DEFAULT_PHASE_SESSIONS,
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
+    zoneSplits: defaultZoneSplitsForKind("BASE"),
   };
 }
 
@@ -63,12 +67,14 @@ describe("phase-span-utils", () => {
       id: "e",
       name: "New",
       color: "#fff",
+      phaseKind: "BASE",
       startWeekIndex: -1,
       endWeekIndex: -1,
       rampEnabled: { swim: true, bike: true, run: true },
       ...DEFAULT_PHASE_SESSIONS,
       ...DEFAULT_PHASE_INTENSE_DAYS,
       goal: null,
+      zoneSplits: null,
     };
     assert.equal(isAssignedPhase(empty), false);
   });
