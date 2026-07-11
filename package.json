@@ -12,6 +12,7 @@
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:sync-calendar": "prisma db execute --file prisma/migrations/manual_calendar_schema_sync.sql --schema prisma/schema.prisma && prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "strava:register-webhook": "npx tsx scripts/register-strava-webhook.ts",

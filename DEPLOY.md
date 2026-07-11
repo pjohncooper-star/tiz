@@ -167,3 +167,4 @@ git push
 | Imports or Strava sync hang | Inngest keys missing or `INNGEST_DEV` still set |
 | Domain shows parking page | DNS not pointed to Vercel yet; check Namecheap CNAME |
 | 500 on login | Neon connection string wrong; check Neon project is active |
+| Calendar: `column does not exist` on `PlannedSession` | DB schema is behind Prisma. Run `npm run db:push` (or `npm run db:sync-calendar` for incremental DBs), then restart the dev server |
