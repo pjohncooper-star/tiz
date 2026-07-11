@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { parseDateKey } from "@/lib/dates";
 import { isSimpleSeasonPlannerEnabled } from "@/lib/features";
 import { updateSimpleSeasonSchema } from "@/lib/plan/api-schemas";
-import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
+import { parseGoalEventWrite, parseLinkCalendarRace } from "@/lib/plan/season/goal-event-api";
 import {
   serializeSimpleSeasonPlan,
   updateSimpleSeasonPlan,
@@ -32,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+    return NextResponse.json({ season: await serializeSimpleSeasonPlan(plan) });
   } catch (err) {
     console.error(`GET /api/plan/season/${id}/simple failed`, err);
     const message = err instanceof Error ? err.message : "Could not load season plan";
@@ -84,6 +84,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
       removedGoalEvents: data.removedGoalEvents,
+      linkCalendarRaces: data.linkCalendarRaces?.map(parseLinkCalendarRace),
       applyRecoveryCadence: data.applyRecoveryCadence,
       recovery: data.recovery,
     });
@@ -92,7 +93,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+    return NextResponse.json({ season: await serializeSimpleSeasonPlan(plan) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update season";
     const status = message.includes("not found") ? 404 : 409;

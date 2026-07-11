@@ -32,7 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ season: null });
     }
 
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+    return NextResponse.json({ season: await serializeSimpleSeasonPlan(plan) });
   } catch (err) {
     console.error("GET /api/plan/season/simple failed", err);
     const message = err instanceof Error ? err.message : "Could not load season plan";

@@ -540,5 +540,6 @@ export const updateSimpleSeasonSchema = z
     bGoalEvents: z.array(seasonGoalEventSchema).optional(),
     cGoalEvents: z.array(seasonGoalEventSchema).optional(),
     removedGoalEvents: z.array(removedGoalEventSchema).optional(),
+    linkCalendarRaces: z.array(linkCalendarRaceSchema).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

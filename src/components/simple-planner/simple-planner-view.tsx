@@ -16,6 +16,21 @@ import {
   type SimpleSeason,
   type SimpleWeek,
 } from "@/components/simple-planner/simple-planner-types";
+import { GoalRaceEditor } from "@/components/season/goal-race-editor";
+import {
+  formatGoalDisciplines,
+  goalEventFromApi,
+  isGoalEventComplete,
+  isGoalEventPartial,
+  isGoalEventTimesPartial,
+  type GoalEventDraft,
+  type UnlinkedRaceSession,
+} from "@/components/season/season-settings-types";
+import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
+import {
+  goalEventDraftPayload,
+  splitRacesForSave,
+} from "@/lib/plan/season/goal-event-api";
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
   defaultZoneRampDefaults,
@@ -31,18 +46,21 @@ import {
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
 import { DEFAULT_RECOVERY_SETTINGS, type RecoverySettings } from "@/lib/plan/season/recovery";
 import { ZoneRampPillRow } from "@/components/simple-planner/zone-pill";
-import {
-  DISCIPLINE_LABELS,
-  DISCIPLINES,
-  sortDisciplines,
-  toggleGoalDiscipline,
-  type Discipline,
-} from "@/components/season/season-settings-types";
+import type { PlanDiscipline } from "@/lib/plan/session";
+import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
+  const mapGoal = (event: SimpleGoalEvent): SimpleGoalEvent => ({
+    ...goalEventFromApi(event),
+    id: event.id,
+    plannedSessionId: event.plannedSessionId,
+    priority: event.priority,
+  });
+
   return {
     ...season,
     recovery: season.recovery ?? DEFAULT_RECOVERY_SETTINGS,
+    unlinkedRaceSessions: season.unlinkedRaceSessions ?? [],
     zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
     phases: season.phases.map((phase) => ({
       ...phase,
@@ -62,6 +80,8 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
       ...week,
       zoneMinutes: week.zoneMinutes ?? {},
     })),
+    primaryGoalEvent: season.primaryGoalEvent ? mapGoal(season.primaryGoalEvent) : null,
+    goalEvents: season.goalEvents.map(mapGoal),
   };
 }
 
@@ -116,22 +136,17 @@ function CollapsibleSection({
 function buildPrimaryGoalEventPayload(
   aRace: SimpleGoalEvent,
   fallbackDate: string
-): { id?: string; name: string; date: string; disciplines: SimpleGoalEvent["disciplines"] } | undefined {
+): ReturnType<typeof goalEventDraftPayload> | undefined {
   if (aRace.id) {
-    return {
-      id: aRace.id,
+    return goalEventDraftPayload({
+      ...aRace,
       name: aRace.name.trim() || "A race",
       date: aRace.date || fallbackDate,
       disciplines: aRace.disciplines.length > 0 ? aRace.disciplines : ["RUN"],
-    };
+    });
   }
-  if (!aRace.name.trim() || !aRace.date) return undefined;
-  return {
-    id: aRace.id,
-    name: aRace.name.trim(),
-    date: aRace.date,
-    disciplines: aRace.disciplines,
-  };
+  if (!isGoalEventComplete(aRace)) return undefined;
+  return goalEventDraftPayload(aRace);
 }
 
 function defaultSeasonDates() {
@@ -154,6 +169,10 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState(DEFAULT_SECTION_EXPANDED);
+
+  const [pendingRemovals, setPendingRemovals] = useState<
+    { id: string; deleteFromCalendar: boolean }[]
+  >([]);
 
   const toggleSection = useCallback((sectionId: PlannerSectionId) => {
     setExpandedSections((current) => ({
@@ -183,6 +202,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
     }
     const data = (await res.json()) as { season: SimpleSeason | null };
     setSeason(data.season ? normalizeSeason(data.season) : null);
+    setPendingRemovals([]);
     setCreateMode(!data.season);
     setLoading(false);
   }, [seasonIdParam]);
@@ -223,6 +243,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
     }
     const data = (await res.json()) as { season: SimpleSeason };
     setSeason(normalizeSeason(data.season));
+    setPendingRemovals([]);
   }
 
   async function handleCreateSeason() {
@@ -271,6 +292,9 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
     const aRace = season.primaryGoalEvent ?? racesByPriority.a;
     const bRaces = season.goalEvents.filter((event) => event.priority === "B");
     const cRaces = season.goalEvents.filter((event) => event.priority === "C");
+    const bSplit = splitRacesForSave(bRaces, "B");
+    const cSplit = splitRacesForSave(cRaces, "C");
+    const goalEvent = buildPrimaryGoalEventPayload(aRace, season.endDate);
     return {
       name: season.name,
       startDate: season.startDate,
@@ -280,25 +304,37 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       recovery: season.recovery,
       phases: season.phases,
       weeks: serializeWeeksForSave(season.weeks),
-      goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
-      bGoalEvents: bRaces
-        .filter((race) => race.name && race.date)
-        .map(({ id, name, date, disciplines }) => ({
-          id,
-          name,
-          date,
-          disciplines,
-        })),
-      cGoalEvents: cRaces
-        .filter((race) => race.name && race.date)
-        .map(({ id, name, date, disciplines }) => ({
-          id,
-          name,
-          date,
-          disciplines,
-        })),
+      ...(goalEvent ? { goalEvent } : {}),
+      bGoalEvents: bSplit.events,
+      cGoalEvents: cSplit.events,
+      linkCalendarRaces: [...bSplit.links, ...cSplit.links],
+      removedGoalEvents: pendingRemovals,
       ...extra,
     };
+  }
+
+  function validateRacesForSave(): string | null {
+    if (!season) return "No season loaded";
+    const aRace = season.primaryGoalEvent ?? racesByPriority.a;
+    if (!isGoalEventComplete(aRace)) {
+      return "A-race name, date, and at least one discipline are required";
+    }
+    const partial = season.goalEvents.find(isGoalEventPartial);
+    if (partial) return "Complete or remove partially filled B/C races";
+    const partialTimes = season.goalEvents.find(isGoalEventTimesPartial);
+    if (partialTimes) {
+      return "Enter a goal time for each selected discipline, or leave all blank";
+    }
+    return null;
+  }
+
+  async function handleSave() {
+    const raceError = validateRacesForSave();
+    if (raceError) {
+      setError(raceError);
+      return;
+    }
+    await saveSeason(savePayload());
   }
   function handleSelectWeek(weekIndex: number) {
     setSelectedWeekIndex(weekIndex);
@@ -380,11 +416,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           >
             All seasons
           </Link>
-          <Button
-            type="button"
-            disabled={saving}
-            onClick={() => void saveSeason(savePayload())}
-          >
+          <Button type="button" disabled={saving} onClick={() => void handleSave()}>
             {saving ? "Saving…" : "Save"}
           </Button>
         </div>
@@ -467,7 +499,9 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           aRace={racesByPriority.a}
           bRaces={racesByPriority.b}
           cRaces={racesByPriority.c}
-          onChange={(goalEvent, bGoalEvents, cGoalEvents) => {
+          unlinkedCalendarRaces={season.unlinkedRaceSessions}
+          disciplineSettings={disciplineSettings}
+          onChange={(goalEvent, bGoalEvents, cGoalEvents, unlinked) => {
             setSeason({
               ...season,
               primaryGoalEvent: goalEvent,
@@ -476,7 +510,45 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
                 ...bGoalEvents.map((event) => ({ ...event, priority: "B" as const })),
                 ...cGoalEvents.map((event) => ({ ...event, priority: "C" as const })),
               ],
+              unlinkedRaceSessions: unlinked,
             });
+          }}
+          onRemoveRace={(priority, index, deleteFromCalendar) => {
+            if (priority === "B") {
+              const race = racesByPriority.b[index];
+              if (race?.id) {
+                setPendingRemovals((current) => [
+                  ...current,
+                  { id: race.id!, deleteFromCalendar },
+                ]);
+              }
+              const bRaces = racesByPriority.b.filter((_, i) => i !== index);
+              setSeason({
+                ...season,
+                goalEvents: [
+                  { ...racesByPriority.a, priority: "A" },
+                  ...bRaces.map((event) => ({ ...event, priority: "B" as const })),
+                  ...racesByPriority.c.map((event) => ({ ...event, priority: "C" as const })),
+                ],
+              });
+            } else {
+              const race = racesByPriority.c[index];
+              if (race?.id) {
+                setPendingRemovals((current) => [
+                  ...current,
+                  { id: race.id!, deleteFromCalendar },
+                ]);
+              }
+              const cRaces = racesByPriority.c.filter((_, i) => i !== index);
+              setSeason({
+                ...season,
+                goalEvents: [
+                  { ...racesByPriority.a, priority: "A" },
+                  ...racesByPriority.b.map((event) => ({ ...event, priority: "B" as const })),
+                  ...cRaces.map((event) => ({ ...event, priority: "C" as const })),
+                ],
+              });
+            }
           }}
         />
       </CollapsibleSection>
@@ -965,143 +1037,168 @@ function RaceSection({
   aRace,
   bRaces,
   cRaces,
+  unlinkedCalendarRaces,
+  disciplineSettings,
   onChange,
+  onRemoveRace,
 }: {
   aRace: SimpleGoalEvent;
   bRaces: SimpleGoalEvent[];
   cRaces: SimpleGoalEvent[];
+  unlinkedCalendarRaces: UnlinkedRaceSession[];
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onChange: (
     a: SimpleGoalEvent,
     b: SimpleGoalEvent[],
-    c: SimpleGoalEvent[]
+    c: SimpleGoalEvent[],
+    unlinked: UnlinkedRaceSession[]
+  ) => void;
+  onRemoveRace: (
+    priority: "B" | "C",
+    index: number,
+    deleteFromCalendar: boolean
   ) => void;
 }) {
+  function importCalendarRace(session: UnlinkedRaceSession, priority: "B" | "C") {
+    const draft: GoalEventDraft = {
+      plannedSessionId: session.plannedSessionId,
+      name: session.name,
+      date: session.date,
+      disciplines: session.disciplines,
+      distanceMeters: session.distanceMeters ?? null,
+      estimatedDurationMinutes: session.estimatedDurationMinutes ?? null,
+      notes: session.notes ?? null,
+    };
+    const next =
+      priority === "B"
+        ? [...bRaces, { ...draft, priority: "B" as const }]
+        : [...cRaces, { ...draft, priority: "C" as const }];
+    const unlinked = unlinkedCalendarRaces.filter(
+      (item) => item.plannedSessionId !== session.plannedSessionId
+    );
+    onChange(
+      aRace,
+      priority === "B" ? next : bRaces,
+      priority === "C" ? next : cRaces,
+      unlinked
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <RaceEditor
+      <GoalRaceEditor
         priority="A"
-        value={aRace}
-        onChange={(next) => onChange(next, bRaces, cRaces)}
         required
+        value={aRace}
+        onChange={(next) => onChange({ ...next, priority: "A" }, bRaces, cRaces, unlinkedCalendarRaces)}
+        disciplineSettings={disciplineSettings}
       />
-      {bRaces.map((race, index) => (
-        <RaceEditor
-          key={`b-${index}`}
-          priority="B"
-          value={race}
-          onChange={(next) => {
-            const updated = [...bRaces];
-            updated[index] = next;
-            onChange(aRace, updated, cRaces);
-          }}
-          onRemove={() => onChange(aRace, bRaces.filter((_, i) => i !== index), cRaces)}
-        />
-      ))}
-      {cRaces.map((race, index) => (
-        <RaceEditor
-          key={`c-${index}`}
-          priority="C"
-          value={race}
-          onChange={(next) => {
-            const updated = [...cRaces];
-            updated[index] = next;
-            onChange(aRace, bRaces, updated);
-          }}
-          onRemove={() => onChange(aRace, bRaces, cRaces.filter((_, i) => i !== index))}
-        />
-      ))}
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onChange(aRace, [...bRaces, emptyRace("B")], cRaces)}
-        >
-          Add B race
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onChange(aRace, bRaces, [...cRaces, emptyRace("C")])}
-        >
-          Add C race
-        </Button>
-      </div>
-    </div>
-  );
-}
 
-function RaceEditor({
-  priority,
-  value,
-  onChange,
-  onRemove,
-  required,
-}: {
-  priority: "A" | "B" | "C";
-  value: SimpleGoalEvent;
-  onChange: (next: SimpleGoalEvent) => void;
-  onRemove?: () => void;
-  required?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-sm font-semibold">{priority}-race</span>
-        {onRemove && (
-          <button type="button" className="text-sm text-zinc-500 hover:text-red-600" onClick={onRemove}>
-            Remove
-          </button>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">B races</p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              onChange(aRace, [...bRaces, emptyRace("B")], cRaces, unlinkedCalendarRaces)
+            }
+          >
+            Add B race
+          </Button>
+        </div>
+        {bRaces.length === 0 && (
+          <p className="text-sm text-zinc-500">Optional tune-up or secondary-priority races.</p>
         )}
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>Name{required ? " *" : ""}</Label>
-          <Input
-            value={value.name}
-            onChange={(event) => onChange({ ...value, name: event.target.value })}
+        {bRaces.map((race, index) => (
+          <GoalRaceEditor
+            key={race.id ?? race.plannedSessionId ?? `b-${index}`}
+            priority="B"
+            value={race}
+            onChange={(next) => {
+              const updated = [...bRaces];
+              updated[index] = { ...next, priority: "B" };
+              onChange(aRace, updated, cRaces, unlinkedCalendarRaces);
+            }}
+            onRemove={(deleteFromCalendar) => onRemoveRace("B", index, deleteFromCalendar)}
+            disciplineSettings={disciplineSettings}
           />
-        </div>
-        <div>
-          <Label>Date{required ? " *" : ""}</Label>
-          <Input
-            type="date"
-            value={value.date}
-            onChange={(event) => onChange({ ...value, date: event.target.value })}
-          />
-        </div>
+        ))}
       </div>
-      <div className="mt-3">
-        <Label>Disciplines</Label>
-        <div className="mt-1 flex flex-wrap gap-2">
-          {DISCIPLINES.map((discipline) => {
-            const active = value.disciplines.includes(discipline);
-            return (
-              <button
-                key={discipline}
-                type="button"
-                onClick={() => {
-                  const next = toggleGoalDiscipline(value.disciplines, discipline);
-                  if (next) onChange({ ...value, disciplines: next });
-                }}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  active
-                    ? "bg-sky-600 text-white"
-                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                }`}
-              >
-                {DISCIPLINE_LABELS[discipline]}
-              </button>
-            );
-          })}
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">C races</p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              onChange(aRace, bRaces, [...cRaces, emptyRace("C")], unlinkedCalendarRaces)
+            }
+          >
+            Add C race
+          </Button>
         </div>
-        {value.disciplines.length > 0 && (
-          <p className="mt-1 text-xs text-zinc-500">
-            {sortDisciplines(value.disciplines as Discipline[])
-              .map((d) => DISCIPLINE_LABELS[d])
-              .join(" · ")}
+        {cRaces.length === 0 && (
+          <p className="text-sm text-zinc-500">Optional low-priority races or training events.</p>
+        )}
+        {cRaces.map((race, index) => (
+          <GoalRaceEditor
+            key={race.id ?? race.plannedSessionId ?? `c-${index}`}
+            priority="C"
+            value={race}
+            onChange={(next) => {
+              const updated = [...cRaces];
+              updated[index] = { ...next, priority: "C" };
+              onChange(aRace, bRaces, updated, unlinkedCalendarRaces);
+            }}
+            onRemove={(deleteFromCalendar) => onRemoveRace("C", index, deleteFromCalendar)}
+            disciplineSettings={disciplineSettings}
+          />
+        ))}
+      </div>
+
+      {unlinkedCalendarRaces.length > 0 && (
+        <div className="space-y-3 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
+          <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">From calendar</p>
+          <p className="text-xs text-zinc-500">
+            These races are on your calendar but not linked to this season plan yet.
           </p>
-        )}
-      </div>
+          {unlinkedCalendarRaces.map((session) => (
+            <div
+              key={session.plannedSessionId}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <div>
+                <p className="font-medium text-zinc-900 dark:text-zinc-100">{session.name}</p>
+                <p className="text-xs text-zinc-500">
+                  {session.date}
+                  {session.disciplines.length > 0 &&
+                    ` · ${formatGoalDisciplines(session.disciplines)}`}
+                  {session.estimatedDurationMinutes != null &&
+                    ` · ${formatGoalTimeDisplay(session.estimatedDurationMinutes)}`}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => importCalendarRace(session, "B")}
+                >
+                  Add as B
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => importCalendarRace(session, "C")}
+                >
+                  Add as C
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

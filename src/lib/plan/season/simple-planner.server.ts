@@ -3,10 +3,12 @@ import { db } from "@/lib/db";
 import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import {
   createGoalEventsWithCalendar,
+  linkCalendarRacesToPlan,
   removeGoalEvents,
   syncGoalEventsByPriority,
   upsertPrimaryGoalEvent,
   type GoalEventWriteInput,
+  type LinkCalendarRaceInput,
   type RemovedGoalEventInput,
 } from "./goal-events-sync";
 import {
@@ -50,6 +52,11 @@ import {
   parsePhaseCoachNotes,
   serializePhaseCoachNotes,
 } from "./simple-phase-notes";
+import {
+  serializeGoalEvent,
+  serializeUnlinkedRaceSession,
+} from "./serialize";
+import { findUnlinkedRaceSessions } from "@/lib/plan/race-calendar-sync";
 import {
   applyRecoveryVolumeHours,
   applyRecoveryZonesForWeek,
@@ -130,6 +137,7 @@ export type UpdateSimpleSeasonInput = {
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
   removedGoalEvents?: RemovedGoalEventInput[];
+  linkCalendarRaces?: LinkCalendarRaceInput[];
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -736,14 +744,36 @@ export async function updateSimpleSeasonPlan(
     if (input.removedGoalEvents?.length) {
       await removeGoalEvents(tx, input.removedGoalEvents);
     }
+    if (input.linkCalendarRaces?.length) {
+      await linkCalendarRacesToPlan(tx, {
+        athleteId,
+        seasonPlanId,
+        links: input.linkCalendarRaces,
+      });
+    }
 
     return getSeasonPlanById(athleteId, seasonPlanId);
   });
 }
 
-export function serializeSimpleSeasonPlan(
+export async function serializeSimpleSeasonPlan(
   plan: NonNullable<Awaited<ReturnType<typeof getSeasonPlanById>>>
 ) {
+  const startDate = calendarDateFromDb(plan.startDate);
+  const endDate = calendarDateFromDb(plan.endDate);
+  const unlinked = await findUnlinkedRaceSessions(plan.athleteId, startDate, endDate);
+  const unlinkedRaceSessions = await Promise.all(
+    unlinked.map(async (session) => {
+      const siblings = session.multisportGroupId
+        ? await db.plannedSession.findMany({
+            where: { multisportGroupId: session.multisportGroupId },
+            orderBy: { sessionIndex: "asc" },
+          })
+        : [];
+      return serializeUnlinkedRaceSession(session, siblings);
+    })
+  );
+
   const defaults = resolveSimpleRampDefaults(plan);
   const zoneRampDefaults = parseZoneRampDefaults(plan.zoneRampDefaultsByDiscipline);
   let cursor = 0;
@@ -794,6 +824,7 @@ export function serializeSimpleSeasonPlan(
     rampDefaults: defaults,
     zoneRampDefaults,
     recovery: resolveRecoverySettings(plan),
+    unlinkedRaceSessions,
     phases,
     weeks: plan.weeks.map((week) => ({
       weekIndex: week.weekIndex,
@@ -810,18 +841,12 @@ export function serializeSimpleSeasonPlan(
       volumeOverridden: week.volumeOverridden,
     })),
     goalEvents: plan.goalEvents.map((event) => ({
-      id: event.id,
-      name: event.name,
-      date: formatDateKey(event.date),
-      disciplines: event.disciplines,
+      ...serializeGoalEvent(event),
       priority: event.priority,
     })),
     primaryGoalEvent: plan.primaryGoalEvent
       ? {
-          id: plan.primaryGoalEvent.id,
-          name: plan.primaryGoalEvent.name,
-          date: formatDateKey(plan.primaryGoalEvent.date),
-          disciplines: plan.primaryGoalEvent.disciplines,
+          ...serializeGoalEvent(plan.primaryGoalEvent),
           priority: plan.primaryGoalEvent.priority,
         }
       : null,

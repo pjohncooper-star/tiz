@@ -1,6 +1,10 @@
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import type { ZoneRampDefaultsByDiscipline } from "@/lib/plan/season/simple-tiz";
 import type { RecoverySettings } from "@/lib/plan/season/recovery";
+import type {
+  GoalEventDraft,
+  UnlinkedRaceSession,
+} from "@/components/season/season-settings-types";
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
@@ -19,11 +23,7 @@ export const DEFAULT_PHASE_INTENSE_DAYS = {
   runIntenseDaysPerWeek: 1,
 } as const;
 
-export type SimpleGoalEvent = {
-  id?: string;
-  name: string;
-  date: string;
-  disciplines: ("SWIM" | "BIKE" | "RUN")[];
+export type SimpleGoalEvent = GoalEventDraft & {
   priority: "A" | "B" | "C";
 };
 
@@ -73,6 +73,7 @@ export type SimpleSeason = {
   rampDefaults: SimpleRampDefaults;
   zoneRampDefaults: ZoneRampDefaultsByDiscipline;
   recovery: RecoverySettings;
+  unlinkedRaceSessions: UnlinkedRaceSession[];
   phases: SimplePhase[];
   weeks: SimpleWeek[];
   goalEvents: SimpleGoalEvent[];
@@ -85,6 +86,13 @@ export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
     date: "",
     disciplines: priority === "A" ? ["SWIM", "BIKE", "RUN"] : ["RUN"],
     priority,
+    distanceMeters: null,
+    estimatedDurationMinutes: null,
+    swimGoalMinutes: null,
+    bikeGoalMinutes: null,
+    runGoalMinutes: null,
+    taperDaysBefore: null,
+    notes: null,
   };
 }
 
