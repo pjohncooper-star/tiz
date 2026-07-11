@@ -149,6 +149,16 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+UPDATE "GoalEvent"
+SET "disciplines" = ARRAY[]::"GoalEventDiscipline"[]
+WHERE "disciplines" IS NULL;
+
+DO $$ BEGIN
+  ALTER TABLE "GoalEvent" ALTER COLUMN "disciplines" SET NOT NULL;
+EXCEPTION
+  WHEN others THEN NULL;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS "GoalEvent_plannedSessionId_key"
   ON "GoalEvent"("plannedSessionId");
 

@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS "GoalEvent" (
   "seasonPlanId" TEXT NOT NULL,
   "name" TEXT NOT NULL,
   "date" DATE NOT NULL,
-  "discipline" "GoalEventDiscipline" NOT NULL,
+  "disciplines" "GoalEventDiscipline"[] NOT NULL DEFAULT ARRAY[]::"GoalEventDiscipline"[],
   "priority" "EventPriority" NOT NULL DEFAULT 'A',
   "taperDaysBefore" INTEGER,
   "notes" TEXT,
