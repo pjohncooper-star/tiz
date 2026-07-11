@@ -17,10 +17,8 @@ import {
   type SimpleWeek,
 } from "@/components/simple-planner/simple-planner-types";
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
-import {
-  defaultZoneRampDefaults,
-  type ZoneRampDefaultsByDiscipline,
-} from "@/lib/plan/season/simple-tiz";
+import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { PhaseKindZoneDefaultsEditor } from "@/components/simple-planner/zone-split-editor";
 import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import {
   distanceDisplayToMeters,
@@ -29,7 +27,6 @@ import {
   PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
-import { ZoneRampPillRow } from "@/components/simple-planner/zone-pill";
 import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
@@ -39,11 +36,14 @@ import {
 } from "@/components/season/season-settings-types";
 
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
+  const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
   return {
     ...season,
-    zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
+    phaseKindZoneDefaults: kindDefaults,
     phases: season.phases.map((phase) => ({
       ...phase,
+      phaseKind: phase.phaseKind ?? "BASE",
+      zoneSplits: phase.zoneSplits ?? null,
       swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
       bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
       runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
@@ -67,18 +67,18 @@ type PlannerSectionId =
   | "season"
   | "races"
   | "timeline"
+  | "phaseKinds"
   | "phases"
   | "ramps"
-  | "zoneRamps"
   | "weeklyVolume";
 
 const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   season: true,
   races: false,
   timeline: true,
+  phaseKinds: false,
   phases: false,
   ramps: false,
-  zoneRamps: false,
   weeklyVolume: true,
 };
 
@@ -232,7 +232,6 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         startDate: draftDates.startDate,
         endDate: draftDates.endDate,
         rampDefaults: defaultSimpleRampDefaults(),
-        zoneRampDefaults: defaultZoneRampDefaults(),
       }),
     });
     setSaving(false);
@@ -242,14 +241,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };
-    setSeason(normalizeSeason({
-      ...data.season,
-      zoneRampDefaults: data.season.zoneRampDefaults ?? defaultZoneRampDefaults(),
-      weeks: data.season.weeks.map((week) => ({
-        ...week,
-        zoneMinutes: week.zoneMinutes ?? {},
-      })),
-    }));
+    setSeason(normalizeSeason(data.season));
     setCreateMode(false);
     setExpandedSections(DEFAULT_SECTION_EXPANDED);
   }
@@ -272,7 +264,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       startDate: season.startDate,
       endDate: season.endDate,
       rampDefaults: season.rampDefaults,
-      zoneRampDefaults: season.zoneRampDefaults,
+      phaseKindZoneDefaults: season.phaseKindZoneDefaults,
       phases: season.phases,
       weeks: serializeWeeksForSave(season.weeks),
       goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
@@ -493,12 +485,36 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       </CollapsibleSection>
 
       <CollapsibleSection
+        title="Phase kind zone defaults"
+        expanded={expandedSections.phaseKinds}
+        onToggle={() => toggleSection("phaseKinds")}
+      >
+        <PhaseKindZoneDefaultsEditor
+          value={season.phaseKindZoneDefaults}
+          onChange={(phaseKindZoneDefaults) =>
+            setSeason({ ...season, phaseKindZoneDefaults })
+          }
+        />
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving}
+            onClick={() => void saveSeason(savePayload({ recalculate: true }))}
+          >
+            {saving ? "Saving…" : "Save & recalculate zones"}
+          </Button>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
         title="Phases"
         expanded={expandedSections.phases}
         onToggle={() => toggleSection("phases")}
       >
         <SimplePlannerPhasesPane
           phases={season.phases}
+          phaseKindZoneDefaults={season.phaseKindZoneDefaults}
           totalWeeks={season.totalWeeks}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
@@ -521,21 +537,6 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Zone ramp defaults"
-        expanded={expandedSections.zoneRamps}
-        onToggle={() => toggleSection("zoneRamps")}
-      >
-        <ZoneRampDefaultsEditor
-          value={season.zoneRampDefaults}
-          onChange={(zoneRampDefaults) => setSeason({ ...season, zoneRampDefaults })}
-          onRecalculate={() =>
-            void saveSeason(savePayload({ recalculate: true, resetZoneOverrides: true }))
-          }
-          saving={saving}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
         title="Weekly volume"
         expanded={expandedSections.weeklyVolume}
         onToggle={() => toggleSection("weeklyVolume")}
@@ -543,8 +544,6 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         <SimplePlannerWeekTable
           weeks={season.weeks}
           phases={season.phases}
-          rampDefaults={season.rampDefaults}
-          disciplineSettings={disciplineSettings}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
           highlightedWeekIndex={selectedWeekIndex}
@@ -755,85 +754,7 @@ function RampDefaultsEditor({
         Recalculate ramp weeks
       </Button>
       <p className="text-xs text-zinc-500">
-        Updates auto-calculated weeks only. Rest weeks, ramp-off phases, and overridden zone weeks
-        stay manual.
-      </p>
-    </div>
-  );
-}
-
-function ZoneRampDefaultsEditor({
-  value,
-  onChange,
-  onRecalculate,
-  saving,
-}: {
-  value: ZoneRampDefaultsByDiscipline;
-  onChange: (value: ZoneRampDefaultsByDiscipline) => void;
-  onRecalculate: () => void;
-  saving: boolean;
-}) {
-  const disciplines = [
-    { key: "SWIM" as const, label: "Swim" },
-    { key: "BIKE" as const, label: "Bike" },
-    { key: "RUN" as const, label: "Run" },
-  ];
-  const zones = [1, 2, 3, 4, 5] as const;
-
-  function updateZone(
-    discipline: "SWIM" | "BIKE" | "RUN",
-    zone: typeof zones[number],
-    patch: Partial<{ startMinutes: number; peakMinutes: number; ratePercent: number }>
-  ) {
-    const key = `z${zone}` as const;
-    onChange({
-      ...value,
-      [discipline]: {
-        ...value[discipline],
-        [key]: { ...value[discipline][key], ...patch },
-      },
-    });
-  }
-
-  return (
-    <div className="space-y-4">
-      {disciplines.map((discipline) => (
-        <div key={discipline.key}>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            {discipline.label}
-          </p>
-          <div className="space-y-1.5">
-            {zones.map((zone) => {
-              const key = `z${zone}` as const;
-              const row = value[discipline.key][key];
-              return (
-                <ZoneRampPillRow
-                  key={zone}
-                  zone={zone}
-                  startMinutes={row.startMinutes}
-                  peakMinutes={row.peakMinutes}
-                  ratePercent={row.ratePercent}
-                  onStartChange={(startMinutes) =>
-                    updateZone(discipline.key, zone, { startMinutes })
-                  }
-                  onPeakChange={(peakMinutes) =>
-                    updateZone(discipline.key, zone, { peakMinutes })
-                  }
-                  onRateChange={(ratePercent) =>
-                    updateZone(discipline.key, zone, { ratePercent })
-                  }
-                />
-              );
-            })}
-          </div>
-        </div>
-      ))}
-      <Button type="button" variant="secondary" disabled={saving} onClick={onRecalculate}>
-        Recalculate zone minutes
-      </Button>
-      <p className="text-xs text-zinc-500">
-        Zone minutes ramp in parallel with volume. Edit minutes directly in the weekly table; those
-        weeks are preserved on recalculate.
+        Updates auto-calculated volume weeks. Rest weeks and ramp-off phases stay unchanged.
       </p>
     </div>
   );

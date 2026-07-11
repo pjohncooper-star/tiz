@@ -1,10 +1,19 @@
 "use client";
 
 import { Button, Input, Label } from "@/components/ui";
+import { ZoneSplitEditor } from "@/components/simple-planner/zone-split-editor";
 import {
   createEmptyPhase,
+  inferPhaseKindFromName,
   type SimplePhase,
 } from "@/components/simple-planner/simple-planner-types";
+import {
+  phaseKindLabel,
+  seedPhaseZoneSplits,
+} from "@/lib/plan/season/phase-zone-defaults";
+import type { PhaseKind } from "@prisma/client";
+import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
+import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
 import {
   formatUnassignedWeeks,
   formatWeekRange,
@@ -15,6 +24,7 @@ import {
 
 type SimplePlannerPhasesPaneProps = {
   phases: SimplePhase[];
+  phaseKindZoneDefaults: PhaseKindZoneDefaults;
   totalWeeks: number;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
@@ -23,6 +33,7 @@ type SimplePlannerPhasesPaneProps = {
 
 export function SimplePlannerPhasesPane({
   phases,
+  phaseKindZoneDefaults,
   totalWeeks,
   selectedPhaseId,
   onSelectPhase,
@@ -49,7 +60,7 @@ export function SimplePlannerPhasesPane({
   }
 
   function addEmptyPhase() {
-    const next = createEmptyPhase(phases.length + 1);
+    const next = createEmptyPhase(phases.length + 1, phaseKindZoneDefaults);
     onPhasesChange([...phases, next]);
     onSelectPhase(next.id ?? null);
   }
@@ -120,6 +131,7 @@ export function SimplePlannerPhasesPane({
         <PhaseDetailEditor
           phase={selected}
           phases={phases}
+          phaseKindZoneDefaults={phaseKindZoneDefaults}
           totalWeeks={totalWeeks}
           onChange={updatePhase}
           onDelete={() => deletePhase(selected)}
@@ -132,12 +144,14 @@ export function SimplePlannerPhasesPane({
 function PhaseDetailEditor({
   phase,
   phases,
+  phaseKindZoneDefaults,
   totalWeeks,
   onChange,
   onDelete,
 }: {
   phase: SimplePhase;
   phases: SimplePhase[];
+  phaseKindZoneDefaults: PhaseKindZoneDefaults;
   totalWeeks: number;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
@@ -153,11 +167,38 @@ function PhaseDetailEditor({
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
+          <Label>Phase kind</Label>
+          <select
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            value={phase.phaseKind}
+            onChange={(event) => {
+              const phaseKind = event.target.value as PhaseKind;
+              onChange({
+                ...phase,
+                phaseKind,
+                zoneSplits: seedPhaseZoneSplits(phaseKind, phaseKindZoneDefaults),
+              });
+            }}
+          >
+            {(["BASE", "BUILD", "RACE_PREP", "TAPER"] as const).map((kind) => (
+              <option key={kind} value={kind}>
+                {phaseKindLabel(kind)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
           <Label>Label</Label>
           <Input
             className="mt-1"
             value={phase.name}
-            onChange={(event) => onChange({ ...phase, name: event.target.value })}
+            onChange={(event) =>
+              onChange({
+                ...phase,
+                name: event.target.value,
+                phaseKind: inferPhaseKindFromName(event.target.value),
+              })
+            }
           />
         </div>
         <div>
@@ -278,6 +319,18 @@ function PhaseDetailEditor({
             </div>
           ))}
         </div>
+      </fieldset>
+
+      <fieldset className="mt-4 space-y-2">
+        <legend className="text-sm font-medium">Zone focus (TiZ %)</legend>
+        <p className="text-xs text-zinc-500">
+          Overrides phase-kind defaults for this phase. Zone minutes are computed from volume ×
+          these splits.
+        </p>
+        <ZoneSplitEditor
+          value={zoneSplitsForPhase(phase, phaseKindZoneDefaults)}
+          onChange={(zoneSplits) => onChange({ ...phase, zoneSplits })}
+        />
       </fieldset>
 
       <fieldset className="mt-4 space-y-2">

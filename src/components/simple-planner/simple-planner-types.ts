@@ -1,5 +1,11 @@
+import type { PhaseKind } from "@prisma/client";
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
-import type { ZoneRampDefaultsByDiscipline } from "@/lib/plan/season/simple-tiz";
+import {
+  defaultPhaseKindZoneDefaults,
+  defaultZoneSplitsForKind,
+  inferPhaseKindFromName,
+} from "@/lib/plan/season/phase-zone-defaults";
+import type { PhaseKindZoneDefaults, PhaseZoneSplits } from "@/lib/plan/season/zone-split-types";
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
@@ -30,6 +36,7 @@ export type SimplePhase = {
   id?: string;
   name: string;
   color: string;
+  phaseKind: PhaseKind;
   startWeekIndex: number;
   endWeekIndex: number;
   rampEnabled: {
@@ -45,6 +52,7 @@ export type SimplePhase = {
   bikeIntenseDaysPerWeek: number;
   runIntenseDaysPerWeek: number;
   goal: string | null;
+  zoneSplits: PhaseZoneSplits | null;
 };
 
 export type SimpleWeek = {
@@ -58,7 +66,6 @@ export type SimpleWeek = {
   swimDistanceMeters?: number | null;
   runDistanceMeters?: number | null;
   zoneMinutes: ZoneMinutes;
-  zoneMinutesOverridden?: boolean;
 };
 
 export type SimpleSeason = {
@@ -69,7 +76,7 @@ export type SimpleSeason = {
   totalWeeks: number;
   status: string;
   rampDefaults: SimpleRampDefaults;
-  zoneRampDefaults: ZoneRampDefaultsByDiscipline;
+  phaseKindZoneDefaults: PhaseKindZoneDefaults;
   phases: SimplePhase[];
   weeks: SimpleWeek[];
   goalEvents: SimpleGoalEvent[];
@@ -85,30 +92,45 @@ export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   };
 }
 
-export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase {
+export function createPhaseAtWeek(
+  weekIndex: number,
+  index: number,
+  kindDefaults: PhaseKindZoneDefaults = defaultPhaseKindZoneDefaults()
+): SimplePhase {
+  const phaseKind = "BASE";
   return {
     id: newPhaseId(),
     name: `Phase ${index}`,
     color: PHASE_COLORS[index % PHASE_COLORS.length] ?? "#38bdf8",
+    phaseKind,
     startWeekIndex: weekIndex,
     endWeekIndex: weekIndex,
     rampEnabled: { swim: true, bike: true, run: true },
     ...DEFAULT_PHASE_SESSIONS,
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
+    zoneSplits: kindDefaults[phaseKind] ?? defaultZoneSplitsForKind(phaseKind),
   };
 }
 
-export function createEmptyPhase(index: number): SimplePhase {
+export function createEmptyPhase(
+  index: number,
+  kindDefaults: PhaseKindZoneDefaults = defaultPhaseKindZoneDefaults()
+): SimplePhase {
+  const phaseKind = "BASE";
   return {
     id: newPhaseId(),
     name: `Phase ${index}`,
     color: PHASE_COLORS[index % PHASE_COLORS.length] ?? "#38bdf8",
+    phaseKind,
     startWeekIndex: -1,
     endWeekIndex: -1,
     rampEnabled: { swim: true, bike: true, run: true },
     ...DEFAULT_PHASE_SESSIONS,
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
+    zoneSplits: kindDefaults[phaseKind] ?? defaultZoneSplitsForKind(phaseKind),
   };
 }
+
+export { inferPhaseKindFromName, defaultPhaseKindZoneDefaults };
