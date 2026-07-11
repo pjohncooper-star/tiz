@@ -10,11 +10,7 @@ import {
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { ZonePillInput } from "@/components/simple-planner/zone-pill";
 import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
-import {
-  createPhaseAtWeek,
-  type SimplePhase,
-  type SimpleWeek,
-} from "@/components/simple-planner/simple-planner-types";
+import type { SimplePhase, SimpleWeek } from "@/components/simple-planner/simple-planner-types";
 import { formatWeekDateRange } from "@/components/simple-planner/simple-planner-timeline";
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
@@ -26,9 +22,8 @@ import {
 } from "@/lib/plan/season/simple-tiz";
 import {
   buildGutterSegments,
-  resizePhaseBottom,
-  resizePhaseTop,
-  weekIsAssigned,
+  applyPhaseBoundaryResize,
+  normalizePhasesToFullCoverage,
 } from "@/lib/plan/season/phase-span-utils";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
@@ -48,12 +43,6 @@ type SimplePlannerWeekTableProps = {
 type DragState = {
   phaseId: string;
   edge: "top" | "bottom";
-};
-
-type DragPreview = {
-  phaseId: string;
-  startWeekIndex: number;
-  endWeekIndex: number;
 };
 
 const DISCIPLINES = [
@@ -97,29 +86,17 @@ export function SimplePlannerWeekTable({
   highlightedWeekIndex,
 }: SimplePlannerWeekTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
-  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const [dragPreviewPhases, setDragPreviewPhases] = useState<SimplePhase[] | null>(null);
 
   const phasesRef = useRef(phases);
   phasesRef.current = phases;
   const weeksLengthRef = useRef(weeks.length);
   weeksLengthRef.current = weeks.length;
-  const dragPreviewRef = useRef(dragPreview);
-  dragPreviewRef.current = dragPreview;
+  const dragPreviewRef = useRef(dragPreviewPhases);
+  dragPreviewRef.current = dragPreviewPhases;
 
-  const displayPhases = useMemo(() => {
-    if (!dragPreview) return phases;
-    return phases.map((phase) =>
-      phase.id === dragPreview.phaseId
-        ? {
-            ...phase,
-            startWeekIndex: dragPreview.startWeekIndex,
-            endWeekIndex: dragPreview.endWeekIndex,
-          }
-        : phase
-    );
-  }, [dragPreview, phases]);
+  const displayPhases = dragPreviewPhases ?? normalizePhasesToFullCoverage(phases, weeks.length);
 
   const gutterSegments = useMemo(
     () => buildGutterSegments(weeks, displayPhases),
@@ -167,30 +144,16 @@ export function SimplePlannerWeekTable({
     [onWeeksChange, weeks]
   );
 
-  const addPhaseAtWeek = useCallback(
-    (weekIndex: number) => {
-      if (weekIsAssigned(phases, weekIndex)) return;
-      const next = createPhaseAtWeek(weekIndex, phases.length + 1);
-      onPhasesChange([...phases, next]);
-      onSelectPhase(next.id ?? null);
-    },
-    [onPhasesChange, onSelectPhase, phases]
-  );
-
   const applyDragAtWeek = useCallback((pointerWeek: number, drag: DragState) => {
-    const phase = phasesRef.current.find((item) => item.id === drag.phaseId);
-    if (!phase) return;
-
-    const resized =
-      drag.edge === "top"
-        ? resizePhaseTop(phase, phasesRef.current, weeksLengthRef.current, pointerWeek)
-        : resizePhaseBottom(phase, phasesRef.current, weeksLengthRef.current, pointerWeek);
-
-    setDragPreview({
-      phaseId: drag.phaseId,
-      startWeekIndex: resized.startWeekIndex,
-      endWeekIndex: resized.endWeekIndex,
-    });
+    setDragPreviewPhases(
+      applyPhaseBoundaryResize(
+        phasesRef.current,
+        drag.phaseId,
+        drag.edge,
+        weeksLengthRef.current,
+        pointerWeek
+      )
+    );
   }, []);
 
   const startDrag = useCallback(
@@ -212,20 +175,10 @@ export function SimplePlannerWeekTable({
     function finishDrag() {
       const preview = dragPreviewRef.current;
       if (preview) {
-        onPhasesChange(
-          phasesRef.current.map((phase) =>
-            phase.id === preview.phaseId
-              ? {
-                  ...phase,
-                  startWeekIndex: preview.startWeekIndex,
-                  endWeekIndex: preview.endWeekIndex,
-                }
-              : phase
-          )
-        );
+        onPhasesChange(preview);
       }
       setDragging(null);
-      setDragPreview(null);
+      setDragPreviewPhases(null);
     }
 
     function onPointerMove(event: PointerEvent) {
@@ -267,31 +220,9 @@ export function SimplePlannerWeekTable({
         </thead>
         <tbody>
           {gutterSegments.map((segment) => {
-            if (segment.kind === "unassigned") {
-              const week = weeks.find((item) => item.weekIndex === segment.weekIndex)!;
-              return (
-                <WeekRowGroup
-                  key={`unassigned-${week.weekIndex}`}
-                  week={week}
-                  rampDefaults={rampDefaults}
-                  disciplineSettings={disciplineSettings}
-                  gutter={
-                    <UnassignedGutter
-                      weekIndex={week.weekIndex}
-                      visible={hoveredWeek === week.weekIndex}
-                      onHover={setHoveredWeek}
-                      onAdd={() => addPhaseAtWeek(week.weekIndex)}
-                    />
-                  }
-                  expanded={expanded.has(week.weekIndex)}
-                  highlighted={highlightedWeekIndex === week.weekIndex}
-                  onToggle={() => toggleExpanded(week.weekIndex)}
-                  onUpdateWeek={(patch) => updateWeek(week.weekIndex, patch)}
-                />
-              );
-            }
-
-            const phase = displayPhases.find((item) => item.id === segment.phase.id) ?? segment.phase;
+            const phase =
+              displayPhases.find((item) => item.id === segment.phase.id) ?? segment.phase;
+            const phaseIndex = displayPhases.findIndex((item) => item.id === phase.id);
             const bandWeeks = weeks.filter(
               (week) =>
                 week.weekIndex >= phase.startWeekIndex && week.weekIndex <= phase.endWeekIndex
@@ -305,6 +236,8 @@ export function SimplePlannerWeekTable({
                 disciplineSettings={disciplineSettings}
                 selected={selectedPhaseId === phase.id}
                 isDragging={dragging?.phaseId === phase.id}
+                canResizeTop={phaseIndex > 0}
+                canResizeBottom={phaseIndex >= 0 && phaseIndex < displayPhases.length - 1}
                 expanded={expanded}
                 highlightedWeekIndex={highlightedWeekIndex}
                 onSelectPhase={() => onSelectPhase(phase.id ?? null)}
@@ -316,37 +249,6 @@ export function SimplePlannerWeekTable({
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function UnassignedGutter({
-  weekIndex,
-  visible,
-  onHover,
-  onAdd,
-}: {
-  weekIndex: number;
-  visible: boolean;
-  onHover: (weekIndex: number | null) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <div
-      className="flex h-full min-h-[2.5rem] items-center justify-center"
-      onMouseEnter={() => onHover(weekIndex)}
-      onMouseLeave={() => onHover(null)}
-    >
-      <button
-        type="button"
-        onClick={onAdd}
-        className={`flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-zinc-300 text-lg leading-none text-zinc-500 transition hover:border-sky-500 hover:text-sky-600 dark:border-zinc-600 ${
-          visible ? "opacity-100" : "opacity-0 md:opacity-0"
-        } ${visible ? "md:opacity-100" : "md:group-hover:opacity-100"}`}
-        aria-label={`Add phase at week ${weekIndex + 1}`}
-      >
-        +
-      </button>
     </div>
   );
 }
@@ -472,61 +374,6 @@ function phaseWeekGutterPosition(
   return "middle";
 }
 
-function WeekRowGroup({
-  week,
-  rampDefaults,
-  disciplineSettings,
-  gutter,
-  expanded,
-  highlighted,
-  onToggle,
-  onUpdateWeek,
-}: {
-  week: SimpleWeek;
-  rampDefaults: SimpleRampDefaults;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  gutter: React.ReactNode;
-  expanded: boolean;
-  highlighted: boolean;
-  onToggle: () => void;
-  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
-}) {
-  const rowSpan = expanded ? 1 + DISCIPLINES.length : 1;
-
-  return (
-    <>
-      <tr
-        id={`week-row-${week.weekIndex}`}
-        data-week-index={week.weekIndex}
-        className={`group border-b border-zinc-100 dark:border-zinc-800 ${
-          week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
-        } ${highlighted ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
-      >
-        <td rowSpan={rowSpan} className="px-2 py-2 align-top">
-          {gutter}
-        </td>
-        <WeekCells
-          week={week}
-          expanded={expanded}
-          onToggle={onToggle}
-          onUpdateWeek={onUpdateWeek}
-        />
-      </tr>
-      {expanded &&
-        DISCIPLINES.map((discipline) => (
-          <DisciplineExpandedRow
-            key={`${week.weekIndex}-${discipline.key}`}
-            week={week}
-            discipline={discipline}
-            rampDefaults={rampDefaults}
-            disciplineSettings={disciplineSettings}
-            onUpdateWeek={onUpdateWeek}
-          />
-        ))}
-    </>
-  );
-}
-
 function PhaseBandRows({
   phase,
   weeks,
@@ -534,6 +381,8 @@ function PhaseBandRows({
   disciplineSettings,
   selected,
   isDragging,
+  canResizeTop,
+  canResizeBottom,
   expanded,
   highlightedWeekIndex,
   onSelectPhase,
@@ -547,6 +396,8 @@ function PhaseBandRows({
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   selected: boolean;
   isDragging: boolean;
+  canResizeTop: boolean;
+  canResizeBottom: boolean;
   expanded: Set<number>;
   highlightedWeekIndex: number | null;
   onSelectPhase: () => void;
@@ -575,8 +426,8 @@ function PhaseBandRows({
                 rowSpan={rowSpan}
                 position={phaseWeekGutterPosition(index, weeks.length)}
                 showLabel={index === 0}
-                showTopHandle={index === 0}
-                showBottomHandle={isLastWeek}
+                showTopHandle={index === 0 && canResizeTop}
+                showBottomHandle={isLastWeek && canResizeBottom}
                 selected={selected}
                 isDragging={isDragging}
                 onSelect={onSelectPhase}

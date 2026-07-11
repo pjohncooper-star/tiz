@@ -1,16 +1,14 @@
 "use client";
 
 import { Button, Input, Label } from "@/components/ui";
+import { type SimplePhase } from "@/components/simple-planner/simple-planner-types";
 import {
-  createEmptyPhase,
-  type SimplePhase,
-} from "@/components/simple-planner/simple-planner-types";
-import {
-  formatUnassignedWeeks,
+  deletePhaseWithMerge,
   formatWeekRange,
   isAssignedPhase,
-  isEmptyPhase,
+  normalizePhasesToFullCoverage,
   setPhaseWeekRange,
+  splitLongestPhase,
 } from "@/lib/plan/season/phase-span-utils";
 
 type SimplePlannerPhasesPaneProps = {
@@ -28,39 +26,43 @@ export function SimplePlannerPhasesPane({
   onSelectPhase,
   onPhasesChange,
 }: SimplePlannerPhasesPaneProps) {
+  const covered = normalizePhasesToFullCoverage(phases, totalWeeks);
   const selected =
-    phases.find((phase) => phase.id === selectedPhaseId) ??
-    phases.find((phase) => !phase.id && selectedPhaseId === phase.name) ??
+    covered.find((phase) => phase.id === selectedPhaseId) ??
+    covered.find((phase) => !phase.id && selectedPhaseId === phase.name) ??
     null;
 
   function updatePhase(updated: SimplePhase) {
     onPhasesChange(
-      phases.map((phase) =>
+      covered.map((phase) =>
         (phase.id ?? phase.name) === (updated.id ?? updated.name) ? updated : phase
       )
     );
   }
 
   function deletePhase(phase: SimplePhase) {
-    onPhasesChange(
-      phases.filter((item) => (item.id ?? item.name) !== (phase.id ?? phase.name))
-    );
+    if (!phase.id) return;
+    const next = deletePhaseWithMerge(covered, phase.id, totalWeeks);
+    onPhasesChange(next);
     if (selectedPhaseId === phase.id) onSelectPhase(null);
   }
 
-  function addEmptyPhase() {
-    const next = createEmptyPhase(phases.length + 1);
-    onPhasesChange([...phases, next]);
-    onSelectPhase(next.id ?? null);
+  function addPhase() {
+    const next = splitLongestPhase(covered, totalWeeks);
+    if (next.length === covered.length) return;
+    onPhasesChange(next);
+    const added = next.find(
+      (phase) => !covered.some((item) => (item.id ?? item.name) === (phase.id ?? phase.name))
+    );
+    onSelectPhase(added?.id ?? null);
   }
 
-  const assignedPhases = phases.filter(isAssignedPhase);
-  const unassignedLabel = formatUnassignedWeeks(totalWeeks, phases);
+  const assignedPhases = covered.filter(isAssignedPhase);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={addEmptyPhase}>
+        <Button type="button" variant="secondary" onClick={addPhase}>
           + Add phase
         </Button>
       </div>
@@ -92,34 +94,12 @@ export function SimplePlannerPhasesPane({
             </button>
           );
         })}
-
-        {phases.filter(isEmptyPhase).map((phase) => {
-          const active = selectedPhaseId === phase.id;
-          return (
-            <button
-              key={phase.id ?? phase.name}
-              type="button"
-              onClick={() => onSelectPhase(phase.id ?? null)}
-              className={`rounded-lg border border-dashed px-3 py-2 text-left text-sm ${
-                active ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30" : "border-zinc-300"
-              }`}
-            >
-              <span className="font-medium">{phase.name}</span>
-              <p className="mt-1 text-xs text-zinc-500">Not assigned</p>
-            </button>
-          );
-        })}
-
-        <div className="rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
-          <p className="font-medium text-zinc-600 dark:text-zinc-400">Unassigned</p>
-          <p className="mt-1 text-xs text-zinc-500">{unassignedLabel}</p>
-        </div>
       </div>
 
       {selected && (
         <PhaseDetailEditor
           phase={selected}
-          phases={phases}
+          phases={covered}
           totalWeeks={totalWeeks}
           onChange={updatePhase}
           onDelete={() => deletePhase(selected)}
@@ -142,10 +122,7 @@ function PhaseDetailEditor({
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
-  const assigned = isAssignedPhase(phase);
-  const weekLabel = assigned
-    ? formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)
-    : "Not assigned — click + on a week in the table";
+  const weekLabel = formatWeekRange(phase.startWeekIndex, phase.endWeekIndex);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -174,20 +151,21 @@ function PhaseDetailEditor({
       <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
         Weeks: <span className="font-medium">{weekLabel}</span>
       </p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Drag phase boundaries in the week table to resize. Add phase splits the longest block.
+      </p>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 md:hidden">
         <div>
           <Label>From week</Label>
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            value={assigned ? phase.startWeekIndex + 1 : ""}
+            value={phase.startWeekIndex + 1}
             onChange={(event) => {
               const start = Number(event.target.value) - 1;
-              const end = assigned ? phase.endWeekIndex : start;
-              onChange(setPhaseWeekRange(phase, phases, totalWeeks, start, end));
+              onChange(setPhaseWeekRange(phase, phases, totalWeeks, start, phase.endWeekIndex));
             }}
           >
-            <option value="">—</option>
             {Array.from({ length: totalWeeks }, (_, index) => (
               <option key={index} value={index + 1}>
                 Week {index + 1}
@@ -199,14 +177,12 @@ function PhaseDetailEditor({
           <Label>To week</Label>
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            value={assigned ? phase.endWeekIndex + 1 : ""}
+            value={phase.endWeekIndex + 1}
             onChange={(event) => {
               const end = Number(event.target.value) - 1;
-              const start = assigned ? phase.startWeekIndex : end;
-              onChange(setPhaseWeekRange(phase, phases, totalWeeks, start, end));
+              onChange(setPhaseWeekRange(phase, phases, totalWeeks, phase.startWeekIndex, end));
             }}
           >
-            <option value="">—</option>
             {Array.from({ length: totalWeeks }, (_, index) => (
               <option key={index} value={index + 1}>
                 Week {index + 1}
@@ -313,7 +289,12 @@ function PhaseDetailEditor({
       </div>
 
       <div className="mt-4">
-        <Button type="button" variant="secondary" onClick={onDelete}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onDelete}
+          disabled={phases.length <= 1}
+        >
           Delete phase
         </Button>
       </div>

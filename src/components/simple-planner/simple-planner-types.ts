@@ -5,7 +5,7 @@ import type {
   GoalEventDraft,
   UnlinkedRaceSession,
 } from "@/components/season/season-settings-types";
-import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
+import { suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
 export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
@@ -96,6 +96,49 @@ export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   };
 }
 
+export function newPhaseId(): string {
+  return `phase-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function createDefaultPhaseCoverage(totalWeeks: number): SimplePhase[] {
+  if (totalWeeks <= 0) return [];
+  return [
+    {
+      id: newPhaseId(),
+      name: "Phase 1",
+      color: PHASE_COLORS[0] ?? "#38bdf8",
+      startWeekIndex: 0,
+      endWeekIndex: totalWeeks - 1,
+      rampEnabled: { swim: true, bike: true, run: true },
+      ...DEFAULT_PHASE_SESSIONS,
+      ...DEFAULT_PHASE_INTENSE_DAYS,
+      goal: null,
+    },
+  ];
+}
+
+export function suggestSimplePhasesForWeeks(totalWeeks: number): SimplePhase[] {
+  if (totalWeeks <= 0) return [];
+  const suggested = suggestPhasesForWeeks(totalWeeks);
+  let cursor = 0;
+  return suggested.map((phase) => {
+    const startWeekIndex = cursor;
+    const endWeekIndex = cursor + phase.weekCount - 1;
+    cursor = endWeekIndex + 1;
+    return {
+      id: newPhaseId(),
+      name: phase.name,
+      color: phase.color ?? PHASE_COLORS[0] ?? "#38bdf8",
+      startWeekIndex,
+      endWeekIndex,
+      rampEnabled: { swim: true, bike: true, run: true },
+      ...DEFAULT_PHASE_SESSIONS,
+      ...DEFAULT_PHASE_INTENSE_DAYS,
+      goal: null,
+    };
+  });
+}
+
 export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase {
   return {
     id: newPhaseId(),
@@ -110,16 +153,3 @@ export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase
   };
 }
 
-export function createEmptyPhase(index: number): SimplePhase {
-  return {
-    id: newPhaseId(),
-    name: `Phase ${index}`,
-    color: PHASE_COLORS[index % PHASE_COLORS.length] ?? "#38bdf8",
-    startWeekIndex: -1,
-    endWeekIndex: -1,
-    rampEnabled: { swim: true, bike: true, run: true },
-    ...DEFAULT_PHASE_SESSIONS,
-    ...DEFAULT_PHASE_INTENSE_DAYS,
-    goal: null,
-  };
-}

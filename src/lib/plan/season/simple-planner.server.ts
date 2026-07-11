@@ -36,7 +36,7 @@ import {
   type SimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
-import { fitSimplePhasesToTotalWeeks } from "./phase-span-utils";
+import { normalizePhasesToFullCoverage } from "./phase-span-utils";
 import {
   clampZoneMinutesToVolume,
   defaultZoneRampDefaults,
@@ -567,8 +567,8 @@ export async function updateSimpleSeasonPlan(
   });
 
   let phaseWrites = input.phases;
-  if (phaseWrites && bounds.totalWeeks !== existing.totalWeeks) {
-    phaseWrites = fitSimplePhasesToTotalWeeks(
+  if (phaseWrites) {
+    phaseWrites = normalizePhasesToFullCoverage(
       phaseWrites.map((phase) => ({ ...phase, goal: phase.goal ?? null })),
       bounds.totalWeeks
     );
@@ -814,6 +814,8 @@ export async function serializeSimpleSeasonPlan(
       };
     });
 
+  const normalizedPhases = normalizePhasesToFullCoverage(phases, plan.totalWeeks);
+
   return {
     id: plan.id,
     name: plan.name,
@@ -825,7 +827,7 @@ export async function serializeSimpleSeasonPlan(
     zoneRampDefaults,
     recovery: resolveRecoverySettings(plan),
     unlinkedRaceSessions,
-    phases,
+    phases: normalizedPhases,
     weeks: plan.weeks.map((week) => ({
       weekIndex: week.weekIndex,
       weekStartDate: formatDateKey(week.weekStartDate),

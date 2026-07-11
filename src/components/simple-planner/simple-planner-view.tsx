@@ -45,6 +45,7 @@ import {
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
 import { DEFAULT_RECOVERY_SETTINGS, type RecoverySettings } from "@/lib/plan/season/recovery";
+import { normalizePhasesToFullCoverage } from "@/lib/plan/season/phase-span-utils";
 import { ZoneRampPillRow } from "@/components/simple-planner/zone-pill";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
@@ -62,20 +63,23 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     recovery: season.recovery ?? DEFAULT_RECOVERY_SETTINGS,
     unlinkedRaceSessions: season.unlinkedRaceSessions ?? [],
     zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
-    phases: season.phases.map((phase) => ({
-      ...phase,
-      swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
-      bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
-      runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
-      strengthSessionsPerWeek:
-        phase.strengthSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.strengthSessionsPerWeek,
-      swimIntenseDaysPerWeek:
-        phase.swimIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.swimIntenseDaysPerWeek,
-      bikeIntenseDaysPerWeek:
-        phase.bikeIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.bikeIntenseDaysPerWeek,
-      runIntenseDaysPerWeek:
-        phase.runIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.runIntenseDaysPerWeek,
-    })),
+    phases: normalizePhasesToFullCoverage(
+      season.phases.map((phase) => ({
+        ...phase,
+        swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
+        bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
+        runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
+        strengthSessionsPerWeek:
+          phase.strengthSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.strengthSessionsPerWeek,
+        swimIntenseDaysPerWeek:
+          phase.swimIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.swimIntenseDaysPerWeek,
+        bikeIntenseDaysPerWeek:
+          phase.bikeIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.bikeIntenseDaysPerWeek,
+        runIntenseDaysPerWeek:
+          phase.runIntenseDaysPerWeek ?? DEFAULT_PHASE_INTENSE_DAYS.runIntenseDaysPerWeek,
+      })),
+      season.totalWeeks
+    ),
     weeks: season.weeks.map((week) => ({
       ...week,
       zoneMinutes: week.zoneMinutes ?? {},
