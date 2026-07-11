@@ -41,11 +41,13 @@ import {
 } from "@/lib/plan/season/simple-tiz";
 import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import {
-  distanceDisplayToMeters,
-  distanceMetersToDisplay,
   hoursFromDisciplineDistance,
   PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
+import {
+  PlannerDistanceInput,
+  PlannerNumberInput,
+} from "@/components/simple-planner/planner-number-input";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
 import { DEFAULT_RECOVERY_SETTINGS, type RecoverySettings } from "@/lib/plan/season/recovery";
 import { normalizePhasesToFullCoverage } from "@/lib/plan/season/phase-span-utils";
@@ -761,15 +763,12 @@ function RecoverySettingsEditor({
         <div>
           <Label>Recovery volume</Label>
           <div className="mt-1 flex items-center gap-2">
-            <Input
-              type="number"
+            <PlannerNumberInput
               min={30}
               max={90}
               className="w-24"
               value={value.volumePercent}
-              onChange={(event) =>
-                onChange({ ...value, volumePercent: Number(event.target.value) })
-              }
+              onChange={(volumePercent) => onChange({ ...value, volumePercent })}
             />
             <span className="text-sm text-zinc-500">% of load-week hours</span>
           </div>
@@ -777,15 +776,13 @@ function RecoverySettingsEditor({
         <div>
           <Label>Load weeks per recovery</Label>
           <div className="mt-1 flex items-center gap-2">
-            <Input
-              type="number"
+            <PlannerNumberInput
               min={1}
               max={6}
+              integer
               className="w-24"
               value={value.loadWeeks}
-              onChange={(event) =>
-                onChange({ ...value, loadWeeks: Number(event.target.value) })
-              }
+              onChange={(loadWeeks) => onChange({ ...value, loadWeeks })}
             />
             <span className="text-sm text-zinc-500">
               e.g. 3 → three load weeks, then one recovery
@@ -815,14 +812,13 @@ function RecoverySettingsEditor({
         <div>
           <Label>High-zone reduction</Label>
           <div className="mt-1 flex items-center gap-2">
-            <Input
-              type="number"
+            <PlannerNumberInput
               min={0}
               max={100}
               className="w-24"
               value={value.highZoneCutPercent}
-              onChange={(event) =>
-                onChange({ ...value, highZoneCutPercent: Number(event.target.value) })
+              onChange={(highZoneCutPercent) =>
+                onChange({ ...value, highZoneCutPercent })
               }
             />
             <span className="text-sm text-zinc-500">% off Z3, Z4, and Z5</span>
@@ -911,23 +907,12 @@ function RampDefaultsEditor({
                   </td>
                   <td className="py-2 pr-4">
                     {distanceMode && row.paceDiscipline ? (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <PlannerDistanceInput
                         className="w-28"
-                        value={distanceMetersToDisplay(
-                          def.startDistanceMeters,
-                          row.paceDiscipline,
-                          disciplineSettings
-                        )}
-                        onChange={(event) => {
-                          const meters = distanceDisplayToMeters(
-                            event.target.value,
-                            row.paceDiscipline!,
-                            disciplineSettings
-                          );
-                          if (meters == null) return;
+                        value={def.startDistanceMeters}
+                        discipline={row.paceDiscipline}
+                        disciplineSettings={disciplineSettings}
+                        onChange={(meters) =>
                           updateDiscipline(row.key, {
                             startDistanceMeters: meters,
                             startHours: hoursFromDisciplineDistance(
@@ -935,43 +920,26 @@ function RampDefaultsEditor({
                               meters,
                               def
                             ),
-                          });
-                        }}
-                      />
-                    ) : (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="w-24"
-                        value={def.startHours}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            startHours: Number(event.target.value),
                           })
                         }
+                      />
+                    ) : (
+                      <PlannerNumberInput
+                        min={0}
+                        className="w-24"
+                        value={def.startHours}
+                        onChange={(startHours) => updateDiscipline(row.key, { startHours })}
                       />
                     )}
                   </td>
                   <td className="py-2 pr-4">
                     {distanceMode && row.paceDiscipline ? (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <PlannerDistanceInput
                         className="w-28"
-                        value={distanceMetersToDisplay(
-                          def.peakDistanceMeters,
-                          row.paceDiscipline,
-                          disciplineSettings
-                        )}
-                        onChange={(event) => {
-                          const meters = distanceDisplayToMeters(
-                            event.target.value,
-                            row.paceDiscipline!,
-                            disciplineSettings
-                          );
-                          if (meters == null) return;
+                        value={def.peakDistanceMeters}
+                        discipline={row.paceDiscipline}
+                        disciplineSettings={disciplineSettings}
+                        onChange={(meters) =>
                           updateDiscipline(row.key, {
                             peakDistanceMeters: meters,
                             peakHours: hoursFromDisciplineDistance(
@@ -979,38 +947,26 @@ function RampDefaultsEditor({
                               meters,
                               def
                             ),
-                          });
-                        }}
-                      />
-                    ) : (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        className="w-24"
-                        value={def.peakHours}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            peakHours: Number(event.target.value),
                           })
                         }
+                      />
+                    ) : (
+                      <PlannerNumberInput
+                        min={0}
+                        className="w-24"
+                        value={def.peakHours}
+                        onChange={(peakHours) => updateDiscipline(row.key, { peakHours })}
                       />
                     )}
                   </td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
+                      <PlannerNumberInput
+                        min={0}
+                        max={100}
                         className="w-20"
                         value={def.ratePercent}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            ratePercent: Number(event.target.value),
-                          })
-                        }
+                        onChange={(ratePercent) => updateDiscipline(row.key, { ratePercent })}
                       />
                       <span className="text-zinc-500">%</span>
                     </div>

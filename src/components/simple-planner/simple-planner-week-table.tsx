@@ -1,13 +1,15 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui";
 import { PlanTizChart } from "@/components/plan-tiz-chart";
 import {
-  distanceDisplayToMeters,
   distanceMetersToDisplay,
   hoursFromDisciplineDistance,
 } from "@/components/simple-planner/simple-planner-volume-display";
+import {
+  PlannerDistanceInput,
+  PlannerNumberInput,
+} from "@/components/simple-planner/planner-number-input";
 import { ZonePillInput } from "@/components/simple-planner/zone-pill";
 import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
 import type { SimplePhase, SimpleWeek } from "@/components/simple-planner/simple-planner-types";
@@ -580,14 +582,8 @@ function DisciplineExpandedCells({
     onUpdateWeek(patch);
   }
 
-  function updateVolumeFromDistance(input: string) {
+  function updateVolumeFromDistance(meters: number) {
     if (!discipline.distanceKey || !paceDiscipline) return;
-    const meters = distanceDisplayToMeters(
-      input,
-      paceDiscipline,
-      disciplineSettings
-    );
-    if (meters == null) return;
     onUpdateWeek({
       [discipline.distanceKey]: meters,
       [discipline.key]: hoursFromDisciplineDistance(paceDiscipline, meters, def),
@@ -603,25 +599,22 @@ function DisciplineExpandedCells({
             <span className="w-12 text-zinc-500">{discipline.label}</span>
             {distanceMode && discipline.distanceKey && paceDiscipline ? (
               <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
+                <PlannerDistanceInput
                   className="w-28"
-                  value={distanceMetersToDisplay(distanceMeters, paceDiscipline, disciplineSettings)}
-                  onChange={(event) => updateVolumeFromDistance(event.target.value)}
+                  value={distanceMeters}
+                  discipline={paceDiscipline}
+                  disciplineSettings={disciplineSettings}
+                  onChange={updateVolumeFromDistance}
                 />
                 <span className="text-xs text-zinc-500">{hours}h</span>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  step="0.1"
-                  min="0"
+                <PlannerNumberInput
+                  min={0}
                   className="w-24"
                   value={hours}
-                  onChange={(event) => updateVolumeFromHours(Number(event.target.value))}
+                  onChange={updateVolumeFromHours}
                 />
                 <span className="text-xs text-zinc-500">h/wk</span>
                 {discipline.distanceKey && paceDiscipline && distanceMeters ? (

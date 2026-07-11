@@ -2,6 +2,7 @@
 
 import { addWeeks, format } from "date-fns";
 import { Button, Input, Label } from "@/components/ui";
+import { PlannerNumberInput } from "@/components/simple-planner/planner-number-input";
 import { parseDateKey } from "@/lib/dates";
 import { type SimplePhase } from "@/components/simple-planner/simple-planner-types";
 import {
@@ -303,33 +304,25 @@ function PhaseDetailEditor({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label>Taper start % of peak</Label>
-              <Input
-                type="number"
+              <PlannerNumberInput
                 min={1}
                 max={150}
                 className="mt-1"
                 value={phase.volumeTaperStartPercent}
-                onChange={(event) =>
-                  onChange({
-                    ...phase,
-                    volumeTaperStartPercent: Number(event.target.value),
-                  })
+                onChange={(volumeTaperStartPercent) =>
+                  onChange({ ...phase, volumeTaperStartPercent })
                 }
               />
             </div>
             <div>
               <Label>Taper end % of peak</Label>
-              <Input
-                type="number"
+              <PlannerNumberInput
                 min={1}
                 max={150}
                 className="mt-1"
                 value={phase.volumeTaperEndPercent}
-                onChange={(event) =>
-                  onChange({
-                    ...phase,
-                    volumeTaperEndPercent: Number(event.target.value),
-                  })
+                onChange={(volumeTaperEndPercent) =>
+                  onChange({ ...phase, volumeTaperEndPercent })
                 }
               />
             </div>
@@ -337,17 +330,13 @@ function PhaseDetailEditor({
         ) : (
           <div>
             <Label>Volume target % of peak</Label>
-            <Input
-              type="number"
+            <PlannerNumberInput
               min={1}
               max={150}
               className="mt-1"
               value={phase.volumeTargetPercent}
-              onChange={(event) =>
-                onChange({
-                  ...phase,
-                  volumeTargetPercent: Number(event.target.value),
-                })
+              onChange={(volumeTargetPercent) =>
+                onChange({ ...phase, volumeTargetPercent })
               }
             />
           </div>
@@ -377,18 +366,13 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <Input
-                type="number"
+              <PlannerNumberInput
                 min={0}
                 max={7}
+                integer
                 className="mt-1"
                 value={phase[field.key]}
-                onChange={(event) =>
-                  onChange({
-                    ...phase,
-                    [field.key]: Number(event.target.value),
-                  })
-                }
+                onChange={(next) => onChange({ ...phase, [field.key]: next })}
               />
             </div>
           ))}
@@ -410,18 +394,13 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <Input
-                type="number"
+              <PlannerNumberInput
                 min={0}
                 max={7}
+                integer
                 className="mt-1"
                 value={phase[field.key]}
-                onChange={(event) =>
-                  onChange({
-                    ...phase,
-                    [field.key]: Number(event.target.value),
-                  })
-                }
+                onChange={(next) => onChange({ ...phase, [field.key]: next })}
               />
             </div>
           ))}

@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, Input, Label } from "@/components/ui";
+import { Button, Label } from "@/components/ui";
+import { PlannerNumberInput } from "@/components/simple-planner/planner-number-input";
 import {
   DEFAULT_LONG_SESSION_DEFAULTS,
   type SimpleLongSessionDefaults,
@@ -45,42 +46,42 @@ export function SimplePlannerLongSessionSection({
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label>Long ride start (min)</Label>
-          <Input
-            type="number"
+          <PlannerNumberInput
             min={1}
+            integer
             className="mt-1"
             value={defaults.longRideStartMin}
-            onChange={(event) => updateField("longRideStartMin", Number(event.target.value))}
+            onChange={(longRideStartMin) => updateField("longRideStartMin", longRideStartMin)}
           />
         </div>
         <div>
           <Label>Long ride peak (min)</Label>
-          <Input
-            type="number"
+          <PlannerNumberInput
             min={1}
+            integer
             className="mt-1"
             value={defaults.longRidePeakMin}
-            onChange={(event) => updateField("longRidePeakMin", Number(event.target.value))}
+            onChange={(longRidePeakMin) => updateField("longRidePeakMin", longRidePeakMin)}
           />
         </div>
         <div>
           <Label>Long run start (min)</Label>
-          <Input
-            type="number"
+          <PlannerNumberInput
             min={1}
+            integer
             className="mt-1"
             value={defaults.longRunStartMin}
-            onChange={(event) => updateField("longRunStartMin", Number(event.target.value))}
+            onChange={(longRunStartMin) => updateField("longRunStartMin", longRunStartMin)}
           />
         </div>
         <div>
           <Label>Long run peak (min)</Label>
-          <Input
-            type="number"
+          <PlannerNumberInput
             min={1}
+            integer
             className="mt-1"
             value={defaults.longRunPeakMin}
-            onChange={(event) => updateField("longRunPeakMin", Number(event.target.value))}
+            onChange={(longRunPeakMin) => updateField("longRunPeakMin", longRunPeakMin)}
           />
         </div>
       </div>
