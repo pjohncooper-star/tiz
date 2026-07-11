@@ -634,6 +634,7 @@ export function SimplePlannerView() {
       >
         <SimplePlannerPhasesPane
           seasonPlanId={season.id}
+          seasonStartDate={season.startDate}
           phases={season.phases}
           totalWeeks={season.totalWeeks}
           selectedPhaseId={selectedPhaseId}

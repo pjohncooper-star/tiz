@@ -1,6 +1,8 @@
 "use client";
 
+import { addWeeks, format } from "date-fns";
 import { Button, Input, Label } from "@/components/ui";
+import { parseDateKey } from "@/lib/dates";
 import { type SimplePhase } from "@/components/simple-planner/simple-planner-types";
 import {
   defaultVolumeSettingsForPhaseName,
@@ -18,6 +20,7 @@ import {
 
 type SimplePlannerPhasesPaneProps = {
   seasonPlanId?: string;
+  seasonStartDate: string;
   phases: SimplePhase[];
   totalWeeks: number;
   selectedPhaseId: string | null;
@@ -27,6 +30,7 @@ type SimplePlannerPhasesPaneProps = {
 
 export function SimplePlannerPhasesPane({
   seasonPlanId,
+  seasonStartDate,
   phases,
   totalWeeks,
   selectedPhaseId,
@@ -92,6 +96,12 @@ export function SimplePlannerPhasesPane({
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Phases are week ranges across your season — not separate calendar events. Week 1 starts
+        on your season start date (under Season). Select a phase below to set its weeks, or drag
+        phase edges in the Weekly volume table.
+      </p>
+
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Button type="button" variant="secondary" onClick={addPhase}>
           + Add phase
@@ -132,6 +142,7 @@ export function SimplePlannerPhasesPane({
           phase={selected}
           phases={covered}
           totalWeeks={totalWeeks}
+          seasonStartDate={seasonStartDate}
           onChange={updatePhase}
           onDelete={() => void deletePhase(selected)}
         />
@@ -140,20 +151,39 @@ export function SimplePlannerPhasesPane({
   );
 }
 
+function formatPhaseCalendarRange(
+  seasonStartDate: string,
+  startWeekIndex: number,
+  endWeekIndex: number
+): string {
+  const seasonStart = parseDateKey(seasonStartDate);
+  const rangeStart = addWeeks(seasonStart, startWeekIndex);
+  const rangeEnd = addWeeks(seasonStart, endWeekIndex);
+  rangeEnd.setDate(rangeEnd.getDate() + 6);
+  return `${format(rangeStart, "MMM d, yyyy")} – ${format(rangeEnd, "MMM d, yyyy")}`;
+}
+
 function PhaseDetailEditor({
   phase,
   phases,
   totalWeeks,
+  seasonStartDate,
   onChange,
   onDelete,
 }: {
   phase: SimplePhase;
   phases: SimplePhase[];
   totalWeeks: number;
+  seasonStartDate: string;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
   const weekLabel = formatWeekRange(phase.startWeekIndex, phase.endWeekIndex);
+  const calendarLabel = formatPhaseCalendarRange(
+    seasonStartDate,
+    phase.startWeekIndex,
+    phase.endWeekIndex
+  );
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -180,14 +210,12 @@ function PhaseDetailEditor({
       </div>
 
       <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-        Weeks: <span className="font-medium">{weekLabel}</span>
-      </p>
-      <p className="mt-1 text-xs text-zinc-500">
-        Per-phase long-session cadence is set above. Recalculate in the Long sessions section to
-        update week values.
+        Span: <span className="font-medium">{weekLabel}</span>
+        <span className="text-zinc-400"> · </span>
+        <span className="font-medium">{calendarLabel}</span>
       </p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 md:hidden">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <Label>From week</Label>
           <select
@@ -223,6 +251,10 @@ function PhaseDetailEditor({
           </select>
         </div>
       </div>
+      <p className="mt-1 text-xs text-zinc-500">
+        Changing weeks resizes this phase and adjusts neighbors so every week stays covered. On
+        desktop you can also drag the top/bottom edge of a phase in the Weekly volume table.
+      </p>
 
       <fieldset className="mt-4 space-y-3">
         <legend className="text-sm font-medium">Volume & recovery</legend>
