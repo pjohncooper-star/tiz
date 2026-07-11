@@ -29,6 +29,7 @@ import {
   PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
+import { DEFAULT_RECOVERY_SETTINGS, type RecoverySettings } from "@/lib/plan/season/recovery";
 import { ZoneRampPillRow } from "@/components/simple-planner/zone-pill";
 import {
   DISCIPLINE_LABELS,
@@ -41,6 +42,7 @@ import {
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
   return {
     ...season,
+    recovery: season.recovery ?? DEFAULT_RECOVERY_SETTINGS,
     zoneRampDefaults: season.zoneRampDefaults ?? defaultZoneRampDefaults(),
     phases: season.phases.map((phase) => ({
       ...phase,
@@ -70,6 +72,7 @@ type PlannerSectionId =
   | "phases"
   | "ramps"
   | "zoneRamps"
+  | "recovery"
   | "weeklyVolume";
 
 const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
@@ -79,6 +82,7 @@ const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   phases: false,
   ramps: false,
   zoneRamps: false,
+  recovery: false,
   weeklyVolume: true,
 };
 
@@ -273,6 +277,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       endDate: season.endDate,
       rampDefaults: season.rampDefaults,
       zoneRampDefaults: season.zoneRampDefaults,
+      recovery: season.recovery,
       phases: season.phases,
       weeks: serializeWeeksForSave(season.weeks),
       goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
@@ -536,6 +541,26 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       </CollapsibleSection>
 
       <CollapsibleSection
+        title="Recovery & de-load"
+        expanded={expandedSections.recovery}
+        onToggle={() => toggleSection("recovery")}
+      >
+        <RecoverySettingsEditor
+          value={season.recovery}
+          onChange={(recovery) => setSeason({ ...season, recovery })}
+          onApplyCadence={() =>
+            void saveSeason(
+              savePayload({
+                applyRecoveryCadence: true,
+                recalculate: true,
+              })
+            )
+          }
+          saving={saving}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection
         title="Weekly volume"
         expanded={expandedSections.weeklyVolume}
         onToggle={() => toggleSection("weeklyVolume")}
@@ -552,6 +577,103 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
         />
       </CollapsibleSection>
+    </div>
+  );
+}
+
+function RecoverySettingsEditor({
+  value,
+  onChange,
+  onApplyCadence,
+  saving,
+}: {
+  value: RecoverySettings;
+  onChange: (value: RecoverySettings) => void;
+  onApplyCadence: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Recovery volume</Label>
+          <div className="mt-1 flex items-center gap-2">
+            <Input
+              type="number"
+              min={30}
+              max={90}
+              className="w-24"
+              value={value.volumePercent}
+              onChange={(event) =>
+                onChange({ ...value, volumePercent: Number(event.target.value) })
+              }
+            />
+            <span className="text-sm text-zinc-500">% of load-week hours</span>
+          </div>
+        </div>
+        <div>
+          <Label>Load weeks per recovery</Label>
+          <div className="mt-1 flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              max={6}
+              className="w-24"
+              value={value.loadWeeks}
+              onChange={(event) =>
+                onChange({ ...value, loadWeeks: Number(event.target.value) })
+              }
+            />
+            <span className="text-sm text-zinc-500">
+              e.g. 3 → three load weeks, then one recovery
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <Label>Zone behavior on recovery weeks</Label>
+        <select
+          className="mt-1 w-full max-w-md rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          value={value.zoneMode}
+          onChange={(event) =>
+            onChange({
+              ...value,
+              zoneMode: event.target.value as RecoverySettings["zoneMode"],
+            })
+          }
+        >
+          <option value="proportional">Match volume (scale all zones)</option>
+          <option value="intensity_shift">Reduce Z3–Z5, increase Z1–Z2</option>
+        </select>
+      </div>
+
+      {value.zoneMode === "intensity_shift" && (
+        <div>
+          <Label>High-zone reduction</Label>
+          <div className="mt-1 flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              className="w-24"
+              value={value.highZoneCutPercent}
+              onChange={(event) =>
+                onChange({ ...value, highZoneCutPercent: Number(event.target.value) })
+              }
+            />
+            <span className="text-sm text-zinc-500">% off Z3, Z4, and Z5</span>
+          </div>
+        </div>
+      )}
+
+      <Button type="button" variant="secondary" disabled={saving} onClick={onApplyCadence}>
+        Apply recovery cadence & recalculate
+      </Button>
+      <p className="text-xs text-zinc-500">
+        Suggests recovery weeks on a repeating load:recovery pattern, then recalculates
+        hours and zones. Weeks you edited manually are left unchanged.
+      </p>
     </div>
   );
 }

@@ -84,6 +84,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
       removedGoalEvents: data.removedGoalEvents,
+      applyRecoveryCadence: data.applyRecoveryCadence,
+      recovery: data.recovery,
     });
 
     if (!plan) {

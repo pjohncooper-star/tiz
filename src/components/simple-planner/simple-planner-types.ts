@@ -1,5 +1,6 @@
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import type { ZoneRampDefaultsByDiscipline } from "@/lib/plan/season/simple-tiz";
+import type { RecoverySettings } from "@/lib/plan/season/recovery";
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
@@ -59,6 +60,7 @@ export type SimpleWeek = {
   runDistanceMeters?: number | null;
   zoneMinutes: ZoneMinutes;
   zoneMinutesOverridden?: boolean;
+  volumeOverridden?: boolean;
 };
 
 export type SimpleSeason = {
@@ -70,6 +72,7 @@ export type SimpleSeason = {
   status: string;
   rampDefaults: SimpleRampDefaults;
   zoneRampDefaults: ZoneRampDefaultsByDiscipline;
+  recovery: RecoverySettings;
   phases: SimplePhase[];
   weeks: SimpleWeek[];
   goalEvents: SimpleGoalEvent[];

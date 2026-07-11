@@ -490,6 +490,16 @@ export const simplePhaseSchema = z
     { message: "Invalid phase week span" }
   );
 
+export const recoveryZoneModeSchema = z.enum(["proportional", "intensity_shift"]);
+
+export const recoverySettingsSchema = z.object({
+  volumePercent: z.number().min(30).max(90),
+  loadWeeks: z.number().int().min(1).max(6),
+  zoneMode: recoveryZoneModeSchema,
+  highZoneCutPercent: z.number().min(0).max(100),
+  sessionScalePercent: z.number().min(10).max(90).nullable().optional(),
+});
+
 export const simpleWeekSchema = z.object({
   weekIndex: z.number().int().nonnegative(),
   isRestWeek: z.boolean(),
@@ -500,6 +510,7 @@ export const simpleWeekSchema = z.object({
   runDistanceMeters: z.number().nonnegative().nullable().optional(),
   zoneMinutes: z.record(z.string(), z.number().nonnegative()).optional(),
   zoneMinutesOverridden: z.boolean().optional(),
+  volumeOverridden: z.boolean().optional(),
 });
 
 export const createSimpleSeasonSchema = z.object({
@@ -523,6 +534,8 @@ export const updateSimpleSeasonSchema = z
     weeks: z.array(simpleWeekSchema).optional(),
     recalculate: z.boolean().optional(),
     resetZoneOverrides: z.boolean().optional(),
+    applyRecoveryCadence: z.boolean().optional(),
+    recovery: recoverySettingsSchema.partial().optional(),
     goalEvent: seasonGoalEventSchema.optional(),
     bGoalEvents: z.array(seasonGoalEventSchema).optional(),
     cGoalEvents: z.array(seasonGoalEventSchema).optional(),

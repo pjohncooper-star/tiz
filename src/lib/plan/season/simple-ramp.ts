@@ -31,6 +31,7 @@ export type SimplePhaseSpan = {
 export type SimpleWeekVolume = {
   weekIndex: number;
   isRestWeek: boolean;
+  volumeOverridden?: boolean;
   swimHours: number;
   bikeHours: number;
   runHours: number;
@@ -144,7 +145,7 @@ function rampNumericValue(
   const week = weeks[weekIndex]!;
   const phase = phaseForWeek(phases, weekIndex);
 
-  if (week.isRestWeek) return;
+  if (week.isRestWeek || week.volumeOverridden) return;
   if (!isRampOnForDiscipline(phase, discipline)) return;
 
   const baseIndex = rampBaseWeekIndex(weeks, weekIndex);
@@ -219,7 +220,7 @@ function applyDistanceRamp(
   }
 }
 
-function syncDerivedDistanceOrHours(
+export function syncDerivedDistanceOrHours(
   weeks: SimpleWeekVolume[],
   defaults: SimpleRampDefaults
 ): void {

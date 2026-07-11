@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui";
+import { PlanTizChart } from "@/components/plan-tiz-chart";
 import {
   distanceDisplayToMeters,
   distanceMetersToDisplay,
@@ -641,7 +642,7 @@ function WeekCells({
           type="checkbox"
           checked={week.isRestWeek}
           onChange={(event) => onUpdateWeek({ isRestWeek: event.target.checked })}
-          aria-label={`Rest week ${week.weekIndex + 1}`}
+          aria-label={`Recovery week ${week.weekIndex + 1}`}
         />
       </td>
       <td className="px-3 py-2 text-right font-medium">{week.totalHours}</td>
@@ -708,7 +709,10 @@ function DisciplineExpandedCells({
   );
 
   function updateVolumeFromHours(nextHours: number) {
-    const patch: Partial<SimpleWeek> = { [discipline.key]: nextHours };
+    const patch: Partial<SimpleWeek> = {
+      [discipline.key]: nextHours,
+      volumeOverridden: true,
+    };
     if (discipline.distanceKey && paceDiscipline && def.referencePaceSeconds > 0) {
       patch[discipline.distanceKey] = Math.round(
         distanceMetersFromHoursPace(paceDiscipline, nextHours, def.referencePaceSeconds)
@@ -728,6 +732,7 @@ function DisciplineExpandedCells({
     onUpdateWeek({
       [discipline.distanceKey]: meters,
       [discipline.key]: hoursFromDisciplineDistance(paceDiscipline, meters, def),
+      volumeOverridden: true,
     });
   }
 
@@ -792,6 +797,10 @@ function DisciplineExpandedCells({
               {budget.used}m / {budget.cap}m
             </span>
           </div>
+          <PlanTizChart
+            discipline={discipline.discipline}
+            values={week.zoneMinutes}
+          />
         </div>
       </td>
       <td className="px-3 py-2 text-right font-medium">{hours}</td>

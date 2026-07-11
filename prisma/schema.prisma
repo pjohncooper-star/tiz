@@ -493,6 +493,9 @@ model SeasonPlan {
   deLoadStrategy           DeLoadStrategy @default(VOLUME_ONLY)
   reduceCountsOnDeLoad     Boolean        @default(true)
   deLoadCountScalePercent  Float?
+  recoveryLoadWeeks        Int            @default(3)
+  recoveryZoneMode         String         @default("proportional")
+  recoveryHighZoneCutPercent Float        @default(50)
   longRideStartMin         Int            @default(60)
   longRidePeakMin          Int            @default(180)
   longRunStartMin          Int            @default(30)
@@ -633,6 +636,7 @@ model SeasonWeek {
   runDistanceMeters  Float?
   zoneMinutes      Json
   zoneMinutesOverridden Boolean @default(false)
+  volumeOverridden    Boolean @default(false)
   swimSessions     Int
   bikeSessions     Int
   runSessions      Int
