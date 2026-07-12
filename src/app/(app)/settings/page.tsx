@@ -14,13 +14,9 @@ import { signalLabel } from "@/lib/zones/display";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
-  const session = await requireAthlete();
-  const athleteId = session.user.athleteId!;
-  const [connection, settings, athlete] = await Promise.all([
-    db.stravaConnection.findUnique({ where: { athleteId } }),
-    db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
-    db.athlete.findUnique({
+async function loadAthleteSettingsProfile(athleteId: string) {
+  try {
+    return await db.athlete.findUnique({
       where: { id: athleteId },
       select: {
         strengthPastWorkoutShading: true,
@@ -28,7 +24,32 @@ export default async function SettingsPage() {
         workoutShadingTarget: true,
         phaseKindZoneDefaults: true,
       },
-    }),
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|column/.test(error.message)
+    ) {
+      return db.athlete.findUnique({
+        where: { id: athleteId },
+        select: {
+          strengthPastWorkoutShading: true,
+          selfEvalConfig: true,
+          workoutShadingTarget: true,
+        },
+      });
+    }
+    throw error;
+  }
+}
+
+export default async function SettingsPage() {
+  const session = await requireAthlete();
+  const athleteId = session.user.athleteId!;
+  const [connection, settings, athlete] = await Promise.all([
+    db.stravaConnection.findUnique({ where: { athleteId } }),
+    db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
+    loadAthleteSettingsProfile(athleteId),
   ]);
 
   const disciplineSettings = buildDisciplineSettings(
@@ -50,7 +71,9 @@ export default async function SettingsPage() {
   const workoutShadingTarget = parseWorkoutShadingTarget(athlete?.workoutShadingTarget);
 
   const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
-  const phaseKindZoneDefaults = parsePhaseKindZoneDefaults(athlete?.phaseKindZoneDefaults);
+  const phaseKindZoneDefaults = parsePhaseKindZoneDefaults(
+    athlete && "phaseKindZoneDefaults" in athlete ? athlete.phaseKindZoneDefaults : null
+  );
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
