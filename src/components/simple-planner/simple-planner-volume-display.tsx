@@ -175,13 +175,23 @@ export function PlannerPaceInput({
     setText(paceCanonicalToDisplay(seconds, discipline, disciplineSettings));
   }
 
+  function handleTextChange(nextText: string) {
+    setText(nextText);
+    const trimmed = nextText.trim();
+    if (!trimmed) return;
+    const seconds = paceDisplayToCanonical(trimmed, discipline, disciplineSettings);
+    if (seconds != null) {
+      onChange(seconds);
+    }
+  }
+
   return (
     <input
       type="text"
       className={className}
       placeholder={paceInputLabelFor(discipline, disciplineSettings)}
       value={text}
-      onChange={(event) => setText(event.target.value)}
+      onChange={(event) => handleTextChange(event.target.value)}
       onFocus={() => {
         focusedRef.current = true;
       }}

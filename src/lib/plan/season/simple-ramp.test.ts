@@ -4,7 +4,10 @@ import {
   buildDisciplineRampDefaults,
   buildPhaseSpansFromDb,
   defaultSimpleRampDefaults,
+  parseSimpleRampDefaultsFromApi,
+  rampDefaultsToPlanFields,
   recalculateSimpleVolumes,
+  resolveSimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
 
@@ -24,6 +27,71 @@ function week(
     totalHours: swimHours + bikeHours + runHours,
   };
 }
+
+describe("simple ramp defaults persistence", () => {
+  it("round-trips reference pace seconds through plan fields", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim.referencePaceSeconds = 95;
+    defaults.run.referencePaceSeconds = 285;
+
+    const fields = rampDefaultsToPlanFields(defaults);
+    assert.equal(fields.swimReferencePaceSeconds, 95);
+    assert.equal(fields.runReferencePaceSeconds, 285);
+
+    const resolved = resolveSimpleRampDefaults({
+      startHours: fields.startHours,
+      peakHours: fields.peakHours,
+      maxRampPercent: fields.maxRampPercent,
+      swimStartHours: fields.swimStartHours,
+      swimPeakHours: fields.swimPeakHours,
+      swimRampPercent: fields.swimRampPercent,
+      bikeStartHours: fields.bikeStartHours,
+      bikePeakHours: fields.bikePeakHours,
+      bikeRampPercent: fields.bikeRampPercent,
+      runStartHours: fields.runStartHours,
+      runPeakHours: fields.runPeakHours,
+      runRampPercent: fields.runRampPercent,
+      swimPlanningMode: fields.swimPlanningMode,
+      runPlanningMode: fields.runPlanningMode,
+      swimReferencePaceSeconds: fields.swimReferencePaceSeconds,
+      runReferencePaceSeconds: fields.runReferencePaceSeconds,
+      swimStartDistanceMeters: fields.swimStartDistanceMeters,
+      swimPeakDistanceMeters: fields.swimPeakDistanceMeters,
+      runStartDistanceMeters: fields.runStartDistanceMeters,
+      runPeakDistanceMeters: fields.runPeakDistanceMeters,
+    });
+
+    assert.equal(resolved.swim.referencePaceSeconds, 95);
+    assert.equal(resolved.run.referencePaceSeconds, 285);
+  });
+
+  it("parses reference pace seconds from API payload", () => {
+    const parsed = parseSimpleRampDefaultsFromApi({
+      swim: {
+        mode: "DISTANCE",
+        startHours: 2,
+        peakHours: 4,
+        ratePercent: 5,
+        startDistanceMeters: 3000,
+        peakDistanceMeters: 6000,
+        referencePaceSeconds: 102,
+      },
+      bike: { startHours: 4, peakHours: 8, ratePercent: 5 },
+      run: {
+        mode: "DISTANCE",
+        startHours: 2,
+        peakHours: 4,
+        ratePercent: 5,
+        startDistanceMeters: 20000,
+        peakDistanceMeters: 40000,
+        referencePaceSeconds: 310,
+      },
+    });
+
+    assert.equal(parsed.swim.referencePaceSeconds, 102);
+    assert.equal(parsed.run.referencePaceSeconds, 310);
+  });
+});
 
 describe("recalculateSimpleVolumes", () => {
   const defaults = defaultSimpleRampDefaults();

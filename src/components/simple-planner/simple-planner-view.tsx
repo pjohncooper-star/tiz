@@ -82,16 +82,80 @@ const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   weeklyVolume: true,
 };
 
+function cloneSeason(season: SimpleSeason): SimpleSeason {
+  return structuredClone(season);
+}
+
+function revertSection(
+  sectionId: PlannerSectionId,
+  baseline: SimpleSeason,
+  draft: SimpleSeason
+): SimpleSeason {
+  switch (sectionId) {
+    case "season":
+      return {
+        ...draft,
+        name: baseline.name,
+        startDate: baseline.startDate,
+        endDate: baseline.endDate,
+        totalWeeks: baseline.totalWeeks,
+        weeks: baseline.weeks,
+        phases: baseline.phases,
+      };
+    case "races":
+      return {
+        ...draft,
+        primaryGoalEvent: baseline.primaryGoalEvent,
+        goalEvents: baseline.goalEvents,
+      };
+    case "phaseKinds":
+      return {
+        ...draft,
+        phaseKindZoneDefaults: baseline.phaseKindZoneDefaults,
+        weeks: baseline.weeks,
+      };
+    case "phases":
+      return {
+        ...draft,
+        phases: baseline.phases,
+        weeks: baseline.weeks,
+      };
+    case "ramps":
+      return {
+        ...draft,
+        rampDefaults: baseline.rampDefaults,
+        weeks: baseline.weeks,
+      };
+    case "weeklyVolume":
+      return {
+        ...draft,
+        weeks: baseline.weeks,
+        phases: baseline.phases,
+      };
+    default:
+      return draft;
+  }
+}
+
+function flushPendingInputs() {
+  const active = document.activeElement;
+  if (active instanceof HTMLElement) {
+    active.blur();
+  }
+}
+
 function CollapsibleSection({
   title,
   expanded,
   onToggle,
   children,
+  actions,
 }: {
   title: string;
   expanded: boolean;
   onToggle: () => void;
   children: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
     <section className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -104,8 +168,40 @@ function CollapsibleSection({
         <span className="text-xs text-zinc-400">{expanded ? "▼" : "▶"}</span>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">{title}</h2>
       </button>
-      {expanded ? <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">{children}</div> : null}
+      {expanded ? (
+        <div className="border-t border-zinc-100 px-5 pb-5 pt-4 dark:border-zinc-800">
+          {children}
+          {actions ? (
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+              {actions}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function SectionActions({
+  onSave,
+  onCancel,
+  saving,
+  saveLabel = "Save",
+}: {
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  saveLabel?: string;
+}) {
+  return (
+    <>
+      <Button type="button" disabled={saving} onClick={onSave}>
+        {saving ? "Saving…" : saveLabel}
+      </Button>
+      <Button type="button" variant="secondary" disabled={saving} onClick={onCancel}>
+        Cancel
+      </Button>
+    </>
   );
 }
 
@@ -144,8 +240,10 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
+  const [baselineSeason, setBaselineSeason] = useState<SimpleSeason | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSection, setSavingSection] = useState<PlannerSectionId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
@@ -178,7 +276,9 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason | null };
-    setSeason(data.season ? normalizeSeason(data.season) : null);
+    const loaded = data.season ? normalizeSeason(data.season) : null;
+    setSeason(loaded);
+    setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setCreateMode(!data.season);
     setLoading(false);
   }, [seasonIdParam]);
@@ -202,9 +302,18 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
     };
   }, [season]);
 
-  async function saveSeason(payload: Record<string, unknown>) {
-    if (!season) return;
+  async function saveSeason(
+    payload: Record<string, unknown>,
+    options?: { sectionId?: PlannerSectionId }
+  ) {
+    if (!season) return false;
+    flushPendingInputs();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     setSaving(true);
+    if (options?.sectionId) {
+      setSavingSection(options.sectionId);
+    }
     setError(null);
     const res = await fetch(`/api/plan/season/${season.id}/simple`, {
       method: "PATCH",
@@ -212,13 +321,105 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       body: JSON.stringify(payload),
     });
     setSaving(false);
+    setSavingSection(null);
     if (!res.ok) {
       const body = (await res.json()) as { error?: string };
       setError(typeof body.error === "string" ? body.error : "Save failed.");
-      return;
+      return false;
     }
     const data = (await res.json()) as { season: SimpleSeason };
-    setSeason(normalizeSeason(data.season));
+    const normalized = normalizeSeason(data.season);
+    setSeason(normalized);
+    setBaselineSeason(cloneSeason(normalized));
+    return true;
+  }
+
+  function sectionSavePayload(
+    sectionId: PlannerSectionId,
+    extra: Record<string, unknown> = {}
+  ): Record<string, unknown> {
+    if (!season) return extra;
+    const aRace = season.primaryGoalEvent ?? racesByPriority.a;
+    const bRaces = season.goalEvents.filter((event) => event.priority === "B");
+    const cRaces = season.goalEvents.filter((event) => event.priority === "C");
+
+    switch (sectionId) {
+      case "season":
+        return {
+          name: season.name,
+          startDate: season.startDate,
+          endDate: season.endDate,
+          ...extra,
+        };
+      case "races":
+        return {
+          goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
+          bGoalEvents: bRaces
+            .filter((race) => race.name && race.date)
+            .map(({ id, name, date, disciplines }) => ({
+              id,
+              name,
+              date,
+              disciplines,
+            })),
+          cGoalEvents: cRaces
+            .filter((race) => race.name && race.date)
+            .map(({ id, name, date, disciplines }) => ({
+              id,
+              name,
+              date,
+              disciplines,
+            })),
+          ...extra,
+        };
+      case "phaseKinds":
+        return {
+          phaseKindZoneDefaults: season.phaseKindZoneDefaults,
+          recalculate: true,
+          ...extra,
+        };
+      case "phases":
+        return {
+          phases: season.phases,
+          recalculate: true,
+          ...extra,
+        };
+      case "ramps":
+        return {
+          rampDefaults: season.rampDefaults,
+          recalculate: true,
+          ...extra,
+        };
+      case "weeklyVolume":
+        return {
+          phases: season.phases,
+          weeks: serializeWeeksForSave(season.weeks),
+          ...extra,
+        };
+      default:
+        return extra;
+    }
+  }
+
+  function cancelSection(sectionId: PlannerSectionId) {
+    if (!season || !baselineSeason) return;
+    setSeason(revertSection(sectionId, baselineSeason, season));
+    setError(null);
+  }
+
+  function sectionActions(
+    sectionId: PlannerSectionId,
+    saveLabel = "Save"
+  ): ReactNode {
+    const isSaving = saving && savingSection === sectionId;
+    return (
+      <SectionActions
+        saving={isSaving}
+        saveLabel={saveLabel}
+        onSave={() => void saveSeason(sectionSavePayload(sectionId), { sectionId })}
+        onCancel={() => cancelSection(sectionId)}
+      />
+    );
   }
 
   async function handleCreateSeason() {
@@ -241,7 +442,9 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       return;
     }
     const data = (await res.json()) as { season: SimpleSeason };
-    setSeason(normalizeSeason(data.season));
+    const normalized = normalizeSeason(data.season);
+    setSeason(normalized);
+    setBaselineSeason(cloneSeason(normalized));
     setCreateMode(false);
     setExpandedSections(DEFAULT_SECTION_EXPANDED);
   }
@@ -372,7 +575,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
             disabled={saving}
             onClick={() => void saveSeason(savePayload())}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving && !savingSection ? "Saving…" : "Save all"}
           </Button>
         </div>
       </div>
@@ -383,6 +586,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         title="Season"
         expanded={expandedSections.season}
         onToggle={() => toggleSection("season")}
+        actions={sectionActions("season")}
       >
         <div className="space-y-4">
           <div>
@@ -449,6 +653,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         title="Races"
         expanded={expandedSections.races}
         onToggle={() => toggleSection("races")}
+        actions={sectionActions("races")}
       >
         <RaceSection
           aRace={racesByPriority.a}
@@ -488,6 +693,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         title="Phase kind zone defaults"
         expanded={expandedSections.phaseKinds}
         onToggle={() => toggleSection("phaseKinds")}
+        actions={sectionActions("phaseKinds", "Save & recalculate zones")}
       >
         <PhaseKindZoneDefaultsEditor
           value={season.phaseKindZoneDefaults}
@@ -495,22 +701,13 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
             setSeason({ ...season, phaseKindZoneDefaults })
           }
         />
-        <div className="mt-4">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={saving}
-            onClick={() => void saveSeason(savePayload({ recalculate: true }))}
-          >
-            {saving ? "Saving…" : "Save & recalculate zones"}
-          </Button>
-        </div>
       </CollapsibleSection>
 
       <CollapsibleSection
         title="Phases"
         expanded={expandedSections.phases}
         onToggle={() => toggleSection("phases")}
+        actions={sectionActions("phases", "Save & recalculate")}
       >
         <SimplePlannerPhasesPane
           phases={season.phases}
@@ -526,13 +723,12 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         title="Ramp defaults"
         expanded={expandedSections.ramps}
         onToggle={() => toggleSection("ramps")}
+        actions={sectionActions("ramps", "Save & recalculate volumes")}
       >
         <RampDefaultsEditor
           value={season.rampDefaults}
           disciplineSettings={disciplineSettings}
           onChange={(rampDefaults) => setSeason({ ...season, rampDefaults })}
-          onRecalculate={() => void saveSeason(savePayload({ recalculate: true }))}
-          saving={saving}
         />
       </CollapsibleSection>
 
@@ -540,6 +736,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         title="Weekly volume"
         expanded={expandedSections.weeklyVolume}
         onToggle={() => toggleSection("weeklyVolume")}
+        actions={sectionActions("weeklyVolume")}
       >
         <SimplePlannerWeekTable
           weeks={season.weeks}
@@ -559,14 +756,10 @@ function RampDefaultsEditor({
   value,
   disciplineSettings,
   onChange,
-  onRecalculate,
-  saving,
 }: {
   value: SimpleRampDefaults;
   disciplineSettings: ReturnType<typeof useDisciplineSettings>["disciplineSettings"];
   onChange: (value: SimpleRampDefaults) => void;
-  onRecalculate: () => void;
-  saving: boolean;
 }) {
   const rows = [
     { key: "swim" as const, label: "Swim", paceDiscipline: "SWIM" as const },
@@ -582,6 +775,30 @@ function RampDefaultsEditor({
       ...value,
       [key]: { ...value[key], ...patch },
     });
+  }
+
+  function updatePace(
+    key: "swim" | "run",
+    paceDiscipline: "SWIM" | "RUN",
+    seconds: number
+  ) {
+    const def = value[key];
+    const patch: Partial<SimpleRampDefaults["swim"]> = {
+      referencePaceSeconds: seconds,
+    };
+    if (def.mode === "DISTANCE") {
+      patch.startHours = hoursFromDisciplineDistance(
+        paceDiscipline,
+        def.startDistanceMeters,
+        { ...def, referencePaceSeconds: seconds }
+      );
+      patch.peakHours = hoursFromDisciplineDistance(
+        paceDiscipline,
+        def.peakDistanceMeters,
+        { ...def, referencePaceSeconds: seconds }
+      );
+    }
+    updateDiscipline(key, patch);
   }
 
   return (
@@ -737,7 +954,7 @@ function RampDefaultsEditor({
                         discipline={row.paceDiscipline}
                         disciplineSettings={disciplineSettings}
                         onChange={(seconds) =>
-                          updateDiscipline(row.key, { referencePaceSeconds: seconds })
+                          updatePace(row.key, row.paceDiscipline!, seconds)
                         }
                       />
                     ) : (
@@ -750,11 +967,9 @@ function RampDefaultsEditor({
           </tbody>
         </table>
       </div>
-      <Button type="button" variant="secondary" disabled={saving} onClick={onRecalculate}>
-        Recalculate ramp weeks
-      </Button>
       <p className="text-xs text-zinc-500">
-        Updates auto-calculated volume weeks. Rest weeks and ramp-off phases stay unchanged.
+        Save this section to persist ramp settings and recalculate auto-filled volume weeks.
+        Rest weeks and ramp-off phases stay unchanged.
       </p>
     </div>
   );
