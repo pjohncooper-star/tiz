@@ -12,6 +12,7 @@ import {
   PHASE_COLORS,
   type SimplePhase,
 } from "@/components/simple-planner/simple-planner-types";
+import { defaultVolumeSettingsForPhaseKind } from "@/lib/plan/season/phase-volume-settings";
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import { suggestPhasesForWeeks } from "@/lib/plan/season/default-phases";
 
@@ -39,6 +40,7 @@ export function suggestSimplePhasesForWeeks(
     const startWeekIndex = cursor;
     const endWeekIndex = cursor + phase.weekCount - 1;
     cursor = endWeekIndex + 1;
+    const volume = defaultVolumeSettingsForPhaseKind(phase.phaseKind);
     return {
       id: newPhaseId(),
       name: phase.name,
@@ -50,6 +52,12 @@ export function suggestSimplePhasesForWeeks(
       ...DEFAULT_PHASE_SESSIONS,
       ...DEFAULT_PHASE_INTENSE_DAYS,
       goal: null,
+      volumeTrend: volume.volumeTrend,
+      volumeTargetPercent: volume.volumeTargetPercent,
+      volumeTaperStartPercent: volume.volumeTaperStartPercent,
+      volumeTaperEndPercent: volume.volumeTaperEndPercent,
+      longSessionCadence: volume.longSessionCadence,
+      suppressRecovery: volume.suppressRecovery,
       zoneSplits: seedPhaseZoneSplits(phase.phaseKind, kindDefaults),
     };
   });

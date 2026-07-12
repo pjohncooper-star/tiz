@@ -19,6 +19,14 @@ export function isPlanningCalendarEnabled(): boolean {
   return process.env.FEATURE_PLANNING_CALENDAR === "true";
 }
 
+/**
+ * Simple season planner: unified /plan season editor (phases, ramps, TiZ, recovery).
+ * Enable with FEATURE_SIMPLE_SEASON_PLANNER=true in .env
+ */
+export function isSimpleSeasonPlannerEnabled(): boolean {
+  return envFlag("FEATURE_SIMPLE_SEASON_PLANNER");
+}
+
 export function isSessionPlanningEnabled(): boolean {
   return isPlanBuilderEnabled() || isPlanningCalendarEnabled();
 }
