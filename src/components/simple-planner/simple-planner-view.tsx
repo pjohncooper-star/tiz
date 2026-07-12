@@ -33,7 +33,7 @@ import {
   sortDisciplines,
   toggleGoalDiscipline,
   type Discipline,
-} from "@/components/season/season-settings-types";
+} from "@/lib/plan/season/season-types";
 
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
   const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
@@ -140,7 +140,7 @@ function defaultSeasonDates() {
   };
 }
 
-export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boolean }) {
+export function SimplePlannerView() {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
@@ -353,14 +353,6 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {showAdvancedLink && (
-            <Link
-              href={`/plan/setup?seasonId=${encodeURIComponent(season.id)}`}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Advanced settings
-            </Link>
-          )}
           <Link
             href="/plan/seasons"
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"

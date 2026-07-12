@@ -29,7 +29,7 @@ import {
   DISCIPLINES,
   toggleGoalDiscipline,
   type Discipline,
-} from "@/components/season/season-settings-types";
+} from "@/lib/plan/season/season-types";
 
 type AddPlannedSessionFormProps = {
   defaultDate: string;

@@ -21,11 +21,6 @@ const REQUIRED = {
   FEATURE_SIMPLE_SEASON_PLANNER: "true",
 };
 
-/** Set false to hide legacy wizard while testing the new planner. */
-const DISABLE = {
-  FEATURE_ADVANCED_SEASON_PLANNER: "false",
-};
-
 const OPTIONAL_DEFAULTS = {
   FEATURE_PLANNING_CALENDAR: "true",
 };
@@ -45,10 +40,6 @@ const updated = lines.map((line) => {
     seen.add(key);
     return `${key}=${REQUIRED[key]}`;
   }
-  if (key in DISABLE) {
-    seen.add(key);
-    return `${key}=${DISABLE[key]}`;
-  }
   if (key in OPTIONAL_DEFAULTS && !seen.has(key)) {
     seen.add(key);
     const current = line.slice(eq + 1).trim();
@@ -61,9 +52,6 @@ const updated = lines.map((line) => {
 const toAppend = [];
 
 for (const [key, value] of Object.entries(REQUIRED)) {
-  if (!seen.has(key)) toAppend.push(`${key}=${value}`);
-}
-for (const [key, value] of Object.entries(DISABLE)) {
   if (!seen.has(key)) toAppend.push(`${key}=${value}`);
 }
 for (const [key, value] of Object.entries(OPTIONAL_DEFAULTS)) {
@@ -82,15 +70,7 @@ if (toAppend.length > 0) {
 writeFileSync(envPath, out, "utf8");
 
 console.log("Updated .env for simple season planner testing:\n");
-for (const [key, value] of Object.entries({ ...REQUIRED, ...DISABLE })) {
+for (const [key, value] of Object.entries(REQUIRED)) {
   console.log(`  ${key}=${value}`);
 }
 console.log("\nRestart the dev server: npm run dev");
-console.log("\nAlso ensure you are on the planner branch and ran the migrations:");
-console.log("  git checkout cursor/simple-season-planner-9d6b");
-console.log(
-  "  npx prisma db execute --file prisma/migrations/manual_simple_season_planner.sql --schema prisma/schema.prisma"
-);
-console.log(
-  "  npx prisma db execute --file prisma/migrations/manual_phase_start_week.sql --schema prisma/schema.prisma"
-);
