@@ -1,3 +1,7 @@
+"use client";
+
+import { useEditableNumber } from "@/components/simple-planner/planner-number-input";
+
 const ZONE_COLORS: Record<number, { pill: string; dot: string; input: string }> = {
   1: {
     pill: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
@@ -70,19 +74,22 @@ export function ZonePillInput({
   max,
   step = 1,
 }: ZonePillInputProps) {
+  const field = useEditableNumber(value, onChange, {
+    min,
+    max,
+    integer: step === 1,
+  });
+
   return (
     <label
       className={`inline-flex min-w-[5.75rem] items-center gap-1 rounded-full px-3 py-1 ${zonePillClass(zone)}`}
     >
       <ZoneLabel zone={zone} />
       <input
-        type="number"
-        step={step}
-        min={min}
-        max={max}
+        type="text"
+        inputMode="decimal"
         className={`${PILL_INPUT} ${zoneInputClass(zone)}`}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        {...field}
       />
       {suffix ? <span className="shrink-0 text-[10px] font-medium opacity-75">{suffix}</span> : null}
     </label>
@@ -110,17 +117,20 @@ function ZonePillField({
   max,
   step = 1,
 }: ZonePillFieldProps) {
+  const field = useEditableNumber(value, onChange, {
+    min,
+    max,
+    integer: step === 1,
+  });
+
   return (
     <span className="inline-flex min-w-0 flex-1 items-center gap-1 border-l border-current/20 pl-3 text-[10px] font-medium first:border-l-0 first:pl-0">
       <span className="shrink-0 opacity-75">{label}</span>
       <input
-        type="number"
-        step={step}
-        min={min}
-        max={max}
+        type="text"
+        inputMode="decimal"
         className={`${PILL_INPUT} min-w-[2rem] flex-1 ${zoneInputClass(zone)}`}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        {...field}
       />
       {suffix ? <span className="shrink-0 opacity-75">{suffix}</span> : null}
     </span>

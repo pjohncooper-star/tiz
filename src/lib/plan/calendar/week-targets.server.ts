@@ -6,7 +6,7 @@ import type {
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializeSimpleSeasonPlan } from "@/lib/plan/season/simple-planner.server";
 
-type SerializedSeason = ReturnType<typeof serializeSimpleSeasonPlan>;
+type SerializedSeason = Awaited<ReturnType<typeof serializeSimpleSeasonPlan>>;
 type SerializedPhase = SerializedSeason["phases"][number];
 type SerializedWeek = SerializedSeason["weeks"][number];
 
@@ -106,7 +106,7 @@ export async function getCalendarWeekTargets(
 
   let season: SerializedSeason;
   try {
-    season = serializeSimpleSeasonPlan(plan);
+    season = await serializeSimpleSeasonPlan(plan);
   } catch {
     return [];
   }

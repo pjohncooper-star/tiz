@@ -51,6 +51,9 @@ export function resizeSimpleWeeksForTotalWeeks(
       runDistanceMeters:
         rampDefaults.run.mode === "DISTANCE" ? rampDefaults.run.startDistanceMeters : null,
       zoneMinutes: {},
+      zoneMinutesOverridden: false,
+      longRideMinutes: 0,
+      longRunMinutes: 0,
     });
   }
 

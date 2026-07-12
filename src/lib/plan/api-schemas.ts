@@ -435,6 +435,12 @@ const simpleDisciplineRampSchema = z.object({
   referencePaceSeconds: z.number().positive().optional(),
 });
 
+const zoneMinuteRampSchema = z.object({
+  startMinutes: z.number().nonnegative(),
+  peakMinutes: z.number().nonnegative(),
+  ratePercent: z.number().min(0).max(100),
+});
+
 const zoneSplitPercentsSchema = z.object({
   z1: z.number().min(0).max(100),
   z2: z.number().min(0).max(100),
@@ -462,10 +468,31 @@ export const phaseKindZoneDefaultsSchema = z.object({
   TAPER: phaseZoneSplitsSchema,
 });
 
+const disciplineZoneRampSchema = z.object({
+  z1: zoneMinuteRampSchema,
+  z2: zoneMinuteRampSchema,
+  z3: zoneMinuteRampSchema,
+  z4: zoneMinuteRampSchema,
+  z5: zoneMinuteRampSchema,
+});
+
+export const zoneRampDefaultsSchema = z.object({
+  SWIM: disciplineZoneRampSchema,
+  BIKE: disciplineZoneRampSchema,
+  RUN: disciplineZoneRampSchema,
+});
+
 export const simpleRampDefaultsSchema = z.object({
   swim: simpleDisciplineRampSchema,
   bike: simpleDisciplineRampSchema,
   run: simpleDisciplineRampSchema,
+});
+
+export const simpleLongSessionDefaultsSchema = z.object({
+  longRideStartMin: z.number().int().positive(),
+  longRidePeakMin: z.number().int().positive(),
+  longRunStartMin: z.number().int().positive(),
+  longRunPeakMin: z.number().int().positive(),
 });
 
 export const simplePhaseSchema = z
@@ -489,6 +516,12 @@ export const simplePhaseSchema = z
     bikeIntenseDaysPerWeek: z.number().int().min(0).max(7),
     runIntenseDaysPerWeek: z.number().int().min(0).max(7),
     goal: z.string().nullable().optional(),
+    volumeTrend: z.enum(["INCREASE", "HOLD", "DECREASE", "TAPER"]).optional(),
+    volumeTargetPercent: z.number().min(1).max(150).optional(),
+    volumeTaperStartPercent: z.number().min(1).max(150).optional(),
+    volumeTaperEndPercent: z.number().min(1).max(150).optional(),
+    longSessionCadence: z.enum(["EVERY_WEEK", "EVERY_OTHER", "NONE"]).optional(),
+    suppressRecovery: z.boolean().optional(),
     zoneSplits: phaseZoneSplitsSchema.nullable().optional(),
   })
   .refine(
@@ -499,6 +532,16 @@ export const simplePhaseSchema = z
     { message: "Invalid phase week span" }
   );
 
+export const recoveryZoneModeSchema = z.enum(["proportional", "intensity_shift"]);
+
+export const recoverySettingsSchema = z.object({
+  volumePercent: z.number().min(30).max(90),
+  loadWeeks: z.number().int().min(1).max(6),
+  zoneMode: recoveryZoneModeSchema,
+  highZoneCutPercent: z.number().min(0).max(100),
+  sessionScalePercent: z.number().min(10).max(90).nullable().optional(),
+});
+
 export const simpleWeekSchema = z.object({
   weekIndex: z.number().int().nonnegative(),
   isRestWeek: z.boolean(),
@@ -507,6 +550,11 @@ export const simpleWeekSchema = z.object({
   runHours: z.number().nonnegative(),
   swimDistanceMeters: z.number().nonnegative().nullable().optional(),
   runDistanceMeters: z.number().nonnegative().nullable().optional(),
+  zoneMinutes: z.record(z.string(), z.number().nonnegative()).optional(),
+  zoneMinutesOverridden: z.boolean().optional(),
+  volumeOverridden: z.boolean().optional(),
+  longRideMinutes: z.number().int().nonnegative().optional(),
+  longRunMinutes: z.number().int().nonnegative().optional(),
 });
 
 export const createSimpleSeasonSchema = z.object({
@@ -514,6 +562,8 @@ export const createSimpleSeasonSchema = z.object({
   startDate: z.string().regex(DATE_KEY),
   endDate: z.string().regex(DATE_KEY),
   rampDefaults: simpleRampDefaultsSchema.optional(),
+  zoneRampDefaults: zoneRampDefaultsSchema.optional(),
+  phaseKindZoneDefaults: phaseKindZoneDefaultsSchema.optional(),
   goalEvent: seasonGoalEventSchema.optional(),
   bGoalEvents: z.array(seasonGoalEventSchema).optional(),
   cGoalEvents: z.array(seasonGoalEventSchema).optional(),
@@ -525,13 +575,19 @@ export const updateSimpleSeasonSchema = z
     startDate: z.string().regex(DATE_KEY).optional(),
     endDate: z.string().regex(DATE_KEY).optional(),
     rampDefaults: simpleRampDefaultsSchema.optional(),
+    zoneRampDefaults: zoneRampDefaultsSchema.optional(),
     phaseKindZoneDefaults: phaseKindZoneDefaultsSchema.optional(),
     phases: z.array(simplePhaseSchema).optional(),
     weeks: z.array(simpleWeekSchema).optional(),
     recalculate: z.boolean().optional(),
+    resetZoneOverrides: z.boolean().optional(),
+    applyRecoveryCadence: z.boolean().optional(),
+    recovery: recoverySettingsSchema.partial().optional(),
+    longSessionDefaults: simpleLongSessionDefaultsSchema.optional(),
     goalEvent: seasonGoalEventSchema.optional(),
     bGoalEvents: z.array(seasonGoalEventSchema).optional(),
     cGoalEvents: z.array(seasonGoalEventSchema).optional(),
     removedGoalEvents: z.array(removedGoalEventSchema).optional(),
+    linkCalendarRaces: z.array(linkCalendarRaceSchema).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

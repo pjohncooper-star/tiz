@@ -1,13 +1,18 @@
 "use client";
 
+import { addWeeks, format } from "date-fns";
 import { Button, Input, Label } from "@/components/ui";
+import { PlannerNumberInput } from "@/components/simple-planner/planner-number-input";
 import { ZoneSplitEditor } from "@/components/simple-planner/zone-split-editor";
+import { parseDateKey } from "@/lib/dates";
+import { type SimplePhase } from "@/components/simple-planner/simple-planner-types";
 import {
-  createEmptyPhase,
+  defaultVolumeSettingsForPhaseName,
+  type LongSessionCadence,
+  type SimplePhaseVolumeTrend,
+} from "@/lib/plan/season/phase-volume-settings";
+import {
   inferPhaseKindFromName,
-  type SimplePhase,
-} from "@/components/simple-planner/simple-planner-types";
-import {
   phaseKindLabel,
   seedPhaseZoneSplits,
 } from "@/lib/plan/season/phase-zone-defaults";
@@ -15,14 +20,17 @@ import type { PhaseKind } from "@prisma/client";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
 import {
-  formatUnassignedWeeks,
+  deletePhaseWithMerge,
   formatWeekRange,
   isAssignedPhase,
-  isEmptyPhase,
+  normalizePhasesToFullCoverage,
   setPhaseWeekRange,
+  splitLongestPhase,
 } from "@/lib/plan/season/phase-span-utils";
 
 type SimplePlannerPhasesPaneProps = {
+  seasonPlanId?: string;
+  seasonStartDate: string;
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   totalWeeks: number;
@@ -32,6 +40,8 @@ type SimplePlannerPhasesPaneProps = {
 };
 
 export function SimplePlannerPhasesPane({
+  seasonPlanId,
+  seasonStartDate,
   phases,
   phaseKindZoneDefaults,
   totalWeeks,
@@ -39,39 +49,73 @@ export function SimplePlannerPhasesPane({
   onSelectPhase,
   onPhasesChange,
 }: SimplePlannerPhasesPaneProps) {
+  const covered = normalizePhasesToFullCoverage(phases, totalWeeks);
   const selected =
-    phases.find((phase) => phase.id === selectedPhaseId) ??
-    phases.find((phase) => !phase.id && selectedPhaseId === phase.name) ??
+    covered.find((phase) => phase.id === selectedPhaseId) ??
+    covered.find((phase) => !phase.id && selectedPhaseId === phase.name) ??
     null;
 
   function updatePhase(updated: SimplePhase) {
     onPhasesChange(
-      phases.map((phase) =>
+      covered.map((phase) =>
         (phase.id ?? phase.name) === (updated.id ?? updated.name) ? updated : phase
       )
     );
   }
 
-  function deletePhase(phase: SimplePhase) {
-    onPhasesChange(
-      phases.filter((item) => (item.id ?? item.name) !== (phase.id ?? phase.name))
-    );
+  async function deletePhase(phase: SimplePhase) {
+    if (!phase.id) return;
+    let message = `Remove "${phase.name}" and merge its weeks into a neighbor?`;
+    if (seasonPlanId) {
+      const res = await fetch(
+        `/api/plan/anchors?seasonPlanId=${encodeURIComponent(seasonPlanId)}`
+      );
+      if (res.ok) {
+        const data = (await res.json()) as { anchors: { seasonPhaseId: string | null }[] };
+        const anchorCount = data.anchors.filter((anchor) => anchor.seasonPhaseId === phase.id).length;
+        if (anchorCount > 0) {
+          message = `Remove "${phase.name}" and delete ${anchorCount} anchor workout${anchorCount === 1 ? "" : "s"}?`;
+        }
+      }
+    }
+    if (!window.confirm(message)) return;
+    const next = deletePhaseWithMerge(covered, phase.id, totalWeeks);
+    onPhasesChange(next);
     if (selectedPhaseId === phase.id) onSelectPhase(null);
   }
 
-  function addEmptyPhase() {
-    const next = createEmptyPhase(phases.length + 1, phaseKindZoneDefaults);
-    onPhasesChange([...phases, next]);
-    onSelectPhase(next.id ?? null);
+  function addPhase() {
+    const next = splitLongestPhase(covered, totalWeeks);
+    if (next.length === covered.length) return;
+    const added = next.find(
+      (phase) => !covered.some((item) => (item.id ?? item.name) === (phase.id ?? phase.name))
+    );
+    const seeded = added
+      ? {
+          ...added,
+          ...defaultVolumeSettingsForPhaseName(added.name),
+        }
+      : null;
+    onPhasesChange(
+      seeded
+        ? next.map((phase) => (phase.id === seeded.id ? seeded : phase))
+        : next
+    );
+    onSelectPhase(seeded?.id ?? added?.id ?? null);
   }
 
-  const assignedPhases = phases.filter(isAssignedPhase);
-  const unassignedLabel = formatUnassignedWeeks(totalWeeks, phases);
+  const assignedPhases = covered.filter(isAssignedPhase);
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Phases are week ranges across your season — not separate calendar events. Week 1 starts
+        on your season start date (under Season). Select a phase below to set its weeks, or drag
+        phase edges in the Weekly volume table.
+      </p>
+
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={addEmptyPhase}>
+        <Button type="button" variant="secondary" onClick={addPhase}>
           + Add phase
         </Button>
       </div>
@@ -103,42 +147,33 @@ export function SimplePlannerPhasesPane({
             </button>
           );
         })}
-
-        {phases.filter(isEmptyPhase).map((phase) => {
-          const active = selectedPhaseId === phase.id;
-          return (
-            <button
-              key={phase.id ?? phase.name}
-              type="button"
-              onClick={() => onSelectPhase(phase.id ?? null)}
-              className={`rounded-lg border border-dashed px-3 py-2 text-left text-sm ${
-                active ? "border-sky-500 bg-sky-50 dark:bg-sky-950/30" : "border-zinc-300"
-              }`}
-            >
-              <span className="font-medium">{phase.name}</span>
-              <p className="mt-1 text-xs text-zinc-500">Not assigned</p>
-            </button>
-          );
-        })}
-
-        <div className="rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
-          <p className="font-medium text-zinc-600 dark:text-zinc-400">Unassigned</p>
-          <p className="mt-1 text-xs text-zinc-500">{unassignedLabel}</p>
-        </div>
       </div>
 
       {selected && (
         <PhaseDetailEditor
           phase={selected}
-          phases={phases}
+          phases={covered}
           phaseKindZoneDefaults={phaseKindZoneDefaults}
           totalWeeks={totalWeeks}
+          seasonStartDate={seasonStartDate}
           onChange={updatePhase}
-          onDelete={() => deletePhase(selected)}
+          onDelete={() => void deletePhase(selected)}
         />
       )}
     </div>
   );
+}
+
+function formatPhaseCalendarRange(
+  seasonStartDate: string,
+  startWeekIndex: number,
+  endWeekIndex: number
+): string {
+  const seasonStart = parseDateKey(seasonStartDate);
+  const rangeStart = addWeeks(seasonStart, startWeekIndex);
+  const rangeEnd = addWeeks(seasonStart, endWeekIndex);
+  rangeEnd.setDate(rangeEnd.getDate() + 6);
+  return `${format(rangeStart, "MMM d, yyyy")} – ${format(rangeEnd, "MMM d, yyyy")}`;
 }
 
 function PhaseDetailEditor({
@@ -146,6 +181,7 @@ function PhaseDetailEditor({
   phases,
   phaseKindZoneDefaults,
   totalWeeks,
+  seasonStartDate,
   onChange,
   onDelete,
 }: {
@@ -153,13 +189,16 @@ function PhaseDetailEditor({
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   totalWeeks: number;
+  seasonStartDate: string;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
-  const assigned = isAssignedPhase(phase);
-  const weekLabel = assigned
-    ? formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)
-    : "Not assigned — click + on a week in the table";
+  const weekLabel = formatWeekRange(phase.startWeekIndex, phase.endWeekIndex);
+  const calendarLabel = formatPhaseCalendarRange(
+    seasonStartDate,
+    phase.startWeekIndex,
+    phase.endWeekIndex
+  );
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -213,22 +252,22 @@ function PhaseDetailEditor({
       </div>
 
       <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-        Weeks: <span className="font-medium">{weekLabel}</span>
+        Span: <span className="font-medium">{weekLabel}</span>
+        <span className="text-zinc-400"> · </span>
+        <span className="font-medium">{calendarLabel}</span>
       </p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2 md:hidden">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <Label>From week</Label>
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            value={assigned ? phase.startWeekIndex + 1 : ""}
+            value={phase.startWeekIndex + 1}
             onChange={(event) => {
               const start = Number(event.target.value) - 1;
-              const end = assigned ? phase.endWeekIndex : start;
-              onChange(setPhaseWeekRange(phase, phases, totalWeeks, start, end));
+              onChange(setPhaseWeekRange(phase, phases, totalWeeks, start, phase.endWeekIndex));
             }}
           >
-            <option value="">—</option>
             {Array.from({ length: totalWeeks }, (_, index) => (
               <option key={index} value={index + 1}>
                 Week {index + 1}
@@ -240,14 +279,12 @@ function PhaseDetailEditor({
           <Label>To week</Label>
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            value={assigned ? phase.endWeekIndex + 1 : ""}
+            value={phase.endWeekIndex + 1}
             onChange={(event) => {
               const end = Number(event.target.value) - 1;
-              const start = assigned ? phase.startWeekIndex : end;
-              onChange(setPhaseWeekRange(phase, phases, totalWeeks, start, end));
+              onChange(setPhaseWeekRange(phase, phases, totalWeeks, phase.startWeekIndex, end));
             }}
           >
-            <option value="">—</option>
             {Array.from({ length: totalWeeks }, (_, index) => (
               <option key={index} value={index + 1}>
                 Week {index + 1}
@@ -256,6 +293,106 @@ function PhaseDetailEditor({
           </select>
         </div>
       </div>
+      <p className="mt-1 text-xs text-zinc-500">
+        Changing weeks resizes this phase and adjusts neighbors so every week stays covered. On
+        desktop you can also drag the top/bottom edge of a phase in the Weekly volume table.
+      </p>
+
+      <fieldset className="mt-4 space-y-3">
+        <legend className="text-sm font-medium">Volume & recovery</legend>
+        <p className="text-xs text-zinc-500">
+          Replaces implicit phase-kind behavior. Volume target is percent of season peak hours.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Volume trend</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={phase.volumeTrend}
+              onChange={(event) =>
+                onChange({
+                  ...phase,
+                  volumeTrend: event.target.value as SimplePhaseVolumeTrend,
+                  ...(event.target.value === "TAPER" ? { suppressRecovery: true } : {}),
+                })
+              }
+            >
+              <option value="INCREASE">Increase</option>
+              <option value="HOLD">Hold</option>
+              <option value="DECREASE">Decrease</option>
+              <option value="TAPER">Taper</option>
+            </select>
+          </div>
+          <div>
+            <Label>Long-session cadence</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={phase.longSessionCadence}
+              onChange={(event) =>
+                onChange({
+                  ...phase,
+                  longSessionCadence: event.target.value as LongSessionCadence,
+                })
+              }
+            >
+              <option value="EVERY_WEEK">Every week</option>
+              <option value="EVERY_OTHER">Every other week</option>
+              <option value="NONE">None</option>
+            </select>
+          </div>
+        </div>
+        {phase.volumeTrend === "TAPER" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Taper start % of peak</Label>
+              <PlannerNumberInput
+                min={1}
+                max={150}
+                className="mt-1"
+                value={phase.volumeTaperStartPercent}
+                onChange={(volumeTaperStartPercent) =>
+                  onChange({ ...phase, volumeTaperStartPercent })
+                }
+              />
+            </div>
+            <div>
+              <Label>Taper end % of peak</Label>
+              <PlannerNumberInput
+                min={1}
+                max={150}
+                className="mt-1"
+                value={phase.volumeTaperEndPercent}
+                onChange={(volumeTaperEndPercent) =>
+                  onChange({ ...phase, volumeTaperEndPercent })
+                }
+              />
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Label>Volume target % of peak</Label>
+            <PlannerNumberInput
+              min={1}
+              max={150}
+              className="mt-1"
+              value={phase.volumeTargetPercent}
+              onChange={(volumeTargetPercent) =>
+                onChange({ ...phase, volumeTargetPercent })
+              }
+            />
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={phase.suppressRecovery}
+            onChange={(event) =>
+              onChange({ ...phase, suppressRecovery: event.target.checked })
+            }
+          />
+          Suppress recovery / de-load weeks in this phase
+        </label>
+      </fieldset>
 
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Sessions per week</legend>
@@ -270,18 +407,13 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <Input
-                type="number"
+              <PlannerNumberInput
                 min={0}
                 max={7}
+                integer
                 className="mt-1"
                 value={phase[field.key]}
-                onChange={(event) =>
-                  onChange({
-                    ...phase,
-                    [field.key]: Number(event.target.value),
-                  })
-                }
+                onChange={(next) => onChange({ ...phase, [field.key]: next })}
               />
             </div>
           ))}
@@ -303,18 +435,13 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <Input
-                type="number"
+              <PlannerNumberInput
                 min={0}
                 max={7}
+                integer
                 className="mt-1"
                 value={phase[field.key]}
-                onChange={(event) =>
-                  onChange({
-                    ...phase,
-                    [field.key]: Number(event.target.value),
-                  })
-                }
+                onChange={(next) => onChange({ ...phase, [field.key]: next })}
               />
             </div>
           ))}
@@ -366,7 +493,12 @@ function PhaseDetailEditor({
       </div>
 
       <div className="mt-4">
-        <Button type="button" variant="secondary" onClick={onDelete}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onDelete}
+          disabled={phases.length <= 1}
+        >
           Delete phase
         </Button>
       </div>

@@ -27,6 +27,20 @@ npx prisma db push
 
 > If you already have a Neon DB that was set up incrementally, run the `manual_*.sql` files in `prisma/migrations/` via the Neon SQL editor instead of `db push`.
 
+**Incremental DB catch-up (recommended):**
+
+```powershell
+npm run db:sync-schema
+```
+
+This runs all season + calendar migrations in order, then `prisma generate`. Options:
+
+- `npm run db:sync-season` — season planner columns only
+- `npm run db:sync-calendar` — calendar / PlannedSession columns only
+- `node scripts/sync-db-schema.mjs --season-only` or `--calendar-only`
+
+**Do not run** `manual_season_plan.sql` (legacy macrocycle schema).
+
 ---
 
 ## 2. Push code to GitHub
@@ -167,3 +181,5 @@ git push
 | Imports or Strava sync hang | Inngest keys missing or `INNGEST_DEV` still set |
 | Domain shows parking page | DNS not pointed to Vercel yet; check Namecheap CNAME |
 | 500 on login | Neon connection string wrong; check Neon project is active |
+| Calendar: `column does not exist` on `PlannedSession` | DB schema is behind Prisma. Run `npm run db:sync-schema` (or `npm run db:sync-calendar`), then restart the dev server |
+| Plan: `Could not create season` | Usually fixed by pulling latest code (transaction read bug) **and** running `npm run db:sync-schema` if Prisma reports missing columns |

@@ -1,26 +1,40 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PlanTizChart } from "@/components/plan-tiz-chart";
 import {
-  createPhaseAtWeek,
-  type SimplePhase,
-  type SimpleWeek,
-} from "@/components/simple-planner/simple-planner-types";
+  distanceMetersToDisplay,
+  hoursFromDisciplineDistance,
+} from "@/components/simple-planner/simple-planner-volume-display";
+import {
+  PlannerDistanceInput,
+  PlannerNumberInput,
+} from "@/components/simple-planner/planner-number-input";
+import { ZonePillInput } from "@/components/simple-planner/zone-pill";
+import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
+import type { SimplePhase, SimpleWeek } from "@/components/simple-planner/simple-planner-types";
 import { formatWeekDateRange } from "@/components/simple-planner/simple-planner-timeline";
+import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
+  clampZoneMinutesToVolume,
   getZoneMinute,
-  zoneMinutesForDiscipline,
+  setZoneMinute,
+  zoneMinutesBudget,
+  zoneMinutesExceedsVolume,
 } from "@/lib/plan/season/simple-tiz";
 import {
   buildGutterSegments,
-  resizePhaseBottom,
-  resizePhaseTop,
-  weekIsAssigned,
+  applyPhaseBoundaryResize,
+  normalizePhasesToFullCoverage,
 } from "@/lib/plan/season/phase-span-utils";
+import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
+import type { PlanDiscipline } from "@/lib/plan/session";
 
 type SimplePlannerWeekTableProps = {
   weeks: SimpleWeek[];
   phases: SimplePhase[];
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
   onWeeksChange: (weeks: SimpleWeek[]) => void;
@@ -31,12 +45,6 @@ type SimplePlannerWeekTableProps = {
 type DragState = {
   phaseId: string;
   edge: "top" | "bottom";
-};
-
-type DragPreview = {
-  phaseId: string;
-  startWeekIndex: number;
-  endWeekIndex: number;
 };
 
 const DISCIPLINES = [
@@ -71,6 +79,8 @@ function weekIndexFromPointer(clientY: number): number | null {
 export function SimplePlannerWeekTable({
   weeks,
   phases,
+  rampDefaults,
+  disciplineSettings,
   selectedPhaseId,
   onSelectPhase,
   onWeeksChange,
@@ -78,29 +88,17 @@ export function SimplePlannerWeekTable({
   highlightedWeekIndex,
 }: SimplePlannerWeekTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
-  const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
-  const [dragPreview, setDragPreview] = useState<DragPreview | null>(null);
+  const [dragPreviewPhases, setDragPreviewPhases] = useState<SimplePhase[] | null>(null);
 
   const phasesRef = useRef(phases);
   phasesRef.current = phases;
   const weeksLengthRef = useRef(weeks.length);
   weeksLengthRef.current = weeks.length;
-  const dragPreviewRef = useRef(dragPreview);
-  dragPreviewRef.current = dragPreview;
+  const dragPreviewRef = useRef(dragPreviewPhases);
+  dragPreviewRef.current = dragPreviewPhases;
 
-  const displayPhases = useMemo(() => {
-    if (!dragPreview) return phases;
-    return phases.map((phase) =>
-      phase.id === dragPreview.phaseId
-        ? {
-            ...phase,
-            startWeekIndex: dragPreview.startWeekIndex,
-            endWeekIndex: dragPreview.endWeekIndex,
-          }
-        : phase
-    );
-  }, [dragPreview, phases]);
+  const displayPhases = dragPreviewPhases ?? normalizePhasesToFullCoverage(phases, weeks.length);
 
   const gutterSegments = useMemo(
     () => buildGutterSegments(weeks, displayPhases),
@@ -119,36 +117,45 @@ export function SimplePlannerWeekTable({
   const updateWeek = useCallback(
     (weekIndex: number, patch: Partial<SimpleWeek>) => {
       onWeeksChange(
-        weeks.map((week) => (week.weekIndex === weekIndex ? { ...week, ...patch } : week))
+        weeks.map((week) => {
+          if (week.weekIndex !== weekIndex) return week;
+          const next = { ...week, ...patch };
+          const swimHours = next.swimHours;
+          const bikeHours = next.bikeHours;
+          const runHours = next.runHours;
+          const zoneMinutes = clampZoneMinutesToVolume({
+            weekIndex: next.weekIndex,
+            isRestWeek: next.isRestWeek,
+            swimHours,
+            bikeHours,
+            runHours,
+            zoneMinutes: next.zoneMinutes ?? {},
+            zoneMinutesOverridden: next.zoneMinutesOverridden,
+          });
+          return {
+            ...next,
+            swimHours,
+            bikeHours,
+            runHours,
+            zoneMinutes,
+            totalHours: round(swimHours + bikeHours + runHours),
+          };
+        })
       );
     },
     [onWeeksChange, weeks]
   );
 
-  const addPhaseAtWeek = useCallback(
-    (weekIndex: number) => {
-      if (weekIsAssigned(phases, weekIndex)) return;
-      const next = createPhaseAtWeek(weekIndex, phases.length + 1);
-      onPhasesChange([...phases, next]);
-      onSelectPhase(next.id ?? null);
-    },
-    [onPhasesChange, onSelectPhase, phases]
-  );
-
   const applyDragAtWeek = useCallback((pointerWeek: number, drag: DragState) => {
-    const phase = phasesRef.current.find((item) => item.id === drag.phaseId);
-    if (!phase) return;
-
-    const resized =
-      drag.edge === "top"
-        ? resizePhaseTop(phase, phasesRef.current, weeksLengthRef.current, pointerWeek)
-        : resizePhaseBottom(phase, phasesRef.current, weeksLengthRef.current, pointerWeek);
-
-    setDragPreview({
-      phaseId: drag.phaseId,
-      startWeekIndex: resized.startWeekIndex,
-      endWeekIndex: resized.endWeekIndex,
-    });
+    setDragPreviewPhases(
+      applyPhaseBoundaryResize(
+        phasesRef.current,
+        drag.phaseId,
+        drag.edge,
+        weeksLengthRef.current,
+        pointerWeek
+      )
+    );
   }, []);
 
   const startDrag = useCallback(
@@ -170,20 +177,10 @@ export function SimplePlannerWeekTable({
     function finishDrag() {
       const preview = dragPreviewRef.current;
       if (preview) {
-        onPhasesChange(
-          phasesRef.current.map((phase) =>
-            phase.id === preview.phaseId
-              ? {
-                  ...phase,
-                  startWeekIndex: preview.startWeekIndex,
-                  endWeekIndex: preview.endWeekIndex,
-                }
-              : phase
-          )
-        );
+        onPhasesChange(preview);
       }
       setDragging(null);
-      setDragPreview(null);
+      setDragPreviewPhases(null);
     }
 
     function onPointerMove(event: PointerEvent) {
@@ -220,34 +217,16 @@ export function SimplePlannerWeekTable({
             <th className="px-3 py-2">Wk</th>
             <th className="px-3 py-2">Dates</th>
             <th className="px-3 py-2">Rest</th>
+            <th className="px-3 py-2 text-right">Ride</th>
+            <th className="px-3 py-2 text-right">Run</th>
             <th className="px-3 py-2 text-right">Total h</th>
           </tr>
         </thead>
         <tbody>
           {gutterSegments.map((segment) => {
-            if (segment.kind === "unassigned") {
-              const week = weeks.find((item) => item.weekIndex === segment.weekIndex)!;
-              return (
-                <WeekRowGroup
-                  key={`unassigned-${week.weekIndex}`}
-                  week={week}
-                  gutter={
-                    <UnassignedGutter
-                      weekIndex={week.weekIndex}
-                      visible={hoveredWeek === week.weekIndex}
-                      onHover={setHoveredWeek}
-                      onAdd={() => addPhaseAtWeek(week.weekIndex)}
-                    />
-                  }
-                  expanded={expanded.has(week.weekIndex)}
-                  highlighted={highlightedWeekIndex === week.weekIndex}
-                  onToggle={() => toggleExpanded(week.weekIndex)}
-                  onUpdateWeek={(patch) => updateWeek(week.weekIndex, patch)}
-                />
-              );
-            }
-
-            const phase = displayPhases.find((item) => item.id === segment.phase.id) ?? segment.phase;
+            const phase =
+              displayPhases.find((item) => item.id === segment.phase.id) ?? segment.phase;
+            const phaseIndex = displayPhases.findIndex((item) => item.id === phase.id);
             const bandWeeks = weeks.filter(
               (week) =>
                 week.weekIndex >= phase.startWeekIndex && week.weekIndex <= phase.endWeekIndex
@@ -257,8 +236,12 @@ export function SimplePlannerWeekTable({
                 key={phase.id ?? phase.name}
                 phase={phase}
                 weeks={bandWeeks}
+                rampDefaults={rampDefaults}
+                disciplineSettings={disciplineSettings}
                 selected={selectedPhaseId === phase.id}
                 isDragging={dragging?.phaseId === phase.id}
+                canResizeTop={phaseIndex > 0}
+                canResizeBottom={phaseIndex >= 0 && phaseIndex < displayPhases.length - 1}
                 expanded={expanded}
                 highlightedWeekIndex={highlightedWeekIndex}
                 onSelectPhase={() => onSelectPhase(phase.id ?? null)}
@@ -270,37 +253,6 @@ export function SimplePlannerWeekTable({
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function UnassignedGutter({
-  weekIndex,
-  visible,
-  onHover,
-  onAdd,
-}: {
-  weekIndex: number;
-  visible: boolean;
-  onHover: (weekIndex: number | null) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <div
-      className="flex h-full min-h-[2.5rem] items-center justify-center"
-      onMouseEnter={() => onHover(weekIndex)}
-      onMouseLeave={() => onHover(null)}
-    >
-      <button
-        type="button"
-        onClick={onAdd}
-        className={`flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-zinc-300 text-lg leading-none text-zinc-500 transition hover:border-sky-500 hover:text-sky-600 dark:border-zinc-600 ${
-          visible ? "opacity-100" : "opacity-0 md:opacity-0"
-        } ${visible ? "md:opacity-100" : "md:group-hover:opacity-100"}`}
-        aria-label={`Add phase at week ${weekIndex + 1}`}
-      >
-        +
-      </button>
     </div>
   );
 }
@@ -426,59 +378,15 @@ function phaseWeekGutterPosition(
   return "middle";
 }
 
-function WeekRowGroup({
-  week,
-  gutter,
-  expanded,
-  highlighted,
-  onToggle,
-  onUpdateWeek,
-}: {
-  week: SimpleWeek;
-  gutter: React.ReactNode;
-  expanded: boolean;
-  highlighted: boolean;
-  onToggle: () => void;
-  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
-}) {
-  const rowSpan = expanded ? 1 + DISCIPLINES.length : 1;
-
-  return (
-    <>
-      <tr
-        id={`week-row-${week.weekIndex}`}
-        data-week-index={week.weekIndex}
-        className={`group border-b border-zinc-100 dark:border-zinc-800 ${
-          week.isRestWeek ? "bg-zinc-50/80 dark:bg-zinc-900/30" : ""
-        } ${highlighted ? "bg-sky-50/60 dark:bg-sky-950/20" : ""}`}
-      >
-        <td rowSpan={rowSpan} className="px-2 py-2 align-top">
-          {gutter}
-        </td>
-        <WeekCells
-          week={week}
-          expanded={expanded}
-          onToggle={onToggle}
-          onUpdateWeek={onUpdateWeek}
-        />
-      </tr>
-      {expanded &&
-        DISCIPLINES.map((discipline) => (
-          <DisciplineExpandedRow
-            key={`${week.weekIndex}-${discipline.key}`}
-            week={week}
-            discipline={discipline}
-          />
-        ))}
-    </>
-  );
-}
-
 function PhaseBandRows({
   phase,
   weeks,
+  rampDefaults,
+  disciplineSettings,
   selected,
   isDragging,
+  canResizeTop,
+  canResizeBottom,
   expanded,
   highlightedWeekIndex,
   onSelectPhase,
@@ -488,8 +396,12 @@ function PhaseBandRows({
 }: {
   phase: SimplePhase;
   weeks: SimpleWeek[];
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   selected: boolean;
   isDragging: boolean;
+  canResizeTop: boolean;
+  canResizeBottom: boolean;
   expanded: Set<number>;
   highlightedWeekIndex: number | null;
   onSelectPhase: () => void;
@@ -518,8 +430,8 @@ function PhaseBandRows({
                 rowSpan={rowSpan}
                 position={phaseWeekGutterPosition(index, weeks.length)}
                 showLabel={index === 0}
-                showTopHandle={index === 0}
-                showBottomHandle={isLastWeek}
+                showTopHandle={index === 0 && canResizeTop}
+                showBottomHandle={isLastWeek && canResizeBottom}
                 selected={selected}
                 isDragging={isDragging}
                 onSelect={onSelectPhase}
@@ -539,7 +451,13 @@ function PhaseBandRows({
                   data-week-index={week.weekIndex}
                   className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
                 >
-                  <DisciplineExpandedCells week={week} discipline={discipline} />
+                  <DisciplineExpandedCells
+                    week={week}
+                    discipline={discipline}
+                    rampDefaults={rampDefaults}
+                    disciplineSettings={disciplineSettings}
+                    onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
+                  />
                 </tr>
               ))}
           </Fragment>
@@ -579,8 +497,14 @@ function WeekCells({
           type="checkbox"
           checked={week.isRestWeek}
           onChange={(event) => onUpdateWeek({ isRestWeek: event.target.checked })}
-          aria-label={`Rest week ${week.weekIndex + 1}`}
+          aria-label={`Recovery week ${week.weekIndex + 1}`}
         />
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-600 dark:text-zinc-400">
+        {week.longRideMinutes > 0 ? week.longRideMinutes : "—"}
+      </td>
+      <td className="px-3 py-2 text-right text-zinc-600 dark:text-zinc-400">
+        {week.longRunMinutes > 0 ? week.longRunMinutes : "—"}
       </td>
       <td className="px-3 py-2 text-right font-medium">{week.totalHours}</td>
     </>
@@ -592,16 +516,28 @@ type DisciplineRowConfig = (typeof DISCIPLINES)[number];
 function DisciplineExpandedRow({
   week,
   discipline,
+  rampDefaults,
+  disciplineSettings,
+  onUpdateWeek,
 }: {
   week: SimpleWeek;
   discipline: DisciplineRowConfig;
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
 }) {
   return (
     <tr
       data-week-index={week.weekIndex}
       className="border-b border-zinc-100 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/20"
     >
-      <DisciplineExpandedCells week={week} discipline={discipline} />
+      <DisciplineExpandedCells
+        week={week}
+        discipline={discipline}
+        rampDefaults={rampDefaults}
+        disciplineSettings={disciplineSettings}
+        onUpdateWeek={onUpdateWeek}
+      />
     </tr>
   );
 }
@@ -609,24 +545,115 @@ function DisciplineExpandedRow({
 function DisciplineExpandedCells({
   week,
   discipline,
+  rampDefaults,
+  disciplineSettings,
+  onUpdateWeek,
 }: {
   week: SimpleWeek;
   discipline: DisciplineRowConfig;
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
 }) {
+  const def = rampDefaults[discipline.simple];
+  const distanceMode =
+    discipline.distanceKey != null && def.mode === "DISTANCE";
+  const paceDiscipline =
+    discipline.discipline === "SWIM" ? "SWIM" : discipline.discipline === "RUN" ? "RUN" : null;
   const hours = week[discipline.key];
-  const zoneTotal = zoneMinutesForDiscipline(week.zoneMinutes, discipline.discipline);
-  const z3 = getZoneMinute(week.zoneMinutes, discipline.discipline, 3);
+  const distanceMeters = discipline.distanceKey ? week[discipline.distanceKey] : null;
+  const budget = zoneMinutesBudget(week, discipline.discipline, week.zoneMinutes);
+  const overBudget = zoneMinutesExceedsVolume(
+    week,
+    discipline.discipline,
+    week.zoneMinutes
+  );
+
+  function updateVolumeFromHours(nextHours: number) {
+    const patch: Partial<SimpleWeek> = {
+      [discipline.key]: nextHours,
+      volumeOverridden: true,
+    };
+    if (discipline.distanceKey && paceDiscipline && def.referencePaceSeconds > 0) {
+      patch[discipline.distanceKey] = Math.round(
+        distanceMetersFromHoursPace(paceDiscipline, nextHours, def.referencePaceSeconds)
+      );
+    }
+    onUpdateWeek(patch);
+  }
+
+  function updateVolumeFromDistance(meters: number) {
+    if (!discipline.distanceKey || !paceDiscipline) return;
+    onUpdateWeek({
+      [discipline.distanceKey]: meters,
+      [discipline.key]: hoursFromDisciplineDistance(paceDiscipline, meters, def),
+      volumeOverridden: true,
+    });
+  }
 
   return (
     <>
-      <td colSpan={3} className="px-3 py-2 pl-16 text-sm text-zinc-600 dark:text-zinc-400">
-        <span className="font-medium text-zinc-700 dark:text-zinc-300">{discipline.label}</span>
-        <span className="mx-2">·</span>
-        <span>{hours}h</span>
-        <span className="mx-2">·</span>
-        <span>
-          TiZ {Math.round(zoneTotal)}m (Z3 {Math.round(z3)}m)
-        </span>
+      <td colSpan={5} className="px-3 py-2 pl-16">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="w-12 text-zinc-500">{discipline.label}</span>
+            {distanceMode && discipline.distanceKey && paceDiscipline ? (
+              <div className="flex items-center gap-2">
+                <PlannerDistanceInput
+                  className="w-28"
+                  value={distanceMeters}
+                  discipline={paceDiscipline}
+                  disciplineSettings={disciplineSettings}
+                  onChange={updateVolumeFromDistance}
+                />
+                <span className="text-xs text-zinc-500">{hours}h</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <PlannerNumberInput
+                  min={0}
+                  className="w-24"
+                  value={hours}
+                  onChange={updateVolumeFromHours}
+                />
+                <span className="text-xs text-zinc-500">h/wk</span>
+                {discipline.distanceKey && paceDiscipline && distanceMeters ? (
+                  <span className="text-xs text-zinc-500">
+                    {distanceMetersToDisplay(distanceMeters, paceDiscipline, disciplineSettings)}
+                  </span>
+                ) : null}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {[1, 2, 3, 4, 5].map((zone) => (
+              <ZonePillInput
+                key={zone}
+                zone={zone}
+                suffix="m"
+                value={getZoneMinute(week.zoneMinutes, discipline.discipline, zone)}
+                onChange={(minutes) =>
+                  onUpdateWeek({
+                    zoneMinutes: setZoneMinute(
+                      week.zoneMinutes,
+                      discipline.discipline,
+                      zone,
+                      minutes
+                    ),
+                    zoneMinutesOverridden: true,
+                  })
+                }
+              />
+            ))}
+            <span className={`text-xs ${overBudget ? "text-red-600" : "text-zinc-500"}`}>
+              {budget.used}m / {budget.cap}m
+            </span>
+          </div>
+          <PlanTizChart
+            discipline={discipline.discipline}
+            values={week.zoneMinutes}
+          />
+        </div>
       </td>
       <td className="px-3 py-2 text-right font-medium">{hours}</td>
     </>

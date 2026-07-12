@@ -12,6 +12,7 @@ import {
 } from "@/components/season/season-settings-types";
 import { Button, Input, Label } from "@/components/ui";
 import { GoalTimeInput } from "@/components/goal-time-input";
+import { useEditableParsedField } from "@/components/simple-planner/planner-number-input";
 import {
   goalRaceDistanceDiscipline,
   goalRaceDistanceInputLabel,
@@ -70,11 +71,15 @@ export function GoalRaceEditor({
   const sortedDisciplines = sortDisciplines(value.disciplines);
   const distanceLabel = goalRaceDistanceInputLabel(value.disciplines, disciplineSettings);
   const distanceUnitDiscipline = goalRaceDistanceDiscipline(value.disciplines);
-  const distanceInput = goalRaceDistanceMetersToInput(
-    value.distanceMeters,
-    value.disciplines,
-    disciplineSettings
-  );
+  const distanceField = useEditableParsedField({
+    value: value.distanceMeters ?? 0,
+    format: (meters) =>
+      goalRaceDistanceMetersToInput(meters > 0 ? meters : null, value.disciplines, disciplineSettings),
+    parse: (text) => goalRaceDistanceInputToMeters(text, value.disciplines, disciplineSettings),
+    onChange: (distanceMeters) => update({ distanceMeters }),
+    allowEmpty: true,
+    onEmpty: () => update({ distanceMeters: null }),
+  });
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -141,19 +146,9 @@ export function GoalRaceEditor({
           <div>
             <Label>{distanceLabel} (optional)</Label>
             <Input
-              type="number"
-              min={0}
-              step="any"
-              value={distanceInput}
-              onChange={(e) =>
-                update({
-                  distanceMeters: goalRaceDistanceInputToMeters(
-                    e.target.value,
-                    value.disciplines,
-                    disciplineSettings
-                  ),
-                })
-              }
+              type="text"
+              inputMode="decimal"
+              {...distanceField}
               placeholder={
                 value.disciplines.includes("SWIM") && value.disciplines.length === 1
                   ? "1500"

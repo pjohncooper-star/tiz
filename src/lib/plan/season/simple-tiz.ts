@@ -48,6 +48,7 @@ export type ZoneRampDefaultsByDiscipline = Record<
 export type SimpleWeekWithZones = {
   weekIndex: number;
   isRestWeek: boolean;
+  volumeOverridden?: boolean;
   swimHours: number;
   bikeHours: number;
   runHours: number;
