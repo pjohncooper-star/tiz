@@ -8,6 +8,11 @@ import {
   type PhaseVolumeSettings,
   type SimplePhaseVolumeTrend,
 } from "@/lib/plan/season/phase-volume-settings";
+import {
+  parsePhaseZoneSplits,
+  serializePhaseZoneSplits,
+} from "@/lib/plan/season/phase-zone-defaults";
+import type { PhaseZoneSplits } from "@/lib/plan/season/zone-split-types";
 
 type PhaseCoachNotesPayload = {
   goal?: string | null;
@@ -22,6 +27,7 @@ type PhaseCoachNotesPayload = {
   volumeTaperEndPercent?: number;
   longSessionCadence?: LongSessionCadence;
   suppressRecovery?: boolean;
+  zoneSplits?: unknown;
 };
 
 export type PhaseCoachNotes = {
@@ -37,6 +43,7 @@ export type PhaseCoachNotes = {
   volumeTaperEndPercent: number | null;
   longSessionCadence: LongSessionCadence | null;
   suppressRecovery: boolean | null;
+  zoneSplits: PhaseZoneSplits | null;
 };
 
 const DEFAULTS: Omit<PhaseCoachNotes, "goal"> = {
@@ -51,6 +58,7 @@ const DEFAULTS: Omit<PhaseCoachNotes, "goal"> = {
   volumeTaperEndPercent: null,
   longSessionCadence: null,
   suppressRecovery: null,
+  zoneSplits: null,
 };
 
 function nonNegativeIntOr(value: unknown, fallback: number): number {
@@ -99,10 +107,12 @@ export function parsePhaseCoachNotes(coachNotes: string | null): PhaseCoachNotes
         "volumeTaperEndPercent",
         "longSessionCadence",
         "suppressRecovery",
+        "zoneSplits",
       ] as const;
       if (known.some((key) => key in parsed)) {
         return {
           goal: typeof parsed.goal === "string" ? parsed.goal.trim() || null : null,
+          zoneSplits: parsePhaseZoneSplits(parsed.zoneSplits),
           strengthSessionsPerWeek: nonNegativeIntOr(
             parsed.strengthSessionsPerWeek,
             DEFAULTS.strengthSessionsPerWeek
@@ -142,8 +152,7 @@ export function phaseVolumeSettingsFromCoachNotes(
   input: { phaseKind?: import("@prisma/client").PhaseKind | null; name?: string | null } = {}
 ): PhaseVolumeSettings {
   return resolvePhaseVolumeSettings({
-    volumeTrend:
-      notes.volumeTrend ?? (notes.isTaperVolume ? "TAPER" : null),
+    volumeTrend: notes.volumeTrend ?? (notes.isTaperVolume ? "TAPER" : null),
     volumeTargetPercent: notes.volumeTargetPercent,
     volumeTaperStartPercent: notes.volumeTaperStartPercent,
     volumeTaperEndPercent: notes.volumeTaperEndPercent,
@@ -156,7 +165,7 @@ export function phaseVolumeSettingsFromCoachNotes(
 
 export function serializePhaseCoachNotes(input: PhaseCoachNotes): string | null {
   const trimmedGoal = input.goal?.trim() || null;
-  const data: Omit<PhaseCoachNotes, "goal"> = {
+  const data: Omit<PhaseCoachNotes, "goal" | "zoneSplits"> = {
     strengthSessionsPerWeek: Math.max(0, Math.round(input.strengthSessionsPerWeek)),
     swimIntenseDaysPerWeek: Math.max(0, Math.round(input.swimIntenseDaysPerWeek)),
     bikeIntenseDaysPerWeek: Math.max(0, Math.round(input.bikeIntenseDaysPerWeek)),
@@ -174,7 +183,8 @@ export function serializePhaseCoachNotes(input: PhaseCoachNotes): string | null 
     data.strengthSessionsPerWeek === DEFAULTS.strengthSessionsPerWeek &&
     data.swimIntenseDaysPerWeek === DEFAULTS.swimIntenseDaysPerWeek &&
     data.bikeIntenseDaysPerWeek === DEFAULTS.bikeIntenseDaysPerWeek &&
-    data.runIntenseDaysPerWeek === DEFAULTS.runIntenseDaysPerWeek;
+    data.runIntenseDaysPerWeek === DEFAULTS.runIntenseDaysPerWeek &&
+    !input.zoneSplits;
 
   const volumeDefaults =
     data.volumeTrend == null &&
@@ -216,8 +226,8 @@ export function serializePhaseCoachNotes(input: PhaseCoachNotes): string | null 
       : {}),
     ...(data.longSessionCadence ? { longSessionCadence: data.longSessionCadence } : {}),
     ...(data.suppressRecovery != null ? { suppressRecovery: data.suppressRecovery } : {}),
+    ...(input.zoneSplits ? { zoneSplits: serializePhaseZoneSplits(input.zoneSplits) } : {}),
   };
 
   return JSON.stringify(payload);
 }
-

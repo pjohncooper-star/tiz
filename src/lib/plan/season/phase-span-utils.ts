@@ -166,6 +166,8 @@ export function resizePhaseTopBoundary(
 
   const phase = covered[index]!;
   const previous = covered[index - 1]!;
+  if (newStart >= phase.endWeekIndex) return covered;
+
   const clampedStart = Math.max(
     previous.startWeekIndex + 1,
     Math.min(newStart, phase.endWeekIndex)

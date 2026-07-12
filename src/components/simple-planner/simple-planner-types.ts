@@ -1,3 +1,4 @@
+import type { PhaseKind } from "@prisma/client";
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import type { ZoneRampDefaultsByDiscipline } from "@/lib/plan/season/simple-tiz";
 import type { RecoverySettings } from "@/lib/plan/season/recovery";
@@ -5,6 +6,11 @@ import {
   DEFAULT_SIMPLE_LONG_SESSION_DEFAULTS,
   type SimpleLongSessionDefaults,
 } from "@/lib/plan/season/simple-long-session-defaults";
+import {
+  defaultPhaseKindZoneDefaults,
+  defaultZoneSplitsForKind,
+} from "@/lib/plan/season/phase-zone-defaults";
+import type { PhaseKindZoneDefaults, PhaseZoneSplits } from "@/lib/plan/season/zone-split-types";
 import type {
   GoalEventDraft,
   UnlinkedRaceSession,
@@ -60,6 +66,7 @@ export type SimplePhase = {
   id?: string;
   name: string;
   color: string;
+  phaseKind: PhaseKind;
   startWeekIndex: number;
   endWeekIndex: number;
   rampEnabled: {
@@ -81,6 +88,7 @@ export type SimplePhase = {
   volumeTaperEndPercent: number;
   longSessionCadence: LongSessionCadence;
   suppressRecovery: boolean;
+  zoneSplits: PhaseZoneSplits | null;
 };
 
 export type { SimpleLongSessionDefaults };
@@ -111,6 +119,7 @@ export type SimpleSeason = {
   status: string;
   rampDefaults: SimpleRampDefaults;
   zoneRampDefaults: ZoneRampDefaultsByDiscipline;
+  phaseKindZoneDefaults: PhaseKindZoneDefaults;
   recovery: RecoverySettings;
   longSessionDefaults: SimpleLongSessionDefaults;
   unlinkedRaceSessions: UnlinkedRaceSession[];
@@ -147,6 +156,7 @@ export function createDefaultPhaseCoverage(totalWeeks: number): SimplePhase[] {
       id: newPhaseId(),
       name: "Phase 1",
       color: PHASE_COLORS[0] ?? "#38bdf8",
+      phaseKind: "BASE",
       startWeekIndex: 0,
       endWeekIndex: totalWeeks - 1,
       rampEnabled: { swim: true, bike: true, run: true },
@@ -154,6 +164,7 @@ export function createDefaultPhaseCoverage(totalWeeks: number): SimplePhase[] {
       ...DEFAULT_PHASE_INTENSE_DAYS,
       goal: null,
       ...DEFAULT_PHASE_VOLUME_FIELDS,
+      zoneSplits: defaultZoneSplitsForKind("BASE"),
     },
   ];
 }
@@ -171,6 +182,7 @@ export function suggestSimplePhasesForWeeks(totalWeeks: number): SimplePhase[] {
       id: newPhaseId(),
       name: phase.name,
       color: phase.color ?? PHASE_COLORS[0] ?? "#38bdf8",
+      phaseKind: phase.phaseKind,
       startWeekIndex,
       endWeekIndex,
       rampEnabled: { swim: true, bike: true, run: true },
@@ -183,15 +195,22 @@ export function suggestSimplePhasesForWeeks(totalWeeks: number): SimplePhase[] {
       volumeTaperEndPercent: volume.volumeTaperEndPercent,
       longSessionCadence: volume.longSessionCadence,
       suppressRecovery: volume.suppressRecovery,
+      zoneSplits: defaultZoneSplitsForKind(phase.phaseKind),
     };
   });
 }
 
-export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase {
+export function createPhaseAtWeek(
+  weekIndex: number,
+  index: number,
+  kindDefaults: PhaseKindZoneDefaults = defaultPhaseKindZoneDefaults()
+): SimplePhase {
+  const phaseKind = "BASE";
   return {
     id: newPhaseId(),
     name: `Phase ${index}`,
     color: PHASE_COLORS[index % PHASE_COLORS.length] ?? "#38bdf8",
+    phaseKind,
     startWeekIndex: weekIndex,
     endWeekIndex: weekIndex,
     rampEnabled: { swim: true, bike: true, run: true },
@@ -199,6 +218,9 @@ export function createPhaseAtWeek(weekIndex: number, index: number): SimplePhase
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
     ...DEFAULT_PHASE_VOLUME_FIELDS,
+    zoneSplits: kindDefaults[phaseKind] ?? defaultZoneSplitsForKind(phaseKind),
   };
 }
+
+export { defaultPhaseKindZoneDefaults };
 

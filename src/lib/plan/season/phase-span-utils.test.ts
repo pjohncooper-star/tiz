@@ -27,6 +27,7 @@ function phase(
     id,
     name: "Base",
     color: "#38bdf8",
+    phaseKind: "BASE",
     startWeekIndex: start,
     endWeekIndex: end,
     rampEnabled: { swim: true, bike: true, run: true },
@@ -34,6 +35,7 @@ function phase(
     ...DEFAULT_PHASE_INTENSE_DAYS,
     goal: null,
     ...DEFAULT_PHASE_VOLUME_FIELDS,
+    zoneSplits: null,
   };
 }
 

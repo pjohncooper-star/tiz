@@ -17,6 +17,7 @@ const PARSED_DEFAULTS = {
   volumeTaperEndPercent: null,
   longSessionCadence: null,
   suppressRecovery: null,
+  zoneSplits: null,
 } as const;
 
 describe("simple-phase-notes", () => {

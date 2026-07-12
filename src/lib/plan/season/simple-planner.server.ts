@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type DeLoadStrategy, type PhaseKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import {
@@ -47,10 +47,20 @@ import {
   defaultZoneRampDefaults,
   parseDisciplineZoneMinutes,
   parseZoneRampDefaults,
-  recalculateSimpleZoneMinutes,
   type SimpleWeekWithZones,
   type ZoneRampDefaultsByDiscipline,
 } from "./simple-tiz";
+import {
+  defaultPhaseKindZoneDefaults,
+  parsePhaseKindZoneDefaults,
+  resolvePhaseZoneSplits,
+  serializePhaseKindZoneDefaults,
+} from "./phase-zone-defaults";
+import type { PhaseKindZoneDefaults, PhaseZoneSplits } from "./zone-split-types";
+import {
+  recalculateZoneMinutesFromSplits,
+  type ZonePhaseSpan,
+} from "./zone-split";
 import { type ZoneMinutes } from "@/lib/workout/steps";
 import { roundHours } from "./volume-curve";
 import {
@@ -89,6 +99,7 @@ export type SimplePhaseWrite = {
   id?: string;
   name: string;
   color: string;
+  phaseKind?: PhaseKind;
   startWeekIndex: number;
   endWeekIndex: number;
   rampEnabled: Record<SimpleDiscipline, boolean>;
@@ -106,6 +117,7 @@ export type SimplePhaseWrite = {
   volumeTaperEndPercent?: number;
   longSessionCadence?: LongSessionCadence;
   suppressRecovery?: boolean;
+  zoneSplits?: PhaseZoneSplits | null;
 };
 
 export type SimpleWeekWrite = {
@@ -136,6 +148,7 @@ export type CreateSimpleSeasonInput = {
   endDate: Date;
   rampDefaults?: SimpleRampDefaults;
   zoneRampDefaults?: ZoneRampDefaultsByDiscipline;
+  phaseKindZoneDefaults?: PhaseKindZoneDefaults;
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
@@ -147,6 +160,7 @@ export type UpdateSimpleSeasonInput = {
   endDate?: Date;
   rampDefaults?: SimpleRampDefaults;
   zoneRampDefaults?: ZoneRampDefaultsByDiscipline;
+  phaseKindZoneDefaults?: PhaseKindZoneDefaults;
   phases?: SimplePhaseWrite[];
   weeks?: SimpleWeekWrite[];
   recalculate?: boolean;
@@ -193,7 +207,7 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
         runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
         volumeMesocycleMode: volumeMesocycleModeToDb(volume.volumeTrend),
-        phaseKind: inferPhaseKindFromVolumeSettings(volume),
+        phaseKind: phase.phaseKind ?? inferPhaseKindFromVolumeSettings(volume),
         coachNotes: serializePhaseCoachNotes({
           goal: phase.goal ?? null,
           strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
@@ -207,6 +221,7 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
           volumeTaperEndPercent: volume.volumeTaperEndPercent,
           longSessionCadence: volume.longSessionCadence,
           suppressRecovery: volume.suppressRecovery,
+          zoneSplits: phase.zoneSplits ?? null,
         }),
       };
     });
@@ -229,10 +244,73 @@ function toWeekWithZones(week: SimpleWeekVolume & {
   };
 }
 
+function zonePhaseSpansFromWrites(
+  phases: SimplePhaseWrite[],
+  kindDefaults: PhaseKindZoneDefaults
+): ZonePhaseSpan[] {
+  return phases
+    .filter((phase) => phase.startWeekIndex >= 0 && phase.endWeekIndex >= phase.startWeekIndex)
+    .map((phase) => {
+      const volume = resolvePhaseVolumeSettings({
+        volumeTrend: phase.volumeTrend,
+        volumeTargetPercent: phase.volumeTargetPercent,
+        volumeTaperStartPercent: phase.volumeTaperStartPercent,
+        volumeTaperEndPercent: phase.volumeTaperEndPercent,
+        longSessionCadence: phase.longSessionCadence,
+        suppressRecovery: phase.suppressRecovery,
+        phaseKind: phase.phaseKind,
+        name: phase.name,
+      });
+      const phaseKind = phase.phaseKind ?? inferPhaseKindFromVolumeSettings(volume);
+      return {
+        startWeekIndex: phase.startWeekIndex,
+        endWeekIndex: phase.endWeekIndex,
+        rampEnabled: phase.rampEnabled,
+        zoneSplits: resolvePhaseZoneSplits({
+          phaseKind,
+          phaseZoneSplits: phase.zoneSplits,
+          kindDefaults,
+        }),
+      };
+    });
+}
+
+function zonePhaseSpansFromDb(
+  phases: NonNullable<Awaited<ReturnType<typeof getSeasonPlanById>>>["phases"],
+  kindDefaults: PhaseKindZoneDefaults
+): ZonePhaseSpan[] {
+  let cursor = 0;
+  return [...phases]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .filter((phase) => phase.weekCount > 0)
+    .map((phase) => {
+      const hasStoredStart = "startWeekIndex" in phase && phase.startWeekIndex >= 0;
+      const startWeekIndex = hasStoredStart ? phase.startWeekIndex : cursor;
+      const endWeekIndex = startWeekIndex + phase.weekCount - 1;
+      if (!hasStoredStart) cursor += phase.weekCount;
+      const notes = parsePhaseCoachNotes(phase.coachNotes);
+      return {
+        startWeekIndex,
+        endWeekIndex,
+        rampEnabled: {
+          swim: phase.rampSwimEnabled,
+          bike: phase.rampBikeEnabled,
+          run: phase.rampRunEnabled,
+        },
+        zoneSplits: resolvePhaseZoneSplits({
+          phaseKind: phase.phaseKind,
+          phaseZoneSplits: notes.zoneSplits,
+          kindDefaults,
+        }),
+      };
+    });
+}
+
 function buildInitialWeeks(
   totalWeeks: number,
   defaults: SimpleRampDefaults,
-  zoneDefaults: ZoneRampDefaultsByDiscipline
+  kindDefaults: PhaseKindZoneDefaults,
+  deLoadStrategy: DeLoadStrategy
 ): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes; zoneMinutesOverridden: boolean }> {
   const weeks: SimpleWeekVolume[] = Array.from({ length: totalWeeks }, (_, weekIndex) => ({
     weekIndex,
@@ -250,15 +328,21 @@ function buildInitialWeeks(
   }));
 
   const volumeWeeks = recalculateSimpleVolumes(weeks, [], defaults);
-  const zoneWeeks = recalculateSimpleZoneMinutes(
-    volumeWeeks.map((week) => toWeekWithZones(week)),
+  const zoneMinutesList = recalculateZoneMinutesFromSplits(
+    volumeWeeks.map((week) => ({
+      weekIndex: week.weekIndex,
+      isRestWeek: week.isRestWeek,
+      swimHours: week.swimHours,
+      bikeHours: week.bikeHours,
+      runHours: week.runHours,
+    })),
     [],
-    zoneDefaults
+    deLoadStrategy
   );
 
   return volumeWeeks.map((week, index) => ({
     ...week,
-    zoneMinutes: zoneWeeks[index]!.zoneMinutes,
+    zoneMinutes: zoneMinutesList[index]!,
     zoneMinutesOverridden: false,
     longRideMinutes: 0,
     longRunMinutes: 0,
@@ -413,6 +497,7 @@ function simplePhasesFromDb(
         id: phase.id,
         name: phase.name,
         color: phase.color,
+        phaseKind: phase.phaseKind,
         startWeekIndex,
         endWeekIndex,
         rampEnabled: {
@@ -434,6 +519,7 @@ function simplePhasesFromDb(
         volumeTaperEndPercent: volume.volumeTaperEndPercent,
         longSessionCadence: volume.longSessionCadence,
         suppressRecovery: volume.suppressRecovery,
+        zoneSplits: notes.zoneSplits,
       };
     });
   return normalizePhasesToFullCoverage(mapped, totalWeeks);
@@ -495,10 +581,12 @@ function toSimplePhase(phase: SimplePhaseWrite): import("@/components/simple-pla
     suppressRecovery: phase.suppressRecovery,
     name: phase.name,
   });
+  const phaseKind = phase.phaseKind ?? inferPhaseKindFromVolumeSettings(volume);
   return {
     id: phase.id,
     name: phase.name,
     color: phase.color,
+    phaseKind,
     startWeekIndex: phase.startWeekIndex,
     endWeekIndex: phase.endWeekIndex,
     rampEnabled: phase.rampEnabled,
@@ -516,6 +604,7 @@ function toSimplePhase(phase: SimplePhaseWrite): import("@/components/simple-pla
     volumeTaperEndPercent: volume.volumeTaperEndPercent,
     longSessionCadence: volume.longSessionCadence,
     suppressRecovery: volume.suppressRecovery,
+    zoneSplits: phase.zoneSplits ?? null,
   };
 }
 
@@ -581,8 +670,9 @@ function recalculateWeeks(
     }
   >,
   phaseSpans: SimplePhaseVolumeSpan[],
+  zonePhaseSpans: ZonePhaseSpan[],
   rampDefaults: SimpleRampDefaults,
-  zoneRampDefaults: ZoneRampDefaultsByDiscipline,
+  deLoadStrategy: DeLoadStrategy,
   recoverySettings: RecoverySettings,
   suppressRecoveryWeeks: ReadonlySet<number> = new Set()
 ) {
@@ -647,15 +737,17 @@ function recalculateWeeks(
     };
   });
 
-  const shadowZones = volumeResult.map((week) => ({
-    ...toWeekWithZones(week),
+  const zoneInput = volumeResult.map((week) => ({
+    weekIndex: week.weekIndex,
     isRestWeek: false,
-    zoneMinutesOverridden: false,
+    swimHours: week.swimHours,
+    bikeHours: week.bikeHours,
+    runHours: week.runHours,
   }));
-  const rampedZones = recalculateSimpleZoneMinutes(
-    shadowZones,
-    phaseSpans,
-    zoneRampDefaults
+  const rampedZones = recalculateZoneMinutesFromSplits(
+    zoneInput,
+    zonePhaseSpans,
+    deLoadStrategy
   );
 
   const result = volumeResult.map((week, weekIndex) => {
@@ -666,11 +758,11 @@ function recalculateWeeks(
       };
     }
 
-    if (week.isRestWeek) {
+    if (week.isRestWeek && !suppressRecoveryWeeks.has(weekIndex)) {
       return {
         ...week,
         zoneMinutes: applyRecoveryZonesForWeek(
-          rampedZones[weekIndex]!.zoneMinutes,
+          rampedZones[weekIndex]!,
           week,
           recoverySettings
         ),
@@ -679,7 +771,7 @@ function recalculateWeeks(
 
     return {
       ...week,
-      zoneMinutes: rampedZones[weekIndex]!.zoneMinutes,
+      zoneMinutes: rampedZones[weekIndex]!,
     };
   });
 
@@ -705,6 +797,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       endDate: input.endDate,
       rampDefaults: input.rampDefaults,
       zoneRampDefaults: input.zoneRampDefaults,
+      phaseKindZoneDefaults: input.phaseKindZoneDefaults,
       phases: [],
       recalculate: true,
       goalEvent: input.goalEvent,
@@ -719,8 +812,15 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
 
   const defaults = input.rampDefaults ?? defaultSimpleRampDefaults();
   const zoneDefaults = input.zoneRampDefaults ?? defaultZoneRampDefaults();
+  const kindDefaults = input.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
   const rampFields = rampDefaultsToPlanFields(defaults);
-  const computedWeeks = buildInitialWeeks(bounds.totalWeeks, defaults, zoneDefaults);
+  const deLoadStrategy: DeLoadStrategy = "VOLUME_ONLY";
+  const computedWeeks = buildInitialWeeks(
+    bounds.totalWeeks,
+    defaults,
+    kindDefaults,
+    deLoadStrategy
+  );
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
 
@@ -739,6 +839,9 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         deLoadEveryNWeeks: 4,
         deLoadVolumePercent: 60,
         zoneRampDefaultsByDiscipline: zoneDefaults as Prisma.InputJsonValue,
+        phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
+          kindDefaults
+        ) as Prisma.InputJsonValue,
         ...rampFields,
       },
     });
@@ -830,6 +933,14 @@ export async function updateSimpleSeasonPlan(
     input.zoneRampDefaults ??
     parseZoneRampDefaults(existing.zoneRampDefaultsByDiscipline);
 
+  const kindDefaults =
+    input.phaseKindZoneDefaults ??
+    parsePhaseKindZoneDefaults(
+      (existing as { phaseKindZoneDefaults?: unknown }).phaseKindZoneDefaults
+    );
+
+  const deLoadStrategy = existing.deLoadStrategy ?? "VOLUME_ONLY";
+
   const rampFields = input.rampDefaults ? rampDefaultsToPlanFields(defaults) : undefined;
 
   const recoverySettings = resolveRecoverySettings({
@@ -852,6 +963,10 @@ export async function updateSimpleSeasonPlan(
   const phaseSpans = phaseWrites
     ? phaseSpansFromWrites(phaseWrites)
     : buildPhaseVolumeSpansFromExisting(existing.phases);
+
+  const zonePhaseSpans = phaseWrites
+    ? zonePhaseSpansFromWrites(phaseWrites, kindDefaults)
+    : zonePhaseSpansFromDb(existing.phases, kindDefaults);
 
   let weeks = mergeWeekWrites(
     weeksFromDb(existing.weeks),
@@ -977,8 +1092,9 @@ export async function updateSimpleSeasonPlan(
     weeks = recalculateWeeks(
       weeks,
       phaseSpans,
+      zonePhaseSpans,
       defaults,
-      zoneDefaults,
+      deLoadStrategy,
       recoverySettings,
       suppressRecoveryWeeks
     );
@@ -1018,6 +1134,13 @@ export async function updateSimpleSeasonPlan(
         ...(rampFields ?? {}),
         ...(input.zoneRampDefaults
           ? { zoneRampDefaultsByDiscipline: zoneDefaults as Prisma.InputJsonValue }
+          : {}),
+        ...(input.phaseKindZoneDefaults
+          ? {
+              phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
+                kindDefaults
+              ) as Prisma.InputJsonValue,
+            }
           : {}),
         ...(input.recovery
           ? {
@@ -1157,6 +1280,9 @@ export async function serializeSimpleSeasonPlan(
 
   const defaults = resolveSimpleRampDefaults(plan);
   const zoneRampDefaults = parseZoneRampDefaults(plan.zoneRampDefaultsByDiscipline);
+  const phaseKindZoneDefaults = parsePhaseKindZoneDefaults(
+    (plan as { phaseKindZoneDefaults?: unknown }).phaseKindZoneDefaults
+  );
   let cursor = 0;
   const phases = [...plan.phases]
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -1189,6 +1315,7 @@ export async function serializeSimpleSeasonPlan(
         id: phase.id,
         name: phase.name,
         color: phase.color,
+        phaseKind: phase.phaseKind,
         startWeekIndex,
         endWeekIndex,
         rampEnabled: {
@@ -1210,6 +1337,7 @@ export async function serializeSimpleSeasonPlan(
         volumeTaperEndPercent: volume.volumeTaperEndPercent,
         longSessionCadence: volume.longSessionCadence,
         suppressRecovery: volume.suppressRecovery,
+        zoneSplits: notes.zoneSplits,
       };
     });
 
@@ -1224,6 +1352,7 @@ export async function serializeSimpleSeasonPlan(
     status: plan.status,
     rampDefaults: defaults,
     zoneRampDefaults,
+    phaseKindZoneDefaults,
     recovery: resolveRecoverySettings(plan),
     longSessionDefaults: resolveSimpleLongSessionDefaults(plan),
     unlinkedRaceSessions,

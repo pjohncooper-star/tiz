@@ -39,6 +39,8 @@ import {
   defaultZoneRampDefaults,
   type ZoneRampDefaultsByDiscipline,
 } from "@/lib/plan/season/simple-tiz";
+import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { PhaseKindZoneDefaultsEditor } from "@/components/simple-planner/zone-split-editor";
 import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import {
   hoursFromDisciplineDistance,
@@ -57,6 +59,7 @@ import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
+  const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
   const mapGoal = (event: SimpleGoalEvent): SimpleGoalEvent => ({
     ...goalEventFromApi(event),
     id: event.id,
@@ -66,6 +69,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
 
   return {
     ...season,
+    phaseKindZoneDefaults: kindDefaults,
     recovery: season.recovery ?? DEFAULT_RECOVERY_SETTINGS,
     longSessionDefaults: season.longSessionDefaults ?? DEFAULT_LONG_SESSION_DEFAULTS,
     unlinkedRaceSessions: season.unlinkedRaceSessions ?? [],
@@ -79,10 +83,13 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
           volumeTaperEndPercent: phase.volumeTaperEndPercent,
           longSessionCadence: phase.longSessionCadence,
           suppressRecovery: phase.suppressRecovery,
+          phaseKind: phase.phaseKind,
           name: phase.name,
         });
         return {
           ...phase,
+          phaseKind: phase.phaseKind ?? "BASE",
+          zoneSplits: phase.zoneSplits ?? null,
           swimSessionsPerWeek: phase.swimSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.swimSessionsPerWeek,
           bikeSessionsPerWeek: phase.bikeSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.bikeSessionsPerWeek,
           runSessionsPerWeek: phase.runSessionsPerWeek ?? DEFAULT_PHASE_SESSIONS.runSessionsPerWeek,
@@ -119,6 +126,7 @@ type PlannerSectionId =
   | "season"
   | "races"
   | "timeline"
+  | "phaseKinds"
   | "phases"
   | "ramps"
   | "zoneRamps"
@@ -131,6 +139,7 @@ const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   season: true,
   races: false,
   timeline: true,
+  phaseKinds: false,
   phases: false,
   ramps: false,
   zoneRamps: false,
@@ -358,6 +367,7 @@ export function SimplePlannerView() {
       endDate: season.endDate,
       rampDefaults: season.rampDefaults,
       zoneRampDefaults: season.zoneRampDefaults,
+      phaseKindZoneDefaults: season.phaseKindZoneDefaults,
       recovery: season.recovery,
       longSessionDefaults: season.longSessionDefaults,
       phases: season.phases,
@@ -630,6 +640,29 @@ export function SimplePlannerView() {
       </CollapsibleSection>
 
       <CollapsibleSection
+        title="Phase kind zone defaults"
+        expanded={expandedSections.phaseKinds}
+        onToggle={() => toggleSection("phaseKinds")}
+      >
+        <PhaseKindZoneDefaultsEditor
+          value={season.phaseKindZoneDefaults}
+          onChange={(phaseKindZoneDefaults) =>
+            setSeason({ ...season, phaseKindZoneDefaults })
+          }
+        />
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving}
+            onClick={() => void saveSeason(savePayload({ recalculate: true }))}
+          >
+            {saving ? "Saving…" : "Save & recalculate zones"}
+          </Button>
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection
         title="Phases"
         expanded={expandedSections.phases}
         onToggle={() => toggleSection("phases")}
@@ -638,6 +671,7 @@ export function SimplePlannerView() {
           seasonPlanId={season.id}
           seasonStartDate={season.startDate}
           phases={season.phases}
+          phaseKindZoneDefaults={season.phaseKindZoneDefaults}
           totalWeeks={season.totalWeeks}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
