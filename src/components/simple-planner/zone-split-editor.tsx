@@ -1,11 +1,11 @@
+"use client";
+
 import type { PhaseFocus, PhaseKind } from "@prisma/client";
-import { FOCUS_TIZ_PRESETS } from "@/lib/plan/season/constants";
 import {
+  disciplineSplitFocusId,
   disciplineZoneSplitSummary,
-  focusLabel,
-  normalizeZoneSplitPercents,
   percentsForDisciplineSplit,
-  presetDisciplineZoneSplit,
+  presetDisciplineZoneSplitById,
 } from "@/lib/plan/season/phase-zone-defaults";
 import type {
   DisciplineZoneSplit,
@@ -13,9 +13,8 @@ import type {
   TriPlanDiscipline,
   ZoneSplitPercents,
 } from "@/lib/plan/season/zone-split-types";
+import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { Input } from "@/components/ui";
-
-const PHASE_FOCUSES = Object.keys(FOCUS_TIZ_PRESETS) as PhaseFocus[];
 
 const DISCIPLINE_ROWS: { key: TriPlanDiscipline; label: string }[] = [
   { key: "SWIM", label: "Swim" },
@@ -26,10 +25,18 @@ const DISCIPLINE_ROWS: { key: TriPlanDiscipline; label: string }[] = [
 type ZoneSplitEditorProps = {
   value: PhaseZoneSplits;
   onChange: (value: PhaseZoneSplits) => void;
+  catalog: ZoneFocusCatalog;
   compact?: boolean;
+  showPresetPercents?: boolean;
 };
 
-export function ZoneSplitEditor({ value, onChange, compact = false }: ZoneSplitEditorProps) {
+export function ZoneSplitEditor({
+  value,
+  onChange,
+  catalog,
+  compact = false,
+  showPresetPercents = false,
+}: ZoneSplitEditorProps) {
   return (
     <div className="space-y-3">
       {DISCIPLINE_ROWS.map((row) => (
@@ -37,7 +44,9 @@ export function ZoneSplitEditor({ value, onChange, compact = false }: ZoneSplitE
           key={row.key}
           label={row.label}
           split={value[row.key]}
+          catalog={catalog}
           compact={compact}
+          showPresetPercents={showPresetPercents}
           onChange={(split) => onChange({ ...value, [row.key]: split })}
         />
       ))}
@@ -49,43 +58,51 @@ function DisciplineZoneSplitRow({
   label,
   split,
   onChange,
+  catalog,
   compact,
+  showPresetPercents,
 }: {
   label: string;
   split: DisciplineZoneSplit;
   onChange: (split: DisciplineZoneSplit) => void;
+  catalog: ZoneFocusCatalog;
   compact?: boolean;
+  showPresetPercents?: boolean;
 }) {
   const isCustom = split.mode === "custom";
-  const summary = disciplineZoneSplitSummary(split);
+  const summary = disciplineZoneSplitSummary(split, catalog);
+  const focusId = disciplineSplitFocusId(split);
 
-  function setPreset(focus: PhaseFocus) {
-    onChange(presetDisciplineZoneSplit(focus));
+  function setPreset(id: string) {
+    onChange(presetDisciplineZoneSplitById(id));
   }
 
   function setCustomPercents(patch: Partial<ZoneSplitPercents>) {
-    const current = percentsForDisciplineSplit(split);
-    const next = normalizeZoneSplitPercents({ ...current, ...patch });
+    const current = percentsForDisciplineSplit(split, catalog);
+    const next = { ...current, ...patch };
     onChange({
       mode: "custom",
-      focus: split.focus,
+      focusId,
+      focus: focusId in catalog ? (focusId as PhaseFocus) : split.focus,
       percents: next,
     });
   }
 
   function toggleCustom() {
     if (isCustom) {
-      onChange(presetDisciplineZoneSplit(split.focus ?? "AEROBIC_BASE"));
+      onChange(presetDisciplineZoneSplitById(focusId));
       return;
     }
     onChange({
       mode: "custom",
+      focusId,
       focus: split.focus,
-      percents: percentsForDisciplineSplit(split),
+      percents: percentsForDisciplineSplit(split, catalog),
     });
   }
 
-  const percents = percentsForDisciplineSplit(split);
+  const percents = percentsForDisciplineSplit(split, catalog);
+  const showSummary = !isCustom && (!compact || showPresetPercents);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
@@ -93,26 +110,24 @@ function DisciplineZoneSplitRow({
         <span className="w-12 text-sm font-medium">{label}</span>
         <select
           className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-          value={isCustom ? "CUSTOM" : (split.focus ?? "AEROBIC_BASE")}
+          value={isCustom ? "CUSTOM" : focusId}
           onChange={(event) => {
             const next = event.target.value;
             if (next === "CUSTOM") {
               toggleCustom();
               return;
             }
-            setPreset(next as PhaseFocus);
+            setPreset(next);
           }}
         >
-          {PHASE_FOCUSES.map((focus) => (
-            <option key={focus} value={focus}>
-              {focusLabel(focus)}
+          {catalog.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
             </option>
           ))}
           <option value="CUSTOM">Custom</option>
         </select>
-        {!isCustom && !compact ? (
-          <span className="text-xs text-zinc-500">{summary}</span>
-        ) : null}
+        {showSummary ? <span className="text-xs text-zinc-500">{summary}</span> : null}
       </div>
 
       {isCustom ? (
@@ -134,9 +149,7 @@ function DisciplineZoneSplitRow({
           ))}
         </div>
       ) : null}
-      {isCustom ? (
-        <p className="mt-2 text-xs text-zinc-500">{summary}</p>
-      ) : null}
+      {isCustom ? <p className="mt-2 text-xs text-zinc-500">{summary}</p> : null}
     </div>
   );
 }
@@ -144,11 +157,15 @@ function DisciplineZoneSplitRow({
 type PhaseKindZoneDefaultsEditorProps = {
   value: Record<PhaseKind, PhaseZoneSplits>;
   onChange: (value: Record<PhaseKind, PhaseZoneSplits>) => void;
+  catalog: ZoneFocusCatalog;
+  showPresetPercents?: boolean;
 };
 
 export function PhaseKindZoneDefaultsEditor({
   value,
   onChange,
+  catalog,
+  showPresetPercents = false,
 }: PhaseKindZoneDefaultsEditorProps) {
   const kinds: PhaseKind[] = ["BASE", "BUILD", "RACE_PREP", "TAPER"];
   const labels: Record<PhaseKind, string> = {
@@ -170,7 +187,9 @@ export function PhaseKindZoneDefaultsEditor({
           <ZoneSplitEditor
             value={value[kind]}
             onChange={(splits) => onChange({ ...value, [kind]: splits })}
+            catalog={catalog}
             compact
+            showPresetPercents={showPresetPercents}
           />
         </div>
       ))}

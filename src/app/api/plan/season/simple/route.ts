@@ -6,6 +6,7 @@ import { createSimpleSeasonSchema } from "@/lib/plan/api-schemas";
 import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
   createSimpleSeasonPlan,
+  loadAthleteZoneFocusCatalog,
   serializeSimpleSeasonPlan,
   updateSimpleSeasonPlan,
 } from "@/lib/plan/season/simple-planner.server";
@@ -29,10 +30,11 @@ export async function GET(request: Request) {
     const plan = await getSimplePlannerSeason(athleteId, seasonId);
 
     if (!plan) {
-      return NextResponse.json({ season: null });
+      return NextResponse.json({ season: null, zoneFocusCatalog: await loadAthleteZoneFocusCatalog(athleteId) });
     }
 
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
   } catch (err) {
     console.error("GET /api/plan/season/simple failed", err);
     const message = err instanceof Error ? err.message : "Could not load season plan";
@@ -83,8 +85,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Could not create season" }, { status: 500 });
     }
 
+    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
     return NextResponse.json(
-      { season: serializeSimpleSeasonPlan(plan) },
+      { season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog },
       { status: 201 }
     );
   } catch (err) {

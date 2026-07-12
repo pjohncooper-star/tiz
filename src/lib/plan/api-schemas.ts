@@ -446,8 +446,20 @@ const zoneSplitPercentsSchema = z.object({
 const disciplineZoneSplitSchema = z.object({
   mode: z.enum(["preset", "custom"]),
   focus: phaseFocusSchema.optional(),
+  focusId: z.string().optional(),
   percents: zoneSplitPercentsSchema.optional(),
 });
+
+export const zoneFocusCatalogSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      percents: zoneSplitPercentsSchema,
+      sortOrder: z.number().int().nonnegative(),
+    })
+  )
+  .min(1);
 
 const phaseZoneSplitsSchema = z.object({
   SWIM: disciplineZoneSplitSchema,
@@ -460,6 +472,11 @@ export const phaseKindZoneDefaultsSchema = z.object({
   BUILD: phaseZoneSplitsSchema,
   RACE_PREP: phaseZoneSplitsSchema,
   TAPER: phaseZoneSplitsSchema,
+});
+
+export const zoneFocusSettingsSchema = z.object({
+  zoneFocusCatalog: zoneFocusCatalogSchema,
+  phaseKindZoneDefaults: phaseKindZoneDefaultsSchema,
 });
 
 export const simpleRampDefaultsSchema = z.object({

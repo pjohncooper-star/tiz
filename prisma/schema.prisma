@@ -264,7 +264,8 @@ model Athlete {
   strengthPastWorkoutShading PastWorkoutShading   @default(OFF)
   workoutShadingTarget     WorkoutShadingTarget     @default(BOTH)
   selfEvalConfig             Json?
-  phaseKindZoneDefaults      Json?
+  zoneFocusCatalog      Json?
+  phaseKindZoneDefaults Json?
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 

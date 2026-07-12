@@ -13,6 +13,7 @@ import {
 } from "@/lib/plan/season/phase-zone-defaults";
 import type { PhaseKind } from "@prisma/client";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
+import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
 import {
   formatUnassignedWeeks,
@@ -25,6 +26,7 @@ import {
 type SimplePlannerPhasesPaneProps = {
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
+  zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
@@ -34,6 +36,7 @@ type SimplePlannerPhasesPaneProps = {
 export function SimplePlannerPhasesPane({
   phases,
   phaseKindZoneDefaults,
+  zoneFocusCatalog,
   totalWeeks,
   selectedPhaseId,
   onSelectPhase,
@@ -132,6 +135,7 @@ export function SimplePlannerPhasesPane({
           phase={selected}
           phases={phases}
           phaseKindZoneDefaults={phaseKindZoneDefaults}
+          zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={totalWeeks}
           onChange={updatePhase}
           onDelete={() => deletePhase(selected)}
@@ -145,6 +149,7 @@ function PhaseDetailEditor({
   phase,
   phases,
   phaseKindZoneDefaults,
+  zoneFocusCatalog,
   totalWeeks,
   onChange,
   onDelete,
@@ -152,6 +157,7 @@ function PhaseDetailEditor({
   phase: SimplePhase;
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
+  zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
@@ -330,6 +336,8 @@ function PhaseDetailEditor({
         <ZoneSplitEditor
           value={zoneSplitsForPhase(phase, phaseKindZoneDefaults)}
           onChange={(zoneSplits) => onChange({ ...phase, zoneSplits })}
+          catalog={zoneFocusCatalog}
+          showPresetPercents
         />
       </fieldset>
 

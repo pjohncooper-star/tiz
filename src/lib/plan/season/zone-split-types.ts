@@ -12,7 +12,9 @@ export type TriPlanDiscipline = "SWIM" | "BIKE" | "RUN";
 
 export type DisciplineZoneSplit = {
   mode: "preset" | "custom";
+  /** Legacy enum id; same string as catalog id for seeded focuses. */
   focus?: PhaseFocus;
+  focusId?: string;
   percents?: ZoneSplitPercents;
 };
 

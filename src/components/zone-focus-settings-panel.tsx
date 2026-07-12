@@ -2,29 +2,36 @@
 
 import { useState } from "react";
 import { PhaseKindZoneDefaultsEditor } from "@/components/simple-planner/zone-split-editor";
+import { ZoneFocusCatalogEditor } from "@/components/zone-focus-catalog-editor";
 import { Button } from "@/components/ui";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
+import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 
-type ZoneFocusSettingsPanelProps = {
-  initialDefaults: PhaseKindZoneDefaults;
+type ZoneFocusSettings = {
+  zoneFocusCatalog: ZoneFocusCatalog;
+  phaseKindZoneDefaults: PhaseKindZoneDefaults;
 };
 
-async function persistPhaseKindZoneDefaults(
-  phaseKindZoneDefaults: PhaseKindZoneDefaults
+type ZoneFocusSettingsPanelProps = {
+  initialSettings: ZoneFocusSettings;
+};
+
+async function persistZoneFocusSettings(
+  settings: ZoneFocusSettings
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const res = await fetch("/api/settings", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ type: "phase-kind-zone-defaults", data: phaseKindZoneDefaults }),
+    body: JSON.stringify({ type: "zone-focus-settings", data: settings }),
   });
   if (res.ok) return { ok: true };
   const data = (await res.json().catch(() => null)) as { error?: string } | null;
-  return { ok: false, error: data?.error ?? "Could not save zone focus defaults" };
+  return { ok: false, error: data?.error ?? "Could not save zone focus settings" };
 }
 
-export function ZoneFocusSettingsPanel({ initialDefaults }: ZoneFocusSettingsPanelProps) {
-  const [saved, setSaved] = useState(initialDefaults);
-  const [draft, setDraft] = useState(initialDefaults);
+export function ZoneFocusSettingsPanel({ initialSettings }: ZoneFocusSettingsPanelProps) {
+  const [saved, setSaved] = useState(initialSettings);
+  const [draft, setDraft] = useState(initialSettings);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +41,7 @@ export function ZoneFocusSettingsPanel({ initialDefaults }: ZoneFocusSettingsPan
     if (!dirty) return;
     setSaving(true);
     setError(null);
-    const result = await persistPhaseKindZoneDefaults(draft);
+    const result = await persistZoneFocusSettings(draft);
     setSaving(false);
     if (!result.ok) {
       setError(result.error);
@@ -49,12 +56,29 @@ export function ZoneFocusSettingsPanel({ initialDefaults }: ZoneFocusSettingsPan
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Default TiZ % by phase kind for <strong>new</strong> seasons. Existing seasons keep their
-        saved values unless you change them on the plan page.
-      </p>
-      <PhaseKindZoneDefaultsEditor value={draft} onChange={setDraft} />
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">Zone focus library</h2>
+        <ZoneFocusCatalogEditor
+          value={draft.zoneFocusCatalog}
+          onChange={(zoneFocusCatalog) => setDraft({ ...draft, zoneFocusCatalog })}
+        />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold">Default zone focus by phase kind</h2>
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Used when creating <strong>new</strong> seasons. Existing seasons keep their saved values
+          unless you change them on the plan page.
+        </p>
+        <PhaseKindZoneDefaultsEditor
+          value={draft.phaseKindZoneDefaults}
+          onChange={(phaseKindZoneDefaults) => setDraft({ ...draft, phaseKindZoneDefaults })}
+          catalog={draft.zoneFocusCatalog}
+          showPresetPercents
+        />
+      </section>
+
       {error ? (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       ) : null}

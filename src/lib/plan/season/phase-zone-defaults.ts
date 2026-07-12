@@ -2,6 +2,11 @@ import type { PhaseFocus, PhaseKind } from "@prisma/client";
 import { DEFAULT_FOCUS } from "./default-phases";
 import { FOCUS_TIZ_PRESETS } from "./constants";
 import {
+  catalogFocusLabel,
+  resolveCatalogPercents,
+  type ZoneFocusCatalog,
+} from "./zone-focus-catalog";
+import {
   PHASE_KINDS,
   TRI_PLAN_DISCIPLINES,
   type DisciplineZoneSplit,
@@ -12,7 +17,19 @@ import {
 } from "./zone-split-types";
 
 export function presetDisciplineZoneSplit(focus: PhaseFocus): DisciplineZoneSplit {
-  return { mode: "preset", focus };
+  return { mode: "preset", focus, focusId: focus };
+}
+
+export function presetDisciplineZoneSplitById(focusId: string): DisciplineZoneSplit {
+  return {
+    mode: "preset",
+    focusId,
+    focus: focusId in FOCUS_TIZ_PRESETS ? (focusId as PhaseFocus) : undefined,
+  };
+}
+
+export function disciplineSplitFocusId(split: DisciplineZoneSplit): string {
+  return split.focusId ?? split.focus ?? "AEROBIC_BASE";
 }
 
 export function zoneSplitsFromFocus(focus: PhaseFocus): PhaseZoneSplits {
@@ -58,12 +75,22 @@ export function normalizeZoneSplitPercents(p: ZoneSplitPercents): ZoneSplitPerce
   };
 }
 
-export function percentsForDisciplineSplit(split: DisciplineZoneSplit): ZoneSplitPercents {
+export function percentsForDisciplineSplit(
+  split: DisciplineZoneSplit,
+  catalog?: ZoneFocusCatalog
+): ZoneSplitPercents {
   if (split.mode === "custom" && split.percents) {
     return normalizeZoneSplitPercents(split.percents);
   }
-  const focus = split.focus ?? "AEROBIC_BASE";
-  return { ...FOCUS_TIZ_PRESETS[focus] };
+  const focusId = disciplineSplitFocusId(split);
+  if (catalog) {
+    const fromCatalog = resolveCatalogPercents(catalog, focusId);
+    if (fromCatalog) return fromCatalog;
+  }
+  if (focusId in FOCUS_TIZ_PRESETS) {
+    return { ...FOCUS_TIZ_PRESETS[focusId as PhaseFocus] };
+  }
+  return { ...FOCUS_TIZ_PRESETS.AEROBIC_BASE };
 }
 
 export function parseDisciplineZoneSplit(raw: unknown): DisciplineZoneSplit | null {
@@ -72,10 +99,19 @@ export function parseDisciplineZoneSplit(raw: unknown): DisciplineZoneSplit | nu
   const mode = row.mode === "custom" ? "custom" : row.mode === "preset" ? "preset" : null;
   if (!mode) return null;
 
+  const focusId =
+    typeof row.focusId === "string"
+      ? row.focusId
+      : typeof row.focus === "string" && row.focus in FOCUS_TIZ_PRESETS
+        ? row.focus
+        : undefined;
+
   const focus =
     typeof row.focus === "string" && row.focus in FOCUS_TIZ_PRESETS
       ? (row.focus as PhaseFocus)
-      : undefined;
+      : focusId && focusId in FOCUS_TIZ_PRESETS
+        ? (focusId as PhaseFocus)
+        : undefined;
 
   let percents: ZoneSplitPercents | undefined;
   if (row.percents && typeof row.percents === "object" && !Array.isArray(row.percents)) {
@@ -90,10 +126,10 @@ export function parseDisciplineZoneSplit(raw: unknown): DisciplineZoneSplit | nu
   }
 
   if (mode === "custom" && percents) {
-    return { mode: "custom", percents, focus };
+    return { mode: "custom", percents, focus, focusId };
   }
-  if (focus) {
-    return { mode: "preset", focus };
+  if (focusId) {
+    return { mode: "preset", focus, focusId };
   }
   return null;
 }
@@ -191,9 +227,21 @@ export function focusLabel(focus: PhaseFocus): string {
   return focus.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
 }
 
-export function disciplineZoneSplitSummary(split: DisciplineZoneSplit): string {
-  const percents = percentsForDisciplineSplit(split);
+export function disciplineZoneSplitSummary(
+  split: DisciplineZoneSplit,
+  catalog?: ZoneFocusCatalog
+): string {
+  const percents = percentsForDisciplineSplit(split, catalog);
   return `Z1 ${Math.round(percents.z1)} · Z2 ${Math.round(percents.z2)} · Z3 ${Math.round(percents.z3)} · Z4 ${Math.round(percents.z4)} · Z5 ${Math.round(percents.z5)}`;
+}
+
+export function disciplineSplitLabel(
+  split: DisciplineZoneSplit,
+  catalog?: ZoneFocusCatalog
+): string {
+  if (split.mode === "custom") return "Custom";
+  const focusId = disciplineSplitFocusId(split);
+  return catalog ? catalogFocusLabel(catalog, focusId) : focusLabel(focusId as PhaseFocus);
 }
 
 export function isCustomDisciplineSplit(split: DisciplineZoneSplit): boolean {

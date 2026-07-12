@@ -5,6 +5,7 @@ import {
   percentsForDisciplineSplit,
   normalizeZoneSplitPercents,
 } from "./phase-zone-defaults";
+import type { ZoneFocusCatalog } from "./zone-focus-catalog";
 import {
   phaseForWeek,
   isRampOnForDiscipline,
@@ -87,12 +88,13 @@ function minutesFromPercents(totalMinutes: number, percents: ZoneSplitPercents):
 
 function targetPercentsForPhase(
   phase: ZonePhaseSpan | null,
-  discipline: TriPlanDiscipline
+  discipline: TriPlanDiscipline,
+  catalog?: ZoneFocusCatalog
 ): ZoneSplitPercents {
   if (!phase) {
     return normalizeZoneSplitPercents({ z1: 100, z2: 0, z3: 0, z4: 0, z5: 0 });
   }
-  return percentsForDisciplineSplit(phase.zoneSplits[discipline]);
+  return percentsForDisciplineSplit(phase.zoneSplits[discipline], catalog);
 }
 
 function sortedZonePhases(phases: ZonePhaseSpan[]): ZonePhaseSpan[] {
@@ -105,20 +107,21 @@ export function resolveZonePercentsForWeek(input: {
   weekIndex: number;
   phases: ZonePhaseSpan[];
   discipline: TriPlanDiscipline;
+  catalog?: ZoneFocusCatalog;
 }): ZoneSplitPercents {
   const sorted = sortedZonePhases(input.phases);
   const phase = phaseForWeek(sorted, input.weekIndex) as ZonePhaseSpan | null;
   if (!phase) {
     const prior = sorted.filter((item) => item.endWeekIndex < input.weekIndex).at(-1);
-    return targetPercentsForPhase(prior ?? null, input.discipline);
+    return targetPercentsForPhase(prior ?? null, input.discipline, input.catalog);
   }
 
-  const exitPercents = targetPercentsForPhase(phase, input.discipline);
+  const exitPercents = targetPercentsForPhase(phase, input.discipline, input.catalog);
   const priorPhase = sorted
     .filter((item) => item.endWeekIndex < phase.startWeekIndex)
     .at(-1);
   const entryPercents = priorPhase
-    ? targetPercentsForPhase(priorPhase, input.discipline)
+    ? targetPercentsForPhase(priorPhase, input.discipline, input.catalog)
     : exitPercents;
 
   const simpleDiscipline = Object.entries(SIMPLE_TO_TRI).find(
@@ -139,6 +142,7 @@ export function computeZoneMinutesForWeekFromSplits(input: {
   week: WeekZoneInput;
   phases: ZonePhaseSpan[];
   deLoadStrategy: DeLoadStrategy;
+  catalog?: ZoneFocusCatalog;
 }): ZoneMinutes {
   const zones: ZoneMinutes = {};
 
@@ -147,6 +151,7 @@ export function computeZoneMinutesForWeekFromSplits(input: {
       weekIndex: input.week.weekIndex,
       phases: input.phases,
       discipline,
+      catalog: input.catalog,
     });
     percents = applyDeLoadIntensityShift(
       percents,
@@ -167,9 +172,10 @@ export function computeZoneMinutesForWeekFromSplits(input: {
 export function recalculateZoneMinutesFromSplits(
   weeks: WeekZoneInput[],
   phases: ZonePhaseSpan[],
-  deLoadStrategy: DeLoadStrategy
+  deLoadStrategy: DeLoadStrategy,
+  catalog?: ZoneFocusCatalog
 ): ZoneMinutes[] {
   return weeks.map((week) =>
-    computeZoneMinutesForWeekFromSplits({ week, phases, deLoadStrategy })
+    computeZoneMinutesForWeekFromSplits({ week, phases, deLoadStrategy, catalog })
   );
 }

@@ -37,6 +37,10 @@ import {
   resolvePhaseZoneSplits,
   serializePhaseKindZoneDefaults,
 } from "./phase-zone-defaults";
+import {
+  parseZoneFocusCatalog,
+  type ZoneFocusCatalog,
+} from "./zone-focus-catalog";
 import type { PhaseKindZoneDefaults, PhaseZoneSplits } from "./zone-split-types";
 import {
   recalculateZoneMinutesFromSplits,
@@ -54,6 +58,20 @@ import {
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
+}
+
+export async function loadAthleteZoneFocusCatalog(
+  athleteId: string
+): Promise<ZoneFocusCatalog> {
+  try {
+    const athlete = await db.athlete.findUnique({
+      where: { id: athleteId },
+      select: { zoneFocusCatalog: true },
+    });
+    return parseZoneFocusCatalog(athlete?.zoneFocusCatalog);
+  } catch {
+    return parseZoneFocusCatalog(null);
+  }
 }
 
 export type SimplePhaseWrite = {
@@ -298,7 +316,8 @@ function recalculateWeeks(
   weeks: Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes }>,
   zonePhaseSpans: ZonePhaseSpan[],
   rampDefaults: SimpleRampDefaults,
-  deLoadStrategy: DeLoadStrategy
+  deLoadStrategy: DeLoadStrategy,
+  catalog?: ZoneFocusCatalog
 ) {
   const volumeWeeks = recalculateSimpleVolumes(weeks, zonePhaseSpans, rampDefaults);
   const zoneMinutesList = recalculateZoneMinutesFromSplits(
@@ -310,7 +329,8 @@ function recalculateWeeks(
       runHours: week.runHours,
     })),
     zonePhaseSpans,
-    deLoadStrategy
+    deLoadStrategy,
+    catalog
   );
 
   return volumeWeeks.map((week, index) => ({
@@ -503,7 +523,8 @@ export async function updateSimpleSeasonPlan(
   );
 
   if (input.recalculate) {
-    weeks = recalculateWeeks(weeks, zonePhaseSpans, defaults, deLoadStrategy);
+    const catalog = await loadAthleteZoneFocusCatalog(athleteId);
+    weeks = recalculateWeeks(weeks, zonePhaseSpans, defaults, deLoadStrategy, catalog);
   }
 
   const status =

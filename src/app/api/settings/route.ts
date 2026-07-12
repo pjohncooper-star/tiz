@@ -12,8 +12,12 @@ import {
 } from "@/lib/zones/signal-preference";
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
-import { phaseKindZoneDefaultsSchema } from "@/lib/plan/api-schemas";
+import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema } from "@/lib/plan/api-schemas";
 import { serializePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import {
+  serializeZoneFocusCatalog,
+  validatePhaseKindDefaultsAgainstCatalog,
+} from "@/lib/plan/season/zone-focus-catalog";
 import type { Discipline } from "@prisma/client";
 const settingsSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
@@ -332,6 +336,41 @@ export async function PUT(req: Request) {
     await syncCurrentPreferenceToSettings(athleteId, row.discipline);
     await recomputeAfterPreferenceChange(athleteId, row.discipline, from, to);
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.type === "zone-focus-settings") {
+    try {
+      const data = zoneFocusSettingsSchema.parse(body.data);
+      validatePhaseKindDefaultsAgainstCatalog(
+        data.zoneFocusCatalog,
+        data.phaseKindZoneDefaults
+      );
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: {
+          zoneFocusCatalog: serializeZoneFocusCatalog(
+            data.zoneFocusCatalog
+          ) as import("@prisma/client").Prisma.InputJsonValue,
+          phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
+            data.phaseKindZoneDefaults
+          ) as import("@prisma/client").Prisma.InputJsonValue,
+        },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid zone focus settings"
+          : error instanceof Error &&
+              /zoneFocusCatalog|ZoneFocusCatalog|phaseKindZoneDefaults|column/.test(
+                error.message
+              )
+            ? "Zone focus settings are not available yet. Run prisma/migrations/manual_athlete_zone_focus_settings.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save zone focus settings";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
 
   if (body.type === "phase-kind-zone-defaults") {

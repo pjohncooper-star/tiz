@@ -7,6 +7,7 @@ import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
   serializeSimpleSeasonPlan,
   updateSimpleSeasonPlan,
+  loadAthleteZoneFocusCatalog,
 } from "@/lib/plan/season/simple-planner.server";
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
@@ -32,7 +33,8 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
   } catch (err) {
     console.error(`GET /api/plan/season/${id}/simple failed`, err);
     const message = err instanceof Error ? err.message : "Could not load season plan";
@@ -89,7 +91,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan) });
+    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update season";
     const status = message.includes("not found") ? 404 : 409;

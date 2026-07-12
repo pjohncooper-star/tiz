@@ -9,6 +9,7 @@ import { buildWorkoutShadingSettings, parseWorkoutShadingTarget } from "@/lib/pl
 import { parseSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
 import { signalLabel } from "@/lib/zones/display";
 
@@ -23,12 +24,15 @@ async function loadAthleteSettingsProfile(athleteId: string) {
         selfEvalConfig: true,
         workoutShadingTarget: true,
         phaseKindZoneDefaults: true,
+        zoneFocusCatalog: true,
       },
     });
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|column/.test(error.message)
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|column/.test(
+        error.message
+      )
     ) {
       return db.athlete.findUnique({
         where: { id: athleteId },
@@ -74,6 +78,9 @@ export default async function SettingsPage() {
   const phaseKindZoneDefaults = parsePhaseKindZoneDefaults(
     athlete && "phaseKindZoneDefaults" in athlete ? athlete.phaseKindZoneDefaults : null
   );
+  const zoneFocusCatalog = parseZoneFocusCatalog(
+    athlete && "zoneFocusCatalog" in athlete ? athlete.zoneFocusCatalog : null
+  );
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -102,8 +109,10 @@ export default async function SettingsPage() {
           </a>
         )}
       </Card>
-      <Card title="Zone focus defaults">
-        <ZoneFocusSettingsPanel initialDefaults={phaseKindZoneDefaults} />
+      <Card title="Zone focus">
+        <ZoneFocusSettingsPanel
+          initialSettings={{ zoneFocusCatalog, phaseKindZoneDefaults }}
+        />
       </Card>
       <Card title="Thresholds & TiZ">
         <ul className="space-y-2 text-sm">

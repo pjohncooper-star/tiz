@@ -18,6 +18,8 @@ import {
 } from "@/components/simple-planner/simple-planner-types";
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
+import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { PhaseKindZoneDefaultsEditor } from "@/components/simple-planner/zone-split-editor";
 import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import {
@@ -241,6 +243,9 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
   const seasonIdParam = searchParams.get("seasonId");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
   const [baselineSeason, setBaselineSeason] = useState<SimpleSeason | null>(null);
+  const [zoneFocusCatalog, setZoneFocusCatalog] = useState<ZoneFocusCatalog>(() =>
+    parseZoneFocusCatalog(null)
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingSection, setSavingSection] = useState<PlannerSectionId | null>(null);
@@ -275,10 +280,14 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       setLoading(false);
       return;
     }
-    const data = (await res.json()) as { season: SimpleSeason | null };
+    const data = (await res.json()) as {
+      season: SimpleSeason | null;
+      zoneFocusCatalog?: ZoneFocusCatalog;
+    };
     const loaded = data.season ? normalizeSeason(data.season) : null;
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
+    setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     setCreateMode(!data.season);
     setLoading(false);
   }, [seasonIdParam]);
@@ -327,10 +336,14 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       setError(typeof body.error === "string" ? body.error : "Save failed.");
       return false;
     }
-    const data = (await res.json()) as { season: SimpleSeason };
+    const data = (await res.json()) as {
+      season: SimpleSeason;
+      zoneFocusCatalog?: ZoneFocusCatalog;
+    };
     const normalized = normalizeSeason(data.season);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
+    setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     return true;
   }
 
@@ -441,10 +454,14 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       setError(typeof body.error === "string" ? body.error : "Could not create season.");
       return;
     }
-    const data = (await res.json()) as { season: SimpleSeason };
+    const data = (await res.json()) as {
+      season: SimpleSeason;
+      zoneFocusCatalog?: ZoneFocusCatalog;
+    };
     const normalized = normalizeSeason(data.season);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
+    setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     setCreateMode(false);
     setExpandedSections(DEFAULT_SECTION_EXPANDED);
   }
@@ -700,10 +717,12 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           onChange={(phaseKindZoneDefaults) =>
             setSeason({ ...season, phaseKindZoneDefaults })
           }
+          catalog={zoneFocusCatalog}
+          showPresetPercents
         />
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/settings" className="text-sky-600 hover:underline">
-            Edit athlete defaults in Settings →
+            Manage focus library and athlete defaults in Settings →
           </Link>
         </p>
       </CollapsibleSection>
@@ -717,6 +736,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         <SimplePlannerPhasesPane
           phases={season.phases}
           phaseKindZoneDefaults={season.phaseKindZoneDefaults}
+          zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={season.totalWeeks}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
