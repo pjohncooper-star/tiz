@@ -59,12 +59,13 @@ export function ZoneSplitPercentsSlider({
 
   useEffect(() => {
     if (draggingHandle === null || disabled) return;
+    const activeHandle = draggingHandle;
 
     function onPointerMove(event: PointerEvent) {
       const current = boundariesFromPercents(valueRef.current);
       const next = boundaryFromPointerRatio(
         pointerRatio(event.clientX),
-        draggingHandle,
+        activeHandle,
         current,
         minZonePercent
       );
