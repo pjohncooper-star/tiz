@@ -3,7 +3,7 @@
 import type { ZoneFocusCatalog, ZoneFocusDefinition } from "@/lib/plan/season/zone-focus-catalog";
 import { defaultNewZoneFocus } from "@/lib/plan/season/zone-focus-catalog";
 import { normalizeZoneSplitPercents } from "@/lib/plan/season/phase-zone-defaults";
-import type { ZoneSplitPercents } from "@/lib/plan/season/zone-split-types";
+import { ZoneSplitPercentsSlider } from "@/components/zone-split-percents-slider";
 import { Button, Input } from "@/components/ui";
 
 type ZoneFocusCatalogEditorProps = {
@@ -16,13 +16,13 @@ export function ZoneFocusCatalogEditor({ value, onChange }: ZoneFocusCatalogEdit
     onChange(value.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)));
   }
 
-  function updatePercents(id: string, patch: Partial<ZoneSplitPercents>) {
+  function updatePercents(id: string, percents: ZoneFocusDefinition["percents"]) {
     onChange(
       value.map((entry) => {
         if (entry.id !== id) return entry;
         return {
           ...entry,
-          percents: normalizeZoneSplitPercents({ ...entry.percents, ...patch }),
+          percents: normalizeZoneSplitPercents(percents),
         };
       })
     );
@@ -65,23 +65,10 @@ export function ZoneFocusCatalogEditor({ value, onChange }: ZoneFocusCatalogEdit
                 Delete
               </Button>
             </div>
-            <div className="mt-3 grid grid-cols-5 gap-2">
-              {(["z1", "z2", "z3", "z4", "z5"] as const).map((key, index) => (
-                <div key={key}>
-                  <span className="text-xs uppercase text-zinc-500">Z{index + 1} %</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="mt-1"
-                    value={entry.percents[key]}
-                    onChange={(event) =>
-                      updatePercents(entry.id, { [key]: Number(event.target.value) || 0 })
-                    }
-                  />
-                </div>
-              ))}
-            </div>
+            <ZoneSplitPercentsSlider
+              value={entry.percents}
+              onChange={(percents) => updatePercents(entry.id, percents)}
+            />
           </div>
         ))}
       </div>

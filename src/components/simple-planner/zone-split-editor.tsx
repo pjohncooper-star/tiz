@@ -14,7 +14,7 @@ import type {
   ZoneSplitPercents,
 } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
-import { Input } from "@/components/ui";
+import { ZoneSplitPercentsSlider } from "@/components/zone-split-percents-slider";
 
 const DISCIPLINE_ROWS: { key: TriPlanDiscipline; label: string }[] = [
   { key: "SWIM", label: "Swim" },
@@ -77,9 +77,7 @@ function DisciplineZoneSplitRow({
     onChange(presetDisciplineZoneSplitById(id));
   }
 
-  function setCustomPercents(patch: Partial<ZoneSplitPercents>) {
-    const current = percentsForDisciplineSplit(split, catalog);
-    const next = { ...current, ...patch };
+  function setCustomPercents(next: ZoneSplitPercents) {
     onChange({
       mode: "custom",
       focusId,
@@ -131,22 +129,11 @@ function DisciplineZoneSplitRow({
       </div>
 
       {isCustom ? (
-        <div className="mt-3 grid grid-cols-5 gap-2">
-          {(["z1", "z2", "z3", "z4", "z5"] as const).map((key, index) => (
-            <div key={key}>
-              <span className="text-xs uppercase text-zinc-500">Z{index + 1} %</span>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                className="mt-1"
-                value={percents[key]}
-                onChange={(event) =>
-                  setCustomPercents({ [key]: Number(event.target.value) || 0 })
-                }
-              />
-            </div>
-          ))}
+        <div className="mt-3">
+          <ZoneSplitPercentsSlider
+            value={percents}
+            onChange={setCustomPercents}
+          />
         </div>
       ) : null}
       {isCustom ? <p className="mt-2 text-xs text-zinc-500">{summary}</p> : null}
