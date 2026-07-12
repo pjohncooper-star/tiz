@@ -8,6 +8,8 @@ import { db } from "@/lib/db";
 import { buildWorkoutShadingSettings, parseWorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import { parseSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
+import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
 import { signalLabel } from "@/lib/zones/display";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,12 @@ export default async function SettingsPage() {
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
     db.athlete.findUnique({
       where: { id: athleteId },
-      select: { strengthPastWorkoutShading: true, selfEvalConfig: true, workoutShadingTarget: true },
+      select: {
+        strengthPastWorkoutShading: true,
+        selfEvalConfig: true,
+        workoutShadingTarget: true,
+        phaseKindZoneDefaults: true,
+      },
     }),
   ]);
 
@@ -43,6 +50,7 @@ export default async function SettingsPage() {
   const workoutShadingTarget = parseWorkoutShadingTarget(athlete?.workoutShadingTarget);
 
   const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
+  const phaseKindZoneDefaults = parsePhaseKindZoneDefaults(athlete?.phaseKindZoneDefaults);
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -70,6 +78,9 @@ export default async function SettingsPage() {
             Connect Strava
           </a>
         )}
+      </Card>
+      <Card title="Zone focus defaults">
+        <ZoneFocusSettingsPanel initialDefaults={phaseKindZoneDefaults} />
       </Card>
       <Card title="Thresholds & TiZ">
         <ul className="space-y-2 text-sm">

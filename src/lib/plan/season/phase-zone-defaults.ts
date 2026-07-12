@@ -38,6 +38,14 @@ export function defaultPhaseKindZoneDefaults(): PhaseKindZoneDefaults {
   );
 }
 
+export function resolvePhaseKindZoneDefaultsForNewSeason(
+  explicit: PhaseKindZoneDefaults | undefined,
+  athleteStored: unknown
+): PhaseKindZoneDefaults {
+  if (explicit !== undefined) return explicit;
+  return parsePhaseKindZoneDefaults(athleteStored);
+}
+
 export function normalizeZoneSplitPercents(p: ZoneSplitPercents): ZoneSplitPercents {
   const sum = p.z1 + p.z2 + p.z3 + p.z4 + p.z5;
   if (sum <= 0) return { z1: 100, z2: 0, z3: 0, z4: 0, z5: 0 };

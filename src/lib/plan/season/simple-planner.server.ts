@@ -32,8 +32,8 @@ import {
 } from "./simple-ramp";
 import { fitSimplePhasesToTotalWeeks } from "./phase-span-utils";
 import {
-  defaultPhaseKindZoneDefaults,
   parsePhaseKindZoneDefaults,
+  resolvePhaseKindZoneDefaultsForNewSeason,
   resolvePhaseZoneSplits,
   serializePhaseKindZoneDefaults,
 } from "./phase-zone-defaults";
@@ -347,7 +347,14 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   }
 
   const defaults = input.rampDefaults ?? defaultSimpleRampDefaults();
-  const kindDefaults = input.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
+  const athlete = await db.athlete.findUnique({
+    where: { id: input.athleteId },
+    select: { phaseKindZoneDefaults: true },
+  });
+  const kindDefaults = resolvePhaseKindZoneDefaultsForNewSeason(
+    input.phaseKindZoneDefaults,
+    athlete?.phaseKindZoneDefaults
+  );
   const rampFields = rampDefaultsToPlanFields(defaults);
   const deLoadStrategy: DeLoadStrategy = "VOLUME_ONLY";
   const computedWeeks = buildInitialWeeks(

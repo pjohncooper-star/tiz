@@ -701,6 +701,11 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
             setSeason({ ...season, phaseKindZoneDefaults })
           }
         />
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+          <Link href="/settings" className="text-sky-600 hover:underline">
+            Edit athlete defaults in Settings →
+          </Link>
+        </p>
       </CollapsibleSection>
 
       <CollapsibleSection
