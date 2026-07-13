@@ -69,6 +69,7 @@ export function CalendarSessionCard({
   const { setNodeRef: setDropRef, isOver } = useDroppable({
     id: `link:${session.id}`,
     data: { type: "session-link", sessionId: session.id, session },
+    disabled: !showLinkDropTarget,
   });
 
   const { setNodeRef: setWorkoutDropRef, isOver: isWorkoutOver } = useDroppable({
@@ -80,6 +81,7 @@ export function CalendarSessionCard({
       source: session.source,
       hasStructuredWorkout: session.stepCount > 0,
     },
+    disabled: !showWorkoutDropTarget,
   });
 
   const [deleting, setDeleting] = useState(false);

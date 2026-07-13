@@ -59,9 +59,12 @@ export function CalendarDayColumn({
     id: dateKey,
     data: { type: "day", dateKey },
     disabled:
-      activeDragId != null &&
-      isPoolPlacementDragId(activeDragId) &&
-      !acceptsPoolDrop,
+      (activeDragId != null &&
+        isPoolPlacementDragId(activeDragId) &&
+        !acceptsPoolDrop) ||
+      // Assembled Build workouts target session cards, not the day surface —
+      // keep the day droppable off so it does not swallow session drops.
+      activeDragId === ASSEMBLED_WORKOUT_DRAG_ID,
   });
   const [addOpen, setAddOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
