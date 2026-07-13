@@ -26,8 +26,10 @@ export default async function CalendarTemplatePage() {
         </Link>
         <h1 className="mt-2 text-2xl font-semibold">Weekly template</h1>
         <p className="text-sm text-zinc-500">
-          Define your default sessions for each day of the week. Use Apply template on the calendar
-          to place them on a specific week.
+          Define your default sessions for each day of the week. Each session has a{" "}
+          <strong className="font-medium text-zinc-600 dark:text-zinc-300">role</strong> (easy,
+          moderate, intensity, long) that sets how it appears on the calendar. Use Apply template on
+          the calendar to place them on a specific week.
         </p>
       </div>
       <WeeklyTemplateEditor />
