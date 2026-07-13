@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline } from "@prisma/client";
+import Link from "next/link";
 import { Button, Select } from "@/components/ui";
-import { WorkoutProfileChart } from "@/components/workout-profile-chart";
+import { WorkoutTreeEditor } from "@/components/workout-tree-editor";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import {
   SEGMENT_COLUMN_LABELS,
@@ -20,11 +21,14 @@ import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
 import type { CalendarWorkoutProfile } from "@/lib/plan/calendar/serialize";
 import type { PoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import { libraryHref } from "@/lib/plan/library-href";
-import Link from "next/link";
-
-type WorkoutGraphComposerProps = {
-  composer: PoolWorkoutComposer;
-};
+import {
+  resolveSessionPoolSize,
+  swimDisplayUnit,
+  unitSettingsForDiscipline,
+  type DisciplineUnitSettings,
+} from "@/lib/units/discipline-settings";
+import type { PlanDiscipline } from "@/lib/plan/session";
+import type { DisplayUnit } from "@/lib/workout/metrics";
 
 function toMiniProfile(
   nodes: ReturnType<typeof templateNodes>,
@@ -132,79 +136,74 @@ function SegmentLibraryCard({
   );
 }
 
-function IntervalEditor({
+/** Warm-up / Main / Cool-down library docked in the nav↔calendar gutter. */
+export function SegmentLibraryPane({
   composer,
 }: {
   composer: PoolWorkoutComposer;
 }) {
-  if (!composer.intervalOpen) return null;
-  const d = composer.intervalDraft;
+  const columnTemplates = useMemo(() => {
+    const map = {} as Record<SegmentFolderKind, PoolLibraryTemplate[]>;
+    for (const kind of SEGMENT_FOLDER_KINDS) {
+      map[kind] = templatesForSegmentColumn(composer.tree, kind);
+    }
+    return map;
+  }, [composer.tree]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-        <h3 className="text-sm font-semibold">Custom interval</h3>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-          <label className="space-y-1">
-            <span className="text-zinc-500">Reps</span>
-            <input
-              type="number"
-              min={1}
-              max={40}
-              className="w-full rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
-              value={d.reps}
-              onChange={(e) =>
-                composer.setIntervalDraft({ ...d, reps: Number(e.target.value) || 1 })
-              }
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-zinc-500">Work (sec)</span>
-            <input
-              type="number"
-              min={1}
-              className="w-full rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
-              value={d.workSeconds}
-              onChange={(e) =>
-                composer.setIntervalDraft({ ...d, workSeconds: Number(e.target.value) || 1 })
-              }
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-zinc-500">Work zone</span>
-            <input
-              type="number"
-              min={1}
-              max={5}
-              className="w-full rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
-              value={d.workZone}
-              onChange={(e) =>
-                composer.setIntervalDraft({ ...d, workZone: Number(e.target.value) || 1 })
-              }
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="text-zinc-500">Rest (sec)</span>
-            <input
-              type="number"
-              min={0}
-              className="w-full rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
-              value={d.restSeconds}
-              onChange={(e) =>
-                composer.setIntervalDraft({ ...d, restSeconds: Number(e.target.value) || 0 })
-              }
-            />
-          </label>
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={() => composer.setIntervalOpen(false)}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={() => composer.addCustomInterval()}>
-            Add to graph
-          </Button>
-        </div>
+    <aside
+      className="fixed bottom-0 left-48 top-0 z-20 w-56 overflow-y-auto border-r border-zinc-200 bg-zinc-50/95 p-2 pt-20 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+      aria-label="Workout component library"
+    >
+      <div className="mb-2 flex items-center justify-between gap-1 px-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+          Components
+        </p>
+        <Link
+          href={libraryHref()}
+          className="text-[10px] text-sky-600 underline-offset-2 hover:underline"
+        >
+          Library
+        </Link>
       </div>
-    </div>
+      {composer.loadingTree ? (
+        <p className="px-1 text-[11px] text-zinc-400">Loading…</p>
+      ) : null}
+      <div className="space-y-3 pb-8">
+        {SEGMENT_FOLDER_KINDS.map((kind) => (
+          <section key={kind}>
+            <h3 className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              {SEGMENT_COLUMN_LABELS[kind]}
+            </h3>
+            <div className="space-y-1.5">
+              {columnTemplates[kind].length > 0 ? (
+                columnTemplates[kind].map((template) => (
+                  <SegmentLibraryCard
+                    key={`${kind}-${template.templateId}`}
+                    template={template}
+                    column={kind}
+                    discipline={composer.discipline}
+                    onAdd={() =>
+                      void composer.appendTemplate(
+                        template.folderId,
+                        template.templateId,
+                        template.name
+                      )
+                    }
+                  />
+                ))
+              ) : (
+                <p className="px-1 text-[10px] leading-snug text-zinc-400">
+                  {kind === "MAIN_SET"
+                    ? "No main-set or library workouts."
+                    : `Create a ${SEGMENT_COLUMN_LABELS[kind]} folder in the library.`}
+                </p>
+              )}
+            </div>
+          </section>
+        ))}
+      </div>
+    </aside>
   );
 }
 
@@ -238,22 +237,43 @@ function AssembledDragHandle({ composer }: { composer: PoolWorkoutComposer }) {
   );
 }
 
-function GraphDropSurface({ composer }: { composer: PoolWorkoutComposer }) {
+type WorkoutGraphPanelProps = {
+  composer: PoolWorkoutComposer;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+};
+
+/** Sticky Build surface: discipline + WorkoutTreeEditor (session-style). */
+export function WorkoutGraphPanel({ composer, disciplineSettings }: WorkoutGraphPanelProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: "pool-workout-graph",
     data: { type: "pool-workout-graph" },
   });
 
+  const unitSettings = unitSettingsForDiscipline(composer.discipline, disciplineSettings);
+  const poolSize = resolveSessionPoolSize(composer.discipline, null, disciplineSettings);
+  const displayUnit: DisplayUnit =
+    composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
+
   return (
     <div
       ref={setNodeRef}
-      className={isOver ? "rounded-md ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : undefined}
+      className={`space-y-3 rounded-md ${
+        isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
+      }`}
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Workout graph</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Select
+            value={composer.discipline}
+            onChange={(e) => composer.setDiscipline(e.target.value as typeof composer.discipline)}
+            aria-label="Build discipline"
+          >
+            <option value="SWIM">Swim</option>
+            <option value="BIKE">Bike</option>
+            <option value="RUN">Run</option>
+          </Select>
           {composer.historySource ? (
-            <p className="text-[10px] text-zinc-500">Source: {composer.historySource}</p>
+            <span className="text-[10px] text-zinc-500">Source: {composer.historySource}</span>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -261,9 +281,6 @@ function GraphDropSurface({ composer }: { composer: PoolWorkoutComposer }) {
             {composer.discipline.charAt(0) + composer.discipline.slice(1).toLowerCase()}
             {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
           </span>
-          <Button type="button" variant="secondary" onClick={() => composer.setIntervalOpen(true)}>
-            + Interval
-          </Button>
           <Button
             type="button"
             variant="secondary"
@@ -276,152 +293,29 @@ function GraphDropSurface({ composer }: { composer: PoolWorkoutComposer }) {
         </div>
       </div>
 
-      {composer.hasWorkout ? (
-        <>
-          <WorkoutProfileChart
-            nodes={composer.mergedNodes}
-            discipline={composer.discipline}
-            lengthView="duration"
-          />
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {composer.segments.map((segment, index) => (
-              <li
-                key={segment.id}
-                className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
-              >
-                <span className="font-medium">{segment.label}</span>
-                <button
-                  type="button"
-                  className="text-zinc-400 hover:text-zinc-600"
-                  disabled={index === 0}
-                  onClick={() => composer.moveSegment(segment.id, -1)}
-                  aria-label="Move earlier"
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  className="text-zinc-400 hover:text-zinc-600"
-                  disabled={index === composer.segments.length - 1}
-                  onClick={() => composer.moveSegment(segment.id, 1)}
-                  aria-label="Move later"
-                >
-                  →
-                </button>
-                <button
-                  type="button"
-                  className="text-zinc-400 hover:text-red-600"
-                  onClick={() => composer.removeSegment(segment.id)}
-                  aria-label="Remove segment"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p className="py-6 text-center text-xs text-zinc-400">
-          Drop warm-up, main, or cool-down pieces here — or click a past structured session to load
-          its profile.
-        </p>
-      )}
+      <WorkoutTreeEditor
+        discipline={composer.discipline}
+        displayUnit={displayUnit}
+        poolSize={poolSize}
+        tree={composer.workoutTree}
+        onChange={composer.setWorkoutTree}
+      />
 
-      <p className="mt-2 text-[10px] text-zinc-400">
-        Drag the assembled workout onto an empty skeleton on the pool week.
+      <p className="text-[10px] text-zinc-400">
+        Drop warm-up / main / cool-down from the left pane, or use Add step / Add repeat. Then drag
+        the assembled workout onto an empty skeleton on the pool week.
       </p>
     </div>
   );
 }
 
-export function WorkoutGraphComposer({ composer }: WorkoutGraphComposerProps) {
-  const columnTemplates = useMemo(() => {
-    const map = {} as Record<SegmentFolderKind, PoolLibraryTemplate[]>;
-    for (const kind of SEGMENT_FOLDER_KINDS) {
-      map[kind] = templatesForSegmentColumn(composer.tree, kind);
-    }
-    return map;
-  }, [composer.tree]);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Select
-            value={composer.discipline}
-            onChange={(e) => composer.setDiscipline(e.target.value as typeof composer.discipline)}
-            aria-label="Build discipline"
-          >
-            <option value="SWIM">Swim</option>
-            <option value="BIKE">Bike</option>
-            <option value="RUN">Run</option>
-          </Select>
-          {composer.loadingTree ? (
-            <span className="text-[11px] text-zinc-400">Loading library…</span>
-          ) : null}
-        </div>
-        <Link
-          href={libraryHref()}
-          className="text-[11px] text-sky-600 underline-offset-2 hover:underline"
-        >
-          Manage library folders
-        </Link>
-      </div>
-
-      <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-4">
-        {SEGMENT_FOLDER_KINDS.map((kind) => (
-          <section
-            key={kind}
-            className="min-h-[8rem] rounded-lg border border-zinc-200 bg-white/80 p-2 dark:border-zinc-700 dark:bg-zinc-950/40"
-          >
-            <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-              {SEGMENT_COLUMN_LABELS[kind]}
-            </h3>
-            <div className="max-h-40 space-y-1.5 overflow-y-auto">
-              {columnTemplates[kind].length > 0 ? (
-                columnTemplates[kind].map((template) => (
-                  <SegmentLibraryCard
-                    key={`${kind}-${template.templateId}`}
-                    template={template}
-                    column={kind}
-                    discipline={composer.discipline}
-                    onAdd={() =>
-                      void composer.appendTemplate(
-                        template.folderId,
-                        template.templateId,
-                        template.name
-                      )
-                    }
-                  />
-                ))
-              ) : (
-                <p className="text-[10px] leading-snug text-zinc-400">
-                  {kind === "MAIN_SET"
-                    ? "No main-set or library workouts for this discipline."
-                    : `Create a ${SEGMENT_COLUMN_LABELS[kind]} folder in the library to populate this column.`}
-                </p>
-              )}
-            </div>
-          </section>
-        ))}
-        <section className="flex min-h-[8rem] flex-col justify-between rounded-lg border border-dashed border-zinc-300 p-2 dark:border-zinc-700">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-            + Custom interval
-          </h3>
-          <p className="text-[10px] text-zinc-400">
-            Build a repeat block and append it to the graph.
-          </p>
-          <Button type="button" variant="secondary" onClick={() => composer.setIntervalOpen(true)}>
-            + Interval
-          </Button>
-        </section>
-      </div>
-
-      <section className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-950/50">
-        <GraphDropSurface composer={composer} />
-      </section>
-
-      <IntervalEditor composer={composer} />
-    </div>
-  );
+/** @deprecated Prefer SegmentLibraryPane + WorkoutGraphPanel */
+export function WorkoutGraphComposer({
+  composer,
+  disciplineSettings,
+}: {
+  composer: PoolWorkoutComposer;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+}) {
+  return <WorkoutGraphPanel composer={composer} disciplineSettings={disciplineSettings} />;
 }

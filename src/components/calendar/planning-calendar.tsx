@@ -54,6 +54,7 @@ import {
 import { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
 import { usePoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
+import { SegmentLibraryPane } from "@/components/calendar/workout-graph-composer";
 import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
@@ -156,15 +157,39 @@ export function PlanningCalendar({
   });
 
   const useWizardPool = poolOpen && isXl;
+  const showBuildGutter = useWizardPool && poolTab === "build";
 
   const poolComposer = usePoolWorkoutComposer({
-    active: useWizardPool && poolTab === "build",
+    active: showBuildGutter,
     onApplied: () => void handleRefresh(),
   });
 
   const setPoolTabStable = useCallback((tab: PoolTab) => {
     setPoolTab(tab);
   }, []);
+
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!(main instanceof HTMLElement)) return;
+
+    const centered = ["mx-auto"];
+    const gutterOffset = ["ml-56"];
+
+    if (showBuildGutter) {
+      main.classList.remove(...centered);
+      main.classList.add(...gutterOffset);
+    } else {
+      main.classList.remove(...gutterOffset);
+      main.classList.add(...centered);
+    }
+
+    return () => {
+      main.classList.remove(...gutterOffset);
+      if (!main.classList.contains("mx-auto")) {
+        main.classList.add("mx-auto");
+      }
+    };
+  }, [showBuildGutter]);
 
   const clearArmedUnscheduled = useCallback((chipId: string) => {
     setArmedUnscheduled((prev) => {
@@ -996,6 +1021,7 @@ export function PlanningCalendar({
                 activeTab={poolTab}
                 onActiveTabChange={setPoolTabStable}
                 composer={poolComposer}
+                disciplineSettings={disciplineSettings}
               />
             </div>
           ) : null}
@@ -1026,6 +1052,8 @@ export function PlanningCalendar({
             </div>
           )}
         </div>
+
+        {showBuildGutter ? <SegmentLibraryPane composer={poolComposer} /> : null}
 
         <div className="space-y-8">
           <div

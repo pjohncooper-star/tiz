@@ -1,6 +1,6 @@
 # Workout pool wizard — wireframe
 
-**Status:** W1–W2 shipped; W3–W5 Build tab implementing. Evolves the shipped left-sidebar pool ([calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)).
+**Status:** W1–W5 shipped on desktop (`xl+`). Evolves the shipped left-sidebar pool ([calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)).
 
 **Concept:** A **wizard-like workout pool** pinned to the **top** of the planning calendar. The pool has its **own week selector** (independent of which week is scrolled into view on the calendar). Athletes build the week in two steps: **skeleton sessions** first, then **structured workouts** assembled from library components.
 
@@ -257,7 +257,7 @@ Template roles use the same enum and descriptions as the skeleton drop picker (`
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Columns are **above** the graph; components drag **down** into the graph. The graph is the single assembly surface (not a side panel).
+Columns originally sat **above** the graph. **Current desktop layout:** Warm-up / Main / Cool-down dock in the **gutter between the app nav and the calendar** (weeks keep `max-w-6xl` width). Sticky top holds week chrome + `WorkoutTreeEditor` (same controls as a planned session — Add step / Add repeat replace a separate Custom Interval modal). Components drag (or +) into the sticky graph, then drag assembled workout onto a skeleton.
 
 ### Component library columns
 
@@ -277,10 +277,10 @@ Full-width staging area **below** the three columns (matches sketch: large “Wo
 
 | Feature | Behavior |
 |---------|----------|
-| **Compose** | Drag column cards into graph; segments append left-to-right; profile re-renders |
-| **Reorder** | Drag segments within graph to reorder |
-| **Custom interval** | **+ Interval** or column “custom” → inline editor: duration, zone/target, rest, reps |
-| **Edit segment** | Click segment on graph → inspector: intensity, duration, rest, etc. |
+| **Compose** | Drag column cards into graph (or +); tree editor edits structure |
+| **Reorder** | Drag segments within `WorkoutTreeEditor` |
+| **Custom interval** | Use **Add repeat** / **Add step** in the sticky tree editor (same as planned-session structured workout) |
+| **Edit segment** | Click controls in `WorkoutTreeEditor`: intensity, duration, rest, reps, zones |
 | **Clear** | Reset graph only — does not change any calendar session until user applies |
 
 Reuses `WorkoutProfileChart` + `WorkoutNode` tree; assembly produces one merged tree before apply.
@@ -417,6 +417,6 @@ Existing pieces to reuse: `WorkoutProfileChart`, `WorkoutNode` / `templateNodes`
 |-------|--------|
 | **W1** | Sticky pool chrome + independent week nav + drop constraint — **shipped** |
 | **W2** | Step 1 skeleton chips + drag to calendar + role picker on drop — **shipped** |
-| **W3** | Step 2 three-column library + workout graph below — **shipped** |
-| **W4** | Drag graph → calendar skeleton; custom interval editor — **shipped** |
+| **W3** | Step 2 library columns + workout graph — **shipped** (columns now in nav gutter) |
+| **W4** | Drag graph → calendar skeleton; session-style tree editor — **shipped** |
 | **W5** | Click any past session → load profile copy into pool-week graph — **shipped** |
