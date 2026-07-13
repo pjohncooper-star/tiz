@@ -74,14 +74,15 @@ export default async function CalendarPage({
     db.syncedActivity.count({ where: { athleteId, ...recordedActivityWhere } }),
   ]);
 
-  // Anchor the loaded window on the most recent workout (or today if none).
-  let anchorWeek = currentWeekStart;
+  // Load data around the most recent workout (or today if none), but land
+  // the calendar viewport on this week unless ?week= is set.
+  let dataWindowWeek = currentWeekStart;
   if (activityBounds._max.startTime) {
-    anchorWeek = startOfWeek(activityBounds._max.startTime, WEEK_OPTS);
+    dataWindowWeek = startOfWeek(activityBounds._max.startTime, WEEK_OPTS);
   }
 
-  let rangeStart = addWeeks(anchorWeek, -CONTEXT_WEEKS);
-  let rangeEnd = endOfWeek(addWeeks(anchorWeek, CONTEXT_WEEKS), WEEK_OPTS);
+  let rangeStart = addWeeks(dataWindowWeek, -CONTEXT_WEEKS);
+  let rangeEnd = endOfWeek(addWeeks(dataWindowWeek, CONTEXT_WEEKS), WEEK_OPTS);
 
   if (plannedBounds._min.scheduledDate) {
     const plannedStart = startOfWeek(
@@ -120,7 +121,7 @@ export default async function CalendarPage({
   const fromDate = parseDateKey(from);
   const toDateEnd = endDateKey(to);
 
-  const defaultScrollWeek = scrollWeekStart ?? format(anchorWeek, "yyyy-MM-dd");
+  const defaultScrollWeek = scrollWeekStart ?? format(currentWeekStart, "yyyy-MM-dd");
 
   const [plannedSessions, activities, allStarts, disciplineSettings] = await Promise.all([
     db.plannedSession.findMany({
