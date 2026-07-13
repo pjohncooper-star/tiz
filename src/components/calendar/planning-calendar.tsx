@@ -131,9 +131,9 @@ export function PlanningCalendar({
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
   const [isXl, setIsXl] = useState(false);
-  const [poolWeekStart, setPoolWeekStart] = useState(
-    () => initialScrollWeekStart ?? currentWeekStart
-  );
+  // Pool week is independent of calendar scroll: land on "this week"
+  // even when the viewport jumps to the most recent activity week.
+  const [poolWeekStart, setPoolWeekStart] = useState(currentWeekStart);
   const [pendingRolePick, setPendingRolePick] = useState<{
     chip: UnscheduledChip;
     dateKey: string;
