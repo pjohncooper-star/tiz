@@ -19,13 +19,18 @@ type WorkoutProfileChartProps = {
   thresholdPaceSeconds?: number | null;
   thresholdFtpWatts?: number | null;
   thresholdHrBpm?: number | null;
+  /** ~half plot height for constrained layouts (e.g. calendar Build panel). */
+  compact?: boolean;
 };
 
 const PLOT_HEIGHT = 128;
+const PLOT_HEIGHT_COMPACT = 64;
 const MARGIN_LEFT = 52;
 const MARGIN_RIGHT = 8;
 const MARGIN_TOP = 8;
 const MARGIN_BOTTOM = 24;
+const MARGIN_TOP_COMPACT = 4;
+const MARGIN_BOTTOM_COMPACT = 16;
 
 export function WorkoutProfileChart({
   nodes,
@@ -36,6 +41,7 @@ export function WorkoutProfileChart({
   thresholdPaceSeconds = null,
   thresholdFtpWatts = null,
   thresholdHrBpm = null,
+  compact = false,
 }: WorkoutProfileChartProps) {
   const ySignal = primarySignal ?? defaultPrimarySignalForDiscipline(discipline);
 
@@ -73,12 +79,15 @@ export function WorkoutProfileChart({
     );
   }
 
+  const plotHeight = compact ? PLOT_HEIGHT_COMPACT : PLOT_HEIGHT;
+  const marginTop = compact ? MARGIN_TOP_COMPACT : MARGIN_TOP;
+  const marginBottom = compact ? MARGIN_BOTTOM_COMPACT : MARGIN_BOTTOM;
   const plotWidth = 640;
   const width = MARGIN_LEFT + plotWidth + MARGIN_RIGHT;
-  const height = MARGIN_TOP + PLOT_HEIGHT + MARGIN_BOTTOM;
+  const height = marginTop + plotHeight + marginBottom;
   const { yMin, yMax, totalX } = profile;
 
-  const plotBottom = MARGIN_TOP + PLOT_HEIGHT;
+  const plotBottom = marginTop + plotHeight;
 
   function xToPx(x: number): number {
     return MARGIN_LEFT + (x / totalX) * plotWidth;
@@ -86,16 +95,20 @@ export function WorkoutProfileChart({
 
   function yToPx(y: number): number {
     const t = (y - yMin) / (yMax - yMin || 1);
-    return MARGIN_TOP + PLOT_HEIGHT - t * PLOT_HEIGHT;
+    return marginTop + plotHeight - t * plotHeight;
   }
 
-  const yTicks = 4;
+  const yTicks = compact ? 2 : 4;
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / yTicks);
   const xTickValues = [0, totalX * 0.25, totalX * 0.5, totalX * 0.75, totalX];
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-900/50">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div
+      className={`rounded-lg border border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/50 ${
+        compact ? "p-2" : "p-3"
+      }`}
+    >
+      <div className={`flex items-center justify-between gap-2 ${compact ? "mb-1" : "mb-2"}`}>
         <p className="text-xs font-medium text-zinc-500">Workout profile</p>
         <p className="text-[10px] text-zinc-400">
           {profile.xLabel} × {profile.yLabel}
@@ -160,17 +173,17 @@ export function WorkoutProfileChart({
 
         <line
           x1={MARGIN_LEFT}
-          y1={MARGIN_TOP + PLOT_HEIGHT}
+          y1={marginTop + plotHeight}
           x2={MARGIN_LEFT + plotWidth}
-          y2={MARGIN_TOP + PLOT_HEIGHT}
+          y2={marginTop + plotHeight}
           stroke="currentColor"
           className="text-zinc-300 dark:text-zinc-600"
         />
         <line
           x1={MARGIN_LEFT}
-          y1={MARGIN_TOP}
+          y1={marginTop}
           x2={MARGIN_LEFT}
-          y2={MARGIN_TOP + PLOT_HEIGHT}
+          y2={marginTop + plotHeight}
           stroke="currentColor"
           className="text-zinc-300 dark:text-zinc-600"
         />

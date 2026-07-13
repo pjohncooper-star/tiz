@@ -299,6 +299,7 @@ export function WorkoutGraphPanel({ composer, disciplineSettings }: WorkoutGraph
         poolSize={poolSize}
         tree={composer.workoutTree}
         onChange={composer.setWorkoutTree}
+        compact
       />
 
       <p className="text-[10px] text-zinc-400">
