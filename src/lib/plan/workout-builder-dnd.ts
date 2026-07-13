@@ -113,7 +113,6 @@ export function isPoolPlacementDragId(id: string | number): boolean {
   return (
     isPoolUnscheduledDrag(s) ||
     isPoolArmedUnscheduledDrag(s) ||
-    isPoolSuggestedDrag(s) ||
     isPoolLibraryDrag(s) ||
     isAssembledWorkoutDrag(s)
   );

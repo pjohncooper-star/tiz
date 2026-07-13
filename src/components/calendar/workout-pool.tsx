@@ -1,11 +1,10 @@
 "use client";
 
 import { PoolLibrarySection } from "@/components/calendar/pool-library-section";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
-import { computeHardZoneBudgets, hasHardZoneBudget } from "@/lib/plan/calendar/pool-budgets";
 import {
   computeUnscheduledChips,
   type PoolDiscipline,
@@ -24,33 +23,13 @@ import {
   summarizeWeekPlannedSessions,
 } from "@/lib/plan/calendar/week-summary";
 import {
-  formatIntervalLength,
-  generateWeekPalette,
-  paletteZoneTotal,
-  recomputeWorkout,
-  type GeneratedWorkout,
-} from "@/lib/plan/calendar/generate-workouts";
-import {
   poolArmedUnscheduledDragId,
-  poolSuggestedDragId,
   poolUnscheduledDragId,
   poolUnscheduledDropId,
 } from "@/lib/plan/workout-builder-dnd";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
-import {
-  formatDurationSeconds,
-  parseDurationInput,
-} from "@/lib/workout/workout-tree";
 import { formatZoneMinutes } from "@/lib/workout/steps";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
-
-const HARD_ZONES = [3, 4, 5] as const;
-
-const ZONE_TEXT: Record<number, string> = {
-  3: "text-amber-700 dark:text-amber-300",
-  4: "text-orange-700 dark:text-orange-300",
-  5: "text-red-700 dark:text-red-300",
-};
 
 function PoolSection({
   title,
@@ -153,83 +132,6 @@ function UnscheduledChipCard({
   );
 }
 
-function SuggestedCard({
-  card,
-  onChange,
-}: {
-  card: GeneratedWorkout;
-  onChange: (next: GeneratedWorkout) => void;
-}) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: poolSuggestedDragId(card.id),
-    data: { type: "pool-suggested-workout", workout: card },
-  });
-
-  const [lengthText, setLengthText] = useState(formatDurationSeconds(card.workLenSeconds));
-
-  return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-md border border-zinc-200 bg-white p-2 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900 ${
-        isDragging ? "opacity-50" : ""
-      }`}
-    >
-      <div className="flex items-center justify-between gap-1">
-        <span className="font-semibold text-zinc-800 dark:text-zinc-100">{card.label}</span>
-        <button
-          type="button"
-          className="shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-          aria-label={`Drag ${card.label}`}
-          {...listeners}
-          {...attributes}
-        >
-          ⠿
-        </button>
-      </div>
-
-      <div className="mt-1 flex items-center gap-1">
-        <input
-          type="number"
-          min={1}
-          max={40}
-          value={card.reps}
-          onChange={(e) => onChange(recomputeWorkout(card, { reps: Number(e.target.value) }))}
-          onPointerDown={(e) => e.stopPropagation()}
-          className="w-11 rounded border border-zinc-300 bg-white px-1 py-0.5 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-950"
-          aria-label="Reps"
-        />
-        <span className="text-zinc-400">×</span>
-        {card.kind === "priming" ? (
-          <span className="tabular-nums text-zinc-600 dark:text-zinc-300">
-            {formatIntervalLength(card.workLenSeconds)}
-          </span>
-        ) : (
-          <input
-            type="text"
-            value={lengthText}
-            onChange={(e) => setLengthText(e.target.value)}
-            onBlur={() => {
-              const seconds = parseDurationInput(lengthText);
-              if (seconds && seconds > 0) {
-                onChange(recomputeWorkout(card, { workLenSeconds: seconds }));
-              } else {
-                setLengthText(formatDurationSeconds(card.workLenSeconds));
-              }
-            }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="w-14 rounded border border-zinc-300 bg-white px-1 py-0.5 text-xs tabular-nums dark:border-zinc-700 dark:bg-zinc-950"
-            aria-label="Interval length"
-          />
-        )}
-      </div>
-
-      <p className={`mt-1 tabular-nums ${ZONE_TEXT[card.zone] ?? "text-zinc-500"}`}>
-        {card.zoneMinutes} min Z{card.zone} · {card.durationMinutes} min total
-      </p>
-    </div>
-  );
-}
-
 function WeekTizFooter({
   weekTarget,
   sessions,
@@ -325,7 +227,7 @@ export type WorkoutPoolProps = {
   selectedDateKey: string | null;
   armedUnscheduled: Record<string, UnscheduledAttachment>;
   onClearArmedUnscheduled: (chipId: string) => void;
-  /** When set, show only skeleton (unscheduled) or build (suggested/library/TiZ) sections. */
+  /** When set, show only skeleton (unscheduled) or build (library/TiZ) sections. */
   activeTab?: "skeleton" | "build";
   embedded?: boolean;
 };
@@ -346,28 +248,6 @@ export function WorkoutPool({
     () => computeUnscheduledChips(weekStart, weekTarget, sessions),
     [weekStart, weekTarget, sessions]
   );
-
-  const budgets = useMemo(
-    () => computeHardZoneBudgets(weekTarget, sessions),
-    [weekTarget, sessions]
-  );
-
-  const baseSuggested = useMemo(() => generateWeekPalette(budgets), [budgets]);
-  const [suggestedOverrides, setSuggestedOverrides] = useState<Record<string, GeneratedWorkout>>(
-    {}
-  );
-
-  const suggested = useMemo(
-    () => baseSuggested.map((card) => suggestedOverrides[card.id] ?? card),
-    [baseSuggested, suggestedOverrides]
-  );
-
-  const hasSuggested = suggested.length > 0;
-  const hasHardBudget = hasHardZoneBudget(budgets);
-
-  function updateSuggested(next: GeneratedWorkout) {
-    setSuggestedOverrides((prev) => ({ ...prev, [next.id]: next }));
-  }
 
   const showSkeleton = activeTab == null || activeTab === "skeleton";
   const showBuild = activeTab == null || activeTab === "build";
@@ -404,64 +284,19 @@ export function WorkoutPool({
       {showBuild ? (
         <>
           <PoolSection
-            title="Suggested"
-            hint="Interval workouts from remaining hard-zone budget. Drag onto a pool-week day or session."
+            title="Library"
+            hint="Saved templates from your workout library. Drag onto a pool-week day or empty session."
           >
-          {hasSuggested ? (
-            <div className="space-y-2">
-              {weekTarget.byDiscipline.map((entry) => {
-                const disciplineCards = suggested.filter((card) => card.discipline === entry.discipline);
-                if (disciplineCards.length === 0) return null;
-                return (
-                  <div key={entry.discipline}>
-                    <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
-                      <span className="font-medium text-zinc-600 dark:text-zinc-300">
-                        {entry.discipline.charAt(0) + entry.discipline.slice(1).toLowerCase()}
-                      </span>
-                      {HARD_ZONES.map((zone) => {
-                        const key = `${entry.discipline}-${zone}`;
-                        const target = entry.zoneMinutes[key] ?? 0;
-                        const placed = paletteZoneTotal(suggested, entry.discipline, zone);
-                        if (target <= 0 && placed <= 0) return null;
-                        return (
-                          <span key={zone} className={`tabular-nums ${ZONE_TEXT[zone]}`}>
-                            Z{zone} {placed}/{Math.round(target)}
-                          </span>
-                        );
-                      })}
-                    </div>
-                    <div className="space-y-1.5">
-                      {disciplineCards.map((card) => (
-                        <SuggestedCard key={card.id} card={card} onChange={updateSuggested} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <p className="text-[11px] text-zinc-500">
-              {hasHardBudget
-                ? "No suggested workouts for this week."
-                : "Hard-zone budget is filled. Strides and spin-ups appear when you have room."}
-            </p>
-          )}
-        </PoolSection>
+            <PoolLibrarySection />
+          </PoolSection>
 
-        <PoolSection
-          title="Library"
-          hint="Saved templates from your workout library. Drag onto a pool-week day or empty session."
-        >
-          <PoolLibrarySection />
-        </PoolSection>
-
-        <WeekTizFooter
-          weekTarget={weekTarget}
-          sessions={sessions}
-          activities={activities}
-          weekStart={weekStart}
-          currentWeekStart={currentWeekStart}
-        />
+          <WeekTizFooter
+            weekTarget={weekTarget}
+            sessions={sessions}
+            activities={activities}
+            weekStart={weekStart}
+            currentWeekStart={currentWeekStart}
+          />
         </>
       ) : null}
     </div>

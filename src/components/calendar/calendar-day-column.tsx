@@ -12,7 +12,6 @@ import {
   ASSEMBLED_WORKOUT_DRAG_ID,
   isPoolPlacementDragId,
   isPoolUnscheduledDrag,
-  isSeasonPaletteDrag,
 } from "@/lib/plan/workout-builder-dnd";
 import { weekDayColumnClass } from "@/components/calendar/week-day-layout";
 import type { WeekActivityGroup } from "@/components/dashboard-week-view";
@@ -71,9 +70,7 @@ export function CalendarDayColumn({
     isPoolPlacementDragId(activeDragId) &&
     !isPoolUnscheduledDrag(activeDragId);
   const workoutDragActive =
-    activeDragId === ASSEMBLED_WORKOUT_DRAG_ID ||
-    (activeDragId != null && isSeasonPaletteDrag(activeDragId)) ||
-    poolSessionDropActive;
+    activeDragId === ASSEMBLED_WORKOUT_DRAG_ID || poolSessionDropActive;
   const showSessionWorkoutDrop = workoutDragActive && acceptsPoolDrop;
 
   function openAdd() {

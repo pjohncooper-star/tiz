@@ -27,7 +27,7 @@ import { WorkoutUploadButton } from "@/components/workout-upload-button";
 import type { CalendarRangeData } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
-import { totalZoneMinutes, WORKOUT_TREE_VERSION } from "@/lib/workout/steps";
+import { totalZoneMinutes } from "@/lib/workout/steps";
 import type { GeneratedWorkout } from "@/lib/plan/calendar/generate-workouts";
 import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
 import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
@@ -505,17 +505,6 @@ export function PlanningCalendar({
         }, selectedDateKey);
         return;
       }
-
-      if (
-        active.data.current?.type === "season-palette-workout" ||
-        active.data.current?.type === "pool-suggested-workout"
-      ) {
-        await handleUnscheduledAttachmentCombo(chip, {
-          kind: "suggested",
-          workout: active.data.current.workout as GeneratedWorkout,
-        }, selectedDateKey);
-        return;
-      }
       return;
     }
 
@@ -523,17 +512,6 @@ export function PlanningCalendar({
       await handleArmedUnscheduledDrop(
         active.data.current.chip as UnscheduledChip,
         active.data.current.attachment as UnscheduledAttachment,
-        over.data.current
-      );
-      return;
-    }
-
-    if (
-      active.data.current?.type === "season-palette-workout" ||
-      active.data.current?.type === "pool-suggested-workout"
-    ) {
-      await handleSuggestedPoolDrop(
-        active.data.current.workout as GeneratedWorkout,
         over.data.current
       );
       return;
@@ -622,28 +600,6 @@ export function PlanningCalendar({
     const id = data.session?.id;
     if (!id) return false;
     return attachStepsToSession(id, workout.tree);
-  }
-
-  async function mergePrimingIntoSession(sessionId: string, workout: GeneratedWorkout) {
-    const res = await fetch(`/api/plan/sessions/${sessionId}`);
-    if (!res.ok) return;
-    const data = (await res.json().catch(() => ({}))) as {
-      session?: { structuredWorkout?: { steps?: { nodes?: unknown[] } } | null };
-    };
-    const existingNodes = Array.isArray(data.session?.structuredWorkout?.steps?.nodes)
-      ? (data.session!.structuredWorkout!.steps!.nodes as unknown[])
-      : [];
-    const first = existingNodes[0] as { kind?: string; intensity?: string } | undefined;
-    const insertAt = first?.kind === "step" && first?.intensity === "warmup" ? 1 : 0;
-    const mergedNodes = [
-      ...existingNodes.slice(0, insertAt),
-      ...workout.tree.nodes,
-      ...existingNodes.slice(insertAt),
-    ];
-    await attachStepsToSession(sessionId, {
-      version: WORKOUT_TREE_VERSION,
-      nodes: mergedNodes as GeneratedWorkout["tree"]["nodes"],
-    });
   }
 
   async function placeUnscheduledAttachment(
@@ -817,43 +773,6 @@ export function PlanningCalendar({
       if (!poolWeekAllowsDate(dateKey)) return;
       const ok = await createSessionWithTemplate(dateKey!, template);
       if (ok) await handleRefresh();
-    }
-  }
-
-  async function handleSuggestedPoolDrop(
-    workout: GeneratedWorkout,
-    overData: Record<string, unknown> | undefined
-  ) {
-    const overType = overData?.type;
-    if (overType === "session-workout") {
-      if (overData?.source === "RACE") {
-        alert("Cannot add a workout to a race session");
-        return;
-      }
-      const sessionDiscipline = overData?.discipline as string | undefined;
-      if (sessionDiscipline && sessionDiscipline !== workout.discipline) {
-        alert("Workout discipline does not match session");
-        return;
-      }
-      const sessionId = overData?.sessionId as string | undefined;
-      if (!sessionId) return;
-      if (workout.kind === "priming") {
-        await mergePrimingIntoSession(sessionId, workout);
-      } else {
-        if (overData?.hasStructuredWorkout) {
-          alert("Remove the existing workout before applying a new one.");
-          return;
-        }
-        await attachStepsToSession(sessionId, workout.tree);
-      }
-      await handleRefresh();
-      return;
-    }
-    if (overType === "day") {
-      const dateKey = overData?.dateKey as string | undefined;
-      if (!poolWeekAllowsDate(dateKey)) return;
-      await createSessionWithWorkout(dateKey!, workout);
-      await handleRefresh();
     }
   }
 
