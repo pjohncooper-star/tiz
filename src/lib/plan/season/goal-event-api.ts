@@ -1,8 +1,8 @@
+import type { z } from "zod";
+import type { seasonGoalEventSchema } from "@/lib/plan/api-schemas";
 import { parseISO, startOfDay } from "date-fns";
 import { parseDateKey } from "@/lib/dates";
-import type { GoalEventWriteInput, LinkCalendarRaceInput } from "@/lib/plan/season/goal-events-sync";
-import type { z } from "zod";
-import type { seasonGoalEventSchema, linkCalendarRaceSchema } from "@/lib/plan/api-schemas";
+import type { GoalEventWriteInput } from "@/lib/plan/season/goal-events-sync";
 
 type GoalEventApi = z.infer<typeof seasonGoalEventSchema>;
 
@@ -19,16 +19,6 @@ export function parseGoalEventWrite(event: GoalEventApi): GoalEventWriteInput {
     runGoalMinutes: event.runGoalMinutes,
     taperDaysBefore: event.taperDaysBefore,
     notes: event.notes,
-  };
-}
-
-export function parseLinkCalendarRace(
-  link: z.infer<typeof linkCalendarRaceSchema>
-): LinkCalendarRaceInput {
-  return {
-    ...parseGoalEventWrite(link),
-    plannedSessionId: link.plannedSessionId,
-    priority: link.priority,
   };
 }
 

@@ -70,7 +70,7 @@ export type WorkoutDetailViewModel = {
   thresholdPaceSeconds: number | null;
   thresholdZoneBoundaries: number[] | undefined;
   primarySignal: SignalType | null;
-  sessionSource: "FLEXIBLE" | "ANCHORED_INSTANCE" | "TEMPLATE" | "RACE";
+  sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE";
   workoutSource: {
     folder: { id: string; name: string; folderKind: string } | null;
     workoutTemplate: { id: string; name: string; sortOrder: number | null };
@@ -90,7 +90,7 @@ export function detectWorkoutDetailMode(input: {
   hasPlannedMetrics: boolean;
   hasNotes: boolean;
   isDefaultTitle: boolean;
-  source: "FLEXIBLE" | "ANCHORED_INSTANCE" | "TEMPLATE" | "RACE";
+  source: "FLEXIBLE" | "TEMPLATE" | "RACE";
 }): WorkoutDetailMode {
   const hasPlannedContent =
     input.hasStructuredWorkout ||

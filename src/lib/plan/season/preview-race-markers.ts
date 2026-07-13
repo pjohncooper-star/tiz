@@ -2,7 +2,7 @@ import {
   formatGoalDisciplines,
   type Discipline,
   type GoalEventDraft,
-} from "@/components/season/season-settings-types";
+} from "@/lib/plan/season/season-types";
 import { parseDateKey } from "@/lib/dates";
 import { formatGoalTimeDisplay } from "@/lib/plan/goal-time";
 import { resolveEstimatedDurationMinutes } from "@/lib/plan/season/goal-event-times";

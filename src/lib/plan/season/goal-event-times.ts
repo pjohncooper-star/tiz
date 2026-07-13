@@ -1,5 +1,5 @@
 import type { GoalEventDiscipline } from "@prisma/client";
-import type { Discipline } from "@/components/season/season-settings-types";
+import type { Discipline } from "@/lib/plan/season/season-types";
 
 export type DisciplineGoalMinutes = {
   swimGoalMinutes?: number | null;

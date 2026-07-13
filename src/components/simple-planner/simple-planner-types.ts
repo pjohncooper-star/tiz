@@ -75,6 +75,7 @@ export type SimpleSeason = {
   endDate: string;
   totalWeeks: number;
   status: string;
+  deLoadVolumePercent: number;
   rampDefaults: SimpleRampDefaults;
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   phases: SimplePhase[];

@@ -416,11 +416,6 @@ async function fullMigration(
   }
 
   await copy(
-    "AnchorWorkout",
-    () => source.anchorWorkout.findMany({ where: { athleteId } }),
-    (r) => target.anchorWorkout.create({ data: r })
-  );
-  await copy(
     "SyncedActivity",
     () => source.syncedActivity.findMany({ where: { athleteId } }),
     (r) => target.syncedActivity.create({ data: r })

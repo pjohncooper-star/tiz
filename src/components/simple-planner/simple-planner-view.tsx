@@ -17,6 +17,7 @@ import {
   type SimpleWeek,
 } from "@/components/simple-planner/simple-planner-types";
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
+import { DEFAULT_REST_VOLUME_PERCENT } from "@/lib/plan/season/constants";
 import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
@@ -35,12 +36,13 @@ import {
   sortDisciplines,
   toggleGoalDiscipline,
   type Discipline,
-} from "@/components/season/season-settings-types";
+} from "@/lib/plan/season/season-types";
 
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
   const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
   return {
     ...season,
+    deLoadVolumePercent: season.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     phaseKindZoneDefaults: kindDefaults,
     phases: season.phases.map((phase) => ({
       ...phase,
@@ -238,7 +240,7 @@ function defaultSeasonDates() {
   };
 }
 
-export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boolean }) {
+export function SimplePlannerView() {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
@@ -483,6 +485,7 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
       name: season.name,
       startDate: season.startDate,
       endDate: season.endDate,
+      deLoadVolumePercent: season.deLoadVolumePercent,
       rampDefaults: season.rampDefaults,
       phaseKindZoneDefaults: season.phaseKindZoneDefaults,
       phases: season.phases,
@@ -573,14 +576,6 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {showAdvancedLink && (
-            <Link
-              href={`/plan/setup?seasonId=${encodeURIComponent(season.id)}`}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Advanced settings
-            </Link>
-          )}
           <Link
             href="/plan/seasons"
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
@@ -763,6 +758,39 @@ export function SimplePlannerView({ showAdvancedLink }: { showAdvancedLink?: boo
         onToggle={() => toggleSection("weeklyVolume")}
         actions={sectionActions("weeklyVolume")}
       >
+        <div className="mb-4 flex flex-wrap items-end gap-4">
+          <div>
+            <Label>Rest week volume</Label>
+            <div className="mt-1 flex items-center gap-2">
+              <Input
+                id="rest-volume-percent"
+                type="number"
+                min={1}
+                max={100}
+                step={1}
+                className="w-24"
+                value={season.deLoadVolumePercent}
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  if (!Number.isFinite(next)) return;
+                  setSeason({
+                    ...season,
+                    deLoadVolumePercent: Math.min(100, Math.max(1, next)),
+                  });
+                }}
+              />
+              <span className="text-sm text-zinc-500">% of prior training week</span>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={saving}
+            onClick={() => void saveSeason(savePayload({ recalculate: true }))}
+          >
+            {saving ? "Saving…" : "Save & recalculate volume"}
+          </Button>
+        </div>
         <SimplePlannerWeekTable
           weeks={season.weeks}
           phases={season.phases}

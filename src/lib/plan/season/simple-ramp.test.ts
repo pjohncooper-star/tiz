@@ -109,15 +109,33 @@ describe("recalculateSimpleVolumes", () => {
       week(2, 1, 2, 1, true),
       week(3, 2, 4, 2),
     ];
-    const result = recalculateSimpleVolumes(weeks, [], defaults);
-    assert.equal(result[2]!.bikeHours, 2);
+    const result = recalculateSimpleVolumes(weeks, [], defaults, 75);
+    assert.equal(result[2]!.bikeHours, 3.15);
     assert.equal(result[3]!.bikeHours, 4.41);
   });
 
-  it("does not overwrite rest week volumes", () => {
-    const weeks = [week(0, 2, 4, 2), week(1, 1, 2.5, 1, true)];
-    const result = recalculateSimpleVolumes(weeks, [], defaults);
-    assert.equal(result[1]!.bikeHours, 2.5);
+  it("applies configurable rest volume cut from prior training week", () => {
+    const weeks = [
+      week(0, 2, 4, 2),
+      week(1, 2, 4.2, 2.1),
+      week(2, 2, 4, 2, true),
+    ];
+    const result = recalculateSimpleVolumes(weeks, [], defaults, 60);
+    assert.equal(result[2]!.bikeHours, 2.52);
+  });
+
+  it("cuts rest week after a ramp block", () => {
+    const weeks = [
+      week(0, 2, 4, 2),
+      week(1, 2, 4.2, 2.1),
+      week(2, 2, 4.41, 2.21),
+      week(3, 2, 4, 2, true),
+      week(4, 2, 4, 2),
+    ];
+    const result = recalculateSimpleVolumes(weeks, [], defaults, 75);
+    assert.equal(result[2]!.bikeHours, 4.41);
+    assert.equal(result[3]!.bikeHours, 3.31);
+    assert.equal(result[4]!.bikeHours, 4.63);
   });
 
   it("respects ramp-off phase per discipline", () => {

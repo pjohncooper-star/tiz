@@ -49,11 +49,6 @@ async function main() {
     WHERE table_schema = 'public' AND table_name = 'PlannedSession'
     AND column_name IN ('weeklyPlanId', 'anchorWorkoutId')`);
 
-  const awCols = await db.$queryRawUnsafe<{ column_name: string }[]>(`
-    SELECT column_name::text AS column_name FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'AnchorWorkout'
-    AND column_name IN ('macrocycleId', 'athleteId', 'weekday')`);
-
   const swCols = await db.$queryRawUnsafe<{ column_name: string }[]>(`
     SELECT column_name::text AS column_name FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'StructuredWorkout'
@@ -68,20 +63,12 @@ async function main() {
   if (tables.length) {
     issues.push(`Planner tables still exist: ${tables.map((t) => t.table_name).join(", ")}`);
   }
-  if (!anchor.length) issues.push("AnchorWorkout table missing");
+  if (anchor.length) issues.push("AnchorWorkout table still exists");
   if (psCols.some((c) => c.column_name === "weeklyPlanId")) {
     issues.push("PlannedSession.weeklyPlanId still exists");
   }
-  if (!psCols.some((c) => c.column_name === "anchorWorkoutId")) {
-    issues.push("PlannedSession.anchorWorkoutId missing");
-  }
-  if (awCols.some((c) => c.column_name === "macrocycleId")) {
-    issues.push("AnchorWorkout.macrocycleId still exists");
-  }
-  for (const col of ["athleteId", "weekday"]) {
-    if (!awCols.some((c) => c.column_name === col)) {
-      issues.push(`AnchorWorkout.${col} missing`);
-    }
+  if (psCols.some((c) => c.column_name === "anchorWorkoutId")) {
+    issues.push("PlannedSession.anchorWorkoutId still exists");
   }
   if (swCols.length) {
     issues.push(
@@ -97,14 +84,10 @@ async function main() {
     "Planner tables remaining:",
     tables.length ? tables.map((t) => t.table_name).join(", ") : "(none)"
   );
-  console.log("AnchorWorkout table:", anchor.length ? "present" : "MISSING");
+  console.log("AnchorWorkout table:", anchor.length ? "STILL EXISTS" : "(dropped)");
   console.log(
     "PlannedSession columns:",
     psCols.map((c) => c.column_name).join(", ") || "(none of checked)"
-  );
-  console.log(
-    "AnchorWorkout columns:",
-    awCols.map((c) => c.column_name).join(", ") || "(none of checked)"
   );
   console.log(
     "StructuredWorkout planner cols:",

@@ -69,7 +69,7 @@ type PlannedSessionEditorProps = {
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
   primarySignal?: import("@prisma/client").SignalType | null;
-  sessionSource?: "FLEXIBLE" | "ANCHORED_INSTANCE" | "TEMPLATE" | "RACE";
+  sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE";
   returnHref: string;
   children?: ReactNode;
 };
@@ -192,7 +192,6 @@ export function PlannedSessionEditor({
   ]);
 
   const [deleting, setDeleting] = useState(false);
-  const [detaching, setDetaching] = useState(false);
   const [unlinking, setUnlinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -437,18 +436,6 @@ export function PlannedSessionEditor({
     router.refresh();
   }
 
-  async function handleDetach() {
-    setDetaching(true);
-    setError(null);
-    const res = await fetch(`/api/plan/sessions/${sessionId}/detach`, { method: "POST" });
-    setDetaching(false);
-    if (!res.ok) {
-      setError("Could not detach from anchor");
-      return;
-    }
-    router.refresh();
-  }
-
   async function handleUnlinkActivity() {
     if (!linkedActivityId || unlinking) return;
     setUnlinking(true);
@@ -564,11 +551,6 @@ export function PlannedSessionEditor({
   return (
     <form onSubmit={handleSave} className="space-y-6">
       <Card title="Summary">
-        {sessionSource === "ANCHORED_INSTANCE" && (
-          <p className="mb-3 text-xs font-medium text-sky-700 dark:text-sky-400">
-            Anchored session — edits here affect this instance only. Detach to make it a flexible session.
-          </p>
-        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label>Date</Label>
@@ -749,16 +731,6 @@ export function PlannedSessionEditor({
               </Button>
             </a>
           </>
-        )}
-        {sessionSource === "ANCHORED_INSTANCE" && (
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={saving || deleting || detaching || unlinking}
-            onClick={handleDetach}
-          >
-            {detaching ? "Detaching…" : "Detach from anchor"}
-          </Button>
         )}
         {linkedActivityId ? (
           <Button

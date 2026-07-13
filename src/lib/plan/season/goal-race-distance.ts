@@ -1,4 +1,4 @@
-import type { Discipline } from "@/components/season/season-settings-types";
+import type { Discipline } from "@/lib/plan/season/season-types";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { formatSummaryDistance } from "@/lib/plan/calendar/week-summary";
 import {

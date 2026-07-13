@@ -370,11 +370,7 @@ export function sessionCardClassName(
     }
   }
 
-  const anchored = session.source === "ANCHORED_INSTANCE";
   const templated = session.source === "TEMPLATE";
-  if (anchored) {
-    return "rounded-md border border-sky-500 bg-sky-50 p-1.5 text-sm shadow-sm dark:border-sky-600 dark:bg-sky-950/50";
-  }
   if (templated) {
     return "rounded-md border border-violet-400 bg-violet-50/80 p-1.5 text-sm shadow-sm dark:border-violet-700 dark:bg-violet-950/30";
   }

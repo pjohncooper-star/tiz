@@ -38,13 +38,6 @@ export async function applyWorkoutTemplateToSession(
   const treeJson = serializeTemplateSteps(template.steps);
 
   return db.$transaction(async (tx) => {
-    if (existing.source === "ANCHORED_INSTANCE" && existing.anchorWorkoutId) {
-      await tx.plannedSession.update({
-        where: { id: sessionId },
-        data: { anchorWorkoutId: null, source: "FLEXIBLE" },
-      });
-    }
-
     if (existing.structuredWorkout) {
       await tx.structuredWorkout.update({
         where: { id: existing.structuredWorkout.id },
