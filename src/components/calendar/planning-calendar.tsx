@@ -116,7 +116,7 @@ export function PlanningCalendar({
     () => initialScrollWeekStart ?? currentWeekStart
   );
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-  const [poolOpen, setPoolOpen] = useState(true);
+  const [poolOpen, setPoolOpen] = useState(false);
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
@@ -164,7 +164,10 @@ export function PlanningCalendar({
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
-    setPoolOpen(mq.matches);
+    const sync = () => setPoolOpen(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
   }, []);
 
   const sortedWeeks = useMemo(
