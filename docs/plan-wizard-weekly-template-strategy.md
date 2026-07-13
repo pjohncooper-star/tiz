@@ -96,7 +96,7 @@ Step 2 budgets and step 3 layout are **intentionally decoupled**. The calendar c
 | **Scheduled** | Count of `PlannedSession` per discipline in that calendar week (anchors + layout + manual flexible) |
 | **Unscheduled** | `max(0, budget − scheduled)` per discipline |
 
-**Calendar UX (V2):** **Sidebar workout pool** — unscheduled discipline chips (budget − scheduled) plus structured workouts from the library. Drag onto the week grid to place. TiZ targets assigned on placement or in session editor. Details: [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md).
+**Calendar UX (V2):** **One focused-week sidebar workout pool** — unscheduled discipline chips (budget − scheduled), suggested hard-zone workouts, plus structured workouts from the library. Drag onto the week grid to place. TiZ targets assigned on placement or in session editor. Details: [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md).
 
 - **No blocking** in wizard step 3 if layout has fewer slots than budget
 - **No mismatch badges** in wizard P1 preview against step 2 (removed from plan)

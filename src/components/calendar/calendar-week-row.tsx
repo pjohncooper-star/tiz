@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   eachDayOfInterval,
   endOfWeek,
@@ -11,7 +10,6 @@ import {
 } from "date-fns";
 import { CalendarDayColumn } from "@/components/calendar/calendar-day-column";
 import { CalendarWeekSummary } from "@/components/calendar/calendar-week-summary";
-import { WorkoutPool } from "@/components/calendar/workout-pool";
 import {
   WEEK_DAY_HEADER_ROW_CLASS,
   WEEK_DAY_ROW_CLASS,
@@ -28,7 +26,6 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
-import type { UnscheduledAttachment } from "@/lib/plan/calendar/pool-unscheduled-attachment";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -46,8 +43,10 @@ type CalendarWeekRowProps = {
   activeDragId: string | null;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
   isCurrentWeek?: boolean;
-  armedUnscheduled: Record<string, UnscheduledAttachment>;
-  onClearArmedUnscheduled: (chipId: string) => void;
+  isFocusedWeek?: boolean;
+  selectedDateKey: string | null;
+  onSelectDay: (dateKey: string) => void;
+  onClearSelection: () => void;
 };
 
 export function CalendarWeekRow({
@@ -63,8 +62,10 @@ export function CalendarWeekRow({
   activeDragId,
   scrollAnchorRef,
   isCurrentWeek,
-  armedUnscheduled,
-  onClearArmedUnscheduled,
+  isFocusedWeek = false,
+  selectedDateKey,
+  onSelectDay,
+  onClearSelection,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -94,12 +95,14 @@ export function CalendarWeekRow({
   const current =
     isCurrentWeek ?? isSameWeek(new Date(), start, WEEK_OPTS);
 
-  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-
   return (
     <section
       ref={scrollAnchorRef}
-      className="scroll-mt-[4.5rem]"
+      className={`scroll-mt-[4.5rem] rounded-lg transition-shadow ${
+        isFocusedWeek
+          ? "ring-2 ring-sky-400/70 ring-offset-2 ring-offset-white dark:ring-sky-600/70 dark:ring-offset-zinc-950"
+          : ""
+      }`}
       data-week-start={weekStart}
       id={current ? "calendar-current-week" : undefined}
     >
@@ -110,64 +113,52 @@ export function CalendarWeekRow({
             This week
           </span>
         )}
+        {isFocusedWeek && !current ? (
+          <span className="ml-2 rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+            Pool focus
+          </span>
+        ) : null}
       </h2>
 
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-        {weekTarget ? (
-          <div className="xl:w-60 xl:shrink-0">
-            <WorkoutPool
-              weekTarget={weekTarget}
-              sessions={sessions}
-              activities={activities}
-              weekStart={weekStart}
-              currentWeekStart={currentWeekStart}
-              selectedDateKey={selectedDateKey}
-              armedUnscheduled={armedUnscheduled}
-              onClearArmedUnscheduled={onClearArmedUnscheduled}
-            />
-          </div>
-        ) : null}
+      <div className="min-w-0">
+        <div className={WEEK_DAY_HEADER_ROW_CLASS}>
+          {DAY_HEADERS.map((h, i) => (
+            <div
+              key={h}
+              className={weekDayColumnClass(weekDays[i] === selectedDateKey)}
+            >
+              {h}
+            </div>
+          ))}
+        </div>
 
-        <div className="min-w-0 flex-1">
-          <div className={WEEK_DAY_HEADER_ROW_CLASS}>
-            {DAY_HEADERS.map((h, i) => (
-              <div
-                key={h}
-                className={weekDayColumnClass(weekDays[i] === selectedDateKey)}
-              >
-                {h}
-              </div>
-            ))}
-          </div>
+        <div className={WEEK_DAY_ROW_CLASS}>
+          {weekDays.map((dateKey) => {
+            const daySessions = sessionsByDay.get(dateKey) ?? [];
+            const linkedIds = linkedActivityIdsFromSessions(daySessions);
+            const activityGroups = filterUnlinkedActivityGroups(
+              groupWeekActivities(activitiesByDay.get(dateKey) ?? []),
+              linkedIds
+            );
 
-          <div className={WEEK_DAY_ROW_CLASS}>
-            {weekDays.map((dateKey) => {
-              const daySessions = sessionsByDay.get(dateKey) ?? [];
-              const linkedIds = linkedActivityIdsFromSessions(daySessions);
-              const activityGroups = filterUnlinkedActivityGroups(
-                groupWeekActivities(activitiesByDay.get(dateKey) ?? []),
-                linkedIds
-              );
-
-              return (
-                <CalendarDayColumn
-                  key={dateKey}
-                  dateKey={dateKey}
-                  sessions={daySessions}
-                  activityGroups={activityGroups}
-                  weekDays={weekDays}
-                  disciplineSettings={disciplineSettings}
-                  workoutShadingSettings={workoutShadingSettings}
-                  workoutShadingTarget={workoutShadingTarget}
-                  onSessionCreated={onSessionCreated}
-                  activeDragId={activeDragId}
-                  isSelected={selectedDateKey === dateKey}
-                  onSelectDay={() => setSelectedDateKey(dateKey)}
-                  onClearSelection={() => setSelectedDateKey(null)}
-                />
-              );
-            })}
-          </div>
+            return (
+              <CalendarDayColumn
+                key={dateKey}
+                dateKey={dateKey}
+                sessions={daySessions}
+                activityGroups={activityGroups}
+                weekDays={weekDays}
+                disciplineSettings={disciplineSettings}
+                workoutShadingSettings={workoutShadingSettings}
+                workoutShadingTarget={workoutShadingTarget}
+                onSessionCreated={onSessionCreated}
+                activeDragId={activeDragId}
+                isSelected={selectedDateKey === dateKey}
+                onSelectDay={() => onSelectDay(dateKey)}
+                onClearSelection={onClearSelection}
+              />
+            );
+          })}
         </div>
       </div>
 

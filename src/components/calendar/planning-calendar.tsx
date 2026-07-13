@@ -23,6 +23,7 @@ import { CalendarWeekRow } from "@/components/calendar/calendar-week-row";
 import { CalendarSessionCard } from "@/components/calendar/calendar-session-card";
 import { DraggableActivityCard } from "@/components/calendar/calendar-activity-card";
 import { ApplyTemplateDialog } from "@/components/calendar/apply-template-dialog";
+import { WorkoutPoolPanel } from "@/components/calendar/workout-pool-panel";
 import { WorkoutUploadButton } from "@/components/workout-upload-button";
 import type { CalendarRangeData } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
@@ -49,6 +50,8 @@ import { Button } from "@/components/ui";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const MAX_PAST_WEEKS_WITHOUT_ACTIVITIES = 52;
+/** Sticky toolbar + week header offset used for focused-week detection. */
+const FOCUS_TOP_OFFSET_PX = 72;
 
 type PlanningCalendarProps = {
   initialData: CalendarRangeData;
@@ -109,10 +112,16 @@ export function PlanningCalendar({
   const [armedUnscheduled, setArmedUnscheduled] = useState<
     Record<string, UnscheduledAttachment>
   >({});
+  const [focusedWeekStart, setFocusedWeekStart] = useState(
+    () => initialScrollWeekStart ?? currentWeekStart
+  );
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [poolOpen, setPoolOpen] = useState(true);
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
   const canLoadPreviousRef = useRef(false);
+  const focusLockUntilRef = useRef(0);
   const pendingScrollRestoreRef = useRef<{ prevScrollHeight: number; prevScrollTop: number } | null>(
     null
   );
@@ -136,6 +145,26 @@ export function PlanningCalendar({
 
   const armUnscheduled = useCallback((chipId: string, attachment: UnscheduledAttachment) => {
     setArmedUnscheduled((prev) => ({ ...prev, [chipId]: attachment }));
+  }, []);
+
+  const setFocusedWeek = useCallback((weekStart: string, options?: { lockMs?: number }) => {
+    if (options?.lockMs) {
+      focusLockUntilRef.current = Date.now() + options.lockMs;
+    }
+    setFocusedWeekStart((prev) => (prev === weekStart ? prev : weekStart));
+    setSelectedDateKey((prev) => {
+      if (!prev) return prev;
+      const dayWeek = format(
+        startOfWeek(parseISO(`${prev}T12:00:00`), WEEK_OPTS),
+        "yyyy-MM-dd"
+      );
+      return dayWeek === weekStart ? prev : null;
+    });
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    setPoolOpen(mq.matches);
   }, []);
 
   const sortedWeeks = useMemo(
@@ -183,6 +212,7 @@ export function PlanningCalendar({
 
   const scrollToWeekAsync = useCallback(
     async (weekStart: string) => {
+      setFocusedWeek(weekStart, { lockMs: 1200 });
       const scroll = () => {
         document
           .querySelector(`[data-week-start="${weekStart}"]`)
@@ -210,7 +240,7 @@ export function PlanningCalendar({
         // ignore
       }
     },
-    [sortedWeeks]
+    [setFocusedWeek, sortedWeeks]
   );
 
   useEffect(() => {
@@ -343,6 +373,41 @@ export function PlanningCalendar({
     observer.observe(el);
     return () => observer.disconnect();
   }, [canLoadPrevious, loadPreviousWeeks, sortedWeeks.length]);
+
+  useEffect(() => {
+    const updateFocusedWeekFromScroll = () => {
+      if (Date.now() < focusLockUntilRef.current) return;
+
+      let bestWeek: string | null = null;
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      for (const weekStart of sortedWeeks) {
+        const el = document.querySelector(`[data-week-start="${weekStart}"]`);
+        if (!(el instanceof HTMLElement)) continue;
+        const top = el.getBoundingClientRect().top;
+        const distance = Math.abs(top - FOCUS_TOP_OFFSET_PX);
+        // Prefer the week whose top is at or above the sticky offset (already scrolled past),
+        // falling back to nearest overall.
+        const score = top <= FOCUS_TOP_OFFSET_PX + 8 ? distance : distance + 10_000;
+        if (score < bestDistance) {
+          bestDistance = score;
+          bestWeek = weekStart;
+        }
+      }
+
+      if (bestWeek) {
+        setFocusedWeek(bestWeek);
+      }
+    };
+
+    updateFocusedWeekFromScroll();
+    window.addEventListener("scroll", updateFocusedWeekFromScroll, { passive: true });
+    window.addEventListener("resize", updateFocusedWeekFromScroll);
+    return () => {
+      window.removeEventListener("scroll", updateFocusedWeekFromScroll);
+      window.removeEventListener("resize", updateFocusedWeekFromScroll);
+    };
+  }, [setFocusedWeek, sortedWeeks]);
 
   async function openApplyDialog() {
     setApplyWeekStart(currentWeekStart);
@@ -818,6 +883,13 @@ export function PlanningCalendar({
               </Button>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant={poolOpen ? "primary" : "secondary"}
+                onClick={() => setPoolOpen((open) => !open)}
+              >
+                {poolOpen ? "Hide pool" : "Workout pool"}
+              </Button>
               <Button type="button" variant="secondary" onClick={scrollToToday}>
                 Today
               </Button>
@@ -865,35 +937,60 @@ export function PlanningCalendar({
           )}
         </div>
 
-        <div className="space-y-8">
-          <div
-            ref={loadPreviousSentinelRef}
-            className="py-2 text-center text-sm text-zinc-500"
-          >
-            {canLoadPrevious
-              ? loadingPrevious
-                ? "Loading previous weeks…"
-                : "Scroll up for previous weeks"
-              : null}
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+          <WorkoutPoolPanel
+            focusedWeekStart={focusedWeekStart}
+            weekTarget={
+              focusedWeekStart ? (targetsByWeek.get(focusedWeekStart) ?? null) : null
+            }
+            sessions={focusedWeekStart ? sessionsForWeek(focusedWeekStart) : []}
+            activities={focusedWeekStart ? activitiesForWeek(focusedWeekStart) : []}
+            currentWeekStart={currentWeekStart}
+            selectedDateKey={selectedDateKey}
+            armedUnscheduled={armedUnscheduled}
+            onClearArmedUnscheduled={clearArmedUnscheduled}
+            open={poolOpen}
+            onOpenChange={setPoolOpen}
+          />
+
+          <div className="min-w-0 flex-1 space-y-8">
+            <div
+              ref={loadPreviousSentinelRef}
+              className="py-2 text-center text-sm text-zinc-500"
+            >
+              {canLoadPrevious
+                ? loadingPrevious
+                  ? "Loading previous weeks…"
+                  : "Scroll up for previous weeks"
+                : null}
+            </div>
+            {sortedWeeks.map((weekStart) => (
+              <CalendarWeekRow
+                key={weekStart}
+                weekStart={weekStart}
+                currentWeekStart={currentWeekStart}
+                sessions={sessionsForWeek(weekStart)}
+                activities={activitiesForWeek(weekStart)}
+                weekTarget={targetsByWeek.get(weekStart) ?? null}
+                disciplineSettings={disciplineSettings}
+                workoutShadingSettings={workoutShadingSettings}
+                workoutShadingTarget={workoutShadingTarget}
+                onSessionCreated={handleRefresh}
+                activeDragId={activeDragId}
+                isCurrentWeek={weekStart === currentWeekStart}
+                isFocusedWeek={weekStart === focusedWeekStart}
+                selectedDateKey={
+                  weekStart === focusedWeekStart ? selectedDateKey : null
+                }
+                onSelectDay={(dateKey) => {
+                  setFocusedWeek(weekStart, { lockMs: 800 });
+                  setSelectedDateKey(dateKey);
+                  if (!poolOpen) setPoolOpen(true);
+                }}
+                onClearSelection={() => setSelectedDateKey(null)}
+              />
+            ))}
           </div>
-          {sortedWeeks.map((weekStart) => (
-            <CalendarWeekRow
-              key={weekStart}
-              weekStart={weekStart}
-              currentWeekStart={currentWeekStart}
-              sessions={sessionsForWeek(weekStart)}
-              activities={activitiesForWeek(weekStart)}
-              weekTarget={targetsByWeek.get(weekStart) ?? null}
-              disciplineSettings={disciplineSettings}
-              workoutShadingSettings={workoutShadingSettings}
-              workoutShadingTarget={workoutShadingTarget}
-              onSessionCreated={handleRefresh}
-              activeDragId={activeDragId}
-              isCurrentWeek={weekStart === currentWeekStart}
-              armedUnscheduled={armedUnscheduled}
-              onClearArmedUnscheduled={clearArmedUnscheduled}
-            />
-          ))}
         </div>
 
         <div ref={loadSentinelRef} className="py-4 text-center text-sm text-zinc-500">
