@@ -4,13 +4,15 @@ import { useEffect, useMemo } from "react";
 import { addWeeks, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { Button } from "@/components/ui";
 import { WorkoutPool } from "@/components/calendar/workout-pool";
-import { WorkoutGraphComposer } from "@/components/calendar/workout-graph-composer";
+import { WorkoutGraphPanel } from "@/components/calendar/workout-graph-composer";
 import type { PoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { UnscheduledAttachment } from "@/lib/plan/calendar/pool-unscheduled-attachment";
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
+import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
+import type { PlanDiscipline } from "@/lib/plan/session";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 
@@ -29,6 +31,7 @@ type WorkoutPoolWizardProps = {
   activeTab: PoolTab;
   onActiveTabChange: (tab: PoolTab) => void;
   composer: PoolWorkoutComposer;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
 };
 
 function weekLabel(weekStart: string): string {
@@ -50,6 +53,7 @@ export function WorkoutPoolWizard({
   activeTab,
   onActiveTabChange,
   composer,
+  disciplineSettings,
 }: WorkoutPoolWizardProps) {
   const unscheduledCount = useMemo(() => {
     if (!weekTarget) return 0;
@@ -128,7 +132,7 @@ export function WorkoutPoolWizard({
           embedded
         />
       ) : (
-        <WorkoutGraphComposer composer={composer} />
+        <WorkoutGraphPanel composer={composer} disciplineSettings={disciplineSettings} />
       )}
     </div>
   );

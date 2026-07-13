@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEndEvent } from "@dnd-kit/core";
 import type { Discipline } from "@prisma/client";
-import { WORKOUT_TREE_VERSION, type WorkoutNode } from "@/lib/workout/workout-tree";
 import {
-  defaultLeafStep,
-  defaultRepeatBlock,
+  WORKOUT_TREE_VERSION,
   totalTreeDurationMinutes,
+  type WorkoutNode,
+  type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
 import { templateNodes } from "@/lib/workout/apply-workout-template";
 import type { FolderTreeNode } from "@/lib/workout/workout-folder-library";
@@ -16,45 +16,24 @@ import {
   isAssembledWorkoutDrag,
   parseWorkoutSessionDropId,
 } from "@/lib/plan/workout-builder-dnd";
-import {
-  mergeSegmentNodes,
-  type GraphSegment,
-} from "@/lib/plan/calendar/workout-graph-compose";
 import { parseWorkoutTree } from "@/lib/workout/steps";
 
 export type EnduranceDiscipline = Extract<Discipline, "SWIM" | "BIKE" | "RUN">;
 
-export type IntervalDraft = {
-  reps: number;
-  workSeconds: number;
-  workZone: number;
-  restSeconds: number;
-  restZone: number;
+const EMPTY_TREE: WorkoutTreeDocument = {
+  version: WORKOUT_TREE_VERSION,
+  nodes: [],
 };
-
-const DEFAULT_INTERVAL: IntervalDraft = {
-  reps: 5,
-  workSeconds: 180,
-  workZone: 4,
-  restSeconds: 60,
-  restZone: 1,
-};
-
-function newSegmentId(): string {
-  return `seg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 export function usePoolWorkoutComposer(options: {
   onApplied?: () => void;
   active: boolean;
 }) {
   const [discipline, setDiscipline] = useState<EnduranceDiscipline>("RUN");
-  const [tree, setTree] = useState<FolderTreeNode[]>([]);
+  const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
   const [loadingTree, setLoadingTree] = useState(false);
-  const [segments, setSegments] = useState<GraphSegment[]>([]);
+  const [workoutTree, setWorkoutTree] = useState<WorkoutTreeDocument>(EMPTY_TREE);
   const [historySource, setHistorySource] = useState<string | null>(null);
-  const [intervalOpen, setIntervalOpen] = useState(false);
-  const [intervalDraft, setIntervalDraft] = useState<IntervalDraft>(DEFAULT_INTERVAL);
 
   const loadTree = useCallback(async () => {
     setLoadingTree(true);
@@ -62,7 +41,7 @@ export function usePoolWorkoutComposer(options: {
       const res = await fetch(`/api/plan/workout-folders?tree=1&discipline=${discipline}`);
       if (!res.ok) return;
       const data = (await res.json()) as { tree: FolderTreeNode[] };
-      setTree(data.tree);
+      setFolderTree(data.tree);
     } finally {
       setLoadingTree(false);
     }
@@ -72,27 +51,28 @@ export function usePoolWorkoutComposer(options: {
     if (options.active) void loadTree();
   }, [options.active, loadTree]);
 
-  const mergedNodes = useMemo(() => mergeSegmentNodes(segments), [segments]);
+  const mergedNodes = workoutTree.nodes;
   const durationMinutes = useMemo(
     () => totalTreeDurationMinutes(mergedNodes),
     [mergedNodes]
   );
 
   const clear = useCallback(() => {
-    setSegments([]);
+    setWorkoutTree(EMPTY_TREE);
     setHistorySource(null);
   }, []);
 
-  const appendNodes = useCallback((label: string, nodes: WorkoutNode[]) => {
+  const appendNodes = useCallback((nodes: WorkoutNode[]) => {
     if (nodes.length === 0) return;
-    setSegments((prev) => [
-      ...prev,
-      { id: newSegmentId(), label, nodes: structuredClone(nodes) },
-    ]);
+    setWorkoutTree((prev) => ({
+      version: WORKOUT_TREE_VERSION,
+      nodes: [...prev.nodes, ...structuredClone(nodes)],
+    }));
+    setHistorySource(null);
   }, []);
 
   const appendTemplate = useCallback(
-    async (folderId: string, templateId: string, name: string) => {
+    async (folderId: string, templateId: string, _name: string) => {
       const res = await fetch(
         `/api/plan/workout-folders/${folderId}/workouts/${templateId}`
       );
@@ -107,78 +87,10 @@ export function usePoolWorkoutComposer(options: {
         alert("Workout discipline does not match Build filter");
         return;
       }
-      appendNodes(name || data.workout.name, templateNodes(data.workout));
-      setHistorySource(null);
+      appendNodes(templateNodes(data.workout));
     },
     [appendNodes, discipline]
   );
-
-  const removeSegment = useCallback((segmentId: string) => {
-    setSegments((prev) => prev.filter((s) => s.id !== segmentId));
-  }, []);
-
-  const moveSegment = useCallback((segmentId: string, direction: -1 | 1) => {
-    setSegments((prev) => {
-      const index = prev.findIndex((s) => s.id === segmentId);
-      if (index < 0) return prev;
-      const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
-      const next = [...prev];
-      const [item] = next.splice(index, 1);
-      next.splice(nextIndex, 0, item!);
-      return next;
-    });
-  }, []);
-
-  const addCustomInterval = useCallback(() => {
-    const { reps, workSeconds, workZone, restSeconds, restZone } = intervalDraft;
-    const workSignal = discipline === "BIKE" ? "power" : "pace";
-    const block =
-      reps > 1
-        ? {
-            ...defaultRepeatBlock(),
-            repeatCount: Math.max(1, reps),
-            children: [
-              {
-                ...defaultLeafStep(),
-                intensity: "interval" as const,
-                duration: { type: "time" as const, value: Math.max(1, workSeconds) },
-                target: {
-                  signal: workSignal as "power" | "pace",
-                  mode: "zone" as const,
-                  zone: workZone,
-                },
-              },
-              {
-                ...defaultLeafStep(),
-                intensity: "recovery" as const,
-                duration: { type: "time" as const, value: Math.max(0, restSeconds) },
-                target: {
-                  signal: workSignal as "power" | "pace",
-                  mode: "zone" as const,
-                  zone: restZone,
-                },
-              },
-            ],
-          }
-        : {
-            ...defaultLeafStep(),
-            intensity: "interval" as const,
-            duration: { type: "time" as const, value: Math.max(1, workSeconds) },
-            target: {
-              signal: workSignal as "power" | "pace",
-              mode: "zone" as const,
-              zone: workZone,
-            },
-          };
-
-    appendNodes(
-      reps > 1 ? `${reps}×${Math.round(workSeconds / 60)}' Z${workZone}` : `Interval Z${workZone}`,
-      [block]
-    );
-    setIntervalOpen(false);
-    setHistorySource(null);
-  }, [appendNodes, discipline, intervalDraft]);
 
   const loadFromSession = useCallback(
     async (sessionId: string, sourceLabel: string) => {
@@ -208,7 +120,7 @@ export function usePoolWorkoutComposer(options: {
         return false;
       }
       setDiscipline(session.discipline as EnduranceDiscipline);
-      setSegments([{ id: newSegmentId(), label: sourceLabel, nodes }]);
+      setWorkoutTree({ version: WORKOUT_TREE_VERSION, nodes });
       setHistorySource(sourceLabel);
       return true;
     },
@@ -287,22 +199,17 @@ export function usePoolWorkoutComposer(options: {
   return {
     discipline,
     setDiscipline,
-    tree,
+    /** Folder library tree for segment columns. */
+    tree: folderTree,
     loadingTree,
     loadTree,
-    segments,
+    workoutTree,
+    setWorkoutTree,
     mergedNodes,
     durationMinutes,
     historySource,
     clear,
     appendTemplate,
-    removeSegment,
-    moveSegment,
-    intervalOpen,
-    setIntervalOpen,
-    intervalDraft,
-    setIntervalDraft,
-    addCustomInterval,
     loadFromSession,
     applyToSession,
     handleDragEnd,
