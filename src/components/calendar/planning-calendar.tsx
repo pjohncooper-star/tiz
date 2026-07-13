@@ -23,7 +23,6 @@ import { CalendarWeekRow } from "@/components/calendar/calendar-week-row";
 import { CalendarSessionCard } from "@/components/calendar/calendar-session-card";
 import { DraggableActivityCard } from "@/components/calendar/calendar-activity-card";
 import { ApplyTemplateDialog } from "@/components/calendar/apply-template-dialog";
-import { WorkoutPoolPanel, calendarPoolLayoutClass } from "@/components/calendar/workout-pool-panel";
 import { WorkoutUploadButton } from "@/components/workout-upload-button";
 import type { CalendarRangeData } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
@@ -162,7 +161,7 @@ export function PlanningCalendar({
     });
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
     const sync = () => setPoolOpen(mq.matches);
     sync();
@@ -940,60 +939,46 @@ export function PlanningCalendar({
           )}
         </div>
 
-        <div className={calendarPoolLayoutClass(poolOpen)}>
-          <WorkoutPoolPanel
-            focusedWeekStart={focusedWeekStart}
-            weekTarget={
-              focusedWeekStart ? (targetsByWeek.get(focusedWeekStart) ?? null) : null
-            }
-            sessions={focusedWeekStart ? sessionsForWeek(focusedWeekStart) : []}
-            activities={focusedWeekStart ? activitiesForWeek(focusedWeekStart) : []}
-            currentWeekStart={currentWeekStart}
-            selectedDateKey={selectedDateKey}
-            armedUnscheduled={armedUnscheduled}
-            onClearArmedUnscheduled={clearArmedUnscheduled}
-            open={poolOpen}
-            onOpenChange={setPoolOpen}
-          />
-
-          <div className="min-w-0 space-y-8">
-            <div
-              ref={loadPreviousSentinelRef}
-              className="py-2 text-center text-sm text-zinc-500"
-            >
-              {canLoadPrevious
-                ? loadingPrevious
-                  ? "Loading previous weeks…"
-                  : "Scroll up for previous weeks"
-                : null}
-            </div>
-            {sortedWeeks.map((weekStart) => (
-              <CalendarWeekRow
-                key={weekStart}
-                weekStart={weekStart}
-                currentWeekStart={currentWeekStart}
-                sessions={sessionsForWeek(weekStart)}
-                activities={activitiesForWeek(weekStart)}
-                weekTarget={targetsByWeek.get(weekStart) ?? null}
-                disciplineSettings={disciplineSettings}
-                workoutShadingSettings={workoutShadingSettings}
-                workoutShadingTarget={workoutShadingTarget}
-                onSessionCreated={handleRefresh}
-                activeDragId={activeDragId}
-                isCurrentWeek={weekStart === currentWeekStart}
-                isFocusedWeek={weekStart === focusedWeekStart}
-                selectedDateKey={
-                  weekStart === focusedWeekStart ? selectedDateKey : null
-                }
-                onSelectDay={(dateKey) => {
-                  setFocusedWeek(weekStart, { lockMs: 800 });
-                  setSelectedDateKey(dateKey);
-                  if (!poolOpen) setPoolOpen(true);
-                }}
-                onClearSelection={() => setSelectedDateKey(null)}
-              />
-            ))}
+        <div className="space-y-8">
+          <div
+            ref={loadPreviousSentinelRef}
+            className="py-2 text-center text-sm text-zinc-500"
+          >
+            {canLoadPrevious
+              ? loadingPrevious
+                ? "Loading previous weeks…"
+                : "Scroll up for previous weeks"
+              : null}
           </div>
+          {sortedWeeks.map((weekStart) => (
+            <CalendarWeekRow
+              key={weekStart}
+              weekStart={weekStart}
+              currentWeekStart={currentWeekStart}
+              sessions={sessionsForWeek(weekStart)}
+              activities={activitiesForWeek(weekStart)}
+              weekTarget={targetsByWeek.get(weekStart) ?? null}
+              disciplineSettings={disciplineSettings}
+              workoutShadingSettings={workoutShadingSettings}
+              workoutShadingTarget={workoutShadingTarget}
+              onSessionCreated={handleRefresh}
+              activeDragId={activeDragId}
+              isCurrentWeek={weekStart === currentWeekStart}
+              isFocusedWeek={weekStart === focusedWeekStart}
+              showPool={poolOpen && weekStart === focusedWeekStart}
+              selectedDateKey={
+                weekStart === focusedWeekStart ? selectedDateKey : null
+              }
+              onSelectDay={(dateKey) => {
+                setFocusedWeek(weekStart, { lockMs: 800 });
+                setSelectedDateKey(dateKey);
+                if (!poolOpen) setPoolOpen(true);
+              }}
+              onClearSelection={() => setSelectedDateKey(null)}
+              armedUnscheduled={armedUnscheduled}
+              onClearArmedUnscheduled={clearArmedUnscheduled}
+            />
+          ))}
         </div>
 
         <div ref={loadSentinelRef} className="py-4 text-center text-sm text-zinc-500">
