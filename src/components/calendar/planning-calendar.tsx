@@ -35,7 +35,17 @@ import {
   unscheduledDisciplinesMatch,
   type UnscheduledAttachment,
 } from "@/lib/plan/calendar/pool-unscheduled-attachment";
-import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
+import { unscheduledSessionTitle, WorkoutPool } from "@/components/calendar/workout-pool";
+import {
+  WorkoutPoolWizard,
+  dateKeyInWeek,
+} from "@/components/calendar/workout-pool-wizard";
+import { SessionRolePickerDialog } from "@/components/calendar/session-role-picker-dialog";
+import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-zones";
+import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
+import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
+import type { SessionRole, Discipline } from "@prisma/client";
+import { isPoolPlacementDragId } from "@/lib/plan/workout-builder-dnd";
 import {
   parseActivityDragId,
   parseSessionLinkDropId,
@@ -116,6 +126,14 @@ export function PlanningCalendar({
   );
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
+  const [isXl, setIsXl] = useState(false);
+  const [poolWeekStart, setPoolWeekStart] = useState(
+    () => initialScrollWeekStart ?? currentWeekStart
+  );
+  const [pendingRolePick, setPendingRolePick] = useState<{
+    chip: UnscheduledChip;
+    dateKey: string;
+  } | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
@@ -163,11 +181,17 @@ export function PlanningCalendar({
 
   useLayoutEffect(() => {
     const mq = window.matchMedia("(min-width: 1280px)");
-    const sync = () => setPoolOpen(mq.matches);
+    const sync = () => {
+      setIsXl(mq.matches);
+      setPoolOpen(mq.matches);
+    };
     sync();
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  const useWizardPool = poolOpen && isXl;
+  const poolDropWeekStart = useWizardPool ? poolWeekStart : null;
 
   const sortedWeeks = useMemo(
     () => [...data.weekStarts].sort(),
@@ -202,6 +226,40 @@ export function PlanningCalendar({
     () => new Map(data.weekTargets.map((t) => [t.weekStart, t])),
     [data.weekTargets]
   );
+
+  const poolWeekTarget = targetsByWeek.get(poolWeekStart) ?? null;
+  const poolWeekSessions = sessionsForWeek(poolWeekStart);
+  const poolWeekActivities = activitiesForWeek(poolWeekStart);
+
+  function poolWeekAllowsDate(dateKey: string | undefined): boolean {
+    if (!dateKey) return false;
+    if (!poolDropWeekStart) return true;
+    return dateKeyInWeek(dateKey, poolDropWeekStart);
+  }
+
+  function poolAllowsOver(overData: Record<string, unknown> | undefined): boolean {
+    if (!poolDropWeekStart) return true;
+    if (!overData) return false;
+    if (overData.type === "pool-unscheduled-drop") return true;
+    if (overData.type === "day") {
+      return poolWeekAllowsDate(overData.dateKey as string | undefined);
+    }
+    if (overData.type === "session-workout") {
+      const sessionId = overData.sessionId as string | undefined;
+      if (!sessionId) return false;
+      const session = data.sessions.find((s) => s.id === sessionId);
+      return session ? poolWeekAllowsDate(session.scheduledDate) : false;
+    }
+    return true;
+  }
+
+  useEffect(() => {
+    if (!useWizardPool) return;
+    setSelectedDateKey((prev) => {
+      if (!prev) return prev;
+      return dateKeyInWeek(prev, poolWeekStart) ? prev : null;
+    });
+  }, [poolWeekStart, useWizardPool]);
 
   const activeSession = activeDragId
     ? data.sessions.find((s) => s.id === activeDragId)
@@ -426,6 +484,13 @@ export function PlanningCalendar({
     const { active, over } = event;
     if (!over) return;
 
+    if (
+      isPoolPlacementDragId(active.id) &&
+      !poolAllowsOver(over.data.current as Record<string, unknown> | undefined)
+    ) {
+      return;
+    }
+
     if (await workoutBuilder.handleDragEnd(event)) return;
 
     if (over.data.current?.type === "pool-unscheduled-drop") {
@@ -602,6 +667,7 @@ export function PlanningCalendar({
     }
 
     if (selectedDateKey) {
+      if (!poolWeekAllowsDate(selectedDateKey)) return;
       const ok = await placeUnscheduledAttachment(selectedDateKey, attachment);
       if (ok) {
         clearArmedUnscheduled(chip.id);
@@ -620,15 +686,42 @@ export function PlanningCalendar({
   ) {
     if (overData?.type !== "day") return;
     const dateKey = overData?.dateKey as string | undefined;
-    if (!dateKey) return;
-    const ok = await placeUnscheduledAttachment(dateKey, attachment);
+    if (!poolWeekAllowsDate(dateKey)) return;
+    const ok = await placeUnscheduledAttachment(dateKey!, attachment);
     if (ok) {
       clearArmedUnscheduled(chip.id);
       await handleRefresh();
     }
   }
 
-  async function createUnscheduledSession(dateKey: string, chip: UnscheduledChip) {
+  async function createUnscheduledSession(
+    dateKey: string,
+    chip: UnscheduledChip,
+    sessionRole: SessionRole
+  ) {
+    const dropWeekStart = format(
+      startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS),
+      "yyyy-MM-dd"
+    );
+    const weekTarget = targetsByWeek.get(dropWeekStart);
+    const weekSessions = sessionsForWeek(dropWeekStart);
+    const unscheduledCount = weekTarget
+      ? computeUnscheduledChips(dropWeekStart, weekTarget, weekSessions).filter(
+          (c) => c.discipline === chip.discipline
+        ).length
+      : 1;
+
+    const targetZones =
+      weekTarget && chip.discipline !== "STRENGTH"
+        ? inheritTargetZonesFromRole({
+            sessionRole,
+            discipline: chip.discipline as Discipline,
+            weekTarget,
+            sessions: weekSessions,
+            unscheduledCount: Math.max(1, unscheduledCount),
+          })
+        : undefined;
+
     const res = await fetch(`/api/plan/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -636,6 +729,8 @@ export function PlanningCalendar({
         scheduledDate: dateKey,
         discipline: chip.discipline,
         title: unscheduledSessionTitle(chip.discipline),
+        sessionRole,
+        ...(targetZones ? { targetZones } : {}),
       }),
     });
     return res.ok;
@@ -647,8 +742,15 @@ export function PlanningCalendar({
   ) {
     if (overData?.type !== "day") return;
     const dateKey = overData?.dateKey as string | undefined;
-    if (!dateKey) return;
-    const ok = await createUnscheduledSession(dateKey, chip);
+    if (!poolWeekAllowsDate(dateKey)) return;
+    setPendingRolePick({ chip, dateKey: dateKey! });
+  }
+
+  async function confirmRolePick(sessionRole: SessionRole) {
+    if (!pendingRolePick) return;
+    const { chip, dateKey } = pendingRolePick;
+    setPendingRolePick(null);
+    const ok = await createUnscheduledSession(dateKey, chip, sessionRole);
     if (ok) await handleRefresh();
   }
 
@@ -701,9 +803,9 @@ export function PlanningCalendar({
       const sessionId = overData?.sessionId as string | undefined;
       if (!sessionId) return;
       if (
-        overData?.hasStructuredWorkout &&
-        !confirm("Replace existing structured workout on this session?")
+        overData?.hasStructuredWorkout
       ) {
+        alert("Remove the existing workout before applying a new one.");
         return;
       }
       const ok = await applyTemplateToSession(sessionId, template.templateId);
@@ -712,8 +814,8 @@ export function PlanningCalendar({
     }
     if (overType === "day") {
       const dateKey = overData?.dateKey as string | undefined;
-      if (!dateKey) return;
-      const ok = await createSessionWithTemplate(dateKey, template);
+      if (!poolWeekAllowsDate(dateKey)) return;
+      const ok = await createSessionWithTemplate(dateKey!, template);
       if (ok) await handleRefresh();
     }
   }
@@ -738,10 +840,8 @@ export function PlanningCalendar({
       if (workout.kind === "priming") {
         await mergePrimingIntoSession(sessionId, workout);
       } else {
-        if (
-          overData?.hasStructuredWorkout &&
-          !confirm("Replace existing structured workout on this session?")
-        ) {
+        if (overData?.hasStructuredWorkout) {
+          alert("Remove the existing workout before applying a new one.");
           return;
         }
         await attachStepsToSession(sessionId, workout.tree);
@@ -751,8 +851,8 @@ export function PlanningCalendar({
     }
     if (overType === "day") {
       const dateKey = overData?.dateKey as string | undefined;
-      if (!dateKey) return;
-      await createSessionWithWorkout(dateKey, workout);
+      if (!poolWeekAllowsDate(dateKey)) return;
+      await createSessionWithWorkout(dateKey!, workout);
       await handleRefresh();
     }
   }
@@ -876,13 +976,15 @@ export function PlanningCalendar({
                   Edit weekly template
                 </Button>
               </Link>
-              <Button
-                type="button"
-                variant={workoutBuilder.open ? "primary" : "secondary"}
-                onClick={() => workoutBuilder.setOpen((v) => !v)}
-              >
-                Workout builder
-              </Button>
+              {!useWizardPool ? (
+                <Button
+                  type="button"
+                  variant={workoutBuilder.open ? "primary" : "secondary"}
+                  onClick={() => workoutBuilder.setOpen((v) => !v)}
+                >
+                  Workout builder
+                </Button>
+              ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Button
@@ -905,11 +1007,28 @@ export function PlanningCalendar({
             </div>
           </div>
 
-          {workoutBuilder.open ? (
+          {workoutBuilder.open && !useWizardPool ? (
             <WorkoutBuilderPane
               builder={workoutBuilder}
               onClose={() => workoutBuilder.setOpen(false)}
             />
+          ) : null}
+
+          {useWizardPool ? (
+            <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+              <WorkoutPoolWizard
+                poolWeekStart={poolWeekStart}
+                onPoolWeekChange={setPoolWeekStart}
+                weekTarget={poolWeekTarget}
+                sessions={poolWeekSessions}
+                activities={poolWeekActivities}
+                currentWeekStart={currentWeekStart}
+                selectedDateKey={selectedDateKey}
+                armedUnscheduled={armedUnscheduled}
+                onClearArmedUnscheduled={clearArmedUnscheduled}
+                builder={workoutBuilder}
+              />
+            </div>
           ) : null}
 
           {calendarOpen && (
@@ -965,9 +1084,18 @@ export function PlanningCalendar({
               activeDragId={activeDragId}
               isCurrentWeek={weekStart === currentWeekStart}
               isFocusedWeek={weekStart === focusedWeekStart}
-              showPool={poolOpen && weekStart === focusedWeekStart}
+              isPoolWeek={useWizardPool && weekStart === poolWeekStart}
+              showPool={poolOpen && !useWizardPool && weekStart === focusedWeekStart}
+              useWizardPool={useWizardPool}
+              acceptsPoolDrop={!useWizardPool || weekStart === poolWeekStart}
               selectedDateKey={
-                weekStart === focusedWeekStart ? selectedDateKey : null
+                useWizardPool
+                  ? weekStart === poolWeekStart
+                    ? selectedDateKey
+                    : null
+                  : weekStart === focusedWeekStart
+                    ? selectedDateKey
+                    : null
               }
               onSelectDay={(dateKey) => {
                 setFocusedWeek(weekStart, { lockMs: 800 });
@@ -1011,6 +1139,19 @@ export function PlanningCalendar({
         hasExistingSessions={applyHasSessions}
         onClose={() => setApplyOpen(false)}
         onApplied={handleTemplateApplied}
+      />
+
+      <SessionRolePickerDialog
+        open={pendingRolePick != null}
+        disciplineLabel={
+          pendingRolePick
+            ? (DISCIPLINE_DISPLAY_LABELS[pendingRolePick.chip.discipline] ??
+              pendingRolePick.chip.discipline)
+            : ""
+        }
+        dateKey={pendingRolePick?.dateKey ?? ""}
+        onCancel={() => setPendingRolePick(null)}
+        onConfirm={(role) => void confirmRolePick(role)}
       />
     </DndContext>
   );

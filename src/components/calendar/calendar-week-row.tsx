@@ -46,7 +46,10 @@ type CalendarWeekRowProps = {
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
   isCurrentWeek?: boolean;
   isFocusedWeek?: boolean;
+  isPoolWeek?: boolean;
   showPool?: boolean;
+  useWizardPool?: boolean;
+  acceptsPoolDrop?: boolean;
   selectedDateKey: string | null;
   onSelectDay: (dateKey: string) => void;
   onClearSelection: () => void;
@@ -68,7 +71,10 @@ export function CalendarWeekRow({
   scrollAnchorRef,
   isCurrentWeek,
   isFocusedWeek = false,
+  isPoolWeek = false,
   showPool = false,
+  useWizardPool = false,
+  acceptsPoolDrop = true,
   selectedDateKey,
   onSelectDay,
   onClearSelection,
@@ -138,6 +144,7 @@ export function CalendarWeekRow({
               onSessionCreated={onSessionCreated}
               activeDragId={activeDragId}
               isSelected={selectedDateKey === dateKey}
+              acceptsPoolDrop={acceptsPoolDrop}
               onSelectDay={() => onSelectDay(dateKey)}
               onClearSelection={onClearSelection}
             />
@@ -151,9 +158,11 @@ export function CalendarWeekRow({
     <section
       ref={scrollAnchorRef}
       className={`scroll-mt-[4.5rem] rounded-lg transition-shadow ${
-        isFocusedWeek
-          ? "ring-2 ring-sky-400/70 ring-offset-2 ring-offset-white dark:ring-sky-600/70 dark:ring-offset-zinc-950"
-          : ""
+        isPoolWeek
+          ? "ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-white dark:ring-emerald-600/70 dark:ring-offset-zinc-950"
+          : isFocusedWeek
+            ? "ring-2 ring-sky-400/70 ring-offset-2 ring-offset-white dark:ring-sky-600/70 dark:ring-offset-zinc-950"
+            : ""
       }`}
       data-week-start={weekStart}
       id={current ? "calendar-current-week" : undefined}
@@ -165,14 +174,19 @@ export function CalendarWeekRow({
             This week
           </span>
         )}
-        {isFocusedWeek && !current ? (
+        {isPoolWeek ? (
+          <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+            Pool week
+          </span>
+        ) : null}
+        {isFocusedWeek && !current && !isPoolWeek ? (
           <span className="ml-2 rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
             Pool focus
           </span>
         ) : null}
       </h2>
 
-      {showPool ? (
+      {showPool && !useWizardPool ? (
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
           <div className="w-full xl:w-60 xl:shrink-0">
             {weekTarget ? (

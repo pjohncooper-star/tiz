@@ -142,10 +142,8 @@ export function useWorkoutBuilder(options: { onApplied?: () => void }) {
           alert("Cannot apply workout to a race session");
           return true;
         }
-        if (
-          over.data.current?.hasStructuredWorkout &&
-          !confirm("Replace existing structured workout on this session?")
-        ) {
+        if (over.data.current?.hasStructuredWorkout) {
+          alert("Remove the existing workout before applying a new one.");
           return true;
         }
         await applyToSession(sessionId);
