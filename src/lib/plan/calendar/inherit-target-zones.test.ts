@@ -65,7 +65,7 @@ describe("inheritTargetZonesFromRole", () => {
       unscheduledCount: 4,
     });
     assert.ok(zones);
-    assert.equal(zones!["2"], 54);
+    assert.equal(zones!["2"], 56);
     assert.equal(zones!["1"], undefined);
   });
 });

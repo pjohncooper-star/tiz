@@ -55,6 +55,8 @@ type CalendarWeekRowProps = {
   onClearSelection: () => void;
   armedUnscheduled: Record<string, UnscheduledAttachment>;
   onClearArmedUnscheduled: (chipId: string) => void;
+  onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
 
 export function CalendarWeekRow({
@@ -80,6 +82,8 @@ export function CalendarWeekRow({
   onClearSelection,
   armedUnscheduled,
   onClearArmedUnscheduled,
+  onLoadIntoBuilder,
+  onUnassignWorkout,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -147,6 +151,8 @@ export function CalendarWeekRow({
               acceptsPoolDrop={acceptsPoolDrop}
               onSelectDay={() => onSelectDay(dateKey)}
               onClearSelection={onClearSelection}
+              onLoadIntoBuilder={onLoadIntoBuilder}
+              onUnassignWorkout={onUnassignWorkout}
             />
           );
         })}

@@ -48,7 +48,15 @@ function FolderTreeItem({
         )}
         <span className="truncate font-medium">{node.name}</span>
         <span className="ml-auto text-[10px] uppercase text-zinc-400">
-          {node.folderKind === "PROGRESSION" ? "prog" : "lib"}
+          {node.folderKind === "PROGRESSION"
+            ? "prog"
+            : node.folderKind === "WARM_UP"
+              ? "wu"
+              : node.folderKind === "MAIN_SET"
+                ? "main"
+                : node.folderKind === "COOL_DOWN"
+                  ? "cd"
+                  : "lib"}
         </span>
       </button>
       {open
@@ -211,6 +219,9 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
           >
             <option value="LIBRARY">Library</option>
             <option value="PROGRESSION">Progression</option>
+            <option value="WARM_UP">Warm-up</option>
+            <option value="MAIN_SET">Main set</option>
+            <option value="COOL_DOWN">Cool-down</option>
           </Select>
           <Button type="button" disabled={busy} onClick={() => void createFolder()}>
             Add folder
@@ -240,7 +251,15 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
               </Button>
             </div>
             <p className="mb-3 text-xs text-zinc-500">
-              {selected.folderKind === "PROGRESSION" ? "Progression" : "Library"}
+              {selected.folderKind === "PROGRESSION"
+                ? "Progression"
+                : selected.folderKind === "WARM_UP"
+                  ? "Warm-up"
+                  : selected.folderKind === "MAIN_SET"
+                    ? "Main set"
+                    : selected.folderKind === "COOL_DOWN"
+                      ? "Cool-down"
+                      : "Library"}
               {selected.discipline ? ` · ${selected.discipline}` : ""}
               {selected.lastCompletedTemplate
                 ? ` · Last done: ${selected.lastCompletedTemplate.name}`

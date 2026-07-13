@@ -168,7 +168,9 @@ export const applyWorkoutTemplateSchema = z.object({
 export const createWorkoutFolderSchema = z.object({
   name: z.string().trim().min(1).max(200),
   parentFolderId: z.string().min(1).nullable().optional(),
-  folderKind: z.enum(["LIBRARY", "PROGRESSION"]).optional(),
+  folderKind: z
+    .enum(["LIBRARY", "PROGRESSION", "WARM_UP", "MAIN_SET", "COOL_DOWN"])
+    .optional(),
   discipline: planDisciplineSchema.nullable().optional(),
   sortOrder: z.number().int().nonnegative().optional(),
 });

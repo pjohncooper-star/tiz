@@ -107,6 +107,29 @@ export function isAssembledWorkoutDrag(id: string | number): boolean {
   return String(id) === ASSEMBLED_WORKOUT_DRAG_ID;
 }
 
+export const POOL_SEGMENT_DRAG_PREFIX = "pool-segment:";
+
+export function poolSegmentDragId(templateId: string, column: string): string {
+  return `${POOL_SEGMENT_DRAG_PREFIX}${column}:${templateId}`;
+}
+
+export function parsePoolSegmentDragId(
+  id: string | number
+): { column: string; templateId: string } | null {
+  const s = String(id);
+  if (!s.startsWith(POOL_SEGMENT_DRAG_PREFIX)) return null;
+  const rest = s.slice(POOL_SEGMENT_DRAG_PREFIX.length);
+  const colon = rest.indexOf(":");
+  if (colon <= 0) return null;
+  const column = rest.slice(0, colon);
+  const templateId = rest.slice(colon + 1);
+  return column && templateId ? { column, templateId } : null;
+}
+
+export function isPoolSegmentDrag(id: string | number): boolean {
+  return String(id).startsWith(POOL_SEGMENT_DRAG_PREFIX);
+}
+
 /** Drags that place pool content onto the calendar grid (subject to pool-week gating). */
 export function isPoolPlacementDragId(id: string | number): boolean {
   const s = String(id);

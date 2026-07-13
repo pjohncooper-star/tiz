@@ -39,6 +39,7 @@ import { unscheduledSessionTitle, WorkoutPool } from "@/components/calendar/work
 import {
   WorkoutPoolWizard,
   dateKeyInWeek,
+  type PoolTab,
 } from "@/components/calendar/workout-pool-wizard";
 import { SessionRolePickerDialog } from "@/components/calendar/session-role-picker-dialog";
 import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-zones";
@@ -51,7 +52,9 @@ import {
   parseSessionLinkDropId,
 } from "@/lib/plan/session-link";
 import { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
+import { usePoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
+import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
@@ -134,6 +137,7 @@ export function PlanningCalendar({
     chip: UnscheduledChip;
     dateKey: string;
   } | null>(null);
+  const [poolTab, setPoolTab] = useState<PoolTab>("skeleton");
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
@@ -150,6 +154,17 @@ export function PlanningCalendar({
   const workoutBuilder = useWorkoutBuilder({
     onApplied: () => void handleRefresh(),
   });
+
+  const useWizardPool = poolOpen && isXl;
+
+  const poolComposer = usePoolWorkoutComposer({
+    active: useWizardPool && poolTab === "build",
+    onApplied: () => void handleRefresh(),
+  });
+
+  const setPoolTabStable = useCallback((tab: PoolTab) => {
+    setPoolTab(tab);
+  }, []);
 
   const clearArmedUnscheduled = useCallback((chipId: string) => {
     setArmedUnscheduled((prev) => {
@@ -190,7 +205,6 @@ export function PlanningCalendar({
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  const useWizardPool = poolOpen && isXl;
   const poolDropWeekStart = useWizardPool ? poolWeekStart : null;
 
   const sortedWeeks = useMemo(
@@ -491,6 +505,7 @@ export function PlanningCalendar({
       return;
     }
 
+    if (await poolComposer.handleDragEnd(event)) return;
     if (await workoutBuilder.handleDragEnd(event)) return;
 
     if (over.data.current?.type === "pool-unscheduled-drop") {
@@ -875,6 +890,39 @@ export function PlanningCalendar({
     void scrollToWeekAsync(currentWeekStart);
   }
 
+  async function handleLoadIntoBuilder(session: CalendarPlannedSession) {
+    if (session.source === "RACE" || session.stepCount <= 0) return;
+    if (session.discipline === "STRENGTH") {
+      alert("Strength sessions are not supported in the Build graph");
+      return;
+    }
+    if (!poolOpen) setPoolOpen(true);
+    setPoolTab("build");
+    const sourceLabel = `${session.title} · ${format(
+      parseISO(`${session.scheduledDate}T12:00:00`),
+      "EEE MMM d"
+    )}`;
+    const ok = await poolComposer.loadFromSession(session.id, sourceLabel);
+    if (ok) {
+      // Ensure pool week stays put; toast-ish via historySource label on graph
+    }
+  }
+
+  async function handleUnassignWorkout(session: CalendarPlannedSession) {
+    const res = await fetch(`/api/plan/sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        steps: { version: WORKOUT_TREE_VERSION, nodes: [] },
+      }),
+    });
+    if (!res.ok) {
+      alert("Could not remove workout");
+      return;
+    }
+    await handleRefresh();
+  }
+
   return (
     <DndContext
       sensors={sensors}
@@ -945,7 +993,9 @@ export function PlanningCalendar({
                 selectedDateKey={selectedDateKey}
                 armedUnscheduled={armedUnscheduled}
                 onClearArmedUnscheduled={clearArmedUnscheduled}
-                builder={workoutBuilder}
+                activeTab={poolTab}
+                onActiveTabChange={setPoolTabStable}
+                composer={poolComposer}
               />
             </div>
           ) : null}
@@ -1024,6 +1074,12 @@ export function PlanningCalendar({
               onClearSelection={() => setSelectedDateKey(null)}
               armedUnscheduled={armedUnscheduled}
               onClearArmedUnscheduled={clearArmedUnscheduled}
+              onLoadIntoBuilder={
+                useWizardPool ? (session) => void handleLoadIntoBuilder(session) : undefined
+              }
+              onUnassignWorkout={
+                useWizardPool ? (session) => void handleUnassignWorkout(session) : undefined
+              }
             />
           ))}
         </div>
