@@ -75,6 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       rampDefaults: data.rampDefaults
         ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
         : undefined,
+      deLoadVolumePercent: data.deLoadVolumePercent,
       phaseKindZoneDefaults: data.phaseKindZoneDefaults,
       phases: data.phases,
       weeks: data.weeks,

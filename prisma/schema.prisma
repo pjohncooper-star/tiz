@@ -453,7 +453,7 @@ model SeasonPlan {
   maxRampPercent           Float          @default(10)
   deLoadEveryNWeeks        Int            @default(4)
   deLoadWeekFlags          Json?
-  deLoadVolumePercent      Float          @default(60)
+  deLoadVolumePercent      Float          @default(75)
   deLoadStrategy           DeLoadStrategy @default(VOLUME_ONLY)
   reduceCountsOnDeLoad     Boolean        @default(true)
   deLoadCountScalePercent  Float?

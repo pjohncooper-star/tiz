@@ -333,6 +333,7 @@ export const updateSimpleSeasonSchema = z
     startDate: z.string().regex(DATE_KEY).optional(),
     endDate: z.string().regex(DATE_KEY).optional(),
     rampDefaults: simpleRampDefaultsSchema.optional(),
+    deLoadVolumePercent: z.number().min(1).max(100).optional(),
     phaseKindZoneDefaults: phaseKindZoneDefaultsSchema.optional(),
     phases: z.array(simplePhaseSchema).optional(),
     weeks: z.array(simpleWeekSchema).optional(),

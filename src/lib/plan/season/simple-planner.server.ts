@@ -47,6 +47,7 @@ import {
 } from "./simple-tiz";
 import { type ZoneMinutes } from "@/lib/workout/steps";
 import { roundHours } from "./volume-curve";
+import { DEFAULT_REST_VOLUME_PERCENT } from "./constants";
 import {
   parsePhaseCoachNotes,
   serializePhaseCoachNotes,
@@ -102,6 +103,7 @@ export type UpdateSimpleSeasonInput = {
   startDate?: Date;
   endDate?: Date;
   rampDefaults?: SimpleRampDefaults;
+  deLoadVolumePercent?: number;
   phaseKindZoneDefaults?: PhaseKindZoneDefaults;
   phases?: SimplePhaseWrite[];
   weeks?: SimpleWeekWrite[];
@@ -225,7 +227,8 @@ function buildInitialWeeks(
   totalWeeks: number,
   defaults: SimpleRampDefaults,
   kindDefaults: PhaseKindZoneDefaults,
-  deLoadStrategy: DeLoadStrategy
+  deLoadStrategy: DeLoadStrategy,
+  restVolumePercent: number
 ): Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes }> {
   const weeks: SimpleWeekVolume[] = Array.from({ length: totalWeeks }, (_, weekIndex) => ({
     weekIndex,
@@ -242,7 +245,7 @@ function buildInitialWeeks(
       defaults.run.mode === "DISTANCE" ? defaults.run.startDistanceMeters : null,
   }));
 
-  const volumeWeeks = recalculateSimpleVolumes(weeks, [], defaults);
+  const volumeWeeks = recalculateSimpleVolumes(weeks, [], defaults, restVolumePercent);
   const zoneMinutesList = recalculateZoneMinutesFromSplits(
     volumeWeeks.map((week) => ({
       weekIndex: week.weekIndex,
@@ -298,9 +301,15 @@ function recalculateWeeks(
   weeks: Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes }>,
   zonePhaseSpans: ZonePhaseSpan[],
   rampDefaults: SimpleRampDefaults,
-  deLoadStrategy: DeLoadStrategy
+  deLoadStrategy: DeLoadStrategy,
+  restVolumePercent: number
 ) {
-  const volumeWeeks = recalculateSimpleVolumes(weeks, zonePhaseSpans, rampDefaults);
+  const volumeWeeks = recalculateSimpleVolumes(
+    weeks,
+    zonePhaseSpans,
+    rampDefaults,
+    restVolumePercent
+  );
   const zoneMinutesList = recalculateZoneMinutesFromSplits(
     volumeWeeks.map((week) => ({
       weekIndex: week.weekIndex,
@@ -354,7 +363,8 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
     bounds.totalWeeks,
     defaults,
     kindDefaults,
-    deLoadStrategy
+    deLoadStrategy,
+    DEFAULT_REST_VOLUME_PERCENT
   );
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
@@ -372,7 +382,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         setupComplete: true,
         mesocycleLengthWeeks: 4,
         deLoadEveryNWeeks: 4,
-        deLoadVolumePercent: 60,
+        deLoadVolumePercent: DEFAULT_REST_VOLUME_PERCENT,
         deLoadStrategy,
         phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
           kindDefaults
@@ -471,6 +481,8 @@ export async function updateSimpleSeasonPlan(
 
   const rampFields = input.rampDefaults ? rampDefaultsToPlanFields(defaults) : undefined;
   const deLoadStrategy = existing.deLoadStrategy ?? "VOLUME_ONLY";
+  const restVolumePercent =
+    input.deLoadVolumePercent ?? existing.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT;
 
   let phaseWrites = input.phases;
   if (phaseWrites && bounds.totalWeeks !== existing.totalWeeks) {
@@ -496,7 +508,13 @@ export async function updateSimpleSeasonPlan(
   );
 
   if (input.recalculate) {
-    weeks = recalculateWeeks(weeks, zonePhaseSpans, defaults, deLoadStrategy);
+    weeks = recalculateWeeks(
+      weeks,
+      zonePhaseSpans,
+      defaults,
+      deLoadStrategy,
+      restVolumePercent
+    );
   }
 
   const status =
@@ -527,6 +545,9 @@ export async function updateSimpleSeasonPlan(
         status,
         setupComplete: true,
         ...(rampFields ?? {}),
+        ...(input.deLoadVolumePercent != null
+          ? { deLoadVolumePercent: input.deLoadVolumePercent }
+          : {}),
         ...(input.phaseKindZoneDefaults
           ? {
               phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
@@ -679,6 +700,7 @@ export function serializeSimpleSeasonPlan(
     endDate: formatDateKey(plan.endDate),
     totalWeeks: plan.totalWeeks,
     status: plan.status,
+    deLoadVolumePercent: plan.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     rampDefaults: defaults,
     phaseKindZoneDefaults,
     phases,

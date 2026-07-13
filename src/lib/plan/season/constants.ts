@@ -27,6 +27,9 @@ export const FOCUS_TIZ_PRESETS: Record<
 
 export const DEFAULT_DE_LOAD_COUNT_SCALE_PERCENT = 50;
 
+/** Default rest-week volume as a percent of the prior training week (Simple Planner). */
+export const DEFAULT_REST_VOLUME_PERCENT = 75;
+
 export const RACE_PREP_VOLUME_FACTOR = 0.9;
 export const TAPER_VOLUME_START_FACTOR = 0.7;
 export const TAPER_VOLUME_END_FACTOR = 0.45;

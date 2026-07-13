@@ -3,6 +3,7 @@ import {
   distanceMetersFromHoursPace,
   hoursFromDistancePace,
 } from "./distance-pace-rollup";
+import { DEFAULT_REST_VOLUME_PERCENT } from "./constants";
 import { roundHours } from "./volume-curve";
 
 export type SimpleDiscipline = "swim" | "bike" | "run";
@@ -219,6 +220,52 @@ function applyDistanceRamp(
   }
 }
 
+function applyRestVolumeCuts(
+  weeks: SimpleWeekVolume[],
+  defaults: SimpleRampDefaults,
+  restVolumePercent: number
+): void {
+  const factor = restVolumePercent / 100;
+
+  for (let weekIndex = 0; weekIndex < weeks.length; weekIndex++) {
+    const week = weeks[weekIndex]!;
+    if (!week.isRestWeek) continue;
+
+    const baseIndex = rampBaseWeekIndex(weeks, weekIndex);
+
+    for (const discipline of SIMPLE_DISCIPLINES) {
+      const def = defaults[discipline];
+      const hoursKey = HOURS_KEY[discipline];
+      const distanceKey = DISTANCE_KEY[discipline];
+      const mode = disciplineMode(discipline, def);
+
+      let priorValue: number;
+      if (baseIndex < 0) {
+        priorValue = mode === "DISTANCE" ? def.startDistanceMeters : def.startHours;
+      } else {
+        const priorWeek = weeks[baseIndex]!;
+        priorValue =
+          mode === "DISTANCE" && distanceKey
+            ? (priorWeek[distanceKey] ?? def.startDistanceMeters)
+            : priorWeek[hoursKey];
+      }
+
+      const cutValue = priorValue * factor;
+      if (mode === "DISTANCE" && distanceKey) {
+        const meters = roundMeters(cutValue);
+        week[distanceKey] = meters;
+        week[hoursKey] = hoursFromDistancePace(
+          PACE_DISCIPLINE[discipline]!,
+          meters,
+          def.referencePaceSeconds
+        );
+      } else {
+        week[hoursKey] = roundHours(cutValue);
+      }
+    }
+  }
+}
+
 function syncDerivedDistanceOrHours(
   weeks: SimpleWeekVolume[],
   defaults: SimpleRampDefaults
@@ -256,7 +303,8 @@ function syncDerivedDistanceOrHours(
 export function recalculateSimpleVolumes(
   weeks: SimpleWeekVolume[],
   phases: SimplePhaseSpan[],
-  defaults: SimpleRampDefaults
+  defaults: SimpleRampDefaults,
+  restVolumePercent: number = DEFAULT_REST_VOLUME_PERCENT
 ): SimpleWeekVolume[] {
   const result = weeks.map((week) => ({ ...week }));
 
@@ -269,6 +317,7 @@ export function recalculateSimpleVolumes(
     }
   }
 
+  applyRestVolumeCuts(result, defaults, restVolumePercent);
   syncDerivedDistanceOrHours(result, defaults);
 
   for (const week of result) {
