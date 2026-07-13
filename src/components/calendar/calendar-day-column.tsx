@@ -10,6 +10,8 @@ import { CalendarPlannedRaceGroupCard } from "@/components/calendar/calendar-pla
 import { groupPlannedSessions } from "@/lib/plan/group-planned-sessions";
 import {
   ASSEMBLED_WORKOUT_DRAG_ID,
+  isPoolPlacementDragId,
+  isPoolUnscheduledDrag,
   isSeasonPaletteDrag,
 } from "@/lib/plan/workout-builder-dnd";
 import { weekDayColumnClass } from "@/components/calendar/week-day-layout";
@@ -30,6 +32,7 @@ type CalendarDayColumnProps = {
   onSessionCreated: () => void;
   activeDragId: string | null;
   isSelected: boolean;
+  acceptsPoolDrop?: boolean;
   onSelectDay: () => void;
   onClearSelection: () => void;
 };
@@ -45,19 +48,33 @@ export function CalendarDayColumn({
   onSessionCreated,
   activeDragId,
   isSelected,
+  acceptsPoolDrop = true,
   onSelectDay,
   onClearSelection,
 }: CalendarDayColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: dateKey, data: { type: "day", dateKey } });
+  const { setNodeRef, isOver } = useDroppable({
+    id: dateKey,
+    data: { type: "day", dateKey },
+    disabled:
+      activeDragId != null &&
+      isPoolPlacementDragId(activeDragId) &&
+      !acceptsPoolDrop,
+  });
   const [addOpen, setAddOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const day = parseISO(`${dateKey}T12:00:00`);
   const today = isToday(day);
   const hasPlannedSessions = sessions.length > 0;
   const activityDragActive = activeDragId?.startsWith("activity:") ?? false;
+  const poolSessionDropActive =
+    activeDragId != null &&
+    isPoolPlacementDragId(activeDragId) &&
+    !isPoolUnscheduledDrag(activeDragId);
   const workoutDragActive =
     activeDragId === ASSEMBLED_WORKOUT_DRAG_ID ||
-    (activeDragId != null && isSeasonPaletteDrag(activeDragId));
+    (activeDragId != null && isSeasonPaletteDrag(activeDragId)) ||
+    poolSessionDropActive;
+  const showSessionWorkoutDrop = workoutDragActive && acceptsPoolDrop;
 
   function openAdd() {
     onSelectDay();
@@ -151,7 +168,7 @@ export function CalendarDayColumn({
                 disciplineSettings={disciplineSettings}
                 isDragging={activeDragId === item.session.id}
                 showLinkDropTarget={activityDragActive}
-                showWorkoutDropTarget={workoutDragActive}
+                showWorkoutDropTarget={showSessionWorkoutDrop}
                 onDeleted={onSessionCreated}
                 onUpdated={onSessionCreated}
               />

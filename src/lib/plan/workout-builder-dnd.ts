@@ -106,3 +106,15 @@ export function parseWorkoutSessionDropId(id: string | number): string | null {
 export function isAssembledWorkoutDrag(id: string | number): boolean {
   return String(id) === ASSEMBLED_WORKOUT_DRAG_ID;
 }
+
+/** Drags that place pool content onto the calendar grid (subject to pool-week gating). */
+export function isPoolPlacementDragId(id: string | number): boolean {
+  const s = String(id);
+  return (
+    isPoolUnscheduledDrag(s) ||
+    isPoolArmedUnscheduledDrag(s) ||
+    isPoolSuggestedDrag(s) ||
+    isPoolLibraryDrag(s) ||
+    isAssembledWorkoutDrag(s)
+  );
+}

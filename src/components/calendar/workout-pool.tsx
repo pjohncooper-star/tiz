@@ -325,6 +325,9 @@ export type WorkoutPoolProps = {
   selectedDateKey: string | null;
   armedUnscheduled: Record<string, UnscheduledAttachment>;
   onClearArmedUnscheduled: (chipId: string) => void;
+  /** When set, show only skeleton (unscheduled) or build (suggested/library/TiZ) sections. */
+  activeTab?: "skeleton" | "build";
+  embedded?: boolean;
 };
 
 export function WorkoutPool({
@@ -336,6 +339,8 @@ export function WorkoutPool({
   selectedDateKey,
   armedUnscheduled,
   onClearArmedUnscheduled,
+  activeTab,
+  embedded = false,
 }: WorkoutPoolProps) {
   const unscheduled = useMemo(
     () => computeUnscheduledChips(weekStart, weekTarget, sessions),
@@ -364,29 +369,18 @@ export function WorkoutPool({
     setSuggestedOverrides((prev) => ({ ...prev, [next.id]: next }));
   }
 
-  return (
-    <aside className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Workout pool</h2>
-        {weekTarget.phase ? (
-          <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: weekTarget.phase.color }}
-              aria-hidden
-            />
-            {weekTarget.phase.name}
-          </span>
-        ) : null}
-      </div>
+  const showSkeleton = activeTab == null || activeTab === "skeleton";
+  const showBuild = activeTab == null || activeTab === "build";
 
-      <div className="space-y-4">
+  const inner = (
+    <div className="space-y-4">
+      {showSkeleton ? (
         <PoolSection
           title="Unscheduled"
           hint={
             selectedDateKey
-              ? "Drop a workout on a chip to place on the selected day, or drag a chip to another day."
-              : "Drop a workout on a chip, then drag it to a day — or select a day first for instant place."
+              ? "Drop a workout on a chip to place on the selected day, or drag a chip to a pool-week day."
+              : "Drag a chip to a day in the pool week — you'll pick a session role."
           }
         >
           {unscheduled.length > 0 ? (
@@ -405,11 +399,14 @@ export function WorkoutPool({
             <p className="text-[11px] text-zinc-500">All budgeted sessions are on the calendar.</p>
           )}
         </PoolSection>
+      ) : null}
 
-        <PoolSection
-          title="Suggested"
-          hint="Interval workouts from remaining hard-zone budget. Drag onto a day or session."
-        >
+      {showBuild ? (
+        <>
+          <PoolSection
+            title="Suggested"
+            hint="Interval workouts from remaining hard-zone budget. Drag onto a pool-week day or session."
+          >
           {hasSuggested ? (
             <div className="space-y-2">
               {weekTarget.byDiscipline.map((entry) => {
@@ -453,7 +450,7 @@ export function WorkoutPool({
 
         <PoolSection
           title="Library"
-          hint="Saved templates from your workout library. Drag onto a day or session."
+          hint="Saved templates from your workout library. Drag onto a pool-week day or empty session."
         >
           <PoolLibrarySection />
         </PoolSection>
@@ -465,7 +462,31 @@ export function WorkoutPool({
           weekStart={weekStart}
           currentWeekStart={currentWeekStart}
         />
+        </>
+      ) : null}
+    </div>
+  );
+
+  if (embedded) {
+    return inner;
+  }
+
+  return (
+    <aside className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h2 className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Workout pool</h2>
+        {weekTarget.phase ? (
+          <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: weekTarget.phase.color }}
+              aria-hidden
+            />
+            {weekTarget.phase.name}
+          </span>
+        ) : null}
       </div>
+      {inner}
     </aside>
   );
 }
