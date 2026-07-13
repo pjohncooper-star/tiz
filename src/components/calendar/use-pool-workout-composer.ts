@@ -168,22 +168,51 @@ export function usePoolWorkoutComposer(options: {
       }
 
       if (isAssembledWorkoutDrag(active.id)) {
-        const sessionId =
-          parseWorkoutSessionDropId(over.id) ??
-          (over.data.current?.type === "session-workout"
-            ? (over.data.current.sessionId as string)
-            : null);
-        if (!sessionId || mergedNodes.length === 0) return false;
-        const sessionDiscipline = over.data.current?.discipline as Discipline | undefined;
-        if (sessionDiscipline && sessionDiscipline !== discipline) {
-          alert("Workout discipline does not match session");
+        if (mergedNodes.length === 0) {
+          alert("Assemble a workout in the graph before dragging to a session.");
           return true;
         }
-        if (over.data.current?.source === "RACE") {
+
+        const overId = String(over.id);
+        const sessionId =
+          parseWorkoutSessionDropId(over.id) ??
+          (over.data.current?.type === "session-workout" ||
+          over.data.current?.type === "session-link"
+            ? (over.data.current.sessionId as string)
+            : null) ??
+          (overId.startsWith("link:") ? overId.slice("link:".length) : null);
+
+        if (!sessionId) {
+          if (over.data.current?.type === "day") {
+            alert(
+              "Drop onto an empty session card (same discipline), not the empty day area."
+            );
+          }
+          return true;
+        }
+
+        const overSession = over.data.current?.session as
+          | { discipline?: Discipline; source?: string; stepCount?: number }
+          | undefined;
+        const sessionDiscipline =
+          (over.data.current?.discipline as Discipline | undefined) ??
+          overSession?.discipline;
+        if (sessionDiscipline && sessionDiscipline !== discipline) {
+          alert(
+            `Workout is ${discipline}; that session is ${sessionDiscipline}. Switch the Build discipline filter to match.`
+          );
+          return true;
+        }
+        const source =
+          (over.data.current?.source as string | undefined) ?? overSession?.source;
+        if (source === "RACE") {
           alert("Cannot apply workout to a race session");
           return true;
         }
-        if (over.data.current?.hasStructuredWorkout) {
+        const hasStructured =
+          over.data.current?.hasStructuredWorkout === true ||
+          (overSession?.stepCount != null && overSession.stepCount > 0);
+        if (hasStructured) {
           alert("Remove the existing workout before applying a new one.");
           return true;
         }

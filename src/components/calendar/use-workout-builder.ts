@@ -129,8 +129,12 @@ export function useWorkoutBuilder(options: { onApplied?: () => void }) {
       if (isAssembledWorkoutDrag(active.id)) {
         const sessionId =
           parseWorkoutSessionDropId(over.id) ??
-          (over.data.current?.type === "session-workout"
+          (over.data.current?.type === "session-workout" ||
+          over.data.current?.type === "session-link"
             ? (over.data.current.sessionId as string)
+            : null) ??
+          (String(over.id).startsWith("link:")
+            ? String(over.id).slice("link:".length)
             : null);
         if (!sessionId || !selected) return false;
         const sessionDiscipline = over.data.current?.discipline as Discipline | undefined;

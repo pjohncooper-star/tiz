@@ -46,7 +46,7 @@ import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-z
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import type { SessionRole, Discipline } from "@prisma/client";
-import { isPoolPlacementDragId } from "@/lib/plan/workout-builder-dnd";
+import { isAssembledWorkoutDrag, isPoolPlacementDragId } from "@/lib/plan/workout-builder-dnd";
 import {
   parseActivityDragId,
   parseSessionLinkDropId,
@@ -283,7 +283,7 @@ export function PlanningCalendar({
     if (overData.type === "day") {
       return poolWeekAllowsDate(overData.dateKey as string | undefined);
     }
-    if (overData.type === "session-workout") {
+    if (overData.type === "session-workout" || overData.type === "session-link") {
       const sessionId = overData.sessionId as string | undefined;
       if (!sessionId) return false;
       const session = data.sessions.find((s) => s.id === sessionId);
@@ -527,6 +527,9 @@ export function PlanningCalendar({
       isPoolPlacementDragId(active.id) &&
       !poolAllowsOver(over.data.current as Record<string, unknown> | undefined)
     ) {
+      if (isAssembledWorkoutDrag(active.id)) {
+        alert("Drop onto a session in the highlighted pool week only.");
+      }
       return;
     }
 
