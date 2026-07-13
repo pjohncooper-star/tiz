@@ -19,6 +19,13 @@ import {
   validatePhaseKindDefaultsAgainstCatalog,
 } from "@/lib/plan/season/zone-focus-catalog";
 import type { Discipline } from "@prisma/client";
+import {
+  DEFAULT_ZONE_COUNT,
+  validateZoneBoundaries,
+  zoneBoundariesFor,
+} from "@/lib/zones/boundaries";
+import { parseZoneBoundaries } from "@/lib/zones/thresholds";
+
 const settingsSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
   primarySignal: z.enum(["POWER", "HEART_RATE", "PACE"]),
@@ -30,8 +37,9 @@ const thresholdSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
   signalType: z.enum(["POWER", "HEART_RATE", "PACE"]),
   thresholdValue: z.number().positive(),
-  zoneCount: z.number().int().min(3).max(7),
-  zoneBoundaries: z.array(z.number()),
+  zoneCount: z.number().int().min(3).max(7).optional(),
+  zoneBoundaries: z.array(z.number()).optional(),
+  resetZones: z.boolean().optional(),
   effectiveDate: z.string(),
   isEstimated: z.boolean(),
 });
@@ -234,20 +242,85 @@ export async function PUT(req: Request) {
   }
 
   if (body.type === "threshold") {
-    const data = thresholdSchema.parse(body.data);
-    await db.thresholdProfile.upsert({
-      where: {
-        athleteId_discipline_signalType_effectiveDate: {
+    try {
+      const data = thresholdSchema.parse(body.data);
+      const effectiveDate = new Date(data.effectiveDate);
+      const existing = await db.thresholdProfile.findUnique({
+        where: {
+          athleteId_discipline_signalType_effectiveDate: {
+            athleteId,
+            discipline: data.discipline,
+            signalType: data.signalType,
+            effectiveDate,
+          },
+        },
+      });
+
+      const zoneCount = data.zoneCount ?? existing?.zoneCount ?? DEFAULT_ZONE_COUNT;
+      let zoneBoundaries: number[];
+      if (data.resetZones) {
+        zoneBoundaries = zoneBoundariesFor(data.discipline, data.signalType);
+      } else if (data.zoneBoundaries != null) {
+        zoneBoundaries = data.zoneBoundaries;
+      } else if (existing?.zoneBoundaries != null) {
+        zoneBoundaries = parseZoneBoundaries(existing.zoneBoundaries);
+      } else {
+        // Prefer copying the latest profile's custom zones when creating a new dated row.
+        const latest = await db.thresholdProfile.findFirst({
+          where: {
+            athleteId,
+            discipline: data.discipline,
+            signalType: data.signalType,
+          },
+          orderBy: { effectiveDate: "desc" },
+        });
+        zoneBoundaries = latest?.zoneBoundaries
+          ? parseZoneBoundaries(latest.zoneBoundaries)
+          : zoneBoundariesFor(data.discipline, data.signalType);
+      }
+
+      const boundaryError = validateZoneBoundaries(zoneBoundaries, zoneCount);
+      if (boundaryError) {
+        return NextResponse.json({ error: boundaryError }, { status: 400 });
+      }
+
+      await db.thresholdProfile.upsert({
+        where: {
+          athleteId_discipline_signalType_effectiveDate: {
+            athleteId,
+            discipline: data.discipline,
+            signalType: data.signalType,
+            effectiveDate,
+          },
+        },
+        create: {
           athleteId,
           discipline: data.discipline,
           signalType: data.signalType,
-          effectiveDate: new Date(data.effectiveDate),
+          thresholdValue: data.thresholdValue,
+          isEstimated: data.isEstimated,
+          zoneCount,
+          zoneBoundaries,
+          effectiveDate,
         },
-      },
-      create: { athleteId, ...data, effectiveDate: new Date(data.effectiveDate) },
-      update: { ...data, effectiveDate: new Date(data.effectiveDate) },
-    });
-    return NextResponse.json({ ok: true });
+        update: {
+          thresholdValue: data.thresholdValue,
+          isEstimated: data.isEstimated,
+          zoneCount,
+          zoneBoundaries,
+          effectiveDate,
+        },
+      });
+      return NextResponse.json({ ok: true, zoneBoundaries, zoneCount });
+    } catch (error) {
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid threshold"
+          : error instanceof Error
+            ? error.message
+            : "Could not save threshold";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
   }
 
   if (body.type === "complete-thresholds") {

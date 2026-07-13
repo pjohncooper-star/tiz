@@ -145,7 +145,11 @@ export function resolveSwimIntervalPaceSeconds(
       : FALLBACK_SWIM_PACE_SECONDS;
   const zone = targetZoneFromTargetLocal(set.target);
   if (zone >= 1) {
-    const pace = paceSecondsAtZoneMidpoint(zone, threshold, zoneBoundariesFor("PACE"));
+    const pace = paceSecondsAtZoneMidpoint(
+      zone,
+      threshold,
+      zoneBoundariesFor("SWIM", "PACE")
+    );
     if (pace > 0) return pace;
   }
   return threshold;

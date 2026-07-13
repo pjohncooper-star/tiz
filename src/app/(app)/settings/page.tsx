@@ -131,7 +131,7 @@ export default async function SettingsPage() {
         </ul>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <Link href="/onboarding/thresholds" className="text-sky-600 hover:underline">
-            Edit current thresholds
+            Edit current thresholds & zone boundaries
           </Link>
           <Link href="/onboarding/threshold-history" className="text-sky-600 hover:underline">
             Threshold & primary metric history

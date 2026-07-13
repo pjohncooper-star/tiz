@@ -1,10 +1,19 @@
 import type { Discipline, SignalType } from "@prisma/client";
+import {
+  zoneBoundariesFor,
+  type ZoneBoundaryKey,
+  DEFAULT_ZONE_BOUNDARIES_BY_KEY,
+} from "@/lib/zones/boundaries";
 
+/** @deprecated Use zoneBoundariesFor(discipline, signalType). */
 export const DEFAULT_ZONE_BOUNDARIES: Record<SignalType, number[]> = {
-  POWER: [55, 75, 90, 105, 120],
-  HEART_RATE: [68, 83, 94, 100, 106],
-  PACE: [90, 97, 100, 110, 120],
+  POWER: zoneBoundariesFor("BIKE", "POWER"),
+  HEART_RATE: zoneBoundariesFor("BIKE", "HEART_RATE"),
+  PACE: zoneBoundariesFor("RUN", "PACE"),
 };
+
+export { zoneBoundariesFor, DEFAULT_ZONE_BOUNDARIES_BY_KEY };
+export type { ZoneBoundaryKey };
 
 export const DEFAULT_DISCIPLINE_SIGNALS: Record<
   Discipline,

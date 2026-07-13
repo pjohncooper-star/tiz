@@ -10,7 +10,6 @@ import {
   paceInputLabel,
   thresholdPaceToInput,
 } from "@/lib/units/pace";
-import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { signalLabel } from "@/lib/zones/display";
 
 type ThresholdRow = {
@@ -179,10 +178,8 @@ export default function ThresholdHistoryStep() {
               discipline,
               signalType,
               thresholdValue: parseRowValue(row.value),
-              zoneCount: 5,
-              zoneBoundaries: zoneBoundariesFor(
-                signalType as "POWER" | "HEART_RATE" | "PACE"
-              ),
+              // Omit zoneBoundaries so the API preserves custom cutoffs from the
+              // latest profile (or applies discipline/signal defaults when none exist).
               effectiveDate: row.effectiveDate,
               isEstimated: true,
             },
