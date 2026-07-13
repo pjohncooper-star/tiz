@@ -1,5 +1,7 @@
 # Plan wizard UI — implementation plan (v2)
 
+> **Legacy doc.** The **simple season planner** at `/plan` is the primary UX. The advanced wizard and **anchor workouts** have been **removed** from the product. See [season-planner-unified-plan.md](./season-planner-unified-plan.md). Step 3 anchor/`AnchorEditor` items below are historical.
+
 Execute after wireframe + screen spec approval. **Do not** edit `.cursor/plans/` mockup file.
 
 **References:**
@@ -17,7 +19,7 @@ Execute after wireframe + screen spec approval. **Do not** edit `.cursor/plans/`
 | 0 | `SeasonSetupStep` | step 0 |
 | 1 | `CycleStructureStep` | step 1 (master–detail) |
 | 2 | `GoalsTrainingDaysStep` | old 3 + session counts from old 5 |
-| 3 | `WorkoutsTemplatesStep` | anchors from old 5 + template link |
+| 3 | `WorkoutsTemplatesStep` | ~~anchors~~ template link + layout (future) |
 | 4 | `VolumeRampDeloadStep` | old 2 + old 4 |
 
 **V2 later:** `ZoneAllocationStep` — new schema/UI for per-discipline zone minutes.
@@ -47,7 +49,7 @@ flowchart TB
 | **PR 1** | Remap `SETUP_STEPS`, `SETTINGS_SECTIONS`, `saveStep` indices; extract step components (behavior unchanged, new order) |
 | **PR 2** | Step 1 master–detail cycle UI |
 | **PR 3** | Step 2 goals + training days table |
-| **PR 4** | Step 3: anchors + scope toggle; template **link-only** (P0) |
+| **PR 4** | Step 3: template **link-only** (P0); ~~anchors~~ removed |
 | **PR 5** | Step 4: volume + deload layout (hours only; P1 adds discipline/distance) |
 | **PR 7** | P1: per-discipline hours + distance volume + pace/speed rollup |
 | **PR 8** | P1+: weekly template preview / season layout (after strategy doc) |
@@ -76,7 +78,7 @@ export const SETUP_STEPS = [
 | 0 | step 0 (unchanged) |
 | 1 | mesocycleLengthWeeks, phases (structure) |
 | 2 | phases (focus + swim/bike/run sessions) |
-| 3 | anchors via existing API (no season patch unless needed) |
+| 3 | template link only (no season patch); ~~anchors API~~ removed |
 | 4 | volume + deload + long flags + phases volume fields + setupComplete |
 
 ### Files
@@ -114,10 +116,10 @@ Unchanged from v1 plan: `CycleStructurePreview` + phase list + detail pane.
 
 | Feature | P0 | P1+ |
 |---------|----|-----|
-| Scope toggle season / phase | Yes | — |
-| `AnchorEditor` per scope | Yes | — |
+| ~~Scope toggle season / phase~~ | — | — |
+| ~~`AnchorEditor` per scope~~ | — | — |
 | Link “Edit weekly template” → `/calendar/template` | Yes | — |
-| Explain anchors vs template (copy) | Yes | — |
+| Explain template vs phase layout (copy) | Yes | — |
 | Read-only template preview | — | Optional |
 | Import preset → phase layout | — | P1 |
 | Season phase layout editor | — | P2 |
@@ -184,7 +186,7 @@ Sections (collapsibles):
 1. `npm test` / `npm run build`
 2. Full wizard 0→4 save on fresh season
 3. Settings sections match wizard layouts
-4. Anchors created on step 3 persist and respect phase scope
+4. ~~Anchors on step 3~~ — removed; template link and (future) phase layout only
 5. De-load flags + volume curve unchanged numerically (regression)
 
 ---

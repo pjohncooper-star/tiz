@@ -1,6 +1,6 @@
 # Calendar workout pool — V2 spec
 
-**Status:** Direction doc (not implemented). Complements [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md).
+**Status:** V2a–V2c **shipped** on production. Complements [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md). Planner context: [season-planner-unified-plan.md](./season-planner-unified-plan.md).
 
 **Confirmed UX:** Workout pool lives in a **left sidebar** on the calendar week view. **Session role** uses enum `easy | moderate | intensity | long` (not a boolean intensity flag). Tabs vs single scrollable list — **TBD**.
 
@@ -23,12 +23,13 @@ The **workout pool** sidebar is the hub for (1) and (2); TiZ assignment happens 
 ```
 ┌──────────────────┬─────────────────────────────────────────────┐
 │  Workout pool    │  Week grid (Mon–Sun)                        │
-│  (left sidebar)  │  · Scheduled sessions (layout + anchors)    │
-│                  │  · sessionRole visual (intensity, long)     │
+│  (left sidebar)  │  · Manual + template sessions               │
+│                  │  · sessionRole badges (intensity, long)     │
 │  ─ Unscheduled ─ │  · Drop targets for pool items              │
 │  Swim ×1         │                                             │
 │  Bike ×1         │                                             │
-│                  │                                             │
+│  ─ Suggested ─   │                                             │
+│  [interval cards]│                                             │
 │  ─ Library ─     │                                             │
 │  [folder tree]   │                                             │
 │                  │                                             │
@@ -38,6 +39,19 @@ The **workout pool** sidebar is the hub for (1) and (2); TiZ assignment happens 
 ```
 
 Sidebar is **week-scoped**: switching calendar weeks updates unscheduled counts, library context, and week zone rollup.
+
+---
+
+## Planner inputs (simple `/plan`)
+
+| Planner source | Field | Pool use |
+|----------------|-------|----------|
+| **Phases** (active week) | `swim/bike/runSessionsPerWeek`, `strengthSessionsPerWeek` | Unscheduled chip counts |
+| **Phases** | `swim/bike/runIntenseDaysPerWeek` | Split remaining Z3–Z5 across N **Suggested** cards |
+| **Phases** | `zoneSplits` (Z1–Z5 % per discipline) | Drives `SeasonWeek.zoneMinutes` after recompute |
+| **Phase kind zone defaults** | Defaults by Base / Build / … | Seeds phase splits |
+| **Settings → Zone focus** | Focus library presets | Labels and default percents for splits |
+| **Ramp defaults + weekly volume** | Hours per discipline; `isRestWeek` | Scales zone totals; de-load adjustment on rest weeks |
 
 ---
 
@@ -52,6 +66,8 @@ Derived from `SeasonWeek` session counts minus scheduled `PlannedSession` per di
 | Source | `max(0, budget − scheduled)` per discipline |
 | Placement | Drag chip onto a day column → creates flexible session (or fills empty layout slot) |
 | After place | Chip count decrements; session may still need workout + TiZ |
+
+**Scheduled sessions** on the calendar (all non-race `PlannedSession` sources—flexible, template, layout, or legacy rows) count toward the unscheduled budget. Races are excluded.
 
 Unscheduled items are **intentionally vague** (“1 swim”) until the athlete assigns structure and targets.
 
@@ -74,7 +90,7 @@ Structured workouts may **bring their own** implied TiZ from step rollup; user c
 
 Rollup of `targetZones` across scheduled sessions in the week vs `SeasonWeek.zoneMinutes` (or V2 custom zone allocation). Read-only progress in V2a; interactive “distribute remaining Z2” in later iteration.
 
-**Today:** `week-summary.ts` + session `targetZones`; season `zoneMinutes` on `SeasonWeek` from `focus-tiz.ts`. V2 zone allocation step would feed the week budget explicitly.
+**Today:** `week-summary.ts` + session `targetZones`; season `zoneMinutes` on `SeasonWeek` from zone split percents. V2 zone allocation step would feed the week budget explicitly.
 
 ---
 
@@ -95,16 +111,16 @@ V2 zone allocation wizard step would set **week-level** zone minutes by discipli
 
 ---
 
-## Intensity days on phase layout (wizard → calendar)
+## Intensity days on phase layout (planner → calendar)
 
-Phase layout slots (and optionally anchors) carry a **session role** flag — not a full zone prescription, but a planning hint:
+Phase layout slots carry a **session role** flag — not a full zone prescription, but a planning hint:
 
 | Role | Meaning | Calendar UX | Default TiZ skew |
 |------|---------|-------------|------------------|
 | `easy` | Recovery / aerobic | Normal card | Z1–2 |
 | `moderate` | Steady endurance | Normal card | Z2 |
 | **`intensity`** | **Zone 3+ expected** | **Visual flag** (accent border, bolt icon, etc.) | Z3–5 |
-| `long` | Long aerobic | Long badge | Z2 (+ duration from step 4 ramp) |
+| `long` | Long aerobic | Long badge | Z2 (+ duration from ramp) |
 
 **User language:** “Intensity day” = this weekday/discipline slot is where hard work belongs.
 
@@ -126,9 +142,7 @@ sessionRole: "easy" | "moderate" | "intensity" | "long"  // default "moderate"
 
 **Confirmed:** use this enum (not `isIntensityDay` boolean) so **long** sessions get distinct handling from **intensity** (Z3+) days.
 
-Anchors may reuse `sessionRole` or infer `long` from duration/title when not set explicitly.
-
-### Wizard step 3 (P2+)
+### Phase layout editor (future)
 
 Phase layout editor: toggle **intensity day** per slot (checkbox or role dropdown). No validation against zone allocation — same philosophy as session counts.
 
@@ -158,26 +172,28 @@ Phase layout editor: toggle **intensity day** per slot (checkbox or role dropdow
 
 ---
 
-## Relation to wizard steps
+## Relation to planner
 
-| Wizard | Feeds pool |
-|--------|------------|
-| Step 2 | Unscheduled **counts** (session budget) |
-| Step 3 | **Grid** + **intensity flags** + anchors |
-| Step 4 | Duration hints, long session tiers |
-| V2 zones | Week TiZ **budget** in sidebar footer |
+| Planner | Feeds pool |
+|---------|------------|
+| Phases (sessions/week) | Unscheduled **counts** (session budget) |
+| Phase layout (future) | **Grid** + **sessionRole** flags |
+| Weekly volume + zone splits | Week TiZ **budget** in sidebar footer |
 
 ---
 
 ## Phased delivery
 
-| Phase | Scope |
-|-------|--------|
-| **V2a** | Sidebar: unscheduled chips; drag to day; week count math |
-| **V2b** | Library browse in sidebar; drag template to day |
-| **V2c** | Layout `sessionRole` + intensity visual on calendar; default TiZ on materialize |
-| **V2d** | TiZ assign UI in pool placement flow; week zone budget vs actual |
-| **V2e** | Zone allocation wizard + distribute week zones to sessions |
+| Phase | Scope | Status |
+|-------|--------|--------|
+| **V2a** | Sidebar: unscheduled chips; drag to day; week count math | **Shipped** |
+| **V2b** | Library browse in sidebar; drag template to day | **Shipped** |
+| **V2b+** | Unscheduled + library/suggested combo drops | **Shipped** |
+| **V2c** | Layout `sessionRole` + intensity visual on calendar | **Shipped** |
+| **V2d** | Library/suggested filtered by selected day + `sessionRole` | Next |
+| **V2e** | Session `targetZones` from role + week zone splits on placement | Next |
+| **V2f** | Phase week layout + `materializeSeasonWeek` (layout only) | Next |
+| **V2g** | Long-session hints (needs planner long-session fields on week targets) | Backlog |
 
 ---
 

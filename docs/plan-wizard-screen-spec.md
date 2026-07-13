@@ -1,6 +1,8 @@
 # Plan wizard — screen spec (v2)
 
-User-directed flow after cycle structure: **goals & days → workouts/anchors → volume/ramp/de-load**. Zone allocation deferred to V2.
+> **Legacy doc.** The advanced 5-step wizard and **anchor workouts** have been **removed** from the product. Content below is historical. See [season-planner-unified-plan.md](./season-planner-unified-plan.md).
+
+User-directed flow after cycle structure: **goals & days → workouts/templates → volume/ramp/de-load**. Zone allocation is in the simple planner week table.
 
 **Wireframe:** [plan-wizard-wireframe.canvas.tsx](file:///C:/Users/pjohn/.cursor/projects/c-Users-pjohn-TiZ/canvases/plan-wizard-wireframe.canvas.tsx)
 
@@ -87,32 +89,30 @@ Same as v1 spec: timeline + master–detail phase/mesocycle editor.
 
 ## Step 3 — Workouts & templates (P0)
 
-**Purpose:** Define recurring anchor workouts and (later) per-phase week layout. Long-term: season-owned layout; athlete weekly template is import-only.
+> **Historical:** Anchor workouts and `AnchorEditor` were removed from the product along with the advanced wizard. The north star is **phase layout** in the simple planner (see [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md)).
+
+**Purpose:** Link to athlete weekly template; (future) per-phase week layout in simple planner. Season-owned layout; athlete weekly template is import-only.
 
 **Layout:**
 
 | Zone | Content |
 |------|---------|
-| Scope | Segmented: **Whole season** \| **Per phase** (select phase when per-phase) |
-| Primary | `AnchorEditor` list — title, discipline, weekday, duration, effective dates, `respectTaper`, optional `workoutTemplateId` |
-| Secondary (collapsible) | Link to athlete weekly template on calendar; **P1+:** “Import preset” into phase layout |
+| ~~Primary~~ | ~~`AnchorEditor`~~ — **removed** |
+| Primary | Link to athlete weekly template on calendar (`/calendar/template`) |
+| **P1+** | “Import preset” into phase layout (simple planner) |
 
 **P0 — Athlete weekly template:**
-- Link only: “Edit weekly template on calendar →” (`/calendar/template`) for off-season / preset editing.
-- Layout on the season is **not** validated against step 2 session budgets.
+- Link only: “Edit weekly template on calendar →” for preset editing.
+- Layout on the season is **not** validated against session budgets.
 
 **P1+ — Season phase layout:**
-- Week grid editor per `SeasonPhase` (option 2 in [strategy doc](./plan-wizard-weekly-template-strategy.md)).
-- Per-slot **session role** enum: `easy` | `moderate` | `intensity` | `long` — distinct handling for Z3+ vs long aerobic; visual on calendar V2c.
-- Import copies athlete template into phase layout; no mismatch badges vs step 2.
+- Week grid editor per `SeasonPhase` in simple planner Phases pane.
+- Per-slot **session role** enum — visual on calendar (V2c shipped).
+- Import copies athlete template into phase layout.
 
-**V2 calendar:** Sidebar **workout pool** — unscheduled chips + structured library + TiZ assignment. Layout slots may flag **intensity days** (Z3+). [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
-
-**Save:** Anchor CRUD via existing `/api/plan/anchors` (already on `AnchorEditor`).
+**Calendar (shipped):** Sidebar **workout pool** — unscheduled + suggested + library. [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
 
 **Gating:** Requires `seasonId` — steps 0–1 already persist plan before step 3.
-
-**OOS P0:** Embedded template editor, auto calendar fill for full season, phase-scoped template schema.
 
 ---
 
@@ -168,7 +168,7 @@ Presets + `LongSessionWeekChart`.
 
 - [ ] Step order 2 → 3 → 4 matches coaching mental model
 - [ ] Days per discipline on step 2 (not step 5)
-- [ ] Anchors step 3 with season vs phase scope
+- [x] ~~Anchors step 3~~ — removed; template link + future phase layout on step 3
 - [x] Per-discipline hours — P1
 - [x] Distance volume + pace rollup — P1
 - [x] Weekly layout: option 2 — season-owned; unscheduled workouts on calendar V2
