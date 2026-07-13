@@ -447,6 +447,82 @@ function DurationEditorInput({
   );
 }
 
+/** Local text while typing — parsePaceInput needs full mm:ss, so controlled
+ * canonical formatting on every keystroke made pace fields look locked. */
+function PaceEditorInput({
+  seconds,
+  discipline,
+  displayUnit,
+  poolSize,
+  onCommit,
+  label,
+  ariaLabel,
+  placeholder = "5:00",
+}: {
+  seconds: number | null | undefined;
+  discipline: PlanDiscipline;
+  displayUnit: DisplayUnit;
+  poolSize: PoolSize | null;
+  onCommit: (seconds: number) => void;
+  label?: string;
+  ariaLabel?: string;
+  placeholder?: string;
+}) {
+  const formatted = stepPaceCanonicalToInput(seconds, discipline, displayUnit, poolSize);
+  const [text, setText] = useState(formatted);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(formatted);
+  }, [formatted, focused]);
+
+  function commit(raw: string, normalize: boolean) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      if (normalize) setText(formatted);
+      return;
+    }
+    const pace = stepPaceInputToCanonical(trimmed, discipline, displayUnit, poolSize);
+    if (pace != null) {
+      onCommit(pace);
+      if (normalize) {
+        setText(stepPaceCanonicalToInput(pace, discipline, displayUnit, poolSize));
+      }
+      return;
+    }
+    if (normalize) setText(formatted);
+  }
+
+  const input = (
+    <Input
+      value={text}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => {
+        const next = e.target.value;
+        setText(next);
+        commit(next, false);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        commit(text, true);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+    />
+  );
+
+  if (!label) return input;
+  return (
+    <div className="min-w-0">
+      <Label>{label}</Label>
+      {input}
+    </div>
+  );
+}
+
 function StepDurationInput({
   duration,
   lengthView,
@@ -938,71 +1014,51 @@ function StepTargetField({
         <div className="min-w-0">
           <Label>{label} range</Label>
           <div className="grid grid-cols-2 gap-1">
-            <Input
-              value={stepPaceCanonicalToInput(low, planDiscipline, displayUnit, poolSize)}
-              aria-label="Fast pace"
-              onChange={(e) => {
-                const pace = stepPaceInputToCanonical(
-                  e.target.value,
-                  planDiscipline,
-                  displayUnit,
-                  poolSize
-                );
-                if (pace) {
-                  onChange({
-                    target: { signal: "pace", mode: "range", low: pace, high },
-                  });
-                }
-              }}
+            <PaceEditorInput
+              seconds={low}
+              discipline={planDiscipline}
+              displayUnit={displayUnit}
+              poolSize={poolSize}
+              ariaLabel="Fast pace"
               placeholder="Fast"
+              onCommit={(pace) =>
+                onChange({
+                  target: { signal: "pace", mode: "range", low: pace, high },
+                })
+              }
             />
-            <Input
-              value={stepPaceCanonicalToInput(high, planDiscipline, displayUnit, poolSize)}
-              aria-label="Slow pace"
-              onChange={(e) => {
-                const pace = stepPaceInputToCanonical(
-                  e.target.value,
-                  planDiscipline,
-                  displayUnit,
-                  poolSize
-                );
-                if (pace) {
-                  onChange({
-                    target: { signal: "pace", mode: "range", low, high: pace },
-                  });
-                }
-              }}
+            <PaceEditorInput
+              seconds={high}
+              discipline={planDiscipline}
+              displayUnit={displayUnit}
+              poolSize={poolSize}
+              ariaLabel="Slow pace"
               placeholder="Slow"
+              onCommit={(pace) =>
+                onChange({
+                  target: { signal: "pace", mode: "range", low, high: pace },
+                })
+              }
             />
           </div>
         </div>
       );
     }
     return (
-      <div className="min-w-0">
-        <Label>{label}</Label>
-        <Input
-          value={stepPaceCanonicalToInput(
-            step.targetPaceSeconds,
-            planDiscipline,
-            displayUnit,
-            poolSize
-          )}
-          onChange={(e) => {
-            const pace = stepPaceInputToCanonical(
-              e.target.value,
-              planDiscipline,
-              displayUnit,
-              poolSize
-            );
-            onChange({
-              target: { signal: "pace", mode: "value" },
-              ...(pace ? { targetPaceSeconds: pace } : {}),
-            });
-          }}
-          placeholder="5:00"
-        />
-      </div>
+      <PaceEditorInput
+        seconds={step.targetPaceSeconds}
+        discipline={planDiscipline}
+        displayUnit={displayUnit}
+        poolSize={poolSize}
+        label={label}
+        placeholder="5:00"
+        onCommit={(pace) =>
+          onChange({
+            target: { signal: "pace", mode: "value" },
+            targetPaceSeconds: pace,
+          })
+        }
+      />
     );
   }
 
@@ -1390,78 +1446,54 @@ function NodeEditor({
         )}
         {targetView === "pace_power" && (discipline === "RUN" || discipline === "SWIM") && (
           <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <Label>Start pace</Label>
-              <Input
-                value={stepPaceCanonicalToInput(
-                  step.target.low,
-                  discipline as PlanDiscipline,
-                  displayUnit,
-                  poolSize
-                )}
-                onChange={(e) => {
-                  const pace = stepPaceInputToCanonical(
-                    e.target.value,
-                    discipline as PlanDiscipline,
-                    displayUnit,
-                    poolSize
-                  );
-                  if (pace) {
-                    onTreeChange((nodes) =>
-                      updateAtPath(nodes, path, (n) =>
-                        n.kind === "ramp"
-                          ? {
-                              ...n,
-                              target: {
-                                signal: "pace",
-                                mode: "range",
-                                low: pace,
-                                high: n.target.high,
-                              },
-                            }
-                          : n
-                      )
-                    );
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <Label>End pace</Label>
-              <Input
-                value={stepPaceCanonicalToInput(
-                  step.target.high,
-                  discipline as PlanDiscipline,
-                  displayUnit,
-                  poolSize
-                )}
-                onChange={(e) => {
-                  const pace = stepPaceInputToCanonical(
-                    e.target.value,
-                    discipline as PlanDiscipline,
-                    displayUnit,
-                    poolSize
-                  );
-                  if (pace) {
-                    onTreeChange((nodes) =>
-                      updateAtPath(nodes, path, (n) =>
-                        n.kind === "ramp"
-                          ? {
-                              ...n,
-                              target: {
-                                signal: "pace",
-                                mode: "range",
-                                low: n.target.low,
-                                high: pace,
-                              },
-                            }
-                          : n
-                      )
-                    );
-                  }
-                }}
-              />
-            </div>
+            <PaceEditorInput
+              seconds={step.target.low}
+              discipline={discipline as PlanDiscipline}
+              displayUnit={displayUnit}
+              poolSize={poolSize}
+              label="Start pace"
+              onCommit={(pace) =>
+                onTreeChange((nodes) =>
+                  updateAtPath(nodes, path, (n) =>
+                    n.kind === "ramp"
+                      ? {
+                          ...n,
+                          target: {
+                            signal: "pace",
+                            mode: "range",
+                            low: pace,
+                            high: n.target.high,
+                          },
+                        }
+                      : n
+                  )
+                )
+              }
+            />
+            <PaceEditorInput
+              seconds={step.target.high}
+              discipline={discipline as PlanDiscipline}
+              displayUnit={displayUnit}
+              poolSize={poolSize}
+              label="End pace"
+              onCommit={(pace) =>
+                onTreeChange((nodes) =>
+                  updateAtPath(nodes, path, (n) =>
+                    n.kind === "ramp"
+                      ? {
+                          ...n,
+                          target: {
+                            signal: "pace",
+                            mode: "range",
+                            low: n.target.low,
+                            high: pace,
+                          },
+                        }
+                      : n
+                  )
+                )
+              }
+            />
           </div>
         )}
         </div>
