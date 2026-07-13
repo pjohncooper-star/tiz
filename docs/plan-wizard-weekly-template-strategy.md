@@ -1,6 +1,8 @@
 # Weekly template vs anchors — strategy (step 3)
 
-**Status:** **Option 2 confirmed** — season plan owns week layout per phase. Layout is **not** validated against step 2 days-per-discipline; gaps surface as **unscheduled workouts** on the calendar (V2).
+**Status:** Layout strategy unchanged (option 2). **Planner unification finalized** — anchors live in `/plan`; see [season-planner-unified-plan.md](./season-planner-unified-plan.md). Pool spec: [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md).
+
+**Option 2 confirmed** — season plan owns week layout per phase. Gaps → unscheduled workouts on calendar (**shipped**).
 
 **Related:** [plan-wizard-screen-spec.md](./plan-wizard-screen-spec.md) step 3 · [plan-wizard-implementation-plan.md](./plan-wizard-implementation-plan.md) PR 4
 
