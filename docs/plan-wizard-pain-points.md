@@ -1,5 +1,7 @@
 # Plan wizard — pain points & proposed flow
 
+**Note (July 2026):** The **simple season planner** at `/plan` is now the primary planning surface. Session counts, intense days, volume, and zone minutes are configured there. The v2 wizard flow below describes the **advanced wizard** (`/plan/setup`) for optional power-user settings. See [season-planner-unified-plan.md](./season-planner-unified-plan.md).
+
 Baseline audit of live wizard in [`season-settings-panels.tsx`](../src/components/season/season-settings-panels.tsx).
 
 **Wireframe v2** reflects user-directed step order (July 2026). v1 wireframe reordered layout only; v2 reorders *what you configure when*.
@@ -29,7 +31,7 @@ flowchart LR
 | **2** | Phase goals & training days | **Per phase (cycle):** training focus/goals + **days per discipline** (swim/bike/run frequency) |
 | **3** | Workouts & templates | **P0:** anchors. **P1+:** season phase layout (import from athlete template). **V2 calendar:** unscheduled workouts when budget > scheduled |
 | **4** | Volume, ramp & de-load | **P0:** weekly hours, phase ramp, long sessions, de-load. **P1:** per-discipline hours; distance volume with pace/speed → duration rollup |
-| **V2** | Zone allocation | **Hours/minutes by zone per discipline** — replaces implicit focus→TIZ presets as primary UX |
+| **5** | Zone allocation by discipline | **Shipped in simple planner** (zone ramp defaults + week table pills); optional wizard step later |
 
 ### Why this order
 
@@ -37,7 +39,7 @@ flowchart LR
 2. **Intent & frequency** — what each block is for and how many swim/bike/run days before picking specific workouts.
 3. **Anchors/templates** — concrete recurring sessions that fill those days.
 4. **Load** — how much volume, how it ramps, when to de-load (depends on structure + session picture).
-5. **Zones** — finer distribution once volume by discipline exists (V2).
+5. **Zones** — explicit per-week zone minutes in simple planner (**shipped**); advanced focus→TIZ presets remain for legacy wizard only.
 
 ### Mapping from current (6-step) wizard
 
@@ -60,7 +62,7 @@ flowchart LR
 | **Density** | Step 4 (old) crowded; v2 splits anchors and merges deload with volume in one *thematic* step with collapsibles. |
 | **Anchors buried** | Anchors only on step 5 after season exists; v2 promotes to dedicated step 3. |
 | **Weekly template** | Athlete template on calendar = import preset; **season phase layout** owns the grid; gaps → unscheduled workouts (V2 calendar). |
-| **Zone UX** | Today: `focus-tiz` presets from phase focus at recompute time; user wants explicit zone allocation by discipline (V2). |
+| Zone UX | Simple planner: zone ramp defaults + week table pills (`simple-tiz`). Advanced: `focus-tiz` presets at recompute — **not used for calendar** when simple planner is active. |
 | **Dead settings** | `maxRampPercent` hidden and unused — remove from UI permanently. |
 
 ---
@@ -104,4 +106,4 @@ Session counts are really **days per discipline**; anchors mixed with frequency 
 | Per-discipline hours (step 4) | **P1** |
 | Distance-based volume (step 4) | **P1** — use avg pace/speed to convert distance ramps → weekly duration |
 | Weekly template (step 3) | **Option 2** — season phase layout; no budget validation; V2 unscheduled on calendar |
-| Zone allocation | **V2** |
+| Zone allocation | **Shipped in simple planner** |

@@ -1,6 +1,8 @@
 # Plan wizard — screen spec (v2)
 
-User-directed flow after cycle structure: **goals & days → workouts/anchors → volume/ramp/de-load**. Zone allocation deferred to V2.
+**Note (July 2026):** Default athletes use the **simple planner** at `/plan` (collapsible sections). This spec describes the **advanced wizard** steps, still available via “Advanced settings” when `FEATURE_ADVANCED_SEASON_PLANNER=true`. Canonical unified roadmap: [season-planner-unified-plan.md](./season-planner-unified-plan.md).
+
+User-directed flow after cycle structure: **goals & days → workouts/anchors → volume/ramp/de-load**. Zone allocation is in the **simple planner week table**, not a separate wizard step.
 
 **Wireframe:** [plan-wizard-wireframe.canvas.tsx](file:///C:/Users/pjohn/.cursor/projects/c-Users-pjohn-TiZ/canvases/plan-wizard-wireframe.canvas.tsx)
 
@@ -18,7 +20,9 @@ Legend: **P0** v1 redesign · **P1** follow-up · **V2** later · **OOS** out of
 | 3 | Workouts & templates | `Workouts & templates` |
 | 4 | Volume, ramp & de-load | `Volume, ramp & de-load` |
 
-**V2 (post-setup):** Zone allocation by discipline — new settings section or step 5 when ready.
+**V2 (post-setup):** Zone minutes by discipline — **shipped in simple planner** (zone ramp defaults + week table). Optional wizard step 5 for advanced-only path.
+
+**Simple planner mapping:** Step 0 → Season + Races · Step 1 → Timeline + Phases · Step 2 → Phases pane · Step 4 → Ramp defaults + Weekly volume.
 
 ---
 
@@ -75,11 +79,11 @@ Same as v1 spec: timeline + master–detail phase/mesocycle editor.
 | Bike days | 0–7 int | `bikeSessionsPerWeek` |
 | Run days | 0–7 int | `runSessionsPerWeek` |
 
-**Helper:** “Weekly session **budget** per discipline — you’ll place workouts on the calendar later; unscheduled sessions show there if the week isn’t full.”
+**Helper:** “Weekly session **budget** per discipline — unscheduled sessions show in the **calendar workout pool** when the week isn’t full.” (Also editable in **simple planner → Phases**.)
 
 **Save:** `phases` (focus + session counts).
 
-**OOS v1:** Zone % columns (→ V2). **No validation** that step 3 layout matches these counts.
+**OOS v1:** Zone % columns in this wizard table — use simple planner week zone pills instead. **No validation** that layout matches these counts.
 
 **Error:** Days sum unusually high → soft warning only.
 
@@ -101,12 +105,13 @@ Same as v1 spec: timeline + master–detail phase/mesocycle editor.
 - Link only: “Edit weekly template on calendar →” (`/calendar/template`) for off-season / preset editing.
 - Layout on the season is **not** validated against step 2 session budgets.
 
-**P1+ — Season phase layout:**
-- Week grid editor per `SeasonPhase` (option 2 in [strategy doc](./plan-wizard-weekly-template-strategy.md)).
-- Per-slot **session role** enum: `easy` | `moderate` | `intensity` | `long` — distinct handling for Z3+ vs long aerobic; visual on calendar V2c.
-- Import copies athlete template into phase layout; no mismatch badges vs step 2.
+**P1+ — Season phase layout (simple planner, not wizard-only):**
 
-**V2 calendar:** Sidebar **workout pool** — unscheduled chips + structured library + TiZ assignment. Layout slots may flag **intensity days** (Z3+). [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
+- Week grid editor per `SeasonPhase` under **Phases** on `/plan` ([strategy doc](./plan-wizard-weekly-template-strategy.md))
+- Per-slot **session role** enum: `easy` | `moderate` | `intensity` | `long`
+- Import copies athlete template into phase layout; no mismatch badges vs session budget
+
+**Calendar (shipped):** Sidebar **workout pool** — unscheduled + suggested + library + sessionRole visuals. [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
 
 **Save:** Anchor CRUD via existing `/api/plan/anchors` (already on `AnchorEditor`).
 
@@ -152,15 +157,13 @@ Presets + `LongSessionWeekChart`.
 
 ---
 
-## V2 — Zone allocation by discipline (OOS v1)
+## V2 — Zone allocation by discipline
 
-**Purpose:** Explicit Z1–Z5 (or zone minutes) per discipline per phase or week — replaces or supplements focus→TIZ preset.
+**Status (unified path):** **Shipped** in simple planner — `Zone ramp defaults` section + editable zone pills on each week row. Depends on step 4 volume hours (simple ramp).
 
-**Depends on:** Step 4 per-discipline volume hours.
+**Advanced wizard:** Optional step 5 later; until then `focus-tiz.ts` applies to advanced-only editing paths.
 
-**Surface:** New settings section + optional wizard step 5 later.
-
-**Today:** [`focus-tiz.ts`](../src/lib/plan/season/focus-tiz.ts) derives zones from `phaseFocus`; keep until V2 ships.
+**Today:** Calendar reads `SeasonWeek.zoneMinutes` from simple planner save, not `focus-tiz` presets.
 
 ---
 
@@ -171,6 +174,6 @@ Presets + `LongSessionWeekChart`.
 - [ ] Anchors step 3 with season vs phase scope
 - [x] Per-discipline hours — P1
 - [x] Distance volume + pace rollup — P1
-- [x] Weekly layout: option 2 — season-owned; unscheduled workouts on calendar V2
-- [ ] De-load inside volume step acceptable
-- [ ] Zone allocation explicitly V2
+- [x] Weekly layout: option 2 — season-owned; unscheduled workouts on calendar (**pool shipped**)
+- [x] Zone allocation in simple planner week table
+- [ ] Phase layout editor in simple planner

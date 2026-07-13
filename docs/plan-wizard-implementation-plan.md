@@ -1,5 +1,7 @@
 # Plan wizard UI — implementation plan (v2)
 
+**Note (July 2026):** Planner **unification is shipped**. The **simple planner** at `/plan` is the primary UX and calendar data source. This doc covers the legacy **advanced wizard** (`/plan/setup`) and remaining parity work. See [season-planner-unified-plan.md](./season-planner-unified-plan.md).
+
 Execute after wireframe + screen spec approval. **Do not** edit `.cursor/plans/` mockup file.
 
 **References:**
@@ -7,6 +9,23 @@ Execute after wireframe + screen spec approval. **Do not** edit `.cursor/plans/`
 - [plan-wizard-pain-points.md](./plan-wizard-pain-points.md) — v2 flow rationale
 - [plan-wizard-screen-spec.md](./plan-wizard-screen-spec.md) — v2 step definitions
 - [plan-wizard-wireframe.canvas.tsx](file:///C:/Users/pjohn/.cursor/projects/c-Users-pjohn-TiZ/canvases/plan-wizard-wireframe.canvas.tsx)
+
+---
+
+## Unified planner (shipped)
+
+| Item | Status |
+|------|--------|
+| Simple planner at `/plan` (`FEATURE_SIMPLE_SEASON_PLANNER`) | Shipped |
+| Redirect `/plan/setup` and `/plan/settings/*` when simple-only | Shipped |
+| Optional advanced wizard link (`FEATURE_ADVANCED_SEASON_PLANNER`) | Shipped |
+| Calendar week targets from `serializeSimpleSeasonPlan` | Shipped |
+| Phase sessions/week + intense days/week in Phases pane | Shipped |
+| Zone minutes per week + zone ramp defaults (simple-tiz) | Shipped |
+| Volume ramps + weekly table + de-load | Shipped |
+| Workout pool V2a–V2c on calendar | Shipped |
+| Anchors in simple planner | **Not shipped** (advanced wizard step 3 only) |
+| Season phase layout editor | **Not shipped** |
 
 ---
 
@@ -166,16 +185,16 @@ Sections (collapsibles):
 
 ---
 
-## V2 — Zone allocation (separate epic)
+## V2 — Zone allocation
 
-| Item | Work |
-|------|------|
-| Schema | Optional `zoneMinutesByDiscipline` on `SeasonPhase` or `SeasonWeek` |
-| UI | Step 5 or settings section; grid phase × discipline × zones |
-| Engine | Replace or override `computeZoneMinutesForWeek` when custom zones set |
-| Migration | Manual SQL + backfill from focus presets |
+**Status for unified path:** **Shipped in simple planner** — zone ramp defaults + per-week zone pills (`simple-tiz.ts`, week table). The table below applied to the **advanced wizard** epic only; keep for reference if advanced-only seasons still use `focus-tiz`.
 
-**Out of scope** for PRs 1–6.
+| Item | Work | Unified status |
+|------|------|----------------|
+| Schema | `zoneMinutes` on `SeasonWeek` | Shipped |
+| UI | Zone ramp defaults + week table pills | Shipped |
+| Engine | `recalculateSimpleZoneMinutes` | Shipped |
+| Wizard step 5 / focus-tiz replacement | Advanced-only | Optional / legacy |
 
 ---
 
@@ -195,5 +214,5 @@ Sections (collapsibles):
 |------|----------|
 | Per-discipline hours (step 4) | **P1** |
 | Distance-based volume (step 4) | **P1** — reference pace/speed rolls distance → weekly duration |
-| Zone allocation | **V2** |
-| Weekly template / layout | **Option 2:** season-owned phase layout; athlete template = import preset; **no** layout vs step 2 validation; **V2** unscheduled workouts on calendar |
+| Zone allocation | **Shipped in simple planner** (week table + zone ramps); wizard step 5 optional |
+| Weekly template / layout | **Option 2:** season-owned phase layout in **simple planner**; athlete template = import preset; unscheduled workouts **shipped** on calendar |
