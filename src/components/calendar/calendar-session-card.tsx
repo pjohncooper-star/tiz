@@ -33,6 +33,10 @@ type CalendarSessionCardProps = {
   onUpdated?: () => void;
   showLinkDropTarget?: boolean;
   showWorkoutDropTarget?: boolean;
+  /** When set, structured sessions show Load (into Build graph). */
+  onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  /** When set, structured sessions show Unassign. */
+  onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
 
 function disciplineLabel(discipline: string): string {
@@ -54,6 +58,8 @@ export function CalendarSessionCard({
   onUpdated,
   showLinkDropTarget = false,
   showWorkoutDropTarget = false,
+  onLoadIntoBuilder,
+  onUnassignWorkout,
 }: CalendarSessionCardProps) {
   const { attributes, listeners, setNodeRef: setDragRef, transform } = useDraggable({
     id: session.id,
@@ -78,6 +84,9 @@ export function CalendarSessionCard({
 
   const [deleting, setDeleting] = useState(false);
   const [updatingRole, setUpdatingRole] = useState(false);
+  const [unassigning, setUnassigning] = useState(false);
+
+  const hasStructured = session.stepCount > 0;
 
   const style = transform
     ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
@@ -122,6 +131,21 @@ export function CalendarSessionCard({
       onUpdated?.();
     } finally {
       setUpdatingRole(false);
+    }
+  }
+
+  async function handleUnassign(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (unassigning || !onUnassignWorkout || !hasStructured) return;
+    if (!confirm(`Remove structured workout from "${session.title}"? The session stays on the calendar.`)) {
+      return;
+    }
+    setUnassigning(true);
+    try {
+      await onUnassignWorkout(session);
+    } finally {
+      setUnassigning(false);
     }
   }
 
@@ -211,6 +235,35 @@ export function CalendarSessionCard({
           {session.workoutProfile ? (
             <div className="mt-1 w-full">
               <WorkoutProfileMiniChart profile={session.workoutProfile} />
+            </div>
+          ) : null}
+          {hasStructured && session.source !== "RACE" && (onLoadIntoBuilder || onUnassignWorkout) ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {onLoadIntoBuilder ? (
+                <button
+                  type="button"
+                  className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 hover:bg-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-900/60"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onLoadIntoBuilder(session);
+                  }}
+                >
+                  Load into Build
+                </button>
+              ) : null}
+              {onUnassignWorkout ? (
+                <button
+                  type="button"
+                  disabled={unassigning}
+                  className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 hover:bg-zinc-200 disabled:opacity-50 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => void handleUnassign(e)}
+                >
+                  Unassign
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>

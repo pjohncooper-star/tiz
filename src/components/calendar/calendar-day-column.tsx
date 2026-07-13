@@ -34,6 +34,8 @@ type CalendarDayColumnProps = {
   acceptsPoolDrop?: boolean;
   onSelectDay: () => void;
   onClearSelection: () => void;
+  onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
 
 export function CalendarDayColumn({
@@ -50,6 +52,8 @@ export function CalendarDayColumn({
   acceptsPoolDrop = true,
   onSelectDay,
   onClearSelection,
+  onLoadIntoBuilder,
+  onUnassignWorkout,
 }: CalendarDayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: dateKey,
@@ -168,6 +172,8 @@ export function CalendarDayColumn({
                 showWorkoutDropTarget={showSessionWorkoutDrop}
                 onDeleted={onSessionCreated}
                 onUpdated={onSessionCreated}
+                onLoadIntoBuilder={onLoadIntoBuilder}
+                onUnassignWorkout={onUnassignWorkout}
               />
             )
           )}

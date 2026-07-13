@@ -106,6 +106,9 @@ enum InsightTier {
 enum WorkoutFolderKind {
   LIBRARY
   PROGRESSION
+  WARM_UP
+  MAIN_SET
+  COOL_DOWN
 }
 
 enum OnboardingStep {

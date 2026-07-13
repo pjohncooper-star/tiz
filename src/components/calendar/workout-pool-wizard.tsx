@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { addWeeks, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { Button } from "@/components/ui";
 import { WorkoutPool } from "@/components/calendar/workout-pool";
-import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
-import type { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
+import { WorkoutGraphComposer } from "@/components/calendar/workout-graph-composer";
+import type { PoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
@@ -14,7 +14,7 @@ import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 
-type PoolTab = "skeleton" | "build";
+export type PoolTab = "skeleton" | "build";
 
 type WorkoutPoolWizardProps = {
   poolWeekStart: string;
@@ -26,7 +26,9 @@ type WorkoutPoolWizardProps = {
   selectedDateKey: string | null;
   armedUnscheduled: Record<string, UnscheduledAttachment>;
   onClearArmedUnscheduled: (chipId: string) => void;
-  builder: ReturnType<typeof useWorkoutBuilder>;
+  activeTab: PoolTab;
+  onActiveTabChange: (tab: PoolTab) => void;
+  composer: PoolWorkoutComposer;
 };
 
 function weekLabel(weekStart: string): string {
@@ -45,41 +47,47 @@ export function WorkoutPoolWizard({
   selectedDateKey,
   armedUnscheduled,
   onClearArmedUnscheduled,
-  builder,
+  activeTab,
+  onActiveTabChange,
+  composer,
 }: WorkoutPoolWizardProps) {
   const unscheduledCount = useMemo(() => {
     if (!weekTarget) return 0;
     return computeUnscheduledChips(poolWeekStart, weekTarget, sessions).length;
   }, [poolWeekStart, weekTarget, sessions]);
 
-  const [activeTab, setActiveTab] = useState<PoolTab>("skeleton");
-
   useEffect(() => {
-    setActiveTab(unscheduledCount > 0 ? "skeleton" : "build");
-  }, [poolWeekStart, unscheduledCount]);
+    onActiveTabChange(unscheduledCount > 0 ? "skeleton" : "build");
+    // Default tab only when the pool week changes — not when chip count updates mid-edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [poolWeekStart]);
 
   function shiftPoolWeek(delta: number) {
     const next = addWeeks(parseISO(`${poolWeekStart}T12:00:00`), delta);
     onPoolWeekChange(format(startOfWeek(next, WEEK_OPTS), "yyyy-MM-dd"));
   }
 
-  useEffect(() => {
-    if (activeTab === "build") {
-      builder.setOpen(true);
-    }
-  }, [activeTab, builder]);
-
   return (
     <div className="rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/90">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <Button type="button" variant="secondary" onClick={() => shiftPoolWeek(-1)} aria-label="Previous pool week">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => shiftPoolWeek(-1)}
+            aria-label="Previous pool week"
+          >
             ◀
           </Button>
           <span className="min-w-[10rem] text-center text-sm font-medium tabular-nums">
             {weekLabel(poolWeekStart)}
           </span>
-          <Button type="button" variant="secondary" onClick={() => shiftPoolWeek(1)} aria-label="Next pool week">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => shiftPoolWeek(1)}
+            aria-label="Next pool week"
+          >
             ▶
           </Button>
         </div>
@@ -94,7 +102,7 @@ export function WorkoutPoolWizard({
                   ? "bg-sky-600 text-white"
                   : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
               }`}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => onActiveTabChange(tab)}
             >
               {tab}
             </button>
@@ -120,21 +128,7 @@ export function WorkoutPoolWizard({
           embedded
         />
       ) : (
-        <div className="space-y-3">
-          <WorkoutBuilderPane builder={builder} onClose={() => builder.setOpen(false)} />
-          <WorkoutPool
-            weekTarget={weekTarget}
-            sessions={sessions}
-            activities={activities}
-            weekStart={poolWeekStart}
-            currentWeekStart={currentWeekStart}
-            selectedDateKey={selectedDateKey}
-            armedUnscheduled={armedUnscheduled}
-            onClearArmedUnscheduled={onClearArmedUnscheduled}
-            activeTab="build"
-            embedded
-          />
-        </div>
+        <WorkoutGraphComposer composer={composer} />
       )}
     </div>
   );
