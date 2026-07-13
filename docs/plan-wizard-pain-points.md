@@ -1,5 +1,7 @@
 # Plan wizard — pain points & proposed flow
 
+> **Legacy doc.** The advanced 5-step wizard and **anchor workouts** have been **removed** from the product. Content below is historical. See [season-planner-unified-plan.md](./season-planner-unified-plan.md).
+
 Baseline audit of live wizard in [`season-settings-panels.tsx`](../src/components/season/season-settings-panels.tsx).
 
 **Wireframe v2** reflects user-directed step order (July 2026). v1 wireframe reordered layout only; v2 reorders *what you configure when*.
@@ -27,7 +29,7 @@ flowchart LR
 | **0** | Season setup | Dates, A/B/C races, calendar import |
 | **1** | Cycle structure | Macro phases, mesocycles, timeline |
 | **2** | Phase goals & training days | **Per phase (cycle):** training focus/goals + **days per discipline** (swim/bike/run frequency) |
-| **3** | Workouts & templates | **P0:** anchors. **P1+:** season phase layout (import from athlete template). **V2 calendar:** unscheduled workouts when budget > scheduled |
+| **3** | Workouts & templates | **P0:** weekly template link. **P1+:** season phase layout (import from athlete template). **V2 calendar:** unscheduled workouts when budget > scheduled |
 | **4** | Volume, ramp & de-load | **P0:** weekly hours, phase ramp, long sessions, de-load. **P1:** per-discipline hours; distance volume with pace/speed → duration rollup |
 | **V2** | Zone allocation | **Hours/minutes by zone per discipline** — replaces implicit focus→TIZ presets as primary UX |
 
@@ -35,7 +37,7 @@ flowchart LR
 
 1. **Structure first** — phases/mesocycles bound everything else.
 2. **Intent & frequency** — what each block is for and how many swim/bike/run days before picking specific workouts.
-3. **Anchors/templates** — concrete recurring sessions that fill those days.
+3. **Template / layout** — recurring week shape via weekly template (manual apply) or phase layout (future).
 4. **Load** — how much volume, how it ramps, when to de-load (depends on structure + session picture).
 5. **Zones** — finer distribution once volume by discipline exists (V2).
 
@@ -48,7 +50,7 @@ flowchart LR
 | 2 De-load cadence | chart + rules | **4** (merged with volume) |
 | 3 Goals & focus | phase/discipline focus | **2** (goals); zones → **V2** |
 | 4 Volume & ramp | hours, phase ramp, long weeks | **4** |
-| 5 Workouts / week | session counts + anchors | **2** (days/discipline) + **3** (anchors) |
+| 5 Workouts / week | session counts + ~~anchors~~ | **2** (days/discipline) + **3** (template link + layout) |
 
 ---
 
@@ -56,9 +58,9 @@ flowchart LR
 
 | Issue | Detail |
 |-------|--------|
-| **Step order** | De-load and volume before goals/anchors felt backwards; v2 fixes. |
-| **Density** | Step 4 (old) crowded; v2 splits anchors and merges deload with volume in one *thematic* step with collapsibles. |
-| **Anchors buried** | Anchors only on step 5 after season exists; v2 promotes to dedicated step 3. |
+| **Step order** | De-load and volume before goals/template felt backwards; v2 fixes. |
+| **Density** | Step 4 (old) crowded; v2 splits template/layout from volume and merges deload with volume in one *thematic* step with collapsibles. |
+| ~~**Anchors buried**~~ | ~~Anchors only on step 5~~ — **removed**; v2 step 3 is template link + future phase layout. |
 | **Weekly template** | Athlete template on calendar = import preset; **season phase layout** owns the grid; gaps → unscheduled workouts (V2 calendar). |
 | **Zone UX** | Today: `focus-tiz` presets from phase focus at recompute time; user wants explicit zone allocation by discipline (V2). |
 | **Dead settings** | `maxRampPercent` hidden and unused — remove from UI permanently. |
@@ -83,14 +85,14 @@ Per-phase cards repetitive; conflates *training goal* with *zone mix* (latter �
 Global + per-phase fields + long-week chart — too dense; no per-discipline volume entry yet.
 
 ### Step 5 — Workouts / week (split to 2 + 3)
-Session counts are really **days per discipline**; anchors mixed with frequency setup.
+Session counts are really **days per discipline**; ~~anchors~~ template/layout separated to step 3.
 
 ---
 
 ## v2 IA decisions (wireframe)
 
 1. **Days per discipline** on step 2 (not a separate “workouts per week” step).
-2. **Anchors + weekly template** on step 3 with scope toggle: season | phase.
+2. **Weekly template link** on step 3 (P0); **phase layout** editor in simple planner (P1+). ~~Anchors + scope toggle~~ — removed.
 3. **Volume step** — P0: total hours + phase ramp + long sessions + de-load. **P1:** per-discipline hours; distance-based volume with reference pace/speed to roll up to weekly duration.
 4. **De-load** collapsible section inside step 4 (not its own wizard step).
 5. **Zone allocation** — documented as V2; finish wizard after step 4.
