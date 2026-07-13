@@ -2,7 +2,9 @@
 
 **Status:** V2a/V2b shipped (unscheduled, suggested, library, week TiZ). Layout uses **one focused-week sticky sidebar** on `/calendar` (not a copy inside every week row). Complements [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md). **Future UX:** [workout-pool-wizard-wireframe.md](./workout-pool-wizard-wireframe.md) (sticky top wizard).
 
-**Confirmed UX:** Workout pool lives in a **left sidebar** on the calendar, bound to the **focused week** (scroll position, Jump to week, or day selection). Collapsible; below `xl` opens as a drawer (collapsed by default). **Session role** uses enum `easy | moderate | intensity | long` (not a boolean intensity flag) — deferred to V2c. Tabs vs single scrollable list — **TBD** (currently one scrollable list with section headers).
+**Confirmed UX:** Workout pool lives in a **left sidebar** on the calendar, bound to the **focused week** (scroll position, Jump to week, or day selection). Collapsible; below `xl` opens as a drawer (collapsed by default). **Session role** uses enum `easy | moderate | intensity | long`. **Layout:** **tabs** — Unscheduled | Suggested | Library | Week TiZ (replacing the interim single scrollable list when implemented).
+
+**Future sticky wizard** ([workout-pool-wizard-wireframe.md](./workout-pool-wizard-wireframe.md)): **desktop only** (`xl+`); not on mobile for now.
 
 **Budget source today:** Active **simple planner** season week targets (`getCalendarWeekTargets`), not the legacy multi-step wizard layout materializer.
 
@@ -30,17 +32,11 @@ The **workout pool** sidebar is the hub for **(1) and (2)**. TiZ **(3)** is coup
 │  (one sidebar)   │  · Week of …                                │
 │  Focused · Mon d │  · Mon–Sun day columns                      │
 │                  │  · Drop targets for pool items              │
-│  ─ Unscheduled ─ │                                             │
-│  Swim ×1         │  (pool is NOT repeated inside each week)    │
-│                  │                                             │
-│  ─ Suggested ─   │                                             │
-│  interval cards  │                                             │
-│                  │                                             │
-│  ─ Library ─     │                                             │
-│  [folder tree]   │                                             │
-│                  │                                             │
-│  ─ Week TiZ ─    │                                             │
-│  budget vs done  │                                             │
+│  [Unsched][Sugg] │                                             │
+│  [Library][TiZ]  │  (pool is NOT repeated inside each week)    │
+│  ─ tab content ─ │                                             │
+│  Swim ×1         │                                             │
+│  …               │                                             │
 └──────────────────┴─────────────────────────────────────────────┘
 ```
 

@@ -12,7 +12,7 @@
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  WORKOUT POOL (sticky)                                                      │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  ◀  Jul 7 – Jul 13, 2026  ▶          Step ① Skeleton  →  ② Build   │  │
+│  │  ◀  Jul 7 – Jul 13, 2026  ▶     [ Skeleton ] [ Build ]  (tabs)          │  │
 │  │  (pool week — independent of calendar scroll)                         │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │  … step content (see below) …                                               │
@@ -55,7 +55,11 @@ flowchart LR
 | **1 — Skeleton** | Drag **unscheduled chips** onto calendar days; **compact role picker** on drop | `PlannedSession` rows (flexible, no structured workout yet) |
 | **2 — Build** | Assemble warm-up + main + cool-down into a **workout graph**, assign to a skeleton on the pool week | `StructuredWorkout` linked to session |
 
-Steps are **linear by default** but user can jump back to step 1 to add skeletons. Step indicator in pool header.
+Steps are **tabs** (**Skeleton** | **Build**), not a forced linear wizard — user can switch anytime. Default tab after pool week change: Skeleton if unscheduled chips remain, else Build.
+
+**Desktop only:** The sticky top workout pool (tabs + graph builder) is **not** implemented on mobile viewports for now — athletes use the existing calendar on mobile without the pool wizard chrome.
+
+**Strength / gym:** Included in **step 1** skeleton chips and weekly template (discipline `STRENGTH`). **Out of scope for step 2** — no structured workout graph, warm-up/main/cool-down columns, or library assign for strength sessions.
 
 ---
 
@@ -118,11 +122,11 @@ Chip list **recomputes** when: pool week changes, planner targets change, templa
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  POOL — Step 1                                                              │
-│  ◀  Jul 7 – Jul 13, 2026  ▶     ● Skeleton    ○ Build                       │
+│  ◀  Jul 7 – Jul 13, 2026  ▶   [ Skeleton ● ] [ Build ]                     │
 │                                                                               │
 │  Skeleton chips (= unscheduled budget for this pool week)                    │
 │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐   │
-│  │ Swim │ │ Bike │ │ Bike │ │ Bike │ │ Bike │ │ Run  │ │ Run  │ │ Run  │   │
+│  │ Swim │ │ Bike │ │ Bike │ │ Bike │ │ Bike │ │ Run  │ │ Run  │ │ Str  │   │
 │  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘ └──────┘   │
 │  (after template with 2 swims on a 3-swim week → only 1 Swim chip above)     │
 │                                                                               │
@@ -213,7 +217,7 @@ Template roles use the same enum and descriptions as the skeleton drop picker (`
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  ◀  Jul 7 – Jul 13, 2026  ▶     ○ Step 1 Skeleton    ● Step 2 Build        │
+│  ◀  Jul 7 – Jul 13, 2026  ▶   [ Skeleton ] [ Build ● ]                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  Discipline   [ Swim ]  [ Bike ]  [ Run ]          Manage library →          │
 ├──────────────────┬──────────────────┬──────────────────┬─────────────────────┤
@@ -247,13 +251,13 @@ Columns are **above** the graph; components drag **down** into the graph. The gr
 
 | Column | Source | Drag behavior |
 |--------|--------|---------------|
-| **Warm-up** | `WorkoutFolder` items tagged or filtered as warm-up | Drag card → append to graph (warm-up segment) |
-| **Main set** | Intervals, tempo, threshold blocks | Drag → append to graph (main segment) |
-| **Cool-down** | Cool-down presets | Drag → append to graph (cool-down segment) |
+| **Warm-up** | `WorkoutFolder` with `folderKind: WARM_UP` | Drag card → append to graph (warm-up segment) |
+| **Main set** | `WorkoutFolder` with `folderKind: MAIN_SET` | Drag → append to graph (main segment) |
+| **Cool-down** | `WorkoutFolder` with `folderKind: COOL_DOWN` | Drag → append to graph (cool-down segment) |
 
-Library cards show a **mini intensity profile** (same visual language as `WorkoutProfileChart`). Filtered by **discipline** toggle at top (swim / bike / run only — no strength in v1).
+Library cards show a **mini intensity profile** (same visual language as `WorkoutProfileChart`). Filtered by **discipline** toggle at top (**swim / bike / run only** — strength skeletons are step 1 only).
 
-**Folder taxonomy (implementation note):** Either explicit folder kinds (`WARM_UP`, `MAIN`, `COOL_DOWN`) or tags on `WorkoutTemplate` — TBD.
+**Folder taxonomy (confirmed):** Three **segment folder kinds** — `WARM_UP`, `MAIN_SET`, `COOL_DOWN` — distinct from existing `LIBRARY` / `PROGRESSION` folder types. Each column lists workouts from folders of that kind for the selected discipline.
 
 ### Workout graph
 
@@ -272,10 +276,22 @@ Reuses `WorkoutProfileChart` + `WorkoutNode` tree; assembly produces one merged 
 ### Assign to skeleton
 
 1. User drags **assembled workout** onto a **skeleton session card** on the calendar (pool week only).
-2. Target must be a session **without** a structured workout (or replace with confirm).
+2. Target must be a swim/bike/run session **without** a structured workout — **block** if one is already assigned (no silent replace).
 3. On apply: link `StructuredWorkout` to that pool-week `PlannedSession`; TiZ rolls up from steps.
 
 No separate skeleton strip in the pool — drop targets live on the calendar grid.
+
+### Unassign / edit structured workout
+
+When a skeleton already has structure, the athlete must **change it explicitly** before applying a new graph:
+
+| Action | Result |
+|--------|--------|
+| **Unassign** | Remove `StructuredWorkout` from session; session stays on calendar as empty skeleton (role retained) |
+| **Delete** | Remove session from calendar; discipline chip returns to unscheduled pool |
+| **Edit** | Open session editor or load workout into **Build** tab graph for adjustment, then save back to same session |
+
+Dropping a new graph onto an occupied skeleton shows a blocked state (e.g. “Remove workout first”) — not replace-with-confirm.
 
 ---
 
@@ -357,15 +373,29 @@ Existing pieces to reuse: `WorkoutProfileChart`, `WorkoutNode` / `templateNodes`
 
 ---
 
+## Decisions (confirmed)
+
+| Item | Choice |
+|------|--------|
+| Skeleton chips | Same as unscheduled budget; template sessions count as scheduled |
+| Role on skeleton drop | **Compact picker** (default moderate); badge cycle after place |
+| Weekly template roles | Set in `/calendar/template`; copied on apply |
+| Strength / gym | **Skeleton only** (step 1 + template); **no** structured workout builder |
+| Folder taxonomy | Three segment kinds: `WARM_UP`, `MAIN_SET`, `COOL_DOWN` |
+| Apply graph to occupied skeleton | **Block** — unassign, delete, or edit first |
+| Mobile | **Out of scope** for sticky pool wizard (desktop `xl+` only) |
+| Pool navigation | **Tabs**: Skeleton \| Build (not a forced linear wizard) |
+
 ## Open questions
 
-- [ ] Strength / gym sessions in pool wizard or out of scope?
-- [ ] Folder taxonomy: three folder kinds vs tags vs single library with column filters?
 - [x] Skeleton chips = unscheduled budget; template sessions count toward scheduled
 - [x] Role on drop: **compact picker** (default moderate); badge cycle for post-place edits
-- [ ] Replace vs block when dropping workout on skeleton that already has structure?
-- [ ] Mobile: collapse pool to bottom sheet; step 2 graph scrolls horizontally?
-- [ ] Tabs vs wizard steps for users who only want library browse (power users)?
+- [x] Strength / gym: skeleton yes; structured workouts **out of scope**
+- [x] Folder taxonomy: **three folder kinds** (`WARM_UP`, `MAIN_SET`, `COOL_DOWN`)
+- [x] Replace vs block: **block** + unassign / delete / edit flows
+- [x] Mobile: **not implementing** pool wizard on mobile for now
+- [x] Tabs vs wizard steps: **tabs** (Skeleton \| Build)
+- [ ] Brick / multisport slots (future)
 
 ---
 
