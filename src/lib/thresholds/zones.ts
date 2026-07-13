@@ -1,7 +1,19 @@
-import type { SignalType } from "@prisma/client";
+import type { Discipline, SignalType } from "@prisma/client";
+import {
+  zoneBoundariesFor as zoneBoundariesForDiscipline,
+  zoneBoundariesForSignal,
+} from "@/lib/zones/boundaries";
 
-export function zoneBoundariesFor(signalType: SignalType): number[] {
-  if (signalType === "POWER") return [55, 75, 90, 105, 120];
-  if (signalType === "PACE") return [90, 97, 100, 110, 120];
-  return [68, 83, 94, 100, 106];
+/** Preferred: discipline + signal aware defaults. */
+export function zoneBoundariesFor(
+  disciplineOrSignal: Discipline | SignalType,
+  signalType?: SignalType
+): number[] {
+  if (signalType != null) {
+    return zoneBoundariesForDiscipline(
+      disciplineOrSignal as Discipline,
+      signalType
+    );
+  }
+  return zoneBoundariesForSignal(disciplineOrSignal as SignalType);
 }

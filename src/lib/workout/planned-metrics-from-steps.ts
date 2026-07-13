@@ -77,7 +77,8 @@ export function derivePlannedMetricsFromPlanningSteps(
   steps: FlatPlanningStep[],
   options: DerivePlannedMetricsOptions = {}
 ): SessionMetrics {
-  const boundaries = options.zoneBoundaries ?? zoneBoundariesFor("PACE");
+  const boundaries =
+    options.zoneBoundaries ?? zoneBoundariesFor(discipline, "PACE");
   const threshold = effectiveThreshold(discipline, options.thresholdPaceSeconds);
 
   let totalDistance = 0;

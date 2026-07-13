@@ -1,9 +1,11 @@
 import type { Discipline, SignalType, ThresholdProfile } from "@prisma/client";
 import { formatPace, thresholdPaceToInput } from "@/lib/units/pace";
+import { roundPct, speedPctToPacePct } from "@/lib/zones/boundaries";
 import { parseZoneBoundaries } from "./thresholds";
 
 export type ZoneRange = {
   zone: number;
+  /** Stored intensity % (speed % for pace). */
   minPct: number | null;
   maxPct: number | null;
 };
@@ -49,7 +51,26 @@ export function zonePctRanges(
   return zones;
 }
 
-function formatPctRange(minPct: number | null, maxPct: number | null): string {
+function formatPctRange(
+  signalType: SignalType,
+  minPct: number | null,
+  maxPct: number | null
+): string {
+  if (signalType === "PACE") {
+    // Display as % of threshold pace (higher = slower).
+    // minPct/maxPct are stored speed % (higher = faster).
+    const slowPacePct =
+      minPct != null ? roundPct(speedPctToPacePct(minPct)) : null;
+    const fastPacePct =
+      maxPct != null ? roundPct(speedPctToPacePct(maxPct)) : null;
+    if (slowPacePct == null && fastPacePct != null) return `> ${fastPacePct}%`;
+    if (slowPacePct != null && fastPacePct == null) return `< ${slowPacePct}%`;
+    if (slowPacePct != null && fastPacePct != null) {
+      return `${fastPacePct}–${slowPacePct}%`;
+    }
+    return "";
+  }
+
   if (minPct == null && maxPct != null) return `< ${maxPct}%`;
   if (minPct != null && maxPct == null) return `≥ ${minPct}%`;
   if (minPct != null && maxPct != null) return `${minPct}–${maxPct}%`;
@@ -123,7 +144,7 @@ export function formatZoneRangeLabel(
   discipline: Discipline,
   displayUnit: "METRIC" | "IMPERIAL"
 ): string {
-  const pct = formatPctRange(range.minPct, range.maxPct);
+  const pct = formatPctRange(profile.signalType, range.minPct, range.maxPct);
   const abs = formatAbsoluteRange(range, profile, discipline, displayUnit);
   return abs ? `${pct} · ${abs}` : pct;
 }

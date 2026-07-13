@@ -11,7 +11,7 @@ import {
 const swimPaceProfile = {
   signalType: "PACE",
   thresholdValue: 120,
-  zoneBoundaries: [90, 97, 100, 110, 120],
+  zoneBoundaries: [93.5, 98, 102, 106.4],
   zoneCount: 5,
 } as ThresholdProfile;
 

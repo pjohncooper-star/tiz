@@ -10,11 +10,11 @@ function zoneMidPct(range: ZoneRange): number {
   return 100;
 }
 
-/** Pace zones use % of threshold; higher % = faster (fewer seconds). */
+/** Pace zones use % of threshold speed; higher % = faster (fewer seconds). */
 export function paceSecondsAtZoneMidpoint(
   zone: number,
   thresholdPaceSeconds: number,
-  boundaries: number[] = zoneBoundariesFor("PACE")
+  boundaries: number[] = zoneBoundariesFor("RUN", "PACE")
 ): number {
   if (!Number.isFinite(thresholdPaceSeconds) || thresholdPaceSeconds <= 0) return 0;
   const z = Math.max(1, Math.min(5, Math.round(zone)));

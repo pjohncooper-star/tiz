@@ -97,7 +97,13 @@ function zoneMidPct(
   zoneCount = 5
 ): number {
   const z = Math.max(1, Math.min(zoneCount, Math.round(zone)));
-  const ranges = zonePctRanges(signal, zoneBoundariesFor(signal), zoneCount);
+  const discipline =
+    signal === "PACE" ? "RUN" : signal === "POWER" ? "BIKE" : "BIKE";
+  const ranges = zonePctRanges(
+    signal,
+    zoneBoundariesFor(discipline, signal),
+    zoneCount
+  );
   const range = ranges.find((r) => r.zone === z);
   if (!range) return 100;
   if (range.minPct != null && range.maxPct != null) {

@@ -2,26 +2,30 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { Discipline, SignalType } from "@prisma/client";
 import { OnboardingBack } from "@/components/onboarding-nav";
+import { ZoneBoundariesEditor } from "@/components/zone-boundaries-editor";
 import { Button, Card, Input, Label, SegmentedControl } from "@/components/ui";
-import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import {
   parseThresholdPaceInput,
   paceInputLabel,
   thresholdPaceToInput,
 } from "@/lib/units/pace";
+import { DEFAULT_ZONE_COUNT, zoneBoundariesFor } from "@/lib/zones/boundaries";
 
 type Threshold = {
-  discipline: string;
-  signalType: string;
+  discipline: Discipline;
+  signalType: SignalType;
   thresholdValue: number;
   isEstimated: boolean;
+  zoneCount: number;
+  zoneBoundaries: number[];
 };
 
 type DisplayUnit = "METRIC" | "IMPERIAL";
 type PrimarySignal = "POWER" | "HEART_RATE" | "PACE";
 
-const DISCIPLINE_ORDER = ["BIKE", "RUN", "SWIM"];
+const DISCIPLINE_ORDER: Discipline[] = ["BIKE", "RUN", "SWIM"];
 
 function primarySignalForRow(t: Threshold): PrimarySignal | null {
   if (t.discipline === "BIKE" && (t.signalType === "POWER" || t.signalType === "HEART_RATE")) {
@@ -56,6 +60,13 @@ function PrimaryRadio({
   );
 }
 
+function parseBoundaries(raw: unknown, discipline: Discipline, signalType: SignalType): number[] {
+  if (Array.isArray(raw) && raw.every((n) => typeof n === "number")) {
+    return raw as number[];
+  }
+  return zoneBoundariesFor(discipline, signalType);
+}
+
 export default function ThresholdsStep() {
   const router = useRouter();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -64,6 +75,7 @@ export default function ThresholdsStep() {
   const [primarySignals, setPrimarySignals] = useState<Record<string, PrimarySignal>>({});
   const [paceInputs, setPaceInputs] = useState<Record<string, string>>({});
   const [paceErrors, setPaceErrors] = useState<Record<string, string>>({});
+  const [expandedZones, setExpandedZones] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/api/settings")
@@ -80,10 +92,23 @@ export default function ThresholdsStep() {
         const latest: Record<string, Threshold> = {};
         for (const t of d.thresholds ?? []) {
           const k = `${t.discipline}-${t.signalType}`;
-          if (!latest[k]) latest[k] = t;
+          if (!latest[k]) {
+            latest[k] = {
+              discipline: t.discipline,
+              signalType: t.signalType,
+              thresholdValue: t.thresholdValue,
+              isEstimated: t.isEstimated,
+              zoneCount: t.zoneCount ?? DEFAULT_ZONE_COUNT,
+              zoneBoundaries: parseBoundaries(
+                t.zoneBoundaries,
+                t.discipline,
+                t.signalType
+              ),
+            };
+          }
         }
 
-        const list = Object.values(latest) as Threshold[];
+        const list = Object.values(latest);
         const inputs: Record<string, string> = {};
         for (const t of list) {
           if (t.signalType !== "PACE") continue;
@@ -102,31 +127,39 @@ export default function ThresholdsStep() {
       });
   }, []);
 
-  async function save(t: Threshold, value: number) {
-    await fetch("/api/settings", {
+  async function saveThreshold(
+    t: Threshold,
+    value: number,
+    zoneBoundaries?: number[]
+  ) {
+    const boundaries = zoneBoundaries ?? t.zoneBoundaries;
+    const res = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "threshold",
         data: {
-          ...t,
+          discipline: t.discipline,
+          signalType: t.signalType,
           thresholdValue: value,
-          zoneCount: 5,
-          zoneBoundaries: zoneBoundariesFor(t.signalType as "POWER" | "HEART_RATE" | "PACE"),
+          zoneCount: t.zoneCount,
+          zoneBoundaries: boundaries,
           effectiveDate: new Date().toISOString().slice(0, 10),
           isEstimated: true,
         },
       }),
     });
-    if (t.signalType === "PACE") {
-      setThresholds((prev) =>
-        prev.map((row) =>
-          row.discipline === t.discipline && row.signalType === t.signalType
-            ? { ...row, thresholdValue: value }
-            : row
-        )
-      );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? "Failed to save threshold");
     }
+    setThresholds((prev) =>
+      prev.map((row) =>
+        row.discipline === t.discipline && row.signalType === t.signalType
+          ? { ...row, thresholdValue: value, zoneBoundaries: boundaries }
+          : row
+      )
+    );
   }
 
   async function savePrimarySignal(discipline: string, primarySignal: PrimarySignal) {
@@ -185,7 +218,7 @@ export default function ThresholdsStep() {
       return;
     }
     setPaceErrors((prev) => ({ ...prev, [key]: "" }));
-    await save(t, parsed);
+    await saveThreshold(t, parsed);
   }
 
   async function complete() {
@@ -237,7 +270,8 @@ export default function ThresholdsStep() {
         </h1>
         <p className="text-sm text-zinc-500">
           Set your best-guess thresholds for today. Choose which metric is primary for
-          time-in-zone reporting on bike and run.
+          time-in-zone reporting on bike and run. Customize zone boundaries per sport and
+          signal when needed.
         </p>
       </div>
       <Card>
@@ -255,8 +289,9 @@ export default function ThresholdsStep() {
                   (t.discipline === "BIKE" ? "POWER" : t.discipline === "RUN" ? "PACE" : null);
                 const isPrimary =
                   rowPrimary != null && disciplinePrimary === rowPrimary;
+                const zonesOpen = expandedZones[key] ?? false;
                 return (
-                  <div key={key}>
+                  <div key={key} className="space-y-1">
                     <Label>{label(t)}</Label>
                     {t.signalType === "PACE" ? (
                       <>
@@ -270,7 +305,7 @@ export default function ThresholdsStep() {
                             onChange={(e) =>
                               setPaceInputs((prev) => ({ ...prev, [key]: e.target.value }))
                             }
-                            onBlur={() => savePace(t)}
+                            onBlur={() => void savePace(t)}
                           />
                           {rowPrimary && (
                             <PrimaryRadio
@@ -282,7 +317,7 @@ export default function ThresholdsStep() {
                           {(t.discipline === "RUN" || t.discipline === "SWIM") && (
                             <SegmentedControl
                               value={displayUnits[t.discipline] ?? "METRIC"}
-                              onChange={(unit) => setDisplayUnit(t.discipline, unit)}
+                              onChange={(unit) => void setDisplayUnit(t.discipline, unit)}
                               options={
                                 t.discipline === "RUN"
                                   ? [
@@ -307,7 +342,7 @@ export default function ThresholdsStep() {
                           type="number"
                           className="min-w-[8rem] flex-1"
                           defaultValue={t.thresholdValue}
-                          onBlur={(e) => save(t, Number(e.target.value))}
+                          onBlur={(e) => void saveThreshold(t, Number(e.target.value))}
                         />
                         {rowPrimary && (
                           <PrimaryRadio
@@ -318,13 +353,36 @@ export default function ThresholdsStep() {
                         )}
                       </div>
                     )}
+                    <button
+                      type="button"
+                      className="text-xs text-sky-600 hover:underline"
+                      onClick={() =>
+                        setExpandedZones((prev) => ({ ...prev, [key]: !zonesOpen }))
+                      }
+                    >
+                      {zonesOpen ? "Hide zone boundaries" : "Edit zone boundaries"}
+                    </button>
+                    {zonesOpen && (
+                      <ZoneBoundariesEditor
+                        key={`${key}-${t.zoneBoundaries.join(",")}`}
+                        discipline={t.discipline}
+                        signalType={t.signalType}
+                        thresholdValue={t.thresholdValue}
+                        zoneBoundaries={t.zoneBoundaries}
+                        zoneCount={t.zoneCount}
+                        displayUnit={displayUnits[t.discipline] ?? "METRIC"}
+                        onSave={async (boundaries) => {
+                          await saveThreshold(t, t.thresholdValue, boundaries);
+                        }}
+                      />
+                    )}
                   </div>
                 );
               })}
             </div>
           ))}
         </div>
-        <Button className="mt-4" onClick={complete}>
+        <Button className="mt-4" onClick={() => void complete()}>
           {onboardingComplete ? "Save and return to settings" : "Continue to historical thresholds"}
         </Button>
       </Card>

@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import {
   DEFAULT_DISCIPLINE_SIGNALS,
-  DEFAULT_ZONE_BOUNDARIES,
   getDefaultThreshold,
+  zoneBoundariesFor,
 } from "@/lib/zones/defaults";
 import type { Discipline, OnboardingStep, SignalType } from "@prisma/client";
 
@@ -45,7 +45,7 @@ export async function initializeAthleteDefaults(athleteId: string) {
           signalType,
           thresholdValue: getDefaultThreshold(discipline, signalType),
           zoneCount: 5,
-          zoneBoundaries: DEFAULT_ZONE_BOUNDARIES[signalType],
+          zoneBoundaries: zoneBoundariesFor(discipline, signalType),
           effectiveDate: new Date(),
           isEstimated: true,
         },
