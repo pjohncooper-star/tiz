@@ -4,6 +4,8 @@ import {
   inferSessionRole,
   nextSessionRole,
   resolveDisplaySessionRole,
+  SESSION_ROLE_DESCRIPTIONS,
+  SESSION_ROLES,
   sessionRoleShowsBadge,
 } from "./session-role";
 
@@ -39,6 +41,12 @@ describe("session-role", () => {
       }),
       "INTENSITY"
     );
+  });
+
+  it("defines a description for every role", () => {
+    for (const role of SESSION_ROLES) {
+      assert.ok(SESSION_ROLE_DESCRIPTIONS[role].length > 0);
+    }
   });
 
   it("infers when stored role is moderate", () => {

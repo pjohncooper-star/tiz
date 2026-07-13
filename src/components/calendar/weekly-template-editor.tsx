@@ -21,7 +21,8 @@ import {
   weekDayColumnClass,
 } from "@/components/calendar/week-day-layout";
 import type { WeeklyTemplate, WeeklyTemplateItem } from "@/components/calendar/types";
-import { SESSION_ROLE_LABELS, SESSION_ROLES } from "@/lib/plan/session-role";
+import { SESSION_ROLE_LABELS, SESSION_ROLES, SESSION_ROLE_DESCRIPTIONS } from "@/lib/plan/session-role";
+import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
 
 const WEEKDAYS: WeeklyTemplateItem["weekday"][] = [
   "MON",
@@ -186,6 +187,7 @@ function TemplateDayColumn({
                       sessionRole: e.target.value as WeeklyTemplateItem["sessionRole"],
                     })
                   }
+                  aria-describedby={`role-desc-${row.key}`}
                 >
                   {SESSION_ROLES.map((role) => (
                     <option key={role} value={role}>
@@ -193,6 +195,17 @@ function TemplateDayColumn({
                     </option>
                   ))}
                 </select>
+                <p
+                  id={`role-desc-${row.key}`}
+                  className="mt-1 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400"
+                >
+                  {SESSION_ROLE_DESCRIPTIONS[row.sessionRole]}
+                </p>
+                {row.sessionRole !== "MODERATE" ? (
+                  <div className="mt-1">
+                    <SessionRoleBadge role={row.sessionRole} />
+                  </div>
+                ) : null}
               </div>
               {row.discipline === "SWIM" ? (
                 <div className="mb-1.5">
@@ -383,7 +396,9 @@ export function WeeklyTemplateEditor() {
       <div>
         <p className="mb-2 text-sm font-medium">Weekly layout</p>
         <p className="mb-3 text-xs text-zinc-500">
-          Add sessions to each day. New sessions default to the sport name (Bike, Run, Swim).
+          Add sessions to each day. Set a <strong className="font-medium">role</strong> per session
+          (easy, moderate, intensity, long) — roles carry over when you apply this template to a
+          calendar week and appear on session cards in the workout pool.
         </p>
 
         <div className={WEEK_DAY_HEADER_ROW_CLASS}>

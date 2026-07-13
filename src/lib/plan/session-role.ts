@@ -13,6 +13,14 @@ export const SESSION_ROLE_LABELS: Record<SessionRole, string> = {
   LONG: "Long",
 };
 
+/** Coaching intent for each role — used in weekly template setup and skeleton drop picker. */
+export const SESSION_ROLE_DESCRIPTIONS: Record<SessionRole, string> = {
+  EASY: "Recovery or light aerobic — mostly easy effort (Z1–2).",
+  MODERATE: "Steady endurance — default training day (mostly Z2).",
+  INTENSITY: "Quality day — intervals, threshold, or hard efforts (Z3+).",
+  LONG: "Long aerobic session — duration-focused endurance.",
+};
+
 const LONG_TITLE = /\b(long run|long ride|long swim|long bike|long\b)/i;
 const INTENSITY_TITLE =
   /\b(interval|intervals|threshold|tempo|vo2|vo₂|hard|intensity|speed|fartlek|sweet spot|over.?under)\b/i;

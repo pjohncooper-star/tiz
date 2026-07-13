@@ -1,6 +1,6 @@
 # Calendar workout pool — V2 spec
 
-**Status:** V2a/V2b shipped (unscheduled, suggested, library, week TiZ). Layout uses **one focused-week sticky sidebar** on `/calendar` (not a copy inside every week row). Complements [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md).
+**Status:** V2a/V2b shipped (unscheduled, suggested, library, week TiZ). Layout uses **one focused-week sticky sidebar** on `/calendar` (not a copy inside every week row). Complements [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md). **Future UX:** [workout-pool-wizard-wireframe.md](./workout-pool-wizard-wireframe.md) (sticky top wizard).
 
 **Confirmed UX:** Workout pool lives in a **left sidebar** on the calendar, bound to the **focused week** (scroll position, Jump to week, or day selection). Collapsible; below `xl` opens as a drawer (collapsed by default). **Session role** uses enum `easy | moderate | intensity | long` (not a boolean intensity flag) — deferred to V2c. Tabs vs single scrollable list — **TBD** (currently one scrollable list with section headers).
 
@@ -59,6 +59,10 @@ Derived from season week session counts minus scheduled `PlannedSession` per dis
 | Source | `max(0, budget − scheduled)` per discipline |
 | Placement | Drag chip onto a day column → creates flexible session (or fills empty layout slot) |
 | After place | Chip count decrements; session may still need workout + TiZ |
+
+**Scheduled sessions** on the calendar (all non-race `PlannedSession` sources—flexible, template, layout, or legacy rows) count toward the unscheduled budget. Races are excluded.
+
+**Weekly template:** each item in `/calendar/template` has a **session role** (easy, moderate, intensity, long) with coaching definitions. Applying the template copies `sessionRole` onto each `PlannedSession` — same badges as manually placed skeletons.
 
 Unscheduled items are **intentionally vague** (“1 swim”) until the athlete assigns structure and targets.
 
