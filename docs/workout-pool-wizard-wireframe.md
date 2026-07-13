@@ -169,6 +169,18 @@ Skeleton sessions carry a **role** (`easy | moderate | intensity | long`). Role 
 
 Role does not affect chip count — only discipline matters for unscheduled math.
 
+### TiZ on place (hybrid — confirmed)
+
+After the role picker confirms, the session is created with **default `targetZones`** — no second popup.
+
+| Layer | Behavior |
+|-------|----------|
+| **Auto** | Skew zones from chosen `sessionRole` + share of discipline’s **remaining week zone budget** |
+| **Edit later** | Session editor or card “Edit zones” for explicit Z1–Z5 |
+| **Structured workout** | Build-tab apply **replaces** inherited zones with rollup from workout steps |
+
+Provisional inherited zones update **Week TiZ** and **Suggested** hard-zone remaining immediately; they refine when a structured workout is attached.
+
 ### Interactions
 
 | Action | Result |

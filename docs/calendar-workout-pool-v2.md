@@ -87,20 +87,43 @@ Rollup of `targetZones` across scheduled sessions in the week vs week zone minut
 
 ---
 
-## TiZ target assignment (V2 — deferred V2d+)
+## TiZ target assignment (V2d+)
 
-Separate but coupled to the pool: every placed session should be able to carry a **TiZ budget** (`PlannedSession.targetZones`).
+Separate but coupled to the pool: every placed session should carry a **TiZ budget** (`PlannedSession.targetZones`) so the **Week TiZ** tab and **Suggested** hard-zone math stay accurate.
+
+### Hybrid — unscheduled / skeleton place (confirmed)
+
+When a chip or skeleton lands on the calendar (after **role picker** in the wizard):
+
+| Step | Behavior |
+|------|----------|
+| **1. Default** | **Inherit from `sessionRole`** — auto-compute `targetZones` from role skew + a fair share of that discipline’s **remaining week zone budget** (no TiZ popup on drop) |
+| **2. Optional edit** | Session editor or “Edit zones” on the card for coaches who want explicit Z1–Z5 pills |
+| **3. Structured workout** | Applying a library/graph workout **replaces** inherited pills with TiZ rolled up from workout steps |
+
+**Role → default skew** (starting point before week-budget split):
+
+| Role | Default TiZ skew |
+|------|------------------|
+| `easy` | Mostly Z1–2 |
+| `moderate` | Mostly Z2 |
+| `intensity` | Z3–5 |
+| `long` | Z2 (+ duration hint when available) |
+
+Inherited zones are **provisional** until a structured workout is attached — week rollup updates immediately but refines when steps are applied.
+
+**Not on drop:** compact TiZ editor popup (keeps skeleton placement fast; role picker is enough at place time).
+
+### Other TiZ paths
 
 | When | How |
 |------|-----|
-| Layout materialize | Default TiZ from slot role + week zone split (easy slot → mostly Z1–2; intensity slot → Z3+) |
-| Place unscheduled chip | Open compact TiZ editor or inherit day slot role if dropped on flagged day |
-| Apply structured workout | Roll up from workout steps; merge or replace manual TiZ pills |
-| Manual edit | Existing planned session editor zone pills |
+| Layout materialize (V2f) | Default TiZ from layout slot role + week zone split |
+| Weekly template apply | Duration → Z2 placeholder when `durationMinutes` set; role from template item |
+| Apply structured workout | Roll up from steps; **replace** inherited/manual TiZ |
+| Manual edit | Planned session editor zone pills anytime |
 
-**`zoneAllocationMissing`** (already on model) flags sessions that need targets — pool can sort/filter “needs TiZ”.
-
-V2 zone allocation wizard step would set **week-level** zone minutes by discipline; the pool + per-session editor **allocates down** to sessions.
+**`zoneAllocationMissing`** clears when inherited or explicit `targetZones` cover the session duration.
 
 ---
 
@@ -194,9 +217,13 @@ sessionRole: "easy" | "moderate" | "intensity" | "long"  // default "moderate"
 | Sidebar instances | **One** shared pool for the focused week — not per week row |
 | Session role | **Enum** `easy \| moderate \| intensity \| long` (V2c) |
 | Suggested workouts | **Kept** as a first-class pool section |
-| Pool layout | **Single scrollable list** with section headers for now; tabs still TBD |
+| Pool layout | **Tabs:** Unscheduled \| Suggested \| Library \| Week TiZ |
+| Strength sessions | Count toward unscheduled budget; **no** structured workout builder in future wizard |
+| Apply to occupied session | **Block** — unassign or edit structured workout first (wizard) |
+| Segment library folders | `WARM_UP`, `MAIN_SET`, `COOL_DOWN` folder kinds (wizard) |
+| Sticky pool wizard | **Desktop only** — out of scope on mobile for now |
 
 ## Open items
 
-- [ ] Tabs (Unscheduled \| Suggested \| Library \| TiZ) vs one scrollable list with section headers
 - [ ] Brick / multisport slots (future)
+- [ ] TiZ on unscheduled place: compact editor vs inherit from `sessionRole` (V2d)
