@@ -73,6 +73,8 @@ type WorkoutTreeEditorProps = {
   onChange: (tree: WorkoutTreeDocument) => void;
   thresholdPaceSeconds?: number | null;
   primarySignal?: SignalType | null;
+  /** Compact chart + scrollable chart/steps viewport (calendar Build panel). */
+  compact?: boolean;
 };
 
 type TargetView = "zone" | "pace_power" | "heart_rate";
@@ -1611,6 +1613,7 @@ export function WorkoutTreeEditor({
   onChange,
   thresholdPaceSeconds = null,
   primarySignal = null,
+  compact = false,
 }: WorkoutTreeEditorProps) {
   const primaryTargetSignal = useMemo(
     () => resolvePrimaryTargetSignal(discipline, primarySignal),
@@ -1718,27 +1721,54 @@ export function WorkoutTreeEditor({
 
       <p className="text-sm text-zinc-500">Total estimated duration: {totalLabel}</p>
 
-      <WorkoutProfileChart
-        nodes={tree.nodes}
-        discipline={discipline}
-        lengthView={lengthView}
-        primarySignal={primarySignal}
-        displayUnit={displayUnit}
-        thresholdPaceSeconds={thresholdPaceSeconds}
-      />
-
-      <WorkoutNodeList
-        parentPath={[]}
-        nodes={tree.nodes}
-        discipline={discipline}
-        displayUnit={displayUnit}
-        poolSize={poolSize}
-        targetView={targetView}
-        lengthView={lengthView}
-        primaryTargetSignal={primaryTargetSignal}
-        activeDragPath={activeDragPath}
-        onTreeChange={onTreeChange}
-      />
+      {compact ? (
+        <div className="max-h-56 space-y-3 overflow-y-auto overscroll-contain rounded-md border border-zinc-200 p-2 dark:border-zinc-700">
+          <WorkoutProfileChart
+            nodes={tree.nodes}
+            discipline={discipline}
+            lengthView={lengthView}
+            primarySignal={primarySignal}
+            displayUnit={displayUnit}
+            thresholdPaceSeconds={thresholdPaceSeconds}
+            compact
+          />
+          <WorkoutNodeList
+            parentPath={[]}
+            nodes={tree.nodes}
+            discipline={discipline}
+            displayUnit={displayUnit}
+            poolSize={poolSize}
+            targetView={targetView}
+            lengthView={lengthView}
+            primaryTargetSignal={primaryTargetSignal}
+            activeDragPath={activeDragPath}
+            onTreeChange={onTreeChange}
+          />
+        </div>
+      ) : (
+        <>
+          <WorkoutProfileChart
+            nodes={tree.nodes}
+            discipline={discipline}
+            lengthView={lengthView}
+            primarySignal={primarySignal}
+            displayUnit={displayUnit}
+            thresholdPaceSeconds={thresholdPaceSeconds}
+          />
+          <WorkoutNodeList
+            parentPath={[]}
+            nodes={tree.nodes}
+            discipline={discipline}
+            displayUnit={displayUnit}
+            poolSize={poolSize}
+            targetView={targetView}
+            lengthView={lengthView}
+            primaryTargetSignal={primaryTargetSignal}
+            activeDragPath={activeDragPath}
+            onTreeChange={onTreeChange}
+          />
+        </>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="secondary" onClick={() => onTreeChange((nodes) => [...nodes, newLeafStep()])}>
