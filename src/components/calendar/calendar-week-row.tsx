@@ -120,7 +120,7 @@ export function CalendarWeekRow({
         ) : null}
       </h2>
 
-      <div className="min-w-0">
+      <div className="min-w-0 w-full">
         <div className={WEEK_DAY_HEADER_ROW_CLASS}>
           {DAY_HEADERS.map((h, i) => (
             <div

@@ -23,7 +23,7 @@ import { CalendarWeekRow } from "@/components/calendar/calendar-week-row";
 import { CalendarSessionCard } from "@/components/calendar/calendar-session-card";
 import { DraggableActivityCard } from "@/components/calendar/calendar-activity-card";
 import { ApplyTemplateDialog } from "@/components/calendar/apply-template-dialog";
-import { WorkoutPoolPanel } from "@/components/calendar/workout-pool-panel";
+import { WorkoutPoolPanel, calendarPoolLayoutClass } from "@/components/calendar/workout-pool-panel";
 import { WorkoutUploadButton } from "@/components/workout-upload-button";
 import type { CalendarRangeData } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
@@ -940,7 +940,7 @@ export function PlanningCalendar({
           )}
         </div>
 
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
+        <div className={calendarPoolLayoutClass(poolOpen)}>
           <WorkoutPoolPanel
             focusedWeekStart={focusedWeekStart}
             weekTarget={
@@ -956,7 +956,7 @@ export function PlanningCalendar({
             onOpenChange={setPoolOpen}
           />
 
-          <div className="min-w-0 flex-1 space-y-8">
+          <div className="min-w-0 space-y-8">
             <div
               ref={loadPreviousSentinelRef}
               className="py-2 text-center text-sm text-zinc-500"
