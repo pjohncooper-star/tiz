@@ -32,7 +32,6 @@ function session(
     targetPaceSeconds: null,
     poolSize: null,
     targetZones: null,
-    anchorWorkoutId: null,
     templateId: null,
     createdAt: new Date(),
     updatedAt: new Date(),

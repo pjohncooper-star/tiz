@@ -45,8 +45,6 @@ function createPrismaClient() {
 
 type PrismaWithPlanning = PrismaClient & {
 
-  anchorWorkout?: { findMany: unknown };
-
   weeklyScheduleTemplate?: { findMany: unknown };
 
   seasonPlan?: { findMany: unknown };
@@ -72,8 +70,6 @@ function hasDelegate(
 
 
 function isStalePrismaClient(client: PrismaClient): boolean {
-
-  if (!hasDelegate(client, "anchorWorkout")) return true;
 
   if (!hasDelegate(client, "weeklyScheduleTemplate")) return true;
 

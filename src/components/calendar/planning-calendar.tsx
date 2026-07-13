@@ -451,9 +451,6 @@ export function PlanningCalendar({
     }));
 
     try {
-      if (session.source === "ANCHORED_INSTANCE") {
-        await fetch(`/api/plan/sessions/${session.id}/detach`, { method: "POST" });
-      }
       const res = await fetch(`/api/plan/sessions/${session.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

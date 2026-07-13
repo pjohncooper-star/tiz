@@ -120,7 +120,6 @@ enum OnboardingStep {
 
 enum PlannedSessionSource {
   FLEXIBLE
-  ANCHORED_INSTANCE
   TEMPLATE
   RACE
 }
@@ -275,7 +274,6 @@ model Athlete {
   stravaConnection    StravaConnection?
   syncedActivities    SyncedActivity[]
   plannedSessions     PlannedSession[]
-  anchorWorkouts      AnchorWorkout[]
   workoutFolders      WorkoutFolder[]
   workoutTemplates    WorkoutTemplate[]
   structuredWorkouts  StructuredWorkout[]
@@ -418,41 +416,6 @@ model ZoneBreakdown {
   @@index([activityId, isCanonical])
 }
 
-model AnchorWorkout {
-  id                String     @id @default(cuid())
-  athleteId         String
-  seasonPlanId      String?
-  seasonPhaseId     String?
-  workoutTemplateId String?
-  title             String
-  discipline        Discipline
-  weekday           Weekday
-  durationMinutes   Int?
-  distanceMeters    Float?
-  targetSpeedMps    Float?
-  targetPaceSeconds Float?
-  targetZones       Json?
-  sessionRole       SessionRole @default(MODERATE)
-  steps             Json?
-  effectiveFrom     DateTime   @db.Date
-  effectiveUntil    DateTime?  @db.Date
-  respectTaper      Boolean    @default(true)
-  notes             String?
-  skippedDates      Json?
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-
-  athlete         Athlete          @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  seasonPlan      SeasonPlan?      @relation(fields: [seasonPlanId], references: [id], onDelete: SetNull)
-  seasonPhase     SeasonPhase?     @relation(fields: [seasonPhaseId], references: [id], onDelete: SetNull)
-  workoutTemplate WorkoutTemplate? @relation(fields: [workoutTemplateId], references: [id], onDelete: SetNull)
-  instances       PlannedSession[]
-
-  @@index([athleteId, weekday])
-  @@index([seasonPlanId])
-  @@index([seasonPhaseId])
-}
-
 model SeasonPlan {
   id                       String         @id @default(cuid())
   athleteId                String
@@ -510,7 +473,6 @@ model SeasonPlan {
   phases            SeasonPhase[]
   weeks             SeasonWeek[]
   goalEvents        GoalEvent[]    @relation("SeasonGoalEvents")
-  anchorWorkouts    AnchorWorkout[]
 
   @@index([athleteId, startDate])
   @@index([athleteId, status])
@@ -586,7 +548,6 @@ model SeasonPhase {
   seasonPlan   SeasonPlan              @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
   mesocycles   SeasonMesocycle[]
   disciplines  SeasonPhaseDiscipline[]
-  anchorWorkouts AnchorWorkout[]
 
   @@index([seasonPlanId, sortOrder])
 }
@@ -650,7 +611,6 @@ model SeasonWeek {
 model PlannedSession {
   id                       String               @id @default(cuid())
   athleteId                String
-  anchorWorkoutId          String?
   weeklyTemplateItemId     String?
   goalEventId              String?
   scheduledDate            DateTime             @db.Date
@@ -676,7 +636,6 @@ model PlannedSession {
   sessionRole              SessionRole          @default(MODERATE)
 
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  anchorWorkout        AnchorWorkout?              @relation(fields: [anchorWorkoutId], references: [id], onDelete: SetNull)
   weeklyTemplateItem   WeeklyScheduleTemplateItem? @relation(fields: [weeklyTemplateItemId], references: [id], onDelete: SetNull)
   goalEvent            GoalEvent?                  @relation("GoalEventCalendarSessions", fields: [goalEventId], references: [id], onDelete: SetNull)
   primaryForGoalEvent  GoalEvent?                  @relation("GoalEventPrimarySession")
@@ -685,7 +644,6 @@ model PlannedSession {
   workoutSource        SessionWorkoutSource?
   foldersLastCompleted WorkoutFolder[]       @relation("FolderLastCompleted")
 
-  @@unique([athleteId, anchorWorkoutId, scheduledDate])
   @@index([athleteId, scheduledDate])
   @@index([goalEventId])
   @@index([multisportGroupId])
@@ -729,7 +687,6 @@ model WorkoutTemplate {
 
   athlete              Athlete                @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   folder               WorkoutFolder?         @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  anchors              AnchorWorkout[]
   foldersLastCompleted WorkoutFolder[]        @relation("FolderLastCompleted")
   sessionSources       SessionWorkoutSource[]
 
