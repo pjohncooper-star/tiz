@@ -494,7 +494,14 @@ function CombinedSummaryRow({
 }
 
 function emptySportRow(): WeekSportSummary {
-  return { discipline: "BIKE", sessionCount: 0, plannedMinutes: 0, distanceMeters: 0, zoneMinutes: {} };
+  return {
+    discipline: "BIKE",
+    sessionCount: 0,
+    plannedMinutes: 0,
+    distanceMeters: 0,
+    zoneMinutes: {},
+    ecos: 0,
+  };
 }
 
 function CombinedExpandedMetricsSection({
@@ -757,6 +764,7 @@ type CalendarWeekSummaryProps = {
   currentWeekStart: string;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   defaultExpanded?: boolean;
+  ecoLoadEnabled?: boolean;
 };
 
 export function CalendarWeekSummary({
@@ -767,6 +775,7 @@ export function CalendarWeekSummary({
   currentWeekStart,
   disciplineSettings,
   defaultExpanded = false,
+  ecoLoadEnabled = false,
 }: CalendarWeekSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -786,12 +795,19 @@ export function CalendarWeekSummary({
   const hasPlanned = weekSummaryHasData(plannedSummary);
   const hasCompleted = completedSummary ? weekSummaryHasData(completedSummary) : false;
   const hasTarget = !!weekTarget;
+  const hasEcos =
+    ecoLoadEnabled &&
+    ((completedSummary?.total.ecos ?? 0) > 0 || plannedSummary.total.ecos > 0);
 
-  if (!hasPlanned && !hasCompleted && !hasTarget) return null;
+  if (!hasPlanned && !hasCompleted && !hasTarget && !hasEcos) return null;
 
-  const plannedPills = buildCollapsedWeekSummaryPills(plannedSummary, disciplineSettings);
+  const plannedPills = buildCollapsedWeekSummaryPills(plannedSummary, disciplineSettings, {
+    includeEcos: ecoLoadEnabled,
+  });
   const completedPills = completedSummary
-    ? buildCollapsedWeekSummaryPills(completedSummary, disciplineSettings)
+    ? buildCollapsedWeekSummaryPills(completedSummary, disciplineSettings, {
+        includeEcos: ecoLoadEnabled,
+      })
     : [];
 
   return (

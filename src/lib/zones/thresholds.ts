@@ -1,6 +1,8 @@
 import type { Discipline, SignalType, ThresholdProfile } from "@prisma/client";
 import { db } from "@/lib/db";
 
+export { parseZoneBoundaries } from "./parse-boundaries";
+
 export async function getThresholdProfileAtDate(
   athleteId: string,
   discipline: Discipline,
@@ -16,16 +18,4 @@ export async function getThresholdProfileAtDate(
     },
     orderBy: { effectiveDate: "desc" },
   });
-}
-
-export function parseZoneBoundaries(zoneBoundaries: unknown): number[] {
-  if (Array.isArray(zoneBoundaries)) return zoneBoundaries as number[];
-  if (
-    zoneBoundaries &&
-    typeof zoneBoundaries === "object" &&
-    "boundaries" in zoneBoundaries
-  ) {
-    return (zoneBoundaries as { boundaries: number[] }).boundaries;
-  }
-  throw new Error("Invalid zone boundaries");
 }

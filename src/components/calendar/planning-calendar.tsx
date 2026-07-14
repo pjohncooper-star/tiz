@@ -73,6 +73,7 @@ type PlanningCalendarProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   workoutShadingSettings: WorkoutShadingSettings;
   workoutShadingTarget: WorkoutShadingTarget;
+  ecoLoadEnabled?: boolean;
   activityDates: string[];
   minDate: string | null;
   maxDate: string | null;
@@ -109,6 +110,7 @@ export function PlanningCalendar({
   disciplineSettings,
   workoutShadingSettings,
   workoutShadingTarget,
+  ecoLoadEnabled = false,
   activityDates,
   minDate,
   maxDate,
@@ -1079,6 +1081,7 @@ export function PlanningCalendar({
               disciplineSettings={disciplineSettings}
               workoutShadingSettings={workoutShadingSettings}
               workoutShadingTarget={workoutShadingTarget}
+              ecoLoadEnabled={ecoLoadEnabled}
               onSessionCreated={handleRefresh}
               activeDragId={activeDragId}
               isCurrentWeek={weekStart === currentWeekStart}

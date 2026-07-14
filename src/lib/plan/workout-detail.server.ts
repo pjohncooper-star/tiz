@@ -39,6 +39,8 @@ export type WorkoutDetailLinkedActivity = {
   rawStreams: unknown;
   durationSeconds: number;
   startTime: Date;
+  ecos: number | null;
+  ecoComputed: boolean;
   surveyResponse: SurveyResponse | null;
   zoneBreakdowns: (ZoneBreakdown & { thresholdProfile: ThresholdProfile | null })[];
 };
@@ -76,6 +78,7 @@ export type WorkoutDetailViewModel = {
     workoutTemplate: { id: string; name: string; sortOrder: number | null };
   } | null;
   selfEvalConfig: SelfEvalConfig;
+  ecoLoadEnabled: boolean;
   linkedActivity: WorkoutDetailLinkedActivity | null;
   workoutLaps: WorkoutExecutionLap[] | undefined;
   swimLaps: SwimLapInterval[] | null;
@@ -126,13 +129,16 @@ export async function loadWorkoutDetail(
     }),
     db.athlete.findUnique({
       where: { id: athleteId },
-      select: { selfEvalConfig: true },
+      select: { selfEvalConfig: true, ecoLoadEnabled: true },
     }),
   ]);
 
   if (!plannedSession) notFound();
 
   const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
+  const ecoLoadEnabled = Boolean(
+    athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
+  );
 
   const disciplineSettingsRows = await db.athleteDisciplineSettings.findMany({
     where: { athleteId },
@@ -221,25 +227,45 @@ export async function loadWorkoutDetail(
       })
     : null;
 
+  const linkedActivityView: WorkoutDetailLinkedActivity | null = linkedActivity
+    ? {
+        id: linkedActivity.id,
+        discipline: linkedActivity.discipline,
+        rawStreams: linkedActivity.rawStreams,
+        durationSeconds: linkedActivity.durationSeconds,
+        startTime: linkedActivity.startTime,
+        ecos:
+          "ecos" in linkedActivity
+            ? ((linkedActivity as { ecos?: number | null }).ecos ?? null)
+            : null,
+        ecoComputed:
+          "ecoComputed" in linkedActivity
+            ? Boolean((linkedActivity as { ecoComputed?: boolean }).ecoComputed)
+            : false,
+        surveyResponse: linkedActivity.surveyResponse,
+        zoneBreakdowns: linkedActivity.zoneBreakdowns,
+      }
+    : null;
+
   let workoutLaps: WorkoutExecutionLap[] | undefined;
   let swimLaps: SwimLapInterval[] | null = null;
 
-  if (linkedActivity?.rawStreams && typeof linkedActivity.rawStreams === "object") {
-    const streams = linkedActivity.rawStreams as NormalizedStreams;
+  if (linkedActivityView?.rawStreams && typeof linkedActivityView.rawStreams === "object") {
+    const streams = linkedActivityView.rawStreams as NormalizedStreams;
     const wl = streams.workoutLaps;
     workoutLaps = Array.isArray(wl) ? wl : wl?.data;
     if (plannedSession.discipline === "SWIM") {
-      swimLaps = parseSwimLapIntervals(parseStoredStreams(linkedActivity.rawStreams));
+      swimLaps = parseSwimLapIntervals(parseStoredStreams(linkedActivityView.rawStreams));
     }
   }
 
   const structuredSteps = plannedSession.structuredWorkout?.steps;
   const isEndurance = ENDURANCE_DISCIPLINES.has(plannedSession.discipline as PlanDiscipline);
   const showExecutionChart =
-    !!linkedActivity &&
+    !!linkedActivityView &&
     (plannedSession.discipline === "BIKE" || plannedSession.discipline === "RUN");
 
-  const hasCompleted = !!linkedActivity || hasCompletedOverride;
+  const hasCompleted = !!linkedActivityView || hasCompletedOverride;
   const hasPlannedMetrics =
     plannedSession.distanceMeters != null ||
     plannedSession.targetSpeedMps != null ||
@@ -259,12 +285,12 @@ export async function loadWorkoutDetail(
   });
 
   const summaryStats =
-    linkedActivity && !isEndurance
+    linkedActivityView && linkedActivity && !isEndurance
       ? computeActivitySummary({
-          discipline: linkedActivity.discipline,
-          durationSeconds: linkedActivity.durationSeconds,
+          discipline: linkedActivityView.discipline,
+          durationSeconds: linkedActivityView.durationSeconds,
           distanceMeters: linkedActivity.distanceMeters,
-          streams: parseStoredStreams(linkedActivity.rawStreams),
+          streams: parseStoredStreams(linkedActivityView.rawStreams),
           displayUnit,
         })
       : [];
@@ -299,7 +325,8 @@ export async function loadWorkoutDetail(
     sessionSource: plannedSession.source,
     workoutSource: plannedSession.workoutSource,
     selfEvalConfig,
-    linkedActivity,
+    ecoLoadEnabled,
+    linkedActivity: linkedActivityView,
     workoutLaps,
     swimLaps,
     showExecutionChart,

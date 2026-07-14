@@ -17,6 +17,7 @@ type WorkoutDetailAnalysisProps = {
     | "structuredSteps"
     | "linkedActivity"
     | "selfEvalConfig"
+    | "ecoLoadEnabled"
     | "workoutLaps"
     | "swimLaps"
     | "showExecutionChart"
@@ -33,6 +34,7 @@ export function WorkoutDetailAnalysis({ viewModel }: WorkoutDetailAnalysisProps)
     structuredSteps,
     linkedActivity,
     selfEvalConfig,
+    ecoLoadEnabled,
     workoutLaps,
     swimLaps,
     showExecutionChart,
@@ -48,6 +50,23 @@ export function WorkoutDetailAnalysis({ viewModel }: WorkoutDetailAnalysisProps)
       {!isEndurance && summaryStats.length > 0 ? (
         <Card title="Summary">
           <ActivitySummary stats={summaryStats} />
+        </Card>
+      ) : null}
+
+      {ecoLoadEnabled ? (
+        <Card title="ECO load">
+          {linkedActivity?.ecos != null ? (
+            <p className="text-2xl font-semibold tabular-nums">
+              {Math.round(linkedActivity.ecos)}{" "}
+              <span className="text-sm font-normal text-zinc-500">ECOs</span>
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500">
+              {linkedActivity?.ecoComputed
+                ? "No usable signal for ECO on this session"
+                : "ECO not computed yet — load recalculates with zone recompute"}
+            </p>
+          )}
         </Card>
       ) : null}
 

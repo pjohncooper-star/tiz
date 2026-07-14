@@ -47,6 +47,7 @@ export default async function CalendarPage({
       onboardingStep: true,
       strengthPastWorkoutShading: true,
       workoutShadingTarget: true,
+      ecoLoadEnabled: true,
     },
   });
   if (athlete && athlete.onboardingStep !== "COMPLETE") {
@@ -251,6 +252,7 @@ export default async function CalendarPage({
         disciplineSettings={disciplineUnitSettings}
         workoutShadingSettings={workoutShadingSettings}
         workoutShadingTarget={workoutShadingTarget}
+        ecoLoadEnabled={Boolean(athlete?.ecoLoadEnabled)}
         activityDates={activityDates}
         minDate={minDate}
         maxDate={maxDate}

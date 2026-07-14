@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { DisciplineUnitsSettings } from "@/components/discipline-units-settings";
+import { EcoLoadSettingsPanel } from "@/components/eco-load-settings-panel";
 import { SelfEvalSettingsPanel } from "@/components/self-eval-settings-panel";
 import { WorkoutShadingSettingsPanel } from "@/components/workout-shading-settings";
 import { Card } from "@/components/ui";
@@ -25,23 +26,42 @@ async function loadAthleteSettingsProfile(athleteId: string) {
         workoutShadingTarget: true,
         phaseKindZoneDefaults: true,
         zoneFocusCatalog: true,
+        ecoLoadEnabled: true,
       },
     });
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|ecoLoadEnabled|column/.test(
         error.message
       )
     ) {
-      return db.athlete.findUnique({
-        where: { id: athleteId },
-        select: {
-          strengthPastWorkoutShading: true,
-          selfEvalConfig: true,
-          workoutShadingTarget: true,
-        },
-      });
+      try {
+        return await db.athlete.findUnique({
+          where: { id: athleteId },
+          select: {
+            strengthPastWorkoutShading: true,
+            selfEvalConfig: true,
+            workoutShadingTarget: true,
+            ecoLoadEnabled: true,
+          },
+        });
+      } catch (inner) {
+        if (
+          inner instanceof Error &&
+          /ecoLoadEnabled|column/.test(inner.message)
+        ) {
+          return db.athlete.findUnique({
+            where: { id: athleteId },
+            select: {
+              strengthPastWorkoutShading: true,
+              selfEvalConfig: true,
+              workoutShadingTarget: true,
+            },
+          });
+        }
+        throw inner;
+      }
     }
     throw error;
   }
@@ -81,6 +101,10 @@ export default async function SettingsPage() {
   const zoneFocusCatalog = parseZoneFocusCatalog(
     athlete && "zoneFocusCatalog" in athlete ? athlete.zoneFocusCatalog : null
   );
+  const ecoLoadEnabled =
+    athlete && "ecoLoadEnabled" in athlete
+      ? Boolean(athlete.ecoLoadEnabled)
+      : false;
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
@@ -93,6 +117,9 @@ export default async function SettingsPage() {
           initialSettings={workoutShadingSettings}
           initialShadingTarget={workoutShadingTarget}
         />
+      </Card>
+      <Card title="Training load (ECO)">
+        <EcoLoadSettingsPanel initialEnabled={ecoLoadEnabled} />
       </Card>
       <Card title="Self evaluation">
         <SelfEvalSettingsPanel initialConfig={selfEvalConfig} />

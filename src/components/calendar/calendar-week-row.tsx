@@ -41,6 +41,7 @@ type CalendarWeekRowProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   workoutShadingSettings: WorkoutShadingSettings;
   workoutShadingTarget: WorkoutShadingTarget;
+  ecoLoadEnabled?: boolean;
   onSessionCreated: () => void;
   activeDragId: string | null;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
@@ -68,6 +69,7 @@ export function CalendarWeekRow({
   disciplineSettings,
   workoutShadingSettings,
   workoutShadingTarget,
+  ecoLoadEnabled = false,
   onSessionCreated,
   activeDragId,
   scrollAnchorRef,
@@ -228,6 +230,7 @@ export function CalendarWeekRow({
         currentWeekStart={currentWeekStart}
         disciplineSettings={disciplineSettings}
         defaultExpanded={current}
+        ecoLoadEnabled={ecoLoadEnabled}
       />
     </section>
   );

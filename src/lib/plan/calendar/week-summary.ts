@@ -18,6 +18,7 @@ export type WeekSportSummary = {
   plannedMinutes: number;
   distanceMeters: number;
   zoneMinutes: ZoneMinutes;
+  ecos: number;
 };
 
 export type WeekPlannedSummary = {
@@ -26,7 +27,14 @@ export type WeekPlannedSummary = {
 };
 
 function emptySportSummary(discipline: Discipline): WeekSportSummary {
-  return { discipline, sessionCount: 0, plannedMinutes: 0, distanceMeters: 0, zoneMinutes: {} };
+  return {
+    discipline,
+    sessionCount: 0,
+    plannedMinutes: 0,
+    distanceMeters: 0,
+    zoneMinutes: {},
+    ecos: 0,
+  };
 }
 
 export function summarizeWeekPlannedSessions(
@@ -62,6 +70,7 @@ export function summarizeWeekPlannedSessions(
     total.sessionCount += row.sessionCount;
     total.plannedMinutes += row.plannedMinutes;
     total.distanceMeters += row.distanceMeters;
+    total.ecos += row.ecos;
     for (const [key, minutes] of Object.entries(row.zoneMinutes)) {
       totalZones[key] = (totalZones[key] ?? 0) + minutes;
     }
@@ -113,6 +122,7 @@ export function summarizeWeekCompletedSessions(
     total.sessionCount += row.sessionCount;
     total.plannedMinutes += row.plannedMinutes;
     total.distanceMeters += row.distanceMeters;
+    total.ecos += row.ecos;
     for (const [key, minutes] of Object.entries(row.zoneMinutes)) {
       totalZones[key] = (totalZones[key] ?? 0) + minutes;
     }
@@ -134,6 +144,7 @@ export function mergeWeekSummaries(...summaries: WeekPlannedSummary[]): WeekPlan
       acc.sessionCount += row.sessionCount;
       acc.plannedMinutes += row.plannedMinutes;
       acc.distanceMeters += row.distanceMeters;
+      acc.ecos += row.ecos;
       for (const [key, minutes] of Object.entries(row.zoneMinutes)) {
         if (minutes > 0) {
           acc.zoneMinutes[key] = (acc.zoneMinutes[key] ?? 0) + minutes;
@@ -152,6 +163,7 @@ export function mergeWeekSummaries(...summaries: WeekPlannedSummary[]): WeekPlan
     total.sessionCount += row.sessionCount;
     total.plannedMinutes += row.plannedMinutes;
     total.distanceMeters += row.distanceMeters;
+    total.ecos += row.ecos;
     for (const [key, minutes] of Object.entries(row.zoneMinutes)) {
       totalZones[key] = (totalZones[key] ?? 0) + minutes;
     }
@@ -179,6 +191,7 @@ export function summarizeWeekCompletedActivities(
     durationSeconds: number;
     distanceMeters: number | null;
     zoneMinutes: ZoneMinutes;
+    ecos?: number | null;
   }>
 ): WeekPlannedSummary {
   const byDiscipline = new Map<Discipline, WeekSportSummary>();
@@ -193,6 +206,9 @@ export function summarizeWeekCompletedActivities(
     row.plannedMinutes += Math.round(activity.durationSeconds / 60);
     if (activity.distanceMeters && activity.distanceMeters > 0) {
       row.distanceMeters += activity.distanceMeters;
+    }
+    if (activity.ecos != null && Number.isFinite(activity.ecos)) {
+      row.ecos += activity.ecos;
     }
     for (const [key, minutes] of Object.entries(activity.zoneMinutes)) {
       if (minutes > 0) {
@@ -211,6 +227,7 @@ export function summarizeWeekCompletedActivities(
     total.sessionCount += row.sessionCount;
     total.plannedMinutes += row.plannedMinutes;
     total.distanceMeters += row.distanceMeters;
+    total.ecos += row.ecos;
     for (const [key, minutes] of Object.entries(row.zoneMinutes)) {
       totalZones[key] = (totalZones[key] ?? 0) + minutes;
     }
@@ -298,7 +315,8 @@ export type CollapsedSummaryPill = {
 
 export function buildCollapsedWeekSummaryPills(
   summary: WeekPlannedSummary,
-  settings: Record<PlanDiscipline, DisciplineUnitSettings>
+  settings: Record<PlanDiscipline, DisciplineUnitSettings>,
+  options?: { includeEcos?: boolean }
 ): CollapsedSummaryPill[] {
   const pills: CollapsedSummaryPill[] = [];
 
@@ -310,9 +328,22 @@ export function buildCollapsedWeekSummaryPills(
     });
   }
 
+  if (options?.includeEcos && summary.total.ecos > 0) {
+    pills.push({
+      id: "ecos",
+      label: "ECO",
+      text: `${Math.round(summary.total.ecos)} ECOs`,
+    });
+  }
+
   for (const row of summary.bySport) {
     const hasZoneTime = Object.values(row.zoneMinutes).some((m) => m > 0);
-    const hasData = row.sessionCount > 0 || row.plannedMinutes > 0 || row.distanceMeters > 0 || hasZoneTime;
+    const hasData =
+      row.sessionCount > 0 ||
+      row.plannedMinutes > 0 ||
+      row.distanceMeters > 0 ||
+      hasZoneTime ||
+      (options?.includeEcos && row.ecos > 0);
     if (!hasData) continue;
 
     const label = DISCIPLINE_DISPLAY_LABELS[row.discipline] ?? row.discipline;
@@ -323,6 +354,9 @@ export function buildCollapsedWeekSummaryPills(
     const distance = formatSummaryDistance(row.discipline, row.distanceMeters, settings);
     if (distance !== "—") {
       values.push(distance);
+    }
+    if (options?.includeEcos && row.ecos > 0) {
+      values.push(`${Math.round(row.ecos)} ECOs`);
     }
     if (values.length > 0) {
       pills.push({

@@ -8,11 +8,53 @@ import {
 import { normalizeStreamsForZones } from "@/lib/zones/normalize-streams";
 import { resolveSignalSettingsForDate } from "@/lib/zones/signal-preference";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
-import type { SignalType } from "@prisma/client";
+import { computeSessionEcos, ecoTransitionBump } from "@/lib/eco/compute";
+import { Prisma, type ActivityLegType, type SignalType } from "@prisma/client";
 
 export function parseStoredStreams(raw: unknown): NormalizedStreams {
   if (!raw || typeof raw !== "object") return {};
   return raw as NormalizedStreams;
+}
+
+async function priorLegTypesForActivity(input: {
+  athleteId: string;
+  multisportGroupId: string | null;
+  sessionIndex: number | null;
+  startTime: Date;
+}): Promise<ActivityLegType[]> {
+  if (!input.multisportGroupId) return [];
+  const siblings = await db.syncedActivity.findMany({
+    where: {
+      athleteId: input.athleteId,
+      multisportGroupId: input.multisportGroupId,
+      OR: [
+        ...(input.sessionIndex != null
+          ? [{ sessionIndex: { lt: input.sessionIndex } }]
+          : []),
+        {
+          sessionIndex: input.sessionIndex,
+          startTime: { lt: input.startTime },
+        },
+        ...(input.sessionIndex == null
+          ? [{ startTime: { lt: input.startTime } }]
+          : []),
+      ],
+    },
+    select: { legType: true, sessionIndex: true, startTime: true },
+    orderBy: [{ sessionIndex: "asc" }, { startTime: "asc" }],
+  });
+
+  return siblings
+    .map((s) => s.legType)
+    .filter((t): t is ActivityLegType => t != null && t !== "TRANSITION");
+}
+
+function ecoClearUpdate() {
+  return {
+    ecos: null as number | null,
+    ecoZoneMinutes: Prisma.JsonNull,
+    ecoComputed: true,
+  };
 }
 
 export async function computeActivityZones(activityId: string) {
@@ -28,7 +70,11 @@ export async function computeActivityZones(activityId: string) {
   if (!settings) {
     await db.syncedActivity.update({
       where: { id: activityId },
-      data: { noUsableSignal: true, zoneComputed: true },
+      data: {
+        noUsableSignal: true,
+        zoneComputed: true,
+        ...ecoClearUpdate(),
+      },
     });
     return;
   }
@@ -57,7 +103,11 @@ export async function computeActivityZones(activityId: string) {
   if (!resolved) {
     await db.syncedActivity.update({
       where: { id: activityId },
-      data: { noUsableSignal: true, zoneComputed: true },
+      data: {
+        noUsableSignal: true,
+        zoneComputed: true,
+        ...ecoClearUpdate(),
+      },
     });
     return;
   }
@@ -71,7 +121,11 @@ export async function computeActivityZones(activityId: string) {
   if (!profile) {
     await db.syncedActivity.update({
       where: { id: activityId },
-      data: { noUsableSignal: true, zoneComputed: true },
+      data: {
+        noUsableSignal: true,
+        zoneComputed: true,
+        ...ecoClearUpdate(),
+      },
     });
     return;
   }
@@ -130,8 +184,35 @@ export async function computeActivityZones(activityId: string) {
     });
   }
 
+  const priorLegs = await priorLegTypesForActivity({
+    athleteId: activity.athleteId,
+    multisportGroupId: activity.multisportGroupId,
+    sessionIndex: activity.sessionIndex,
+    startTime: activity.startTime,
+  });
+  const transitionBump = ecoTransitionBump({
+    discipline: activity.discipline,
+    legType: activity.legType,
+    priorLegTypes: priorLegs,
+  });
+
+  const eco = computeSessionEcos({
+    streams,
+    signal: resolved.signal,
+    thresholdValue: profile.thresholdValue,
+    discipline: activity.discipline,
+    durationSeconds: activity.durationSeconds,
+    transitionBump,
+  });
+
   await db.syncedActivity.update({
     where: { id: activityId },
-    data: { zoneComputed: true, noUsableSignal: false },
+    data: {
+      zoneComputed: true,
+      noUsableSignal: false,
+      ecos: eco?.ecos ?? null,
+      ecoZoneMinutes: eco?.ecoZoneMinutes ?? Prisma.JsonNull,
+      ecoComputed: true,
+    },
   });
 }

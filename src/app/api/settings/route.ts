@@ -72,6 +72,10 @@ export async function GET() {
     thresholds,
     signalPreferences,
     onboardingStep: athlete?.onboardingStep,
+    ecoLoadEnabled:
+      athlete && "ecoLoadEnabled" in athlete
+        ? Boolean((athlete as { ecoLoadEnabled?: boolean }).ecoLoadEnabled)
+        : false,
   });
 }
 
@@ -157,6 +161,38 @@ export async function PUT(req: Request) {
           : error instanceof Error
             ? error.message
             : "Could not save self-eval settings";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (body.type === "eco-load") {
+    try {
+      const data = z.object({ ecoLoadEnabled: z.boolean() }).parse(body.data);
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: { ecoLoadEnabled: data.ecoLoadEnabled },
+      });
+      if (!data.ecoLoadEnabled) {
+        await db.interactionInsight.deleteMany({
+          where: {
+            athleteId,
+            tier: "V0",
+            triggerPattern: { contains: "_ECO_" },
+          },
+        });
+      }
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      console.error("eco-load update failed:", error);
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid ECO load setting"
+          : error instanceof Error &&
+              /ecoLoadEnabled|EcoLoadEnabled|column/.test(error.message)
+            ? "ECO load settings are not available yet. Run prisma/migrations/manual_eco_load.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save ECO load setting";
       return NextResponse.json({ error: message }, { status: 500 });
     }
   }

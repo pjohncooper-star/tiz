@@ -7,6 +7,8 @@ import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import { getSignalingGateStatus } from "@/lib/signaling/gates";
+import { sumEcos } from "@/lib/eco/rollup";
+import { isEcoTriggerPattern } from "@/lib/signaling/eco-patterns";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +21,18 @@ type DashboardPageProps = {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const session = await requireAthlete();
-  const athlete = await db.athlete.findUnique({ where: { id: session.user.athleteId! } });
+  const athlete = await db.athlete.findUnique({
+    where: { id: session.user.athleteId! },
+  });
   if (athlete && athlete.onboardingStep !== "COMPLETE") {
     onboardingRedirect(athlete.onboardingStep);
   }
 
   const params = await searchParams;
   const athleteId = session.user.athleteId!;
+  const ecoLoadEnabled = Boolean(
+    athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
+  );
   const anchor =
     params.week && DATE_KEY.test(params.week) ? parseISO(params.week) : new Date();
   const weekStart = startOfWeek(anchor, WEEK_OPTS);
@@ -45,7 +52,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     db.interactionInsight.findMany({
       where: { athleteId, tier: "V0" },
       orderBy: { generatedAt: "desc" },
-      take: 6,
+      take: 12,
     }),
     db.syncedActivity.count({ where: { athleteId, ...recordedActivityWhere } }),
     db.syncedActivity.aggregate({
@@ -84,6 +91,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     legType: a.legType,
   }));
 
+  const weekEcos = ecoLoadEnabled
+    ? sumEcos(
+        activities.map((a) =>
+          "ecos" in a ? ((a as { ecos?: number | null }).ecos ?? null) : null
+        )
+      )
+    : 0;
+
+  const visibleInsights = insights
+    .filter((i) => ecoLoadEnabled || !isEcoTriggerPattern(i.triggerPattern))
+    .slice(0, 6);
+
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <div>
@@ -110,7 +129,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <Card title="Insights">
         <InsightsPanel
           gateActivated={gate.activated}
-          insights={insights.map((i) => ({
+          insights={visibleInsights.map((i) => ({
             id: i.id,
             headline: i.headline,
             sampleSize: i.sampleSize,
@@ -119,6 +138,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           }))}
         />
       </Card>
+
+      {ecoLoadEnabled ? (
+        <Card title="Week ECO load">
+          <p className="text-2xl font-semibold tabular-nums">
+            {Math.round(weekEcos)}{" "}
+            <span className="text-sm font-normal text-zinc-500">ECOs</span>
+          </p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Sum of scored swim / bike / run sessions this week
+          </p>
+        </Card>
+      ) : null}
 
       <Card title="Training week">
         <DashboardWeekView

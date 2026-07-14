@@ -5,6 +5,7 @@ import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 export type CalendarWeekActivity = WeekActivity & {
   distanceMeters: number | null;
   zoneMinutes: ZoneMinutes;
+  ecos: number | null;
 };
 
 type ActivityRow = {
@@ -19,6 +20,7 @@ type ActivityRow = {
   multisportGroupId: string | null;
   sessionIndex: number | null;
   legType: string | null;
+  ecos?: number | null;
   zoneBreakdowns: Array<{
     zone: number;
     minutes: number;
@@ -47,6 +49,7 @@ export function serializeCalendarActivities(activities: ActivityRow[]): Calendar
       durationSeconds: activity.durationSeconds,
       distanceMeters: activity.distanceMeters,
       zoneMinutes,
+      ecos: activity.ecos ?? null,
       multisportGroupId: activity.multisportGroupId,
       sessionIndex: activity.sessionIndex,
       legType: activity.legType,

@@ -2,12 +2,19 @@ import { db } from "@/lib/db";
 import { getSignalingGateStatus } from "./gates";
 import {
   lightLoadRateForPrecedingWorkouts,
+  lightEcoRateForPrecedingWorkouts,
   OUTCOME_DISCIPLINES,
   overextendedRateForPrecedingWorkouts,
+  overextendedEcoRateForPrecedingWorkouts,
   TRIGGER_DISCIPLINES,
   TRIGGER_ZONES,
   type ActivityWithZones,
 } from "./preceding-load";
+import {
+  ecoLightTriggerPattern,
+  ecoOverextendedTriggerPattern,
+} from "./eco-patterns";
+import { isEcoLoadEnabledForAthlete } from "@/lib/eco/preference";
 import {
   DEFAULT_LOOKBACK_WINDOW_HOURS,
   type LookbackWindowHours,
@@ -185,7 +192,10 @@ export async function generateV0Insights(
     };
   }
 
-  const allActivities = await loadActivitiesWithZones(athleteId);
+  const [allActivities, ecoEnabled] = await Promise.all([
+    loadActivitiesWithZones(athleteId),
+    isEcoLoadEnabledForAthlete(athleteId),
+  ]);
   const riskInsights: V0InsightDraft[] = [];
   const protectiveInsights: V0InsightDraft[] = [];
 
@@ -250,6 +260,58 @@ export async function generateV0Insights(
             polarity: "protective",
             headline: `Good/great ${outcome} workouts were more often preceded within ${lookbackHours}h by ${trigger} workout with light Z${zone} load than rough/bad ${outcome} workouts.`,
             triggerPattern: `${triggerDisc}_Z${zone}_light_prev1-3_${lookbackHours}h`,
+            outcomePattern: `${outcomeDisc}_good_or_great`,
+            sampleSize: badOutcomes.length + goodOutcomes.length,
+            confidenceNote: comparisonNote,
+          });
+        }
+      }
+
+      if (ecoEnabled) {
+        const badEcoOver = overextendedEcoRateForPrecedingWorkouts(
+          badOutcomes,
+          allActivities,
+          triggerDisc,
+          config,
+          lookbackHours
+        );
+        const goodEcoOver = overextendedEcoRateForPrecedingWorkouts(
+          goodOutcomes,
+          allActivities,
+          triggerDisc,
+          config,
+          lookbackHours
+        );
+        if (patternMatchesRisk(badEcoOver, goodEcoOver, config)) {
+          riskInsights.push({
+            polarity: "risk",
+            headline: `Rough/bad ${outcome} workouts were more often preceded within ${lookbackHours}h by ${trigger} workout with overextended ECO load than good ${outcome} workouts.`,
+            triggerPattern: ecoOverextendedTriggerPattern(triggerDisc, lookbackHours),
+            outcomePattern: `${outcomeDisc}_rough_or_bad`,
+            sampleSize: badOutcomes.length + goodOutcomes.length,
+            confidenceNote: comparisonNote,
+          });
+        }
+
+        const goodEcoLight = lightEcoRateForPrecedingWorkouts(
+          goodOutcomes,
+          allActivities,
+          triggerDisc,
+          config,
+          lookbackHours
+        );
+        const badEcoLight = lightEcoRateForPrecedingWorkouts(
+          badOutcomes,
+          allActivities,
+          triggerDisc,
+          config,
+          lookbackHours
+        );
+        if (patternMatchesProtective(goodEcoLight, badEcoLight, config)) {
+          protectiveInsights.push({
+            polarity: "protective",
+            headline: `Good/great ${outcome} workouts were more often preceded within ${lookbackHours}h by ${trigger} workout with light ECO load than rough/bad ${outcome} workouts.`,
+            triggerPattern: ecoLightTriggerPattern(triggerDisc, lookbackHours),
             outcomePattern: `${outcomeDisc}_good_or_great`,
             sampleSize: badOutcomes.length + goodOutcomes.length,
             confidenceNote: comparisonNote,

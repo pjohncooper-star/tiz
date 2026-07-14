@@ -6,8 +6,8 @@ import type {
 } from "@prisma/client";
 import type { SwimLapPoint } from "@/lib/import/swim-laps";
 import { velocityToPaceSecPer100m, velocityToPaceSecPerKm } from "@/lib/units/pace";
+import { parseZoneBoundaries } from "./parse-boundaries";
 import { resolveSampleDurations } from "./sample-time";
-import { parseZoneBoundaries } from "./thresholds";
 
 export type StreamSeries = { data: number[] };
 
