@@ -59,7 +59,8 @@ import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
-import { Button } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
+import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const MAX_PAST_WEEKS_WITHOUT_ACTIVITIES = 52;
@@ -133,6 +134,7 @@ export function PlanningCalendar({
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
   const [isXl, setIsXl] = useState(false);
+  const [pmcRefreshKey, setPmcRefreshKey] = useState(0);
   // Pool week starts on this week and stays independent of calendar scroll.
   const [poolWeekStart, setPoolWeekStart] = useState(currentWeekStart);
   const [pendingRolePick, setPendingRolePick] = useState<{
@@ -903,6 +905,7 @@ export function PlanningCalendar({
   async function handleRefresh() {
     setArmedUnscheduled({});
     await reloadCalendarData();
+    setPmcRefreshKey((k) => k + 1);
   }
 
   function handleTemplateApplied(appliedWeekStart: string) {
@@ -1060,6 +1063,15 @@ export function PlanningCalendar({
         {showBuildGutter ? <SegmentLibraryPane composer={poolComposer} /> : null}
 
         <div className="space-y-8">
+          {ecoLoadEnabled ? (
+            <Card title="Fitness / fatigue (plan + history)">
+              <FitnessFatigueChart
+                key={pmcRefreshKey}
+                includePlan
+                compact
+              />
+            </Card>
+          ) : null}
           <div
             ref={loadPreviousSentinelRef}
             className="py-2 text-center text-sm text-zinc-500"
