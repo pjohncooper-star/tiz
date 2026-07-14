@@ -22,6 +22,7 @@ export type SyncedActivityWrite = {
   name: string;
   discipline: Discipline;
   startTime: Date;
+  utcOffsetSeconds?: number | null;
   durationSeconds: number;
   distanceMeters?: number | null;
   externalId?: string | null;
@@ -93,6 +94,9 @@ export async function upsertSyncedActivity(
         rawStreams,
         streamsFetched: true,
         ...(input.externalId ? { externalId: input.externalId } : {}),
+        ...(input.utcOffsetSeconds != null
+          ? { utcOffsetSeconds: input.utcOffsetSeconds }
+          : {}),
         dedupFingerprint: normalizedFingerprint,
         ...(shouldRecomputeZones ? { zoneComputed: false } : {}),
       },
@@ -120,6 +124,7 @@ export async function upsertSyncedActivity(
       discipline: input.discipline,
       name: input.name,
       startTime: input.startTime,
+      utcOffsetSeconds: input.utcOffsetSeconds ?? null,
       durationSeconds: input.durationSeconds,
       distanceMeters: input.distanceMeters ?? null,
       source: input.source,

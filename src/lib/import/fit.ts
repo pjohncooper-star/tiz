@@ -62,6 +62,22 @@ function sessionStartTime(session: Record<string, unknown>): Date {
   return new Date();
 }
 
+/**
+ * FIT activity.localTimestamp − activity.timestamp (seconds).
+ * Same offset applies to every session in the file (device local TZ).
+ */
+export function utcOffsetSecondsFromFitMessages(
+  messages: Record<string, Array<Record<string, unknown>>>
+): number | null {
+  const activity = messages.activityMesgs?.[0];
+  if (!activity) return null;
+  const utc = activity.timestamp;
+  const local = activity.localTimestamp;
+  if (!(utc instanceof Date) || !(local instanceof Date)) return null;
+  if (Number.isNaN(utc.getTime()) || Number.isNaN(local.getTime())) return null;
+  return Math.round((local.getTime() - utc.getTime()) / 1000);
+}
+
 function sessionEndTime(
   session: Record<string, unknown>,
   nextSession: Record<string, unknown> | undefined
@@ -345,10 +361,11 @@ function parseSession(
   fallbackName: string,
   sessionIndex: number,
   sessionEnd: Date,
-  multisport?: {
+  multisport: {
     groupId: string;
     transitionNumber: number;
-  }
+  } | undefined,
+  utcOffsetSeconds: number | null
 ): ParsedActivity | null {
   const sport = String(session.sport ?? "").toLowerCase();
   const legType = mapLegType(session.sport, session.subSport);
@@ -385,6 +402,7 @@ function parseSession(
     name,
     discipline,
     startTime,
+    utcOffsetSeconds,
     durationSeconds,
     distanceMeters: session.totalDistance as number | undefined,
     streams: attachSessionMeta(
@@ -419,6 +437,8 @@ export function parseFitFile(
     const records = (messages.recordMesgs ?? []) as Array<Record<string, unknown>>;
     if (sessions.length === 0) return [];
 
+    const utcOffsetSeconds = utcOffsetSecondsFromFitMessages(msgMap);
+
     const sorted = [...sessions].sort(
       (a, b) => sessionStartTime(a).getTime() - sessionStartTime(b).getTime()
     );
@@ -451,7 +471,8 @@ export function parseFitFile(
         fallbackName,
         i,
         end,
-        groupId ? { groupId, transitionNumber } : undefined
+        groupId ? { groupId, transitionNumber } : undefined,
+        utcOffsetSeconds
       );
       if (parsed) activities.push(parsed);
     }

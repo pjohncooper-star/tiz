@@ -31,6 +31,9 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
     name: string;
     type: string;
     start_date: string;
+    start_date_local?: string;
+    timezone?: string;
+    utc_offset?: number;
     moving_time: number;
     distance?: number;
   }>(`/activities/${stravaId}`, token);
@@ -78,12 +81,18 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
     }
   }
 
+  const utcOffsetSeconds =
+    typeof activity.utc_offset === "number" && Number.isFinite(activity.utc_offset)
+      ? Math.round(activity.utc_offset)
+      : null;
+
   const synced = await upsertSyncedActivity(
     athleteId,
     {
       name: activity.name,
       discipline,
       startTime: new Date(activity.start_date),
+      utcOffsetSeconds,
       durationSeconds: activity.moving_time,
       distanceMeters: activity.distance,
       externalId: String(activity.id),

@@ -1,6 +1,7 @@
 import { format, parseISO, startOfWeek, endOfWeek } from "date-fns";
 import { Card } from "@/components/ui";
 import { DashboardWeekView } from "@/components/dashboard-week-view";
+import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
 import { InsightsPanel } from "@/components/insights-panel";
 import { insightPolarityFromOutcome } from "@/lib/signaling/v0";
 import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
@@ -148,6 +149,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <p className="mt-1 text-xs text-zinc-500">
             Sum of scored swim / bike / run sessions this week
           </p>
+        </Card>
+      ) : null}
+
+      {ecoLoadEnabled ? (
+        <Card title="Fitness / fatigue">
+          <FitnessFatigueChart />
         </Card>
       ) : null}
 

@@ -380,6 +380,12 @@ model SyncedActivity {
   discipline       Discipline
   name             String
   startTime        DateTime
+  /**
+   * Seconds to add to UTC startTime to get activity-local wall time
+   * (Strava utc_offset; FIT activity localTimestamp − timestamp).
+   * Null when the source did not provide an offset.
+   */
+  utcOffsetSeconds Int?
   durationSeconds  Int
   distanceMeters   Float?
   source           ActivitySource

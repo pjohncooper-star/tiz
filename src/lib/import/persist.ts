@@ -25,6 +25,7 @@ export async function upsertImportedActivity(
       name: parsed.name,
       discipline: parsed.discipline,
       startTime: parsed.startTime,
+      utcOffsetSeconds: parsed.utcOffsetSeconds ?? null,
       durationSeconds: parsed.durationSeconds,
       distanceMeters: parsed.distanceMeters,
       externalId: parsed.externalId,

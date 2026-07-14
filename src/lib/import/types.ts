@@ -8,6 +8,8 @@ export type ParsedActivity = {
   name: string;
   discipline: "BIKE" | "RUN" | "SWIM";
   startTime: Date;
+  /** Seconds east of UTC at the activity location (FIT/Strava). */
+  utcOffsetSeconds?: number | null;
   durationSeconds: number;
   distanceMeters?: number;
   streams: NormalizedStreams;
