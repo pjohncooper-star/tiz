@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import { activityLocalDateKey, eachDateKey } from "@/lib/dates";
 import {
   buildDailyLoadByDiscipline,
+  buildWeeklyLoadByDiscipline,
   computeFitnessFatigue,
+  computeFitnessFatigueWeekly,
   DEFAULT_TAU1,
   DEFAULT_TAU2,
 } from "@/lib/eco/fitness-fatigue";
@@ -161,5 +163,70 @@ describe("computeFitnessFatigue", () => {
     const mon = series.find((p) => p.date === "2026-01-12");
     assert.equal(sun?.swim.w ?? 0, 0);
     assert.equal(mon?.swim.w, 25);
+  });
+});
+
+describe("computeFitnessFatigueWeekly", () => {
+  it("buckets two mid-week activities into one Monday w", () => {
+    // Wed + Fri of week starting Mon 2026-06-08
+    const weekly = buildWeeklyLoadByDiscipline([
+      {
+        startTime: new Date("2026-06-10T12:00:00.000Z"),
+        utcOffsetSeconds: 0,
+        discipline: "RUN",
+        ecos: 40,
+      },
+      {
+        startTime: new Date("2026-06-12T12:00:00.000Z"),
+        utcOffsetSeconds: 0,
+        discipline: "RUN",
+        ecos: 60,
+      },
+    ]);
+    assert.equal(weekly.size, 1);
+    assert.equal(weekly.get("2026-06-08")?.RUN, 100);
+  });
+
+  it("decays with e^(-7/τ) between weekly steps", () => {
+    const series = computeFitnessFatigueWeekly(
+      [
+        {
+          startTime: new Date("2026-06-01T12:00:00.000Z"), // Mon
+          utcOffsetSeconds: 0,
+          discipline: "RUN",
+          ecos: 100,
+        },
+      ],
+      { to: "2026-06-15" } // through week of Jun 15
+    );
+    assert.equal(series[0]!.date, "2026-06-01");
+    assert.equal(series[0]!.run.g, 100);
+    const g1 = 100 * Math.exp(-7 / DEFAULT_TAU1);
+    const h1 = 100 * Math.exp(-7 / DEFAULT_TAU2);
+    assert.equal(series[1]!.date, "2026-06-08");
+    assert.ok(Math.abs(series[1]!.run.g - g1) < 1e-9);
+    assert.ok(Math.abs(series[1]!.run.h - h1) < 1e-9);
+    assert.equal(series[1]!.run.w, 0);
+  });
+
+  it("aligns season week impulse to a single Monday series point", () => {
+    const series = computeFitnessFatigueWeekly(
+      [
+        {
+          startTime: new Date("2026-06-15T12:00:00.000Z"),
+          utcOffsetSeconds: 0,
+          discipline: "RUN",
+          ecos: 180,
+        },
+      ],
+      { from: "2026-06-08", to: "2026-06-22" }
+    );
+    // Series warm-starts at first impulse week (Jun 15), not before.
+    assert.deepEqual(
+      series.map((p) => p.date),
+      ["2026-06-15", "2026-06-22"]
+    );
+    assert.equal(series[0]!.run.w, 180);
+    assert.equal(series[1]!.run.w, 0);
   });
 });

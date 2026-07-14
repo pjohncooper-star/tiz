@@ -116,8 +116,8 @@ export function plannedEcoImpulses(options: {
 
 /**
  * Project weekly season TiZ budgets into ECO impulses.
- * Each week's full swim/bike/run ECO is placed on max(weekStart, today)
- * so mid-week views still include the current week's planned load.
+ * Each week's full swim/bike/run ECO is placed on weekStartDate (Monday).
+ * Fully past weeks and rest weeks are skipped.
  */
 export function seasonWeekEcoImpulses(options: {
   weeks: SeasonWeekForEco[];
@@ -133,8 +133,7 @@ export function seasonWeekEcoImpulses(options: {
     if (weekEnd < todayKey) continue;
     if (week.isRestWeek) continue;
 
-    const dayKey =
-      week.weekStartDate < todayKey ? todayKey : week.weekStartDate;
+    const dayKey = week.weekStartDate;
 
     for (const discipline of disciplines) {
       const tiz = tizMinutesForDiscipline(discipline, week.zoneMinutes ?? {});

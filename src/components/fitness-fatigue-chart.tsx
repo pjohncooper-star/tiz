@@ -13,7 +13,8 @@ import {
 } from "recharts";
 import { SegmentedControl } from "@/components/ui";
 import {
-  computeFitnessFatigue,
+  computeFitnessFatigueWeekly,
+  mondayWeekStartKey,
   type EcoImpulse,
   type FitnessFatiguePoint,
 } from "@/lib/eco/fitness-fatigue";
@@ -76,13 +77,16 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-function toHybridRows(series: FitnessFatiguePoint[], todayKey: string): ChartRow[] {
+function toHybridRows(
+  series: FitnessFatiguePoint[],
+  splitKey: string
+): ChartRow[] {
   return series.map((p) => {
-    const isPast = p.date < todayKey;
-    const isToday = p.date === todayKey;
-    const isFuture = p.date > todayKey;
-    const showHistory = isPast || isToday;
-    const showForecast = isToday || isFuture;
+    const isPast = p.date < splitKey;
+    const isSplit = p.date === splitKey;
+    const isFuture = p.date > splitKey;
+    const showHistory = isPast || isSplit;
+    const showForecast = isSplit || isFuture;
 
     const swimForm = round1(p.swim.form);
     const bikeForm = round1(p.bike.form);
@@ -266,9 +270,7 @@ export function FitnessFatigueChart({
     if (useDraftWeeks && draftWeeks) {
       const history = historyToImpulses(data.history);
       const seasonPlanned = seasonWeekEcoImpulses({ weeks: draftWeeks, todayKey: today });
-      // If includePlan was true, body.series already has calendar plan; rebuild from history + calendar is hard
-      // without separate calendar impulses — draft path uses history + season weeks only.
-      return computeFitnessFatigue(
+      return computeFitnessFatigueWeekly(
         mergeHistoryAndPlanImpulses(history, seasonPlanned),
         { from: from ?? undefined, to }
       );
@@ -279,8 +281,11 @@ export function FitnessFatigueChart({
 
   const rows = useMemo(() => {
     if (!series.length) return [];
-    return toHybridRows(series, data?.today ?? todayKey);
-  }, [series, data?.today, todayKey]);
+    const today = data?.today ?? todayKey;
+    // Weekly planner: split at the Monday of the current week; daily charts split at today.
+    const splitKey = useDraftWeeks ? mondayWeekStartKey(today) : today;
+    return toHybridRows(series, splitKey);
+  }, [series, data?.today, todayKey, useDraftWeeks]);
 
   const heightClass = compact ? "h-56" : "h-72";
 
@@ -298,7 +303,11 @@ export function FitnessFatigueChart({
         {data ? (
           <p className="text-xs text-zinc-500">
             τ₁={data.tau1}d · τ₂={data.tau2}d
-            {showForecast ? " · plan projected" : ""}
+            {useDraftWeeks
+              ? " · weekly PMC"
+              : showForecast
+                ? " · plan projected"
+                : ""}
           </p>
         ) : null}
       </div>
@@ -364,7 +373,7 @@ export function FitnessFatigueChart({
 
       <p className="text-xs text-zinc-500">
         {useDraftWeeks
-          ? "Solid = scored history; dashed = this season’s weekly TiZ projected to ECO."
+          ? "Weekly PMC · solid = scored history; dashed = this season’s weekly TiZ projected to ECO."
           : data?.note ??
             (showForecast
               ? "Solid = scored history; dashed = planned TiZ projected to ECO."

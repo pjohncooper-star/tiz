@@ -132,14 +132,22 @@ describe("seasonWeekEcoImpulses", () => {
           zoneMinutes: { [zoneKey("RUN", 2)]: 60 },
         },
         {
+          // Current week Mon Jun 8 — still included; load on Monday not today
+          weekStartDate: "2026-06-08",
+          zoneMinutes: { [zoneKey("BIKE", 2)]: 20 },
+        },
+        {
           weekStartDate: "2026-06-15",
           zoneMinutes: { [zoneKey("RUN", 2)]: 40 },
         },
       ],
     });
-    // Past week still in range if weekEnd >= today? June 1 week ends June 7 < June 10 → skip
-    assert.equal(impulses.length, 1);
-    assert.equal(impulses[0]!.discipline, "RUN");
-    assert.equal(impulses[0]!.ecos, 40 * ecoZoneScore(3));
+    assert.equal(impulses.length, 2);
+    const bike = impulses.find((i) => i.discipline === "BIKE");
+    const run = impulses.find((i) => i.discipline === "RUN");
+    assert.ok(bike && run);
+    assert.equal(bike!.startTime.toISOString().slice(0, 10), "2026-06-08");
+    assert.equal(run!.startTime.toISOString().slice(0, 10), "2026-06-15");
+    assert.equal(run!.ecos, 40 * ecoZoneScore(3));
   });
 });

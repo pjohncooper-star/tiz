@@ -61,6 +61,40 @@ export function normalizeWeekStart(dateKey: string): string {
   return format(startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS), "yyyy-MM-dd");
 }
 
+/**
+ * Monday yyyy-MM-dd for the week containing dateKey (UTC noon stepping).
+ * Prefer this for IR bucketing so server TZ does not shift the week.
+ */
+export function mondayWeekStartKey(dateKey: string): string {
+  if (!DATE_KEY_RE.test(dateKey)) return dateKey;
+  const d = new Date(`${dateKey}T12:00:00.000Z`);
+  const day = d.getUTCDay(); // 0=Sun … 6=Sat
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Next Monday week-start after `weekStart` (UTC). */
+export function nextWeekStartKey(weekStart: string): string {
+  const d = new Date(`${weekStart}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + 7);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Inclusive Monday week-starts from `fromWeek` through `toWeek`. */
+export function eachWeekStartKey(fromWeek: string, toWeek: string): string[] {
+  const from = mondayWeekStartKey(fromWeek);
+  const to = mondayWeekStartKey(toWeek);
+  if (!DATE_KEY_RE.test(from) || !DATE_KEY_RE.test(to) || from > to) return [];
+  const keys: string[] = [];
+  let cur = from;
+  while (cur <= to) {
+    keys.push(cur);
+    cur = nextWeekStartKey(cur);
+  }
+  return keys;
+}
+
 /** Local calendar date for display/formatting of a DB @db.Date value. */
 export function calendarDateFromDb(date: Date): Date {
   return parseDateKey(formatDateKey(date));
