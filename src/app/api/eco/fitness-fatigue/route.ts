@@ -11,9 +11,12 @@ import {
 import {
   mergeHistoryAndPlanImpulses,
   plannedEcoImpulses,
+  seasonWeekEcoImpulses,
   type PlannedSessionForEco,
 } from "@/lib/eco/hybrid-impulses";
-import { nextDateKey } from "@/lib/dates";
+import { formatDateKey, nextDateKey } from "@/lib/dates";
+import { parseDisciplineZoneMinutes } from "@/lib/plan/season/simple-tiz";
+import type { ZoneMinutes } from "@/lib/workout/steps";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -21,6 +24,15 @@ function addDaysKey(dateKey: string, days: number): string {
   let cur = dateKey;
   for (let i = 0; i < days; i++) cur = nextDateKey(cur);
   return cur;
+}
+
+function serializeImpulse(impulse: EcoImpulse) {
+  return {
+    startTime: impulse.startTime.toISOString(),
+    utcOffsetSeconds: impulse.utcOffsetSeconds ?? null,
+    discipline: impulse.discipline,
+    ecos: impulse.ecos,
+  };
 }
 
 async function loadHistoryImpulses(athleteId: string): Promise<EcoImpulse[]> {
@@ -124,6 +136,31 @@ async function loadPlannedForEco(
   }));
 }
 
+async function loadSeasonWeeksForEco(
+  athleteId: string,
+  seasonId: string
+): Promise<Array<{ weekStartDate: string; zoneMinutes: ZoneMinutes; isRestWeek: boolean }>> {
+  const plan = await db.seasonPlan.findFirst({
+    where: { id: seasonId, athleteId },
+    select: {
+      weeks: {
+        select: {
+          weekStartDate: true,
+          zoneMinutes: true,
+          isDeLoadWeek: true,
+        },
+        orderBy: { weekIndex: "asc" },
+      },
+    },
+  });
+  if (!plan) return [];
+  return plan.weeks.map((week) => ({
+    weekStartDate: formatDateKey(week.weekStartDate),
+    zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
+    isRestWeek: week.isDeLoadWeek,
+  }));
+}
+
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.athleteId) {
@@ -144,6 +181,7 @@ export async function GET(req: Request) {
   const toParam = url.searchParams.get("to");
   const todayParam = url.searchParams.get("today");
   const includePlan = url.searchParams.get("includePlan") === "1";
+  const seasonId = url.searchParams.get("seasonId");
 
   const todayKey =
     todayParam && DATE_KEY.test(todayParam) ? todayParam : utcTodayKey();
@@ -152,7 +190,7 @@ export async function GET(req: Request) {
   const to =
     toParam && DATE_KEY.test(toParam)
       ? toParam
-      : includePlan
+      : includePlan || seasonId
         ? addDaysKey(todayKey, 90)
         : todayKey;
 
@@ -166,24 +204,36 @@ export async function GET(req: Request) {
     planned = plannedEcoImpulses({ sessions, todayKey });
   }
 
-  const impulses = includePlan
-    ? mergeHistoryAndPlanImpulses(history, planned)
-    : history;
+  if (seasonId) {
+    const weeks = await loadSeasonWeeksForEco(athleteId, seasonId);
+    planned = [
+      ...planned,
+      ...seasonWeekEcoImpulses({ weeks, todayKey }),
+    ];
+  }
+
+  const impulses =
+    includePlan || seasonId
+      ? mergeHistoryAndPlanImpulses(history, planned)
+      : history;
 
   const series = computeFitnessFatigue(impulses, { from, to });
 
   return NextResponse.json({
     enabled: true,
     includePlan,
+    seasonId: seasonId || null,
     today: todayKey,
     from: series[0]?.date ?? from ?? null,
     to: series[series.length - 1]?.date ?? to,
     tau1: 42,
     tau2: 7,
     plannedImpulseCount: planned.length,
-    note: includePlan
-      ? "Solid lines are scored history; dashed lines project planned TiZ as ECO (5→8 zone map). τ₁=42 / τ₂=7 are population defaults, not athlete-fit."
-      : "Fitness (τ≈42) and fatigue (τ≈7) use population defaults, not athlete-fit values. Days use activity-local time when the source provided an offset.",
+    history: history.map(serializeImpulse),
+    note:
+      includePlan || seasonId
+        ? "Solid lines are scored history; dashed lines project planned / season TiZ as ECO (5→8 zone map). τ₁=42 / τ₂=7 are population defaults, not athlete-fit."
+        : "Fitness (τ≈42) and fatigue (τ≈7) use population defaults, not athlete-fit values. Days use activity-local time when the source provided an offset.",
     series,
   });
 }

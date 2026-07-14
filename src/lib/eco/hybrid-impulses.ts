@@ -1,8 +1,14 @@
 import type { ActivityLegType, Discipline } from "@prisma/client";
-import { formatDateKey } from "@/lib/dates";
+import { formatDateKey, nextDateKey } from "@/lib/dates";
 import { ecoTransitionBump } from "@/lib/eco/compute";
 import type { EcoImpulse } from "@/lib/eco/fitness-fatigue";
-import { projectedEcosFromPlannedTiZ } from "@/lib/eco/tiz-to-eco";
+import {
+  mapTizMinutesToEcoZones,
+  projectedEcosFromPlannedTiZ,
+  tizMinutesForDiscipline,
+} from "@/lib/eco/tiz-to-eco";
+import { ecoDisciplineFactor, weightedEcoFromZoneMinutes } from "@/lib/eco/scores";
+import type { ZoneMinutes } from "@/lib/workout/steps";
 
 export type PlannedSessionForEco = {
   id: string;
@@ -18,6 +24,14 @@ export type PlannedSessionForEco = {
   linkedActivityHasEcos?: boolean;
 };
 
+export type SeasonWeekForEco = {
+  weekStartDate: string;
+  zoneMinutes: ZoneMinutes;
+  isRestWeek?: boolean;
+};
+
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
 function impulseAtDateKey(dateKey: string, discipline: string, ecos: number): EcoImpulse {
   return {
     startTime: new Date(`${dateKey}T12:00:00.000Z`),
@@ -32,6 +46,12 @@ function enduranceLeg(discipline: Discipline): ActivityLegType | null {
     return discipline;
   }
   return null;
+}
+
+function addDaysKey(dateKey: string, days: number): string {
+  let cur = dateKey;
+  for (let i = 0; i < days; i++) cur = nextDateKey(cur);
+  return cur;
 }
 
 /**
@@ -89,6 +109,50 @@ export function plannedEcoImpulses(options: {
     if (!projected) continue;
 
     impulses.push(impulseAtDateKey(dateKey, session.discipline, projected.ecos));
+  }
+
+  return impulses;
+}
+
+/**
+ * Project weekly season TiZ budgets into ECO impulses.
+ * Each week's full swim/bike/run ECO is placed on max(weekStart, today)
+ * so mid-week views still include the current week's planned load.
+ */
+export function seasonWeekEcoImpulses(options: {
+  weeks: SeasonWeekForEco[];
+  todayKey: string;
+}): EcoImpulse[] {
+  const { weeks, todayKey } = options;
+  const impulses: EcoImpulse[] = [];
+  const disciplines: Discipline[] = ["SWIM", "BIKE", "RUN"];
+
+  for (const week of weeks) {
+    if (!DATE_KEY.test(week.weekStartDate)) continue;
+    const weekEnd = addDaysKey(week.weekStartDate, 6);
+    if (weekEnd < todayKey) continue;
+    if (week.isRestWeek) continue;
+
+    const dayKey =
+      week.weekStartDate < todayKey ? todayKey : week.weekStartDate;
+
+    for (const discipline of disciplines) {
+      const tiz = tizMinutesForDiscipline(discipline, week.zoneMinutes ?? {});
+      const total =
+        (tiz[1] ?? 0) +
+        (tiz[2] ?? 0) +
+        (tiz[3] ?? 0) +
+        (tiz[4] ?? 0) +
+        (tiz[5] ?? 0);
+      if (!(total > 0)) continue;
+
+      const ecoZones = mapTizMinutesToEcoZones(tiz);
+      const factor = ecoDisciplineFactor(discipline);
+      if (factor == null) continue;
+      const ecos = weightedEcoFromZoneMinutes(ecoZones, factor);
+      if (!(ecos > 0) || !Number.isFinite(ecos)) continue;
+      impulses.push(impulseAtDateKey(dayKey, discipline, ecos));
+    }
   }
 
   return impulses;

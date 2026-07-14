@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
+import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
 import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
@@ -240,7 +241,11 @@ function defaultSeasonDates() {
   };
 }
 
-export function SimplePlannerView() {
+export function SimplePlannerView({
+  ecoLoadEnabled = false,
+}: {
+  ecoLoadEnabled?: boolean;
+}) {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
@@ -593,6 +598,20 @@ export function SimplePlannerView() {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {ecoLoadEnabled ? (
+        <Card title="Fitness / fatigue (season TiZ → ECO)">
+          <FitnessFatigueChart
+            seasonId={season.id}
+            draftWeeks={season.weeks.map((week) => ({
+              weekStartDate: week.weekStartDate,
+              zoneMinutes: week.zoneMinutes,
+              isRestWeek: week.isRestWeek,
+            }))}
+            compact
+          />
+        </Card>
+      ) : null}
 
       <CollapsibleSection
         title="Season"

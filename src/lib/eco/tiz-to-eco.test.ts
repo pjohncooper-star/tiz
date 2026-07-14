@@ -119,3 +119,27 @@ describe("plannedEcoImpulses", () => {
     assert.ok(onLoad!.run.h > before!.run.h);
   });
 });
+
+describe("seasonWeekEcoImpulses", () => {
+  it("places weekly TiZ ECO on week start for future weeks", async () => {
+    const { seasonWeekEcoImpulses } = await import("@/lib/eco/hybrid-impulses");
+    const { zoneKey } = await import("@/lib/workout/steps");
+    const impulses = seasonWeekEcoImpulses({
+      todayKey: "2026-06-10",
+      weeks: [
+        {
+          weekStartDate: "2026-06-01",
+          zoneMinutes: { [zoneKey("RUN", 2)]: 60 },
+        },
+        {
+          weekStartDate: "2026-06-15",
+          zoneMinutes: { [zoneKey("RUN", 2)]: 40 },
+        },
+      ],
+    });
+    // Past week still in range if weekEnd >= today? June 1 week ends June 7 < June 10 → skip
+    assert.equal(impulses.length, 1);
+    assert.equal(impulses[0]!.discipline, "RUN");
+    assert.equal(impulses[0]!.ecos, 40 * ecoZoneScore(3));
+  });
+});

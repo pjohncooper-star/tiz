@@ -7,15 +7,22 @@ export const dynamic = "force-dynamic";
 
 export default async function PlanPage() {
   const session = await requireAthlete();
-  const athlete = await db.athlete.findUnique({ where: { id: session.user.athleteId! } });
+  const athlete = await db.athlete.findUnique({
+    where: { id: session.user.athleteId! },
+    select: { onboardingStep: true, ecoLoadEnabled: true },
+  });
   if (athlete && athlete.onboardingStep !== "COMPLETE") {
     onboardingRedirect(athlete.onboardingStep);
   }
 
+  const ecoLoadEnabled = Boolean(
+    athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
+  );
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading season…</p>}>
-        <SimplePlannerView />
+        <SimplePlannerView ecoLoadEnabled={ecoLoadEnabled} />
       </Suspense>
     </main>
   );

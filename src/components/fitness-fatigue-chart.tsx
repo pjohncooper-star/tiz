@@ -12,13 +12,31 @@ import {
   YAxis,
 } from "recharts";
 import { SegmentedControl } from "@/components/ui";
-import type { FitnessFatiguePoint } from "@/lib/eco/fitness-fatigue";
+import {
+  computeFitnessFatigue,
+  type EcoImpulse,
+  type FitnessFatiguePoint,
+} from "@/lib/eco/fitness-fatigue";
+import {
+  mergeHistoryAndPlanImpulses,
+  seasonWeekEcoImpulses,
+  type SeasonWeekForEco,
+} from "@/lib/eco/hybrid-impulses";
+import type { ZoneMinutes } from "@/lib/workout/steps";
 
 type Mode = "form" | "gh";
+
+type SerializedImpulse = {
+  startTime: string;
+  utcOffsetSeconds: number | null;
+  discipline: string;
+  ecos: number;
+};
 
 type ApiResponse = {
   enabled: boolean;
   includePlan?: boolean;
+  seasonId?: string | null;
   today?: string;
   from: string | null;
   to: string | null;
@@ -26,12 +44,12 @@ type ApiResponse = {
   tau2: number;
   note: string;
   series: FitnessFatiguePoint[];
+  history?: SerializedImpulse[];
   error?: string;
 };
 
 type ChartRow = {
   date: string;
-  // History (solid) — null after today (except bridge at today)
   swimFormH: number | null;
   bikeFormH: number | null;
   runFormH: number | null;
@@ -42,7 +60,6 @@ type ChartRow = {
   bikeHH: number | null;
   runGH: number | null;
   runHH: number | null;
-  // Forecast (dashed) — null before today
   swimFormF: number | null;
   bikeFormF: number | null;
   runFormF: number | null;
@@ -118,18 +135,49 @@ function defaultFromKey(todayKey: string): string {
   return d.toISOString().slice(0, 10);
 }
 
-function defaultToKey(todayKey: string): string {
+function defaultToKey(todayKey: string, weeks?: SeasonWeekForEco[]): string {
+  if (weeks && weeks.length > 0) {
+    const last = [...weeks]
+      .map((w) => w.weekStartDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1);
+    if (last) {
+      const d = new Date(`${last}T12:00:00.000Z`);
+      d.setUTCDate(d.getUTCDate() + 6);
+      return d.toISOString().slice(0, 10);
+    }
+  }
   const d = new Date(`${todayKey}T12:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + 90);
   return d.toISOString().slice(0, 10);
 }
 
+function historyToImpulses(rows: SerializedImpulse[] | undefined): EcoImpulse[] {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    startTime: new Date(row.startTime),
+    utcOffsetSeconds: row.utcOffsetSeconds,
+    discipline: row.discipline,
+    ecos: row.ecos,
+  }));
+}
+
 type FitnessFatigueChartProps = {
-  /** When true, project planned TiZ as future ECO (planner hybrid PMC). */
+  /** When true, include calendar PlannedSession TiZ projections. */
   includePlan?: boolean;
-  /** Override lookback start (yyyy-MM-dd). */
+  /** Saved season id — server loads week TiZ for forecast. */
+  seasonId?: string | null;
+  /**
+   * Live draft weeks from the simple planner. When set, client merges these
+   * as season TiZ→ECO impulses (overrides server seasonId projection).
+   */
+  draftWeeks?: Array<{
+    weekStartDate: string;
+    zoneMinutes: ZoneMinutes;
+    isRestWeek?: boolean;
+  }>;
   from?: string;
-  /** Override look-ahead end (yyyy-MM-dd). */
   to?: string;
   className?: string;
   compact?: boolean;
@@ -137,6 +185,8 @@ type FitnessFatigueChartProps = {
 
 export function FitnessFatigueChart({
   includePlan = false,
+  seasonId = null,
+  draftWeeks,
   from: fromProp,
   to: toProp,
   className = "",
@@ -147,13 +197,19 @@ export function FitnessFatigueChart({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const todayKey = useMemo(() => localTodayKey(), []);
+  const useDraftWeeks = Boolean(draftWeeks && draftWeeks.length > 0);
+  const showForecast = includePlan || useDraftWeeks || Boolean(seasonId);
 
   useEffect(() => {
     let cancelled = false;
     const from = fromProp ?? defaultFromKey(todayKey);
-    const to = toProp ?? (includePlan ? defaultToKey(todayKey) : todayKey);
+    const to =
+      toProp ??
+      (showForecast ? defaultToKey(todayKey, draftWeeks) : todayKey);
     const params = new URLSearchParams({ from, to, today: todayKey });
     if (includePlan) params.set("includePlan", "1");
+    // When live draft weeks are provided, skip server season to avoid double count.
+    if (seasonId && !useDraftWeeks) params.set("seasonId", seasonId);
 
     setLoading(true);
     fetch(`/api/eco/fitness-fatigue?${params}`)
@@ -180,13 +236,51 @@ export function FitnessFatigueChart({
     return () => {
       cancelled = true;
     };
-  }, [includePlan, fromProp, toProp, todayKey]);
+  }, [
+    includePlan,
+    seasonId,
+    useDraftWeeks,
+    fromProp,
+    toProp,
+    todayKey,
+    // Remount-friendly: stringify week zone totals lightly
+    draftWeeks
+      ?.map(
+        (w) =>
+          `${w.weekStartDate}:${w.isRestWeek ? 1 : 0}:${Object.entries(w.zoneMinutes)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(",")}`
+      )
+      .join("|") ?? "",
+  ]);
+
+  const series = useMemo(() => {
+    if (!data) return [];
+    const today = data.today ?? todayKey;
+    const from = fromProp ?? data.from ?? defaultFromKey(today);
+    const to =
+      toProp ??
+      data.to ??
+      (showForecast ? defaultToKey(today, draftWeeks) : today);
+
+    if (useDraftWeeks && draftWeeks) {
+      const history = historyToImpulses(data.history);
+      const seasonPlanned = seasonWeekEcoImpulses({ weeks: draftWeeks, todayKey: today });
+      // If includePlan was true, body.series already has calendar plan; rebuild from history + calendar is hard
+      // without separate calendar impulses — draft path uses history + season weeks only.
+      return computeFitnessFatigue(
+        mergeHistoryAndPlanImpulses(history, seasonPlanned),
+        { from: from ?? undefined, to }
+      );
+    }
+
+    return data.series ?? [];
+  }, [data, draftWeeks, useDraftWeeks, fromProp, toProp, todayKey, showForecast]);
 
   const rows = useMemo(() => {
-    if (!data?.series) return [];
-    const today = data.today ?? todayKey;
-    return toHybridRows(data.series, today);
-  }, [data, todayKey]);
+    if (!series.length) return [];
+    return toHybridRows(series, data?.today ?? todayKey);
+  }, [series, data?.today, todayKey]);
 
   const heightClass = compact ? "h-56" : "h-72";
 
@@ -204,7 +298,7 @@ export function FitnessFatigueChart({
         {data ? (
           <p className="text-xs text-zinc-500">
             τ₁={data.tau1}d · τ₂={data.tau2}d
-            {includePlan ? " · plan projected" : ""}
+            {showForecast ? " · plan projected" : ""}
           </p>
         ) : null}
       </div>
@@ -215,7 +309,7 @@ export function FitnessFatigueChart({
         <p className="text-sm text-zinc-500">{error}</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          {includePlan
+          {showForecast
             ? "No scored ECO history or projectable planned TiZ yet."
             : "No scored ECO sessions yet. Import or sync activities with zones."}
         </p>
@@ -239,28 +333,28 @@ export function FitnessFatigueChart({
               {mode === "form" ? (
                 <>
                   <Line type="monotone" dataKey="swimFormH" name="Swim" stroke="#0284c7" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="swimFormF" name="Swim (plan)" stroke="#0284c7" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={includePlan ? "line" : "none"} hide={!includePlan} />
+                  <Line type="monotone" dataKey="swimFormF" name="Swim (plan)" stroke="#0284c7" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
                   <Line type="monotone" dataKey="bikeFormH" name="Bike" stroke="#ca8a04" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bikeFormF" name="Bike (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={includePlan ? "line" : "none"} hide={!includePlan} />
+                  <Line type="monotone" dataKey="bikeFormF" name="Bike (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
                   <Line type="monotone" dataKey="runFormH" name="Run" stroke="#16a34a" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="runFormF" name="Run (plan)" stroke="#16a34a" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={includePlan ? "line" : "none"} hide={!includePlan} />
+                  <Line type="monotone" dataKey="runFormF" name="Run (plan)" stroke="#16a34a" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
                   <Line type="monotone" dataKey="combinedH" name="Combined" stroke="#18181b" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="combinedF" name="Combined (plan)" stroke="#18181b" dot={false} strokeWidth={2} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={includePlan ? "line" : "none"} hide={!includePlan} />
+                  <Line type="monotone" dataKey="combinedF" name="Combined (plan)" stroke="#18181b" dot={false} strokeWidth={2} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
                 </>
               ) : (
                 <>
                   <Line type="monotone" dataKey="swimGH" name="Swim fitness" stroke="#0284c7" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="swimGF" name="Swim fitness (plan)" stroke="#0284c7" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!includePlan} legendType={includePlan ? "line" : "none"} />
+                  <Line type="monotone" dataKey="swimGF" name="Swim fitness (plan)" stroke="#0284c7" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                   <Line type="monotone" dataKey="swimHH" name="Swim fatigue" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="swimHF" name="Swim fatigue (plan)" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!includePlan} legendType={includePlan ? "line" : "none"} />
+                  <Line type="monotone" dataKey="swimHF" name="Swim fatigue (plan)" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                   <Line type="monotone" dataKey="bikeGH" name="Bike fitness" stroke="#ca8a04" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bikeGF" name="Bike fitness (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!includePlan} legendType={includePlan ? "line" : "none"} />
+                  <Line type="monotone" dataKey="bikeGF" name="Bike fitness (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                   <Line type="monotone" dataKey="bikeHH" name="Bike fatigue" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bikeHF" name="Bike fatigue (plan)" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!includePlan} legendType={includePlan ? "line" : "none"} />
+                  <Line type="monotone" dataKey="bikeHF" name="Bike fatigue (plan)" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                   <Line type="monotone" dataKey="runGH" name="Run fitness" stroke="#16a34a" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="runGF" name="Run fitness (plan)" stroke="#16a34a" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!includePlan} legendType={includePlan ? "line" : "none"} />
+                  <Line type="monotone" dataKey="runGF" name="Run fitness (plan)" stroke="#16a34a" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                   <Line type="monotone" dataKey="runHH" name="Run fatigue" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="runHF" name="Run fatigue (plan)" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!includePlan} legendType={includePlan ? "line" : "none"} />
+                  <Line type="monotone" dataKey="runHF" name="Run fatigue (plan)" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                 </>
               )}
             </LineChart>
@@ -269,10 +363,12 @@ export function FitnessFatigueChart({
       )}
 
       <p className="text-xs text-zinc-500">
-        {data?.note ??
-          (includePlan
-            ? "Solid = scored history; dashed = planned TiZ projected to ECO."
-            : "Fitness (τ≈42) and fatigue (τ≈7) use population defaults, not athlete-fit values.")}
+        {useDraftWeeks
+          ? "Solid = scored history; dashed = this season’s weekly TiZ projected to ECO."
+          : data?.note ??
+            (showForecast
+              ? "Solid = scored history; dashed = planned TiZ projected to ECO."
+              : "Fitness (τ≈42) and fatigue (τ≈7) use population defaults, not athlete-fit values.")}
       </p>
     </div>
   );
