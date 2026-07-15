@@ -1,26 +1,39 @@
-import { format, parseISO, startOfWeek, endOfWeek } from "date-fns";
+import { addDays, format, subDays } from "date-fns";
 import { Card } from "@/components/ui";
-import { DashboardWeekView } from "@/components/dashboard-week-view";
+import {
+  DashboardDayStrip,
+  type DayStripColumn,
+  type DayStripSession,
+} from "@/components/dashboard-day-strip";
+import { DashboardGlanceCharts } from "@/components/dashboard-glance-charts";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
-import { InsightsPanel } from "@/components/insights-panel";
-import { insightPolarityFromOutcome } from "@/lib/signaling/v0";
 import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
-import { getSignalingGateStatus } from "@/lib/signaling/gates";
-import { sumEcos } from "@/lib/eco/rollup";
-import { isEcoTriggerPattern } from "@/lib/signaling/eco-patterns";
+import {
+  cycleBoundsFromSeason,
+  localTodayKey,
+  type CycleRangeBounds,
+  type SeasonRangeBounds,
+} from "@/lib/dashboard/date-range";
+import { endDateKey, formatDateKey, parseDateKey } from "@/lib/dates";
+import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
+import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
+import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
+import { sessionCompletionRollup } from "@/lib/plan/session-completion";
+import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
+import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
+import type { Discipline } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
-const WEEK_OPTS = { weekStartsOn: 1 as const };
+function dayLabel(offset: -1 | 0 | 1): string {
+  if (offset === -1) return "Yesterday";
+  if (offset === 1) return "Tomorrow";
+  return "Today";
+}
 
-type DashboardPageProps = {
-  searchParams: Promise<{ week?: string }>;
-};
-
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage() {
   const session = await requireAthlete();
   const athlete = await db.athlete.findUnique({
     where: { id: session.user.athleteId! },
@@ -29,80 +42,169 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     onboardingRedirect(athlete.onboardingStep);
   }
 
-  const params = await searchParams;
   const athleteId = session.user.athleteId!;
   const ecoLoadEnabled = Boolean(
     athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
   );
-  const anchor =
-    params.week && DATE_KEY.test(params.week) ? parseISO(params.week) : new Date();
-  const weekStart = startOfWeek(anchor, WEEK_OPTS);
-  const weekEnd = endOfWeek(weekStart, WEEK_OPTS);
 
-  const [gate, activities, insights, activityCount, bounds, allStarts] = await Promise.all([
-    getSignalingGateStatus(athleteId),
-    db.syncedActivity.findMany({
-      where: {
-        athleteId,
-        startTime: { gte: weekStart, lte: weekEnd },
-        ...recordedActivityWhere,
-      },
-      include: { zoneBreakdowns: { where: { isCanonical: true }, take: 1 } },
-      orderBy: { startTime: "asc" },
-    }),
-    db.interactionInsight.findMany({
-      where: { athleteId, tier: "V0" },
-      orderBy: { generatedAt: "desc" },
-      take: 12,
-    }),
-    db.syncedActivity.count({ where: { athleteId, ...recordedActivityWhere } }),
-    db.syncedActivity.aggregate({
-      where: { athleteId, ...recordedActivityWhere },
-      _min: { startTime: true },
-      _max: { startTime: true },
-    }),
-    db.syncedActivity.findMany({
-      where: { athleteId, ...recordedActivityWhere },
-      select: { startTime: true },
-    }),
-  ]);
+  const todayKey = localTodayKey();
+  const yesterdayKey = format(subDays(parseDateKey(todayKey), 1), "yyyy-MM-dd");
+  const tomorrowKey = format(addDays(parseDateKey(todayKey), 1), "yyyy-MM-dd");
+  const fromDate = parseDateKey(yesterdayKey);
+  const toDateEnd = endDateKey(tomorrowKey);
 
-  const activityDates = [
-    ...new Set(allStarts.map((a) => format(a.startTime, "yyyy-MM-dd"))),
-  ].sort((a, b) => b.localeCompare(a));
+  const [plannedRows, activityRows, activityCount, seasonPlan, disciplineSettings] =
+    await Promise.all([
+      db.plannedSession.findMany({
+        where: {
+          athleteId,
+          scheduledDate: { gte: fromDate, lte: parseDateKey(tomorrowKey) },
+        },
+        include: {
+          structuredWorkout: true,
+          linkedActivity: {
+            select: {
+              id: true,
+              name: true,
+              startTime: true,
+              durationSeconds: true,
+              distanceMeters: true,
+              rawStreams: true,
+              discipline: true,
+              legType: true,
+              zoneBreakdowns: {
+                where: { isCanonical: true },
+                select: { zone: true, minutes: true, isCanonical: true },
+              },
+            },
+          },
+        },
+        orderBy: [{ scheduledDate: "asc" }, { title: "asc" }],
+      }),
+      db.syncedActivity.findMany({
+        where: {
+          athleteId,
+          startTime: { gte: fromDate, lte: toDateEnd },
+          ...recordedActivityWhere,
+        },
+        include: { zoneBreakdowns: { where: { isCanonical: true } } },
+        orderBy: { startTime: "asc" },
+      }),
+      db.syncedActivity.count({ where: { athleteId, ...recordedActivityWhere } }),
+      getSimplePlannerSeason(athleteId),
+      db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
+    ]);
 
-  const minDate = bounds._min.startTime
-    ? format(bounds._min.startTime, "yyyy-MM-dd")
-    : null;
-  const maxDate = bounds._max.startTime
-    ? format(bounds._max.startTime, "yyyy-MM-dd")
-    : null;
+  const displayUnits = Object.fromEntries(
+    disciplineSettings.map((s) => [s.discipline, s.displayUnit])
+  );
+  const primarySignals = Object.fromEntries(
+    disciplineSettings.map((s) => [s.discipline, s.primarySignal])
+  );
+  const defaultPoolSizes = Object.fromEntries(
+    disciplineSettings.map((s) => [s.discipline, s.poolSize])
+  );
+  const settings = buildDisciplineSettings(
+    disciplineSettings.map((s) => ({
+      discipline: s.discipline,
+      displayUnit: s.displayUnit,
+      poolSize: s.poolSize,
+    }))
+  );
+  const runDisplayUnit = settings.RUN?.displayUnit ?? "METRIC";
 
-  const weekActivities = activities.map((a) => ({
-    id: a.id,
-    name: a.name,
-    startTime: a.startTime.toISOString(),
-    discipline: a.discipline,
-    source: a.source,
-    signalUsed: a.zoneBreakdowns[0]?.signalUsed ?? null,
-    noUsableSignal: a.noUsableSignal,
-    durationSeconds: a.durationSeconds,
-    multisportGroupId: a.multisportGroupId,
-    sessionIndex: a.sessionIndex,
-    legType: a.legType,
-  }));
+  const planned = serializePlannedSessions(
+    plannedRows,
+    displayUnits,
+    defaultPoolSizes,
+    primarySignals
+  );
+  const activities = serializeCalendarActivities(activityRows);
+  const linkedActivityIds = new Set(
+    planned.map((p) => p.linkedActivity?.id).filter((id): id is string => Boolean(id))
+  );
 
-  const weekEcos = ecoLoadEnabled
-    ? sumEcos(
-        activities.map((a) =>
-          "ecos" in a ? ((a as { ecos?: number | null }).ecos ?? null) : null
-        )
-      )
-    : 0;
+  const dateKeys = [yesterdayKey, todayKey, tomorrowKey] as const;
+  const days: DayStripColumn[] = dateKeys.map((date, idx) => {
+    const offset = (idx - 1) as -1 | 0 | 1;
+    const sessions: DayStripSession[] = [];
 
-  const visibleInsights = insights
-    .filter((i) => ecoLoadEnabled || !isEcoTriggerPattern(i.triggerPattern))
-    .slice(0, 6);
+    for (const p of planned.filter((s) => s.scheduledDate === date)) {
+      const completion = sessionCompletionRollup({
+        discipline: p.discipline as Discipline,
+        completedDurationMinutes: p.completedDurationMinutes,
+        completedDistanceMeters: p.completedDistanceMeters,
+        completedTargetSpeedMps: p.completedTargetSpeedMps,
+        completedTargetPaceSeconds: p.completedTargetPaceSeconds,
+        completedZones: p.completedZones,
+      });
+      const linkedMinutes =
+        p.linkedActivity != null
+          ? Math.round((p.linkedActivity.durationSeconds / 60) * 10) / 10
+          : null;
+      const completedMinutes = completion?.durationMinutes ?? linkedMinutes;
+      const isPast = date < todayKey;
+      const isDone = Boolean(p.linkedActivity) || completedMinutes != null;
+      sessions.push({
+        id: p.id,
+        kind: "planned",
+        title: p.title,
+        discipline: p.discipline,
+        scheduledDate: p.scheduledDate,
+        plannedMinutes: p.plannedMinutes > 0 ? p.plannedMinutes : p.estimatedDurationMinutes,
+        completedMinutes,
+        href: `/workouts/${p.id}`,
+        status: isDone ? "completed" : isPast ? "missed" : "planned",
+      });
+    }
+
+    for (const a of activities) {
+      const activityDate = format(new Date(a.startTime), "yyyy-MM-dd");
+      if (activityDate !== date) continue;
+      if (linkedActivityIds.has(a.id)) continue;
+      sessions.push({
+        id: a.id,
+        kind: "completed",
+        title: a.name,
+        discipline: a.legType ?? a.discipline,
+        scheduledDate: date,
+        plannedMinutes: null,
+        completedMinutes: Math.round((a.durationSeconds / 60) * 10) / 10,
+        href: `/activities/${a.id}?returnTo=${encodeURIComponent(activityReturnHrefFromStartTime(a.startTime))}`,
+        status: "unplanned",
+      });
+    }
+
+    sessions.sort((a, b) => a.title.localeCompare(b.title));
+
+    return {
+      date,
+      label: dayLabel(offset),
+      isToday: offset === 0,
+      sessions,
+    };
+  });
+
+  let seasonBounds: SeasonRangeBounds | null = null;
+  let cycleBounds: CycleRangeBounds | null = null;
+  if (seasonPlan) {
+    seasonBounds = {
+      startDate: formatDateKey(seasonPlan.startDate),
+      endDate: formatDateKey(seasonPlan.endDate),
+    };
+    const mesocycles = seasonPlan.phases.flatMap((phase) =>
+      phase.mesocycles.map((m) => ({
+        name: m.name || phase.name,
+        startWeekIndex: m.startWeekIndex,
+        endWeekIndex: m.endWeekIndex,
+      }))
+    );
+    cycleBounds = cycleBoundsFromSeason({
+      seasonStartDate: seasonPlan.startDate,
+      today: parseDateKey(todayKey),
+      mesocycles,
+    });
+  }
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
@@ -111,60 +213,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <p className="text-sm text-zinc-500">{activityCount} activities total</p>
       </div>
 
-      <Card title="Workout Signaling">
-        <p className="text-sm text-zinc-600">{gate.message}</p>
-        <div className="mt-2 h-2 w-full rounded bg-zinc-200 dark:bg-zinc-800">
-          <div
-            className="h-2 rounded bg-sky-600"
-            style={{
-              width: `${Math.min(100, (gate.monthsOfHistory / gate.requiredMonths) * 100)}%`,
-            }}
-          />
-        </div>
-        <p className="mt-1 text-xs text-zinc-500">
-          {gate.monthsOfHistory.toFixed(1)} / {gate.requiredMonths} months
-          {gate.activated && ` · ${gate.eligibleDayCount} eligible days`}
-        </p>
+      <Card title="Yesterday · Today · Tomorrow">
+        <DashboardDayStrip days={days} />
       </Card>
 
-      <Card title="Insights">
-        <InsightsPanel
-          gateActivated={gate.activated}
-          insights={visibleInsights.map((i) => ({
-            id: i.id,
-            headline: i.headline,
-            sampleSize: i.sampleSize,
-            confidenceNote: i.confidenceNote,
-            polarity: insightPolarityFromOutcome(i.outcomePattern),
-          }))}
-        />
+      <Card title={ecoLoadEnabled ? "PMC (ECO)" : "PMC (TiZ / hours)"}>
+        <FitnessFatigueChart includePlan />
       </Card>
 
-      {ecoLoadEnabled ? (
-        <Card title="Week ECO load">
-          <p className="text-2xl font-semibold tabular-nums">
-            {Math.round(weekEcos)}{" "}
-            <span className="text-sm font-normal text-zinc-500">ECOs</span>
-          </p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Sum of scored swim / bike / run sessions this week
-          </p>
-        </Card>
-      ) : null}
-
-      {ecoLoadEnabled ? (
-        <Card title="Fitness / fatigue">
-          <FitnessFatigueChart />
-        </Card>
-      ) : null}
-
-      <Card title="Training week">
-        <DashboardWeekView
-          weekStart={format(weekStart, "yyyy-MM-dd")}
-          activities={weekActivities}
-          activityDates={activityDates}
-          minDate={minDate}
-          maxDate={maxDate}
+      <Card title="At a glance">
+        <DashboardGlanceCharts
+          season={seasonBounds}
+          cycle={cycleBounds}
+          displayUnit={runDisplayUnit === "IMPERIAL" ? "IMPERIAL" : "METRIC"}
         />
       </Card>
     </main>

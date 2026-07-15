@@ -38,9 +38,15 @@ const POLARITY_LABELS: Record<InsightSignalPolarity, string> = {
 type InsightsPanelProps = {
   insights: InsightItem[];
   gateActivated: boolean;
+  /** When false, hide the day-flags deep link (e.g. already on Workout Signaling). */
+  showFlagLink?: boolean;
 };
 
-export function InsightsPanel({ insights, gateActivated }: InsightsPanelProps) {
+export function InsightsPanel({
+  insights,
+  gateActivated,
+  showFlagLink = true,
+}: InsightsPanelProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [sensitivity, setSensitivity] = useState<InsightSensitivity>(
@@ -154,12 +160,14 @@ export function InsightsPanel({ insights, gateActivated }: InsightsPanelProps) {
           {loading ? "Regenerating…" : "Regenerate insights"}
         </Button>
       </div>
-      <Link
-        href="/onboarding/day-flags"
-        className="inline-block text-sm text-sky-600 hover:underline"
-      >
-        Review or add day flags
-      </Link>
+      {showFlagLink ? (
+        <Link
+          href="/onboarding/day-flags"
+          className="inline-block text-sm text-sky-600 hover:underline"
+        >
+          Review or add day flags
+        </Link>
+      ) : null}
     </div>
   );
 }

@@ -36,6 +36,9 @@ type SerializedImpulse = {
 
 type ApiResponse = {
   enabled: boolean;
+  ecoEnabled?: boolean;
+  loadMode?: "eco" | "hours";
+  loadUnit?: "ECO" | "hours";
   includePlan?: boolean;
   seasonId?: string | null;
   today?: string;
@@ -303,6 +306,7 @@ export function FitnessFatigueChart({
         {data ? (
           <p className="text-xs text-zinc-500">
             τ₁={data.tau1}d · τ₂={data.tau2}d
+            {data.loadUnit === "hours" ? " · load = TiZ/hours" : ""}
             {useDraftWeeks
               ? " · weekly PMC"
               : showForecast
@@ -318,9 +322,13 @@ export function FitnessFatigueChart({
         <p className="text-sm text-zinc-500">{error}</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          {showForecast
-            ? "No scored ECO history or projectable planned TiZ yet."
-            : "No scored ECO sessions yet. Import or sync activities with zones."}
+          {data?.loadMode === "hours"
+            ? showForecast
+              ? "No TiZ/hours history or projectable planned volume yet."
+              : "No timed sessions yet. Import or sync activities to build the hours-based PMC."
+            : showForecast
+              ? "No scored ECO history or projectable planned TiZ yet."
+              : "No scored ECO sessions yet. Import or sync activities with zones."}
         </p>
       ) : (
         <div className={`${heightClass} w-full`}>
