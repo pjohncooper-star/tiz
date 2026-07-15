@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { Input, Select, SegmentedControl } from "@/components/ui";
+import { useRechartsTooltipStyles } from "@/components/use-recharts-tooltip-styles";
 import { formatPace } from "@/lib/units/pace";
 import { formatDurationWindow } from "@/lib/activity/mean-max";
 import {
@@ -63,6 +64,7 @@ export function DashboardGlanceCharts({
   const [data, setData] = useState<GlanceResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [failedRangeKey, setFailedRangeKey] = useState<string | null>(null);
+  const tooltipStyles = useRechartsTooltipStyles();
 
   const range = useMemo(
     () =>
@@ -232,7 +234,9 @@ export function DashboardGlanceCharts({
                       <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} width={40} unit=" W" />
                       <Tooltip
-                        contentStyle={{ fontSize: 12 }}
+                        contentStyle={tooltipStyles.contentStyle}
+                        itemStyle={tooltipStyles.itemStyle}
+                        labelStyle={tooltipStyles.labelStyle}
                         formatter={(value) => [`${value} W`, "Mean max"]}
                       />
                       <Line
@@ -271,7 +275,9 @@ export function DashboardGlanceCharts({
                       }
                     />
                     <Tooltip
-                      contentStyle={{ fontSize: 12 }}
+                      contentStyle={tooltipStyles.contentStyle}
+                      itemStyle={tooltipStyles.itemStyle}
+                      labelStyle={tooltipStyles.labelStyle}
                       formatter={(_value, _name, item) => {
                         const label =
                           item && typeof item === "object" && "payload" in item
@@ -313,7 +319,11 @@ export function DashboardGlanceCharts({
                     <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
                     <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={36} unit="h" />
-                    <Tooltip contentStyle={{ fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={tooltipStyles.contentStyle}
+                      itemStyle={tooltipStyles.itemStyle}
+                      labelStyle={tooltipStyles.labelStyle}
+                    />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="swimHours" name="Swim" stackId="v" fill="#0284c7" isAnimationActive={false} />
                     <Bar dataKey="bikeHours" name="Bike" stackId="v" fill="#ca8a04" isAnimationActive={false} />
@@ -330,7 +340,9 @@ export function DashboardGlanceCharts({
                     <XAxis dataKey="zone" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} width={36} unit="h" />
                     <Tooltip
-                      contentStyle={{ fontSize: 12 }}
+                      contentStyle={tooltipStyles.contentStyle}
+                      itemStyle={tooltipStyles.itemStyle}
+                      labelStyle={tooltipStyles.labelStyle}
                       formatter={(value, _name, item) => {
                         const minutes =
                           item && typeof item === "object" && "payload" in item

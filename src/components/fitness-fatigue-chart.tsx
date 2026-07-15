@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { SegmentedControl } from "@/components/ui";
+import { useRechartsTooltipStyles } from "@/components/use-recharts-tooltip-styles";
 import {
   computeFitnessFatigueWeekly,
   mondayWeekStartKey,
@@ -204,6 +205,7 @@ export function FitnessFatigueChart({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const todayKey = useMemo(() => localTodayKey(), []);
+  const tooltipStyles = useRechartsTooltipStyles();
   const useDraftWeeks = Boolean(draftWeeks && draftWeeks.length > 0);
   const showForecast = includePlan || useDraftWeeks || Boolean(seasonId);
 
@@ -343,7 +345,9 @@ export function FitnessFatigueChart({
               />
               <YAxis tick={{ fontSize: 11 }} width={40} />
               <Tooltip
-                contentStyle={{ fontSize: 12 }}
+                contentStyle={tooltipStyles.contentStyle}
+                itemStyle={tooltipStyles.itemStyle}
+                labelStyle={tooltipStyles.labelStyle}
                 labelFormatter={(label) => String(label)}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
