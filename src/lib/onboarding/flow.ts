@@ -11,7 +11,7 @@ export const ONBOARDING_STEPS = [
   },
   { step: "IMPORT" as const, path: "/onboarding/import", title: "Historical import", number: 4 },
   { step: "STRAVA" as const, path: "/onboarding/strava", title: "Strava connect", number: 5 },
-  { step: "DAY_FLAGS" as const, path: "/onboarding/day-flags", title: "Day flags", number: 6 },
+  { step: "DAY_FLAGS" as const, path: "/onboarding/day-flags", title: "Workout Signaling", number: 6 },
 ];
 
 export const ONBOARDING_ROUTES: Record<OnboardingStep, string> = {

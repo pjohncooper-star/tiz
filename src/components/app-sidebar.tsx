@@ -17,7 +17,7 @@ export async function AppSidebar() {
   if (planBuilderEnabled) {
     items.push({ href: "/plan", label: "Plan" });
   }
-  items.push({ href: "/onboarding/day-flags", label: "Day flags" });
+  items.push({ href: "/onboarding/day-flags", label: "Workout Signaling" });
   items.push({ href: "/settings", label: "Settings" });
 
   return (
