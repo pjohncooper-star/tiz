@@ -75,6 +75,8 @@ type WorkoutTreeEditorProps = {
   primarySignal?: SignalType | null;
   /** Compact chart + scrollable chart/steps viewport (calendar Build panel). */
   compact?: boolean;
+  /** Split step editor (left) and profile graph (middle) for calendar Build layout. */
+  build?: boolean;
 };
 
 type TargetView = "zone" | "pace_power" | "heart_rate";
@@ -1646,6 +1648,7 @@ export function WorkoutTreeEditor({
   thresholdPaceSeconds = null,
   primarySignal = null,
   compact = false,
+  build = false,
 }: WorkoutTreeEditorProps) {
   const primaryTargetSignal = useMemo(
     () => resolvePrimaryTargetSignal(discipline, primarySignal),
@@ -1730,8 +1733,107 @@ export function WorkoutTreeEditor({
   const draggedNode =
     activeDragPath != null ? getNodeAtPath(tree.nodes, activeDragPath) : null;
 
+  const controls = (
+    <>
+      <div className="grid gap-3 border-b border-zinc-200 pb-3 dark:border-zinc-700 sm:grid-cols-2">
+        <SegmentedControl
+          label="Target"
+          value={targetView}
+          options={targetOptions}
+          onChange={setTargetView}
+        />
+        <SegmentedControl
+          label="Step length"
+          value={lengthView}
+          options={[
+            { value: "duration", label: "Duration" },
+            { value: "distance", label: "Distance" },
+          ]}
+          onChange={setLengthView}
+        />
+      </div>
+
+      <p className="text-xs text-zinc-500">Total: {totalLabel}</p>
+
+      <div className="flex flex-wrap gap-1.5">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onTreeChange((nodes) => [...nodes, newLeafStep()])}
+        >
+          Add step
+        </Button>
+        {discipline === "SWIM" ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onTreeChange((nodes) => [...nodes, defaultSwimIntervalSet()])}
+          >
+            Add interval set
+          </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onTreeChange((nodes) => [...nodes, defaultRepeatBlock()])}
+        >
+          Add repeat
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onTreeChange((nodes) => [...nodes, defaultRampStep()])}
+        >
+          Add ramp
+        </Button>
+      </div>
+    </>
+  );
+
+  const nodeList = (
+    <WorkoutNodeList
+      parentPath={[]}
+      nodes={tree.nodes}
+      discipline={discipline}
+      displayUnit={displayUnit}
+      poolSize={poolSize}
+      targetView={targetView}
+      lengthView={lengthView}
+      primaryTargetSignal={primaryTargetSignal}
+      activeDragPath={activeDragPath}
+      onTreeChange={onTreeChange}
+    />
+  );
+
+  const profileChart = (
+    <WorkoutProfileChart
+      nodes={tree.nodes}
+      discipline={discipline}
+      lengthView={lengthView}
+      primarySignal={primarySignal}
+      displayUnit={displayUnit}
+      thresholdPaceSeconds={thresholdPaceSeconds}
+      compact={compact || build}
+    />
+  );
+
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      {build ? (
+        <div className="flex h-full min-h-0">
+          <div className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto overscroll-contain border-r border-zinc-200 p-3 dark:border-zinc-800">
+            {controls}
+            <div className="min-h-0 flex-1 space-y-2">{nodeList}</div>
+          </div>
+          <div className="flex w-80 shrink-0 flex-col gap-2 overflow-y-auto overscroll-contain p-3">
+            {profileChart}
+            <p className="text-[10px] leading-snug text-zinc-400">
+              Drop warm-up / main / cool-down from the component library on the right, or drag
+              segments onto the graph. Then drag the assembled workout onto the pool week.
+            </p>
+          </div>
+        </div>
+      ) : (
       <div className="space-y-4">
       <div className="grid gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-700 sm:grid-cols-2">
         <SegmentedControl
@@ -1755,50 +1857,13 @@ export function WorkoutTreeEditor({
 
       {compact ? (
         <div className="max-h-56 space-y-3 overflow-y-auto overscroll-contain rounded-md border border-zinc-200 p-2 dark:border-zinc-700">
-          <WorkoutProfileChart
-            nodes={tree.nodes}
-            discipline={discipline}
-            lengthView={lengthView}
-            primarySignal={primarySignal}
-            displayUnit={displayUnit}
-            thresholdPaceSeconds={thresholdPaceSeconds}
-            compact
-          />
-          <WorkoutNodeList
-            parentPath={[]}
-            nodes={tree.nodes}
-            discipline={discipline}
-            displayUnit={displayUnit}
-            poolSize={poolSize}
-            targetView={targetView}
-            lengthView={lengthView}
-            primaryTargetSignal={primaryTargetSignal}
-            activeDragPath={activeDragPath}
-            onTreeChange={onTreeChange}
-          />
+          {profileChart}
+          {nodeList}
         </div>
       ) : (
         <>
-          <WorkoutProfileChart
-            nodes={tree.nodes}
-            discipline={discipline}
-            lengthView={lengthView}
-            primarySignal={primarySignal}
-            displayUnit={displayUnit}
-            thresholdPaceSeconds={thresholdPaceSeconds}
-          />
-          <WorkoutNodeList
-            parentPath={[]}
-            nodes={tree.nodes}
-            discipline={discipline}
-            displayUnit={displayUnit}
-            poolSize={poolSize}
-            targetView={targetView}
-            lengthView={lengthView}
-            primaryTargetSignal={primaryTargetSignal}
-            activeDragPath={activeDragPath}
-            onTreeChange={onTreeChange}
-          />
+          {profileChart}
+          {nodeList}
         </>
       )}
 
@@ -1831,6 +1896,7 @@ export function WorkoutTreeEditor({
         </Button>
       </div>
       </div>
+      )}
 
       <DragOverlay>
         {draggedNode ? (

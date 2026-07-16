@@ -136,7 +136,7 @@ function SegmentLibraryCard({
   );
 }
 
-/** Warm-up / Main / Cool-down library docked in the nav↔calendar gutter. */
+/** Warm-up / Main / Cool-down library docked on the right in Build mode. */
 export function SegmentLibraryPane({
   composer,
 }: {
@@ -152,7 +152,7 @@ export function SegmentLibraryPane({
 
   return (
     <aside
-      className="fixed bottom-0 left-48 top-0 z-20 w-56 overflow-y-auto border-r border-zinc-200 bg-zinc-50/95 p-2 pt-20 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+      className="fixed bottom-0 right-0 top-0 z-20 w-56 overflow-y-auto border-l border-zinc-200 bg-zinc-50/95 p-2 pt-20 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
       aria-label="Workout component library"
     >
       <div className="mb-2 flex items-center justify-between gap-1 px-1">
@@ -240,10 +240,63 @@ function AssembledDragHandle({ composer }: { composer: PoolWorkoutComposer }) {
 type WorkoutGraphPanelProps = {
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  build?: boolean;
 };
 
+function WorkoutGraphToolbar({
+  composer,
+  disciplineSettings,
+  compact = false,
+}: {
+  composer: PoolWorkoutComposer;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`flex flex-wrap items-center justify-between gap-2 ${
+        compact ? "border-b border-zinc-200 pb-2 dark:border-zinc-800" : ""
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Select
+          value={composer.discipline}
+          onChange={(e) => composer.setDiscipline(e.target.value as typeof composer.discipline)}
+          aria-label="Build discipline"
+        >
+          <option value="SWIM">Swim</option>
+          <option value="BIKE">Bike</option>
+          <option value="RUN">Run</option>
+        </Select>
+        {composer.historySource ? (
+          <span className="text-[10px] text-zinc-500">Source: {composer.historySource}</span>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] tabular-nums text-zinc-500">
+          {composer.discipline.charAt(0) + composer.discipline.slice(1).toLowerCase()}
+          {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={composer.clear}
+          disabled={!composer.hasWorkout}
+        >
+          Clear
+        </Button>
+        <AssembledDragHandle composer={composer} />
+      </div>
+    </div>
+  );
+}
+
 /** Sticky Build surface: discipline + WorkoutTreeEditor (session-style). */
-export function WorkoutGraphPanel({ composer, disciplineSettings }: WorkoutGraphPanelProps) {
+export function WorkoutGraphPanel({
+  composer,
+  disciplineSettings,
+  build = false,
+}: WorkoutGraphPanelProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: "pool-workout-graph",
     data: { type: "pool-workout-graph" },
@@ -254,6 +307,35 @@ export function WorkoutGraphPanel({ composer, disciplineSettings }: WorkoutGraph
   const displayUnit: DisplayUnit =
     composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
 
+  if (build) {
+    return (
+      <div
+        ref={setNodeRef}
+        className={`flex h-full min-h-0 flex-col ${
+          isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
+        }`}
+      >
+        <div className="shrink-0 border-b border-zinc-200 bg-zinc-50/95 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/90">
+          <WorkoutGraphToolbar
+            composer={composer}
+            disciplineSettings={disciplineSettings}
+            compact
+          />
+        </div>
+        <div className="min-h-0 flex-1">
+          <WorkoutTreeEditor
+            discipline={composer.discipline}
+            displayUnit={displayUnit}
+            poolSize={poolSize}
+            tree={composer.workoutTree}
+            onChange={composer.setWorkoutTree}
+            build
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={setNodeRef}
@@ -261,37 +343,7 @@ export function WorkoutGraphPanel({ composer, disciplineSettings }: WorkoutGraph
         isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
       }`}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Select
-            value={composer.discipline}
-            onChange={(e) => composer.setDiscipline(e.target.value as typeof composer.discipline)}
-            aria-label="Build discipline"
-          >
-            <option value="SWIM">Swim</option>
-            <option value="BIKE">Bike</option>
-            <option value="RUN">Run</option>
-          </Select>
-          {composer.historySource ? (
-            <span className="text-[10px] text-zinc-500">Source: {composer.historySource}</span>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] tabular-nums text-zinc-500">
-            {composer.discipline.charAt(0) + composer.discipline.slice(1).toLowerCase()}
-            {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={composer.clear}
-            disabled={!composer.hasWorkout}
-          >
-            Clear
-          </Button>
-          <AssembledDragHandle composer={composer} />
-        </div>
-      </div>
+      <WorkoutGraphToolbar composer={composer} disciplineSettings={disciplineSettings} />
 
       <WorkoutTreeEditor
         discipline={composer.discipline}
