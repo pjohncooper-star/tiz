@@ -134,6 +134,13 @@ enum SessionRole {
   LONG
 }
 
+enum PoolSlotKind {
+  ENDURANCE
+  INTENSITY
+  LONG
+  SUBSTITUTE_ENDURANCE
+}
+
 enum Weekday {
   MON
   TUE
@@ -673,6 +680,7 @@ model PlannedSession {
   completedTargetPaceSeconds Float?
   completedZones           Json?
   sessionRole              SessionRole          @default(MODERATE)
+  poolSlotKind             PoolSlotKind?
 
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   weeklyTemplateItem   WeeklyScheduleTemplateItem? @relation(fields: [weeklyTemplateItemId], references: [id], onDelete: SetNull)

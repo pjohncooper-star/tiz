@@ -1,4 +1,4 @@
-import type { Discipline, DisplayUnit, PlannedSession, PoolSize, SessionRole, SignalType, SyncedActivity } from "@prisma/client";
+import type { Discipline, DisplayUnit, PlannedSession, PoolSize, PoolSlotKind, SessionRole, SignalType, SyncedActivity } from "@prisma/client";
 import { format } from "date-fns";
 import { resolveActivityNumericMetrics } from "@/lib/activity/summary";
 import { calendarDateFromDb } from "@/lib/dates";
@@ -76,6 +76,7 @@ export type CalendarPlannedSession = {
   workoutProfile: CalendarWorkoutProfile | null;
   sessionRole: SessionRole;
   displaySessionRole: SessionRole;
+  poolSlotKind: PoolSlotKind | null;
 };
 
 type SessionRow = PlannedSession & {
@@ -239,6 +240,7 @@ export function serializePlannedSessions(
       workoutProfile,
       sessionRole: s.sessionRole,
       displaySessionRole,
+      poolSlotKind: s.poolSlotKind ?? null,
     };
   });
 }

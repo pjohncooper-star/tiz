@@ -232,6 +232,7 @@ function buildSlotBudgets(input: {
   };
   if (!input.phase) return budgets;
 
+  // Rest-week load is expressed via volume/TiZ cuts, not fewer slot counts (Option B).
   const map = {
     SWIM: {
       sessions: input.phase.swimSessionsPerWeek,

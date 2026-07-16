@@ -5,6 +5,7 @@ import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import {
   computeUnscheduledChips,
   countScheduledSessionsByDiscipline,
+  countScheduledSlotsByDiscipline,
 } from "./unscheduled-chips";
 
 function baseWeekTarget(overrides: Partial<CalendarWeekTarget> = {}): CalendarWeekTarget {
@@ -56,7 +57,16 @@ function session(
     workoutProfile: null,
     sessionRole: "MODERATE",
     displaySessionRole: "MODERATE",
+    poolSlotKind: null,
   };
+}
+
+function sessionWithSlot(
+  discipline: CalendarPlannedSession["discipline"],
+  sessionRole: CalendarPlannedSession["sessionRole"],
+  poolSlotKind: CalendarPlannedSession["poolSlotKind"]
+): CalendarPlannedSession {
+  return { ...session(discipline), sessionRole, displaySessionRole: sessionRole, poolSlotKind };
 }
 
 describe("unscheduled-chips", () => {
@@ -114,11 +124,61 @@ describe("unscheduled-chips", () => {
     const bikeLong = chips.filter((c) => c.discipline === "BIKE" && c.slotKind === "LONG");
     assert.equal(bikeLong.length, 1);
     assert.equal(bikeLong[0]?.targetDurationMinutes, 120);
+    assert.equal(bikeLong[0]?.label, "Bike · Long · 2h");
     const runSub = chips.filter(
       (c) => c.discipline === "RUN" && c.slotKind === "SUBSTITUTE_ENDURANCE"
     );
     assert.equal(runSub.length, 1);
     assert.equal(runSub[0]?.targetDurationMinutes, 45);
+    assert.equal(runSub[0]?.label, "Run · Endurance (sub) · 45m");
+  });
+
+  it("decrements substitute chips when session has poolSlotKind SUBSTITUTE_ENDURANCE", () => {
+    const weekTarget = baseWeekTarget({
+      slotBudgets: {
+        SWIM: {
+          endurance: 0,
+          intensity: 0,
+          long: 0,
+          substituteEndurance: 0,
+          substituteDurationMinutes: 0,
+        },
+        BIKE: {
+          endurance: 0,
+          intensity: 0,
+          long: 0,
+          substituteEndurance: 0,
+          substituteDurationMinutes: 0,
+        },
+        RUN: {
+          endurance: 1,
+          intensity: 0,
+          long: 0,
+          substituteEndurance: 1,
+          substituteDurationMinutes: 45,
+        },
+      },
+    });
+    const chips = computeUnscheduledChips("2026-07-06", weekTarget, [
+      sessionWithSlot("RUN", "MODERATE", "SUBSTITUTE_ENDURANCE"),
+    ]);
+    const runEndurance = chips.filter(
+      (c) => c.discipline === "RUN" && c.slotKind === "ENDURANCE"
+    );
+    const runSub = chips.filter(
+      (c) => c.discipline === "RUN" && c.slotKind === "SUBSTITUTE_ENDURANCE"
+    );
+    assert.equal(runEndurance.length, 1);
+    assert.equal(runSub.length, 0);
+  });
+
+  it("counts poolSlotKind before sessionRole fallback", () => {
+    const counts = countScheduledSlotsByDiscipline([
+      sessionWithSlot("RUN", "MODERATE", "SUBSTITUTE_ENDURANCE"),
+      sessionWithSlot("RUN", "MODERATE", "ENDURANCE"),
+    ]);
+    assert.equal(counts.get("RUN")?.get("SUBSTITUTE_ENDURANCE"), 1);
+    assert.equal(counts.get("RUN")?.get("ENDURANCE"), 1);
   });
 
   it("does not count race sessions toward the scheduled total", () => {
