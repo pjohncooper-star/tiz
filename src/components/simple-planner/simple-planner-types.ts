@@ -109,6 +109,8 @@ export type SimpleSeason = {
   weeks: SimpleWeek[];
   goalEvents: SimpleGoalEvent[];
   primaryGoalEvent: SimpleGoalEvent | null;
+  longRideWeekFlags?: boolean[];
+  longRunWeekFlags?: boolean[];
 };
 
 export type { PoolSlotKind, WeekSlotBudgets };

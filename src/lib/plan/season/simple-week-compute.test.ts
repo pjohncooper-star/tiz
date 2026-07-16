@@ -211,4 +211,90 @@ describe("simple-week-compute", () => {
     assert.equal(week.bikeHours, 5);
     assert.ok(week.longRideMinutes > 0);
   });
+
+  it("uses stored long week flags with all-on default", () => {
+    const phases = [basePhase()];
+    const weeks = enrichSimpleSeasonWeeks({
+      weeks: [
+        {
+          weekIndex: 0,
+          isRestWeek: false,
+          swimHours: 2,
+          bikeHours: 5,
+          runHours: 3,
+          totalHours: 10,
+          swimDistanceMeters: null,
+          runDistanceMeters: null,
+        },
+        {
+          weekIndex: 1,
+          isRestWeek: false,
+          swimHours: 2,
+          bikeHours: 5,
+          runHours: 3,
+          totalHours: 10,
+          swimDistanceMeters: null,
+          runDistanceMeters: null,
+        },
+      ],
+      phases,
+      zonePhaseSpans: [],
+      phasesWithBlocks: [],
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      deLoadStrategy: "VOLUME_ONLY",
+      seasonSplit: { swim: 33.33, bike: 33.34, run: 33.33 },
+      longAnchors: { rideStart: 60, ridePeak: 180, runStart: 30, runPeak: 90 },
+      phaseKindsByWeek: ["BASE", "BASE"],
+      taperWeekIndices: [],
+      deLoadEveryNWeeks: 4,
+      longRideWeekFlags: [true, false],
+      longRunWeekFlags: [false, true],
+    });
+
+    assert.ok(weeks[0]!.longRideMinutes > 0);
+    assert.equal(weeks[0]!.longRunMinutes, 0);
+    assert.equal(weeks[0]!.slotBudgets.BIKE.long, 1);
+    assert.equal(weeks[0]!.slotBudgets.RUN.long, 0);
+
+    assert.equal(weeks[1]!.longRideMinutes, 0);
+    assert.ok(weeks[1]!.longRunMinutes > 0);
+    assert.equal(weeks[1]!.slotBudgets.BIKE.long, 0);
+    assert.equal(weeks[1]!.slotBudgets.RUN.long, 1);
+  });
+
+  it("forces long sessions off on rest weeks even when stored true", () => {
+    const phases = [basePhase()];
+    const weeks = enrichSimpleSeasonWeeks({
+      weeks: [
+        {
+          weekIndex: 0,
+          isRestWeek: true,
+          swimHours: 2,
+          bikeHours: 5,
+          runHours: 3,
+          totalHours: 10,
+          swimDistanceMeters: null,
+          runDistanceMeters: null,
+        },
+      ],
+      phases,
+      zonePhaseSpans: [],
+      phasesWithBlocks: [],
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      deLoadStrategy: "VOLUME_ONLY",
+      seasonSplit: { swim: 33.33, bike: 33.34, run: 33.33 },
+      longAnchors: { rideStart: 60, ridePeak: 180, runStart: 30, runPeak: 90 },
+      phaseKindsByWeek: ["BASE"],
+      taperWeekIndices: [],
+      deLoadEveryNWeeks: 4,
+      longRideWeekFlags: [true],
+      longRunWeekFlags: [true],
+    });
+
+    const week = weeks[0]!;
+    assert.equal(week.longRideMinutes, 0);
+    assert.equal(week.longRunMinutes, 0);
+    assert.equal(week.slotBudgets.BIKE.long, 0);
+    assert.equal(week.slotBudgets.RUN.long, 0);
+  });
 });

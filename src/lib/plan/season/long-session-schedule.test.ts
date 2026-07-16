@@ -5,8 +5,10 @@ import {
   applyLongSessionTier,
   defaultLongWeekFlagAtWeek,
   defaultLongWeekFlags,
+  initialLongWeekFlags,
   LONG_SESSION_MEDIUM_FACTOR,
   mergeLongWeekFlags,
+  resolveLongWeekFlagsForSeason,
 } from "./long-session-schedule";
 import type { ComputedMesocycle } from "./types";
 
@@ -114,5 +116,34 @@ describe("long-session-schedule", () => {
       false,
     ]);
     assert.deepEqual(mergeLongWeekFlags(defaults, [false]), defaults);
+  });
+
+  it("initialLongWeekFlags defaults all weeks to on", () => {
+    assert.deepEqual(initialLongWeekFlags(4), [true, true, true, true]);
+    assert.deepEqual(initialLongWeekFlags(0), []);
+  });
+
+  it("resolveLongWeekFlagsForSeason uses all-on when stored is null", () => {
+    assert.deepEqual(
+      resolveLongWeekFlagsForSeason({ totalWeeks: 3, stored: null }),
+      [true, true, true]
+    );
+  });
+
+  it("resolveLongWeekFlagsForSeason pads new weeks with on", () => {
+    assert.deepEqual(
+      resolveLongWeekFlagsForSeason({ totalWeeks: 4, stored: [false, true] }),
+      [false, true, true, true]
+    );
+  });
+
+  it("resolveLongWeekFlagsForSeason keeps stored when length matches", () => {
+    assert.deepEqual(
+      resolveLongWeekFlagsForSeason({
+        totalWeeks: 2,
+        stored: [false, true],
+      }),
+      [false, true]
+    );
   });
 });

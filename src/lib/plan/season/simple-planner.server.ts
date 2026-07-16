@@ -66,6 +66,11 @@ import {
   type ComputedSimpleWeek,
   type SimplePhaseCompute,
 } from "./simple-week-compute";
+import {
+  initialLongWeekFlags,
+  parseLongWeekFlags,
+  resolveLongWeekFlagsForSeason,
+} from "./long-session-schedule";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
@@ -164,6 +169,8 @@ export type UpdateSimpleSeasonInput = {
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
   removedGoalEvents?: RemovedGoalEventInput[];
+  longRideWeekFlags?: boolean[] | null;
+  longRunWeekFlags?: boolean[] | null;
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -544,7 +551,11 @@ function recalculateWeeks(
   },
   totalWeeks: number,
   catalog?: ZoneFocusCatalog,
-  seasonAnchors?: { startHours: number; peakHours: number }
+  seasonAnchors?: { startHours: number; peakHours: number },
+  longWeekFlags?: {
+    longRideWeekFlags?: boolean[] | null;
+    longRunWeekFlags?: boolean[] | null;
+  }
 ): ComputedSimpleWeek[] {
   const rampPhaseSpans = zonePhaseSpans.map((span) => ({
     startWeekIndex: span.startWeekIndex,
@@ -586,6 +597,8 @@ function recalculateWeeks(
     phaseKindsByWeek: phaseKindsByWeekIndex(totalWeeks, phaseCompute),
     taperWeekIndices: [],
     deLoadEveryNWeeks: seasonContext.deLoadEveryNWeeks,
+    longRideWeekFlags: longWeekFlags?.longRideWeekFlags,
+    longRunWeekFlags: longWeekFlags?.longRunWeekFlags,
   });
 }
 
@@ -716,7 +729,11 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
     },
     bounds.totalWeeks,
     undefined,
-    { startHours: rampFields.startHours, peakHours: rampFields.peakHours }
+    { startHours: rampFields.startHours, peakHours: rampFields.peakHours },
+    {
+      longRideWeekFlags: initialLongWeekFlags(bounds.totalWeeks),
+      longRunWeekFlags: initialLongWeekFlags(bounds.totalWeeks),
+    }
   );
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
@@ -740,6 +757,8 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
           kindDefaults
         ) as Prisma.InputJsonValue,
+        longRideWeekFlags: initialLongWeekFlags(bounds.totalWeeks),
+        longRunWeekFlags: initialLongWeekFlags(bounds.totalWeeks),
         ...rampFields,
       },
     });
@@ -855,6 +874,21 @@ export async function updateSimpleSeasonPlan(
     ? phaseComputeFromWrites(phaseWrites, kindDefaults)
     : phaseComputeFromDb(existing.phases, kindDefaults);
 
+  const resolvedLongRideWeekFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks: bounds.totalWeeks,
+    stored:
+      input.longRideWeekFlags ??
+      parseLongWeekFlags(existing.longRideWeekFlags) ??
+      null,
+  });
+  const resolvedLongRunWeekFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks: bounds.totalWeeks,
+    stored:
+      input.longRunWeekFlags ??
+      parseLongWeekFlags(existing.longRunWeekFlags) ??
+      null,
+  });
+
   const phaseDbRowsForBlocks =
     phaseDbRows ??
     existing.phases
@@ -918,7 +952,11 @@ export async function updateSimpleSeasonPlan(
       seasonContext,
       bounds.totalWeeks,
       catalog,
-      { startHours: existing.startHours, peakHours: existing.peakHours }
+      { startHours: existing.startHours, peakHours: existing.peakHours },
+      {
+        longRideWeekFlags: resolvedLongRideWeekFlags,
+        longRunWeekFlags: resolvedLongRunWeekFlags,
+      }
     );
   }
 
@@ -963,6 +1001,8 @@ export async function updateSimpleSeasonPlan(
         ...(input.defaultPlanningMode != null
           ? { defaultPlanningMode: input.defaultPlanningMode }
           : {}),
+        longRideWeekFlags: resolvedLongRideWeekFlags,
+        longRunWeekFlags: resolvedLongRunWeekFlags,
       },
     });
 
@@ -1128,6 +1168,15 @@ export function serializeSimpleSeasonPlan(
       };
     });
 
+  const longRideWeekFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks: plan.totalWeeks,
+    stored: parseLongWeekFlags(plan.longRideWeekFlags),
+  });
+  const longRunWeekFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks: plan.totalWeeks,
+    stored: parseLongWeekFlags(plan.longRunWeekFlags),
+  });
+
   return {
     id: plan.id,
     name: plan.name,
@@ -1139,6 +1188,8 @@ export function serializeSimpleSeasonPlan(
     deLoadVolumePercent: plan.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     rampDefaults: defaults,
     phaseKindZoneDefaults,
+    longRideWeekFlags,
+    longRunWeekFlags,
     phases,
     weeks: plan.weeks.map((week) => ({
       weekIndex: week.weekIndex,
