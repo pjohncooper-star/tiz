@@ -43,18 +43,25 @@ import {
   disciplinePlanningMode,
   exactHoursFromDisciplineDistance,
 } from "@/components/simple-planner/simple-planner-volume-display";
+import { LongWeekScheduleGrid } from "@/components/simple-planner/long-week-schedule-grid";
+import type { SimpleWeek } from "@/components/simple-planner/simple-planner-types";
 
 type SimplePlannerPhasesPaneProps = {
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
+  weeks: SimpleWeek[];
   defaultPlanningMode: PlanningMode;
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  longRideWeekFlags: boolean[];
+  longRunWeekFlags: boolean[];
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
   onPhasesChange: (phases: SimplePhase[]) => void;
+  onLongRideWeekFlagsChange: (flags: boolean[]) => void;
+  onLongRunWeekFlagsChange: (flags: boolean[]) => void;
 };
 
 export function SimplePlannerPhasesPane({
@@ -62,12 +69,17 @@ export function SimplePlannerPhasesPane({
   phaseKindZoneDefaults,
   zoneFocusCatalog,
   totalWeeks,
+  weeks,
   defaultPlanningMode,
   rampDefaults,
   disciplineSettings,
+  longRideWeekFlags,
+  longRunWeekFlags,
   selectedPhaseId,
   onSelectPhase,
   onPhasesChange,
+  onLongRideWeekFlagsChange,
+  onLongRunWeekFlagsChange,
 }: SimplePlannerPhasesPaneProps) {
   const selected =
     phases.find((phase) => phase.id === selectedPhaseId) ??
@@ -164,9 +176,14 @@ export function SimplePlannerPhasesPane({
           phaseKindZoneDefaults={phaseKindZoneDefaults}
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={totalWeeks}
+          weeks={weeks}
           defaultPlanningMode={defaultPlanningMode}
           rampDefaults={rampDefaults}
           disciplineSettings={disciplineSettings}
+          longRideWeekFlags={longRideWeekFlags}
+          longRunWeekFlags={longRunWeekFlags}
+          onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
+          onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
           onChange={updatePhase}
           onDelete={() => deletePhase(selected)}
         />
@@ -181,9 +198,14 @@ function PhaseDetailEditor({
   phaseKindZoneDefaults,
   zoneFocusCatalog,
   totalWeeks,
+  weeks,
   defaultPlanningMode,
   rampDefaults,
   disciplineSettings,
+  longRideWeekFlags,
+  longRunWeekFlags,
+  onLongRideWeekFlagsChange,
+  onLongRunWeekFlagsChange,
   onChange,
   onDelete,
 }: {
@@ -192,9 +214,14 @@ function PhaseDetailEditor({
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
+  weeks: SimpleWeek[];
   defaultPlanningMode: PlanningMode;
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  longRideWeekFlags: boolean[];
+  longRunWeekFlags: boolean[];
+  onLongRideWeekFlagsChange: (flags: boolean[]) => void;
+  onLongRunWeekFlagsChange: (flags: boolean[]) => void;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
@@ -204,6 +231,7 @@ function PhaseDetailEditor({
     : "Not assigned — click + on a week in the table";
   const effectiveMode = phase.planningMode ?? defaultPlanningMode;
   const showLongSettings = planningModeIncludesLongs(effectiveMode);
+  const restWeekByIndex = weeks.map((week) => week.isRestWeek);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -446,6 +474,18 @@ function PhaseDetailEditor({
               onChange({ ...phase, longRunOffWeekEndurancePercent: value })
             }
           />
+          {assigned ? (
+            <LongWeekScheduleGrid
+              startWeekIndex={phase.startWeekIndex}
+              endWeekIndex={phase.endWeekIndex}
+              phaseKind={phase.phaseKind}
+              longRideWeekFlags={longRideWeekFlags}
+              longRunWeekFlags={longRunWeekFlags}
+              restWeekByIndex={restWeekByIndex}
+              onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
+              onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
+            />
+          ) : null}
         </fieldset>
       ) : null}
 

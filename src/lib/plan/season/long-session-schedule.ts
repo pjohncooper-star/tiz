@@ -20,6 +20,28 @@ export function parseLongWeekFlags(value: unknown): boolean[] | null {
   return value;
 }
 
+export function initialLongWeekFlags(totalWeeks: number): boolean[] {
+  return Array.from({ length: totalWeeks }, () => true);
+}
+
+export function resolveLongWeekFlagsForSeason(input: {
+  totalWeeks: number;
+  stored: boolean[] | null | undefined;
+}): boolean[] {
+  const parsed = parseLongWeekFlags(input.stored);
+  if (parsed && parsed.length === input.totalWeeks) {
+    return parsed;
+  }
+
+  const result = initialLongWeekFlags(input.totalWeeks);
+  if (parsed) {
+    for (let i = 0; i < Math.min(parsed.length, input.totalWeeks); i++) {
+      result[i] = parsed[i]!;
+    }
+  }
+  return result;
+}
+
 export function mergeLongWeekFlags(
   defaults: boolean[],
   stored: boolean[] | null | undefined

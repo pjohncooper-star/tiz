@@ -33,6 +33,7 @@ import {
   PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
+import { resolveLongWeekFlagsForSeason } from "@/lib/plan/season/long-session-schedule";
 import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
@@ -43,11 +44,21 @@ import {
 
 function normalizeSeason(season: SimpleSeason): SimpleSeason {
   const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
+  const longRideWeekFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks: season.totalWeeks,
+    stored: season.longRideWeekFlags ?? null,
+  });
+  const longRunWeekFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks: season.totalWeeks,
+    stored: season.longRunWeekFlags ?? null,
+  });
   return {
     ...season,
     deLoadVolumePercent: season.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     defaultPlanningMode: season.defaultPlanningMode ?? "BY_DISCIPLINE",
     phaseKindZoneDefaults: kindDefaults,
+    longRideWeekFlags,
+    longRunWeekFlags,
     phases: season.phases.map((phase) => ({
       ...phase,
       phaseKind: phase.phaseKind ?? "BASE",
@@ -127,6 +138,8 @@ function revertSection(
         ...draft,
         phases: baseline.phases,
         weeks: baseline.weeks,
+        longRideWeekFlags: baseline.longRideWeekFlags,
+        longRunWeekFlags: baseline.longRunWeekFlags,
       };
     case "ramps":
       return {
@@ -509,6 +522,8 @@ export function SimplePlannerView({
       phaseKindZoneDefaults: season.phaseKindZoneDefaults,
       phases: season.phases,
       weeks: serializeWeeksForSave(season.weeks),
+      longRideWeekFlags: season.longRideWeekFlags,
+      longRunWeekFlags: season.longRunWeekFlags,
       goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
       bGoalEvents: bRaces
         .filter((race) => race.name && race.date)
@@ -788,12 +803,21 @@ export function SimplePlannerView({
           phaseKindZoneDefaults={season.phaseKindZoneDefaults}
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={season.totalWeeks}
+          weeks={season.weeks}
           defaultPlanningMode={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
           rampDefaults={season.rampDefaults}
           disciplineSettings={disciplineSettings}
+          longRideWeekFlags={season.longRideWeekFlags ?? []}
+          longRunWeekFlags={season.longRunWeekFlags ?? []}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
+          onLongRideWeekFlagsChange={(longRideWeekFlags) =>
+            setSeason({ ...season, longRideWeekFlags })
+          }
+          onLongRunWeekFlagsChange={(longRunWeekFlags) =>
+            setSeason({ ...season, longRunWeekFlags })
+          }
         />
       </CollapsibleSection>
 

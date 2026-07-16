@@ -6,8 +6,7 @@ import type {
 } from "@prisma/client";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 import {
-  defaultLongWeekFlags,
-  type DefaultLongWeekFlagsInput,
+  resolveLongWeekFlagsForSeason,
 } from "./long-session-schedule";
 import {
   applyLongOffWeekPolicy,
@@ -298,33 +297,18 @@ export function enrichSimpleSeasonWeeks(input: {
   phaseKindsByWeek: PhaseKind[];
   taperWeekIndices: number[];
   deLoadEveryNWeeks: number;
+  longRideWeekFlags?: boolean[] | null;
+  longRunWeekFlags?: boolean[] | null;
 }): ComputedSimpleWeek[] {
-  const mesocycles = input.phasesWithBlocks.flatMap((p) =>
-    p.blocks.map((b) => ({
-      phaseIndex: 0,
-      phaseId: p.phaseId,
-      name: b.name,
-      index: b.index,
-      startWeekIndex: b.startWeekIndex,
-      endWeekIndex: b.endWeekIndex,
-    }))
-  );
-
-  const longRideFlags = defaultLongWeekFlags({
-    totalWeeks: input.weeks.length,
-    phaseKindsByWeek: input.phaseKindsByWeek,
-    mesocycles,
-    deLoadFlags: input.weeks.map((w) => w.isRestWeek),
-    preset: "default",
-  } as DefaultLongWeekFlagsInput);
-
-  const longRunFlags = defaultLongWeekFlags({
-    totalWeeks: input.weeks.length,
-    phaseKindsByWeek: input.phaseKindsByWeek,
-    mesocycles,
-    deLoadFlags: input.weeks.map((w) => w.isRestWeek),
-    preset: "default",
-  } as DefaultLongWeekFlagsInput);
+  const totalWeeks = input.weeks.length;
+  const longRideFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks,
+    stored: input.longRideWeekFlags,
+  });
+  const longRunFlags = resolveLongWeekFlagsForSeason({
+    totalWeeks,
+    stored: input.longRunWeekFlags,
+  });
 
   return input.weeks.map((week) => {
     const phase = phaseAtWeek(week.weekIndex, input.phases);
