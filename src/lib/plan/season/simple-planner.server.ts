@@ -1190,6 +1190,12 @@ export function serializeSimpleSeasonPlan(
     phaseKindZoneDefaults,
     longRideWeekFlags,
     longRunWeekFlags,
+    longAnchors: {
+      rideStart: plan.longRideStartMin,
+      ridePeak: plan.longRidePeakMin,
+      runStart: plan.longRunStartMin,
+      runPeak: plan.longRunPeakMin,
+    },
     phases,
     weeks: plan.weeks.map((week) => ({
       weekIndex: week.weekIndex,

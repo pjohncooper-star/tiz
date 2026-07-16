@@ -7,7 +7,12 @@ import type { PlanningMode } from "@prisma/client";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializeSimpleSeasonPlan } from "@/lib/plan/season/simple-planner.server";
 import { resolvePlanningModeForWeek } from "@/lib/plan/season/planning-mode";
-import type { WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
+import {
+  computeCalendarWeekPoolFields,
+  needsSlotBudgetBackfill,
+  type SimplePhaseCompute,
+  type WeekSlotBudgets,
+} from "@/lib/plan/season/simple-week-compute";
 
 type SerializedSeason = ReturnType<typeof serializeSimpleSeasonPlan>;
 type SerializedPhase = SerializedSeason["phases"][number];
@@ -91,6 +96,31 @@ function parseSlotBudgets(raw: unknown): WeekSlotBudgets | null {
   };
 }
 
+function phaseToCompute(phase: SerializedPhase): SimplePhaseCompute {
+  return {
+    id: phase.id,
+    startWeekIndex: phase.startWeekIndex,
+    endWeekIndex: phase.endWeekIndex,
+    planningMode: phase.planningMode,
+    phaseKind: phase.phaseKind,
+    swimSessionsPerWeek: phase.swimSessionsPerWeek,
+    bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+    runSessionsPerWeek: phase.runSessionsPerWeek,
+    swimIntenseDaysPerWeek: phase.swimIntenseDaysPerWeek,
+    bikeIntenseDaysPerWeek: phase.bikeIntenseDaysPerWeek,
+    runIntenseDaysPerWeek: phase.runIntenseDaysPerWeek,
+    longRideStartMin: phase.longRideStartMin,
+    longRideEndMin: phase.longRideEndMin,
+    longRunStartMin: phase.longRunStartMin,
+    longRunEndMin: phase.longRunEndMin,
+    longRideOffWeekPolicy: phase.longRideOffWeekPolicy,
+    longRunOffWeekPolicy: phase.longRunOffWeekPolicy,
+    longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
+    longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
+    rampEnabled: phase.rampEnabled,
+  };
+}
+
 function buildWeekTarget(
   week: SerializedWeek & {
     longRideMinutes?: number;
@@ -99,7 +129,8 @@ function buildWeekTarget(
     slotBudgets?: unknown;
   },
   phase: SerializedPhase | null,
-  planningMode: PlanningMode
+  planningMode: PlanningMode,
+  season: SerializedSeason
 ): CalendarWeekTarget {
   const byDiscipline: CalendarWeekTargetDiscipline[] = TARGET_DISCIPLINES.map(
     (discipline) => ({
@@ -111,6 +142,29 @@ function buildWeekTarget(
     })
   );
 
+  const storedSlotBudgets = parseSlotBudgets(week.slotBudgets);
+  const phaseCompute = phase ? phaseToCompute(phase) : null;
+  let slotBudgets = storedSlotBudgets ?? undefined;
+  let longRideMinutes = week.longRideMinutes ?? 0;
+  let longRunMinutes = week.longRunMinutes ?? 0;
+
+  if (needsSlotBudgetBackfill(storedSlotBudgets ?? undefined, phaseCompute)) {
+    const computed = computeCalendarWeekPoolFields({
+      weekIndex: week.weekIndex,
+      isRestWeek: week.isRestWeek,
+      phase: phaseCompute,
+      planningMode,
+      context: {
+        longRideWeekFlags: season.longRideWeekFlags,
+        longRunWeekFlags: season.longRunWeekFlags,
+        longAnchors: season.longAnchors,
+      },
+    });
+    slotBudgets = computed.slotBudgets;
+    longRideMinutes = computed.longRideMinutes;
+    longRunMinutes = computed.longRunMinutes;
+  }
+
   return {
     weekStart: week.weekStartDate,
     weekIndex: week.weekIndex,
@@ -119,10 +173,10 @@ function buildWeekTarget(
     phase: phase ? { name: phase.name, color: phase.color } : null,
     strengthSessionsPerWeek: phase ? phase.strengthSessionsPerWeek : 0,
     planningMode,
-    longRideMinutes: week.longRideMinutes ?? 0,
-    longRunMinutes: week.longRunMinutes ?? 0,
+    longRideMinutes,
+    longRunMinutes,
     longSessionZoneMinutes: week.longSessionZoneMinutes ?? {},
-    slotBudgets: parseSlotBudgets(week.slotBudgets) ?? undefined,
+    slotBudgets,
     byDiscipline,
     zoneMinutes: week.zoneMinutes,
   };
@@ -170,7 +224,7 @@ export async function getCalendarWeekTargets(
       phasePlanningSpans,
       defaultPlanningMode
     );
-    targets.push(buildWeekTarget(week, phase, planningMode));
+    targets.push(buildWeekTarget(week, phase, planningMode, season));
   }
 
   targets.sort((a, b) => a.weekStart.localeCompare(b.weekStart));

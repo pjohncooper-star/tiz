@@ -217,6 +217,118 @@ export function computeWeekSlotBudgets(input: {
   return buildSlotBudgets(input);
 }
 
+export type CalendarWeekPoolContext = {
+  longRideWeekFlags: boolean[];
+  longRunWeekFlags: boolean[];
+  longAnchors: {
+    rideStart: number;
+    ridePeak: number;
+    runStart: number;
+    runPeak: number;
+  };
+};
+
+export function totalSlotBudgetCount(budgets: WeekSlotBudgets): number {
+  let total = 0;
+  for (const discipline of TRI) {
+    const row = budgets[discipline];
+    total +=
+      row.endurance +
+      row.intensity +
+      row.long +
+      row.substituteEndurance;
+  }
+  return total;
+}
+
+/** True when persisted budgets are missing or all-zero but the phase still defines sessions. */
+export function needsSlotBudgetBackfill(
+  stored: WeekSlotBudgets | null | undefined,
+  phase: SimplePhaseCompute | null
+): boolean {
+  if (!phase) return false;
+  const sessions =
+    phase.swimSessionsPerWeek +
+    phase.bikeSessionsPerWeek +
+    phase.runSessionsPerWeek;
+  if (sessions <= 0) return false;
+  if (!stored) return true;
+  return totalSlotBudgetCount(stored) === 0;
+}
+
+export type CalendarWeekPoolFields = {
+  slotBudgets: WeekSlotBudgets;
+  longRideMinutes: number;
+  longRunMinutes: number;
+};
+
+/** Derive pool slot budgets and long durations for calendar read paths (no DB recalculate). */
+export function computeCalendarWeekPoolFields(input: {
+  weekIndex: number;
+  isRestWeek: boolean;
+  phase: SimplePhaseCompute | null;
+  planningMode: PlanningMode;
+  context: CalendarWeekPoolContext;
+}): CalendarWeekPoolFields {
+  const { weekIndex, isRestWeek, phase, planningMode, context } = input;
+  const mode = planningMode;
+  const isTaper = phase?.phaseKind === "TAPER";
+  const suppressLong = shouldSuppressLongForWeek({
+    isRestWeek,
+    isTaperPhase: isTaper,
+    isDeLoadWeek: isRestWeek,
+  });
+
+  const fullLongRide =
+    !suppressLong && (context.longRideWeekFlags[weekIndex] ?? false);
+  const fullLongRun =
+    !suppressLong && (context.longRunWeekFlags[weekIndex] ?? false);
+
+  const fullLongRideMinutes = suppressLong
+    ? 0
+    : longMinutesForMetric(weekIndex, phase, "longRide", context.longAnchors);
+  const fullLongRunMinutes = suppressLong
+    ? 0
+    : longMinutesForMetric(weekIndex, phase, "longRun", context.longAnchors);
+
+  let longRideMinutes = 0;
+  let longRunMinutes = 0;
+  let longRideOff: LongOffWeekResult = { kind: "none" };
+  let longRunOff: LongOffWeekResult = { kind: "none" };
+
+  if (mode === "SEPARATE_LONGS" || mode === "SEPARATE_LONG_TIZ") {
+    if (fullLongRide) {
+      longRideMinutes = fullLongRideMinutes;
+    } else if (phase && !suppressLong) {
+      longRideOff = applyLongOffWeekPolicy({
+        policy: phase.longRideOffWeekPolicy,
+        fullLongMinutes: fullLongRideMinutes,
+        endurancePercent: phase.longRideOffWeekEndurancePercent,
+      });
+    }
+    if (fullLongRun) {
+      longRunMinutes = fullLongRunMinutes;
+    } else if (phase && !suppressLong) {
+      longRunOff = applyLongOffWeekPolicy({
+        policy: phase.longRunOffWeekPolicy,
+        fullLongMinutes: fullLongRunMinutes,
+        endurancePercent: phase.longRunOffWeekEndurancePercent,
+      });
+    }
+  }
+
+  const slotBudgets = buildSlotBudgets({
+    phase,
+    mode,
+    longRideFull: fullLongRide,
+    longRunFull: fullLongRun,
+    longRideResult: longRideOff,
+    longRunResult: longRunOff,
+  });
+
+  return { slotBudgets, longRideMinutes, longRunMinutes };
+}
+
 function buildSlotBudgets(input: {
   phase: SimplePhaseCompute | null;
   mode: PlanningMode;
