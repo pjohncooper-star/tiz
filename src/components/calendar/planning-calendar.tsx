@@ -43,6 +43,7 @@ import {
 } from "@/components/calendar/workout-pool-wizard";
 import { SessionRolePickerDialog } from "@/components/calendar/session-role-picker-dialog";
 import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-zones";
+import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import type { SessionRole, Discipline } from "@prisma/client";
@@ -721,6 +722,7 @@ export function PlanningCalendar({
             weekTarget,
             sessions: weekSessions,
             unscheduledCount: Math.max(1, unscheduledCount),
+            targetDurationMinutes: chip.targetDurationMinutes,
           })
         : undefined;
 
@@ -732,6 +734,9 @@ export function PlanningCalendar({
         discipline: chip.discipline,
         title: unscheduledSessionTitle(chip.discipline),
         sessionRole,
+        ...(chip.targetDurationMinutes != null && chip.targetDurationMinutes > 0
+          ? { estimatedDurationMinutes: chip.targetDurationMinutes }
+          : {}),
         ...(targetZones ? { targetZones } : {}),
       }),
     });
@@ -745,7 +750,9 @@ export function PlanningCalendar({
     if (overData?.type !== "day") return;
     const dateKey = overData?.dateKey as string | undefined;
     if (!poolWeekAllowsDate(dateKey)) return;
-    setPendingRolePick({ chip, dateKey: dateKey! });
+    const sessionRole = sessionRoleForChip(chip);
+    const ok = await createUnscheduledSession(dateKey!, chip, sessionRole);
+    if (ok) await handleRefresh();
   }
 
   async function confirmRolePick(sessionRole: SessionRole) {

@@ -4,8 +4,10 @@ import type { PhaseFocus, PhaseKind } from "@prisma/client";
 import {
   disciplineSplitFocusId,
   disciplineZoneSplitSummary,
+  endPercentsForDisciplineSplit,
   percentsForDisciplineSplit,
   presetDisciplineZoneSplitById,
+  startPercentsForDisciplineSplit,
 } from "@/lib/plan/season/phase-zone-defaults";
 import type {
   DisciplineZoneSplit,
@@ -28,6 +30,8 @@ type ZoneSplitEditorProps = {
   catalog: ZoneFocusCatalog;
   compact?: boolean;
   showPresetPercents?: boolean;
+  /** Show start/end TiZ % sliders (phase pane). */
+  showStartEnd?: boolean;
 };
 
 export function ZoneSplitEditor({
@@ -36,6 +40,7 @@ export function ZoneSplitEditor({
   catalog,
   compact = false,
   showPresetPercents = false,
+  showStartEnd = false,
 }: ZoneSplitEditorProps) {
   return (
     <div className="space-y-3">
@@ -47,6 +52,7 @@ export function ZoneSplitEditor({
           catalog={catalog}
           compact={compact}
           showPresetPercents={showPresetPercents}
+          showStartEnd={showStartEnd}
           onChange={(split) => onChange({ ...value, [row.key]: split })}
         />
       ))}
@@ -61,6 +67,7 @@ function DisciplineZoneSplitRow({
   catalog,
   compact,
   showPresetPercents,
+  showStartEnd,
 }: {
   label: string;
   split: DisciplineZoneSplit;
@@ -68,21 +75,37 @@ function DisciplineZoneSplitRow({
   catalog: ZoneFocusCatalog;
   compact?: boolean;
   showPresetPercents?: boolean;
+  showStartEnd?: boolean;
 }) {
   const isCustom = split.mode === "custom";
   const summary = disciplineZoneSplitSummary(split, catalog);
   const focusId = disciplineSplitFocusId(split);
+  const endPercents = endPercentsForDisciplineSplit(split, catalog);
+  const startPercents = startPercentsForDisciplineSplit(split) ?? endPercents;
 
   function setPreset(id: string) {
     onChange(presetDisciplineZoneSplitById(id));
   }
 
-  function setCustomPercents(next: ZoneSplitPercents) {
+  function setCustomEndPercents(next: ZoneSplitPercents) {
     onChange({
       mode: "custom",
       focusId,
       focus: focusId in catalog ? (focusId as PhaseFocus) : split.focus,
       percents: next,
+      endPercents: next,
+      startPercents: split.startPercents,
+    });
+  }
+
+  function setCustomStartPercents(next: ZoneSplitPercents) {
+    onChange({
+      mode: "custom",
+      focusId,
+      focus: focusId in catalog ? (focusId as PhaseFocus) : split.focus,
+      percents: endPercents,
+      endPercents,
+      startPercents: next,
     });
   }
 
@@ -91,11 +114,13 @@ function DisciplineZoneSplitRow({
       onChange(presetDisciplineZoneSplitById(focusId));
       return;
     }
+    const current = percentsForDisciplineSplit(split, catalog);
     onChange({
       mode: "custom",
       focusId,
       focus: split.focus,
-      percents: percentsForDisciplineSplit(split, catalog),
+      percents: current,
+      endPercents: current,
     });
   }
 
@@ -129,11 +154,21 @@ function DisciplineZoneSplitRow({
       </div>
 
       {isCustom ? (
-        <div className="mt-3">
-          <ZoneSplitPercentsSlider
-            value={percents}
-            onChange={setCustomPercents}
-          />
+        <div className="mt-3 space-y-4">
+          {showStartEnd ? (
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                Start TiZ % (week 1)
+              </p>
+              <ZoneSplitPercentsSlider value={startPercents} onChange={setCustomStartPercents} />
+            </div>
+          ) : null}
+          <div>
+            <p className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              {showStartEnd ? "End TiZ % (last week)" : "Custom TiZ %"}
+            </p>
+            <ZoneSplitPercentsSlider value={endPercents} onChange={setCustomEndPercents} />
+          </div>
         </div>
       ) : null}
       {isCustom ? <p className="mt-2 text-xs text-zinc-500">{summary}</p> : null}

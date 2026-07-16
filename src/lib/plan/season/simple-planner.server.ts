@@ -1,4 +1,4 @@
-import { Prisma, type DeLoadStrategy, type PhaseKind } from "@prisma/client";
+import type { PhaseKind, PlanningMode, Prisma, type DeLoadStrategy } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import {
@@ -56,6 +56,12 @@ import {
   parsePhaseCoachNotes,
   serializePhaseCoachNotes,
 } from "./simple-phase-notes";
+import { buildPhaseBlocks, type PhaseWithBlocks } from "./phase-blocks";
+import {
+  enrichSimpleSeasonWeeks,
+  type ComputedSimpleWeek,
+  type SimplePhaseCompute,
+} from "./simple-week-compute";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
@@ -92,6 +98,15 @@ export type SimplePhaseWrite = {
   runIntenseDaysPerWeek: number;
   goal?: string | null;
   zoneSplits?: PhaseZoneSplits | null;
+  planningMode?: PlanningMode | null;
+  longRideStartMin?: number | null;
+  longRideEndMin?: number | null;
+  longRunStartMin?: number | null;
+  longRunEndMin?: number | null;
+  longRideOffWeekPolicy?: SimplePhaseCompute["longRideOffWeekPolicy"];
+  longRunOffWeekPolicy?: SimplePhaseCompute["longRunOffWeekPolicy"];
+  longRideOffWeekEndurancePercent?: number;
+  longRunOffWeekEndurancePercent?: number;
 };
 
 export type SimpleWeekWrite = {
@@ -111,6 +126,7 @@ export type CreateSimpleSeasonInput = {
   endDate: Date;
   rampDefaults?: SimpleRampDefaults;
   phaseKindZoneDefaults?: PhaseKindZoneDefaults;
+  defaultPlanningMode?: PlanningMode;
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
@@ -123,6 +139,7 @@ export type UpdateSimpleSeasonInput = {
   rampDefaults?: SimpleRampDefaults;
   deLoadVolumePercent?: number;
   phaseKindZoneDefaults?: PhaseKindZoneDefaults;
+  defaultPlanningMode?: PlanningMode;
   phases?: SimplePhaseWrite[];
   weeks?: SimpleWeekWrite[];
   recalculate?: boolean;
@@ -141,6 +158,7 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
     })
     .map((phase, sortOrder) => {
       const assigned = phase.startWeekIndex >= 0 && phase.endWeekIndex >= phase.startWeekIndex;
+      const write = phase;
       return {
         id: phase.id ?? cuid(),
         name: phase.name.trim() || `Phase ${sortOrder + 1}`,
@@ -154,6 +172,15 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         swimSessionsPerWeek: Math.max(0, Math.round(phase.swimSessionsPerWeek)),
         bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
         runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
+        planningMode: write.planningMode ?? null,
+        longRideStartMin: write.longRideStartMin ?? null,
+        longRideEndMin: write.longRideEndMin ?? null,
+        longRunStartMin: write.longRunStartMin ?? null,
+        longRunEndMin: write.longRunEndMin ?? null,
+        longRideOffWeekPolicy: write.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT",
+        longRunOffWeekPolicy: write.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT",
+        longRideOffWeekEndurancePercent: write.longRideOffWeekEndurancePercent ?? 60,
+        longRunOffWeekEndurancePercent: write.longRunOffWeekEndurancePercent ?? 60,
         coachNotes: serializePhaseCoachNotes({
           goal: phase.goal ?? null,
           strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
@@ -164,6 +191,110 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         }),
       };
     });
+}
+
+function phaseComputeFromWrites(
+  phases: SimplePhaseWrite[],
+  kindDefaults: PhaseKindZoneDefaults
+): SimplePhaseCompute[] {
+  return phases
+    .filter((p) => p.startWeekIndex >= 0 && p.endWeekIndex >= p.startWeekIndex)
+    .map((phase) => ({
+      id: phase.id ?? "",
+      startWeekIndex: phase.startWeekIndex,
+      endWeekIndex: phase.endWeekIndex,
+      planningMode: phase.planningMode ?? null,
+      phaseKind: phase.phaseKind,
+      swimSessionsPerWeek: phase.swimSessionsPerWeek,
+      bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+      runSessionsPerWeek: phase.runSessionsPerWeek,
+      swimIntenseDaysPerWeek: phase.swimIntenseDaysPerWeek,
+      bikeIntenseDaysPerWeek: phase.bikeIntenseDaysPerWeek,
+      runIntenseDaysPerWeek: phase.runIntenseDaysPerWeek,
+      longRideStartMin: phase.longRideStartMin,
+      longRideEndMin: phase.longRideEndMin,
+      longRunStartMin: phase.longRunStartMin,
+      longRunEndMin: phase.longRunEndMin,
+      longRideOffWeekPolicy: phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT",
+      longRunOffWeekPolicy: phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT",
+      longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent ?? 60,
+      longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent ?? 60,
+      zoneSplits: resolvePhaseZoneSplits({
+        phaseKind: phase.phaseKind,
+        phaseZoneSplits: phase.zoneSplits,
+        kindDefaults,
+      }),
+      rampEnabled: phase.rampEnabled,
+    }));
+}
+
+function phaseComputeFromDb(
+  phases: NonNullable<Awaited<ReturnType<typeof getSeasonPlanById>>>["phases"],
+  kindDefaults: PhaseKindZoneDefaults
+): SimplePhaseCompute[] {
+  let cursor = 0;
+  return [...phases]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .filter((phase) => phase.weekCount > 0)
+    .map((phase) => {
+      const hasStoredStart = phase.startWeekIndex >= 0;
+      const startWeekIndex = hasStoredStart ? phase.startWeekIndex : cursor;
+      const endWeekIndex = startWeekIndex + phase.weekCount - 1;
+      if (!hasStoredStart) cursor += phase.weekCount;
+      const notes = parsePhaseCoachNotes(phase.coachNotes);
+      return {
+        id: phase.id,
+        startWeekIndex,
+        endWeekIndex,
+        planningMode: phase.planningMode,
+        phaseKind: phase.phaseKind,
+        swimSessionsPerWeek: phase.swimSessionsPerWeek,
+        bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
+        runSessionsPerWeek: phase.runSessionsPerWeek,
+        swimIntenseDaysPerWeek: notes.swimIntenseDaysPerWeek,
+        bikeIntenseDaysPerWeek: notes.bikeIntenseDaysPerWeek,
+        runIntenseDaysPerWeek: notes.runIntenseDaysPerWeek,
+        longRideStartMin: phase.longRideStartMin,
+        longRideEndMin: phase.longRideEndMin,
+        longRunStartMin: phase.longRunStartMin,
+        longRunEndMin: phase.longRunEndMin,
+        longRideOffWeekPolicy: phase.longRideOffWeekPolicy,
+        longRunOffWeekPolicy: phase.longRunOffWeekPolicy,
+        longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
+        longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
+        zoneSplits: resolvePhaseZoneSplits({
+          phaseKind: phase.phaseKind,
+          phaseZoneSplits: notes.zoneSplits,
+          kindDefaults,
+        }),
+        rampEnabled: {
+          swim: phase.rampSwimEnabled,
+          bike: phase.rampBikeEnabled,
+          run: phase.rampRunEnabled,
+        },
+      };
+    });
+}
+
+function phaseKindsByWeekIndex(totalWeeks: number, phases: SimplePhaseCompute[]): PhaseKind[] {
+  return Array.from({ length: totalWeeks }, (_, weekIndex) => {
+    const phase = phases.find(
+      (p) => weekIndex >= p.startWeekIndex && weekIndex <= p.endWeekIndex
+    );
+    return phase?.phaseKind ?? "BUILD";
+  });
+}
+
+function seasonSplitPercents(plan: {
+  swimSplitPercent?: number | null;
+  bikeSplitPercent?: number | null;
+  runSplitPercent?: number | null;
+}) {
+  return {
+    swim: plan.swimSplitPercent ?? 33.33,
+    bike: plan.bikeSplitPercent ?? 33.34,
+    run: plan.runSplitPercent ?? 33.33,
+  };
 }
 
 function weeksFromDb(
@@ -318,34 +449,101 @@ function mergeWeekWrites(
 function recalculateWeeks(
   weeks: Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes }>,
   zonePhaseSpans: ZonePhaseSpan[],
+  phaseCompute: SimplePhaseCompute[],
+  phasesWithBlocks: PhaseWithBlocks[],
   rampDefaults: SimpleRampDefaults,
   deLoadStrategy: DeLoadStrategy,
   restVolumePercent: number,
+  seasonContext: {
+    defaultPlanningMode: PlanningMode;
+    seasonSplit: { swim: number; bike: number; run: number };
+    longAnchors: { rideStart: number; ridePeak: number; runStart: number; runPeak: number };
+    deLoadEveryNWeeks: number;
+  },
+  totalWeeks: number,
   catalog?: ZoneFocusCatalog
-) {
+): ComputedSimpleWeek[] {
   const volumeWeeks = recalculateSimpleVolumes(
     weeks,
     zonePhaseSpans,
     rampDefaults,
     restVolumePercent
   );
-  const zoneMinutesList = recalculateZoneMinutesFromSplits(
-    volumeWeeks.map((week) => ({
-      weekIndex: week.weekIndex,
-      isRestWeek: week.isRestWeek,
-      swimHours: week.swimHours,
-      bikeHours: week.bikeHours,
-      runHours: week.runHours,
-    })),
-    zonePhaseSpans,
-    deLoadStrategy,
-    catalog
-  );
 
-  return volumeWeeks.map((week, index) => ({
-    ...week,
-    zoneMinutes: zoneMinutesList[index]!,
-  }));
+  return enrichSimpleSeasonWeeks({
+    weeks: volumeWeeks,
+    phases: phaseCompute,
+    zonePhaseSpans,
+    phasesWithBlocks,
+    seasonDefaultPlanningMode: seasonContext.defaultPlanningMode,
+    deLoadStrategy,
+    catalog,
+    seasonSplit: seasonContext.seasonSplit,
+    longAnchors: seasonContext.longAnchors,
+    phaseKindsByWeek: phaseKindsByWeekIndex(totalWeeks, phaseCompute),
+    taperWeekIndices: [],
+    deLoadEveryNWeeks: seasonContext.deLoadEveryNWeeks,
+  });
+}
+
+function weekCreateData(
+  seasonPlanId: string,
+  startDate: Date,
+  week: ComputedSimpleWeek
+) {
+  return {
+    id: cuid(),
+    seasonPlanId,
+    weekIndex: week.weekIndex,
+    weekStartDate: weekStartDateForIndex(startDate, week.weekIndex),
+    isDeLoadWeek: week.isRestWeek,
+    mesocycleId: week.mesocycleId,
+    totalHours: week.totalHours,
+    swimHours: week.swimHours,
+    bikeHours: week.bikeHours,
+    runHours: week.runHours,
+    swimDistanceMeters: week.swimDistanceMeters,
+    runDistanceMeters: week.runDistanceMeters,
+    zoneMinutes: week.zoneMinutes as Prisma.InputJsonValue,
+    longSessionZoneMinutes: Object.keys(week.longSessionZoneMinutes).length
+      ? (week.longSessionZoneMinutes as Prisma.InputJsonValue)
+      : Prisma.DbNull,
+    slotBudgets: week.slotBudgets as Prisma.InputJsonValue,
+    zoneMinutesOverridden: false,
+    swimSessions: 0,
+    bikeSessions: 0,
+    runSessions: 0,
+    longRideMinutes: week.longRideMinutes,
+    longRunMinutes: week.longRunMinutes,
+  };
+}
+
+function buildPhasesWithBlocks(
+  phaseDbRows: Array<{
+    id: string;
+    name: string;
+    startWeekIndex: number;
+    weekCount: number;
+  }> | null,
+  phaseWrites: SimplePhaseWrite[] | undefined,
+  mesocycleLengthWeeks: number
+): PhaseWithBlocks[] {
+  if (!phaseDbRows?.length) return [];
+  return buildPhaseBlocks({
+    mesocycleLengthWeeks,
+    phases: phaseDbRows
+      .filter((p) => p.startWeekIndex >= 0 && p.weekCount > 0)
+      .map((p) => {
+        const write = phaseWrites?.find((w) => w.id === p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          startWeekIndex: p.startWeekIndex,
+          endWeekIndex: write?.endWeekIndex ?? p.startWeekIndex + p.weekCount - 1,
+          phaseKind: write?.phaseKind ?? "BASE",
+        };
+      }),
+  });
 }
 
 export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
@@ -386,12 +584,34 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   );
   const rampFields = rampDefaultsToPlanFields(defaults);
   const deLoadStrategy: DeLoadStrategy = "VOLUME_ONLY";
-  const computedWeeks = buildInitialWeeks(
+  const defaultPlanningMode = input.defaultPlanningMode ?? "BY_DISCIPLINE";
+  const initialMerged = buildInitialWeeks(
     bounds.totalWeeks,
     defaults,
     kindDefaults,
     deLoadStrategy,
     DEFAULT_REST_VOLUME_PERCENT
+  );
+  const computedWeeks = recalculateWeeks(
+    initialMerged,
+    [],
+    [],
+    [],
+    defaults,
+    deLoadStrategy,
+    DEFAULT_REST_VOLUME_PERCENT,
+    {
+      defaultPlanningMode,
+      seasonSplit: seasonSplitPercents({}),
+      longAnchors: {
+        rideStart: 60,
+        ridePeak: 180,
+        runStart: 30,
+        runPeak: 90,
+      },
+      deLoadEveryNWeeks: 4,
+    },
+    bounds.totalWeeks
   );
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
@@ -411,6 +631,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         deLoadEveryNWeeks: 4,
         deLoadVolumePercent: DEFAULT_REST_VOLUME_PERCENT,
         deLoadStrategy,
+        defaultPlanningMode,
         phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
           kindDefaults
         ) as Prisma.InputJsonValue,
@@ -420,26 +641,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
 
     for (const week of computedWeeks) {
       await tx.seasonWeek.create({
-        data: {
-          id: cuid(),
-          seasonPlanId,
-          weekIndex: week.weekIndex,
-          weekStartDate: weekStartDateForIndex(bounds.startDate, week.weekIndex),
-          isDeLoadWeek: week.isRestWeek,
-          totalHours: week.totalHours,
-          swimHours: week.swimHours,
-          bikeHours: week.bikeHours,
-          runHours: week.runHours,
-          swimDistanceMeters: week.swimDistanceMeters,
-          runDistanceMeters: week.runDistanceMeters,
-          zoneMinutes: week.zoneMinutes as Prisma.InputJsonValue,
-          zoneMinutesOverridden: false,
-          swimSessions: 0,
-          bikeSessions: 0,
-          runSessions: 0,
-          longRideMinutes: 0,
-          longRunMinutes: 0,
-        },
+        data: weekCreateData(seasonPlanId, bounds.startDate, week),
       });
     }
 
@@ -527,21 +729,89 @@ export async function updateSimpleSeasonPlan(
     ? zonePhaseSpansFromWrites(phaseWrites, kindDefaults)
     : zonePhaseSpansFromDb(existing.phases, kindDefaults);
 
-  let weeks = mergeWeekWrites(
+  const defaultPlanningMode =
+    input.defaultPlanningMode ??
+    existing.defaultPlanningMode ??
+    "BY_DISCIPLINE";
+  const mesocycleLengthWeeks = existing.mesocycleLengthWeeks ?? 4;
+  const seasonContext = {
+    defaultPlanningMode,
+    seasonSplit: seasonSplitPercents(existing),
+    longAnchors: {
+      rideStart: existing.longRideStartMin,
+      ridePeak: existing.longRidePeakMin,
+      runStart: existing.longRunStartMin,
+      runPeak: existing.longRunPeakMin,
+    },
+    deLoadEveryNWeeks: existing.deLoadEveryNWeeks ?? 4,
+  };
+
+  const phaseCompute = phaseWrites
+    ? phaseComputeFromWrites(phaseWrites, kindDefaults)
+    : phaseComputeFromDb(existing.phases, kindDefaults);
+
+  const phaseDbRowsForBlocks =
+    phaseDbRows ??
+    existing.phases
+      .filter((p) => p.weekCount > 0 && p.startWeekIndex >= 0)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.startWeekIndex + p.weekCount - 1,
+      }));
+
+  const phasesWithBlocks: PhaseWithBlocks[] = phaseDbRows
+    ? buildPhasesWithBlocks(phaseDbRows, phaseWrites ?? undefined, mesocycleLengthWeeks)
+    : existing.phases
+        .filter((p) => p.mesocycles.length > 0)
+        .map((phase) => ({
+          phaseId: phase.id,
+          phaseName: phase.name,
+          startWeekIndex: phase.startWeekIndex,
+          endWeekIndex: phase.startWeekIndex + phase.weekCount - 1,
+          weekCount: phase.weekCount,
+          blocks: phase.mesocycles.map((m) => ({
+            id: m.id,
+            phaseId: phase.id,
+            name: m.name,
+            index: m.index,
+            startWeekIndex: m.startWeekIndex,
+            endWeekIndex: m.endWeekIndex,
+          })),
+        }));
+
+  let weeks: ComputedSimpleWeek[] = mergeWeekWrites(
     weeksFromDb(existing.weeks),
     input.weeks,
     bounds.totalWeeks,
     defaults
-  );
+  ).map((week) => ({
+    ...week,
+    longSessionZoneMinutes: {},
+    longRideMinutes: 0,
+    longRunMinutes: 0,
+    slotBudgets: {
+      SWIM: { endurance: 0, intensity: 0, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+      BIKE: { endurance: 0, intensity: 0, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+      RUN: { endurance: 0, intensity: 0, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+    },
+    mesocycleId: null,
+    planningMode: defaultPlanningMode,
+  }));
 
   if (input.recalculate) {
     const catalog = await loadAthleteZoneFocusCatalog(athleteId);
     weeks = recalculateWeeks(
       weeks,
       zonePhaseSpans,
+      phaseCompute,
+      phasesWithBlocks,
       defaults,
       deLoadStrategy,
       restVolumePercent,
+      seasonContext,
+      bounds.totalWeeks,
       catalog
     );
   }
@@ -584,6 +854,9 @@ export async function updateSimpleSeasonPlan(
               ) as Prisma.InputJsonValue,
             }
           : {}),
+        ...(input.defaultPlanningMode != null
+          ? { defaultPlanningMode: input.defaultPlanningMode }
+          : {}),
       },
     });
 
@@ -607,33 +880,38 @@ export async function updateSimpleSeasonPlan(
             swimSessionsPerWeek: phase.swimSessionsPerWeek,
             bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
             runSessionsPerWeek: phase.runSessionsPerWeek,
+            planningMode: phase.planningMode,
+            longRideStartMin: phase.longRideStartMin,
+            longRideEndMin: phase.longRideEndMin,
+            longRunStartMin: phase.longRunStartMin,
+            longRunEndMin: phase.longRunEndMin,
+            longRideOffWeekPolicy: phase.longRideOffWeekPolicy,
+            longRunOffWeekPolicy: phase.longRunOffWeekPolicy,
+            longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
+            longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
           },
         });
+      }
+
+      for (const phaseBlocks of phasesWithBlocks) {
+        for (const block of phaseBlocks.blocks) {
+          await tx.seasonMesocycle.create({
+            data: {
+              id: block.id,
+              phaseId: phaseBlocks.phaseId,
+              name: block.name,
+              index: block.index,
+              startWeekIndex: block.startWeekIndex,
+              endWeekIndex: block.endWeekIndex,
+            },
+          });
+        }
       }
     }
 
     for (const week of weeks) {
       await tx.seasonWeek.create({
-        data: {
-          id: cuid(),
-          seasonPlanId,
-          weekIndex: week.weekIndex,
-          weekStartDate: weekStartDateForIndex(bounds.startDate, week.weekIndex),
-          isDeLoadWeek: week.isRestWeek,
-          totalHours: week.totalHours,
-          swimHours: week.swimHours,
-          bikeHours: week.bikeHours,
-          runHours: week.runHours,
-          swimDistanceMeters: week.swimDistanceMeters,
-          runDistanceMeters: week.runDistanceMeters,
-          zoneMinutes: week.zoneMinutes as Prisma.InputJsonValue,
-          zoneMinutesOverridden: false,
-          swimSessions: 0,
-          bikeSessions: 0,
-          runSessions: 0,
-          longRideMinutes: 0,
-          longRunMinutes: 0,
-        },
+        data: weekCreateData(seasonPlanId, bounds.startDate, week),
       });
     }
 
@@ -719,6 +997,15 @@ export function serializeSimpleSeasonPlan(
         runIntenseDaysPerWeek: notes.runIntenseDaysPerWeek,
         goal: notes.goal,
         zoneSplits: notes.zoneSplits,
+        planningMode: phase.planningMode,
+        longRideStartMin: phase.longRideStartMin,
+        longRideEndMin: phase.longRideEndMin,
+        longRunStartMin: phase.longRunStartMin,
+        longRunEndMin: phase.longRunEndMin,
+        longRideOffWeekPolicy: phase.longRideOffWeekPolicy,
+        longRunOffWeekPolicy: phase.longRunOffWeekPolicy,
+        longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
+        longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
       };
     });
 
@@ -729,6 +1016,7 @@ export function serializeSimpleSeasonPlan(
     endDate: formatDateKey(plan.endDate),
     totalWeeks: plan.totalWeeks,
     status: plan.status,
+    defaultPlanningMode: plan.defaultPlanningMode,
     deLoadVolumePercent: plan.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     rampDefaults: defaults,
     phaseKindZoneDefaults,
@@ -744,6 +1032,10 @@ export function serializeSimpleSeasonPlan(
       swimDistanceMeters: week.swimDistanceMeters,
       runDistanceMeters: week.runDistanceMeters,
       zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
+      longRideMinutes: week.longRideMinutes,
+      longRunMinutes: week.longRunMinutes,
+      longSessionZoneMinutes: parseDisciplineZoneMinutes(week.longSessionZoneMinutes),
+      slotBudgets: week.slotBudgets,
     })),
     goalEvents: plan.goalEvents.map((event) => ({
       id: event.id,

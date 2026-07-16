@@ -65,6 +65,28 @@ describe("zone-split", () => {
     assert.equal(Math.round(baseExit.z3), Math.round(buildEntry.z3));
   });
 
+  it("explicit start/end percents ramp within a phase", () => {
+    const start = { z1: 10, z2: 70, z3: 10, z4: 10, z5: 0 };
+    const end = { z1: 10, z2: 65, z3: 20, z4: 5, z5: 0 };
+    const phases: ZonePhaseSpan[] = [
+      {
+        startWeekIndex: 0,
+        endWeekIndex: 3,
+        rampEnabled: { swim: true, bike: true, run: true },
+        zoneSplits: {
+          SWIM: { mode: "custom", percents: end, startPercents: start, endPercents: end },
+          BIKE: { mode: "custom", percents: end, startPercents: start, endPercents: end },
+          RUN: { mode: "custom", percents: end, startPercents: start, endPercents: end },
+        },
+      },
+    ];
+    const w0 = resolveZonePercentsForWeek({ weekIndex: 0, phases, discipline: "BIKE" });
+    const w3 = resolveZonePercentsForWeek({ weekIndex: 3, phases, discipline: "BIKE" });
+    assert.equal(Math.round(w0.z2), 70);
+    assert.equal(Math.round(w3.z2), 65);
+    assert.equal(Math.round(w3.z3), 20);
+  });
+
   it("holds flat percents when ramp is disabled for discipline", () => {
     const phases: ZonePhaseSpan[] = [
       {

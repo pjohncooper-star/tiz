@@ -1,5 +1,7 @@
+import type { PlanningMode } from "@prisma/client";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
+import type { WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
 
 export type TargetDiscipline = "SWIM" | "BIKE" | "RUN";
 
@@ -20,6 +22,11 @@ export type CalendarWeekTarget = {
   totalHours: number;
   phase: { name: string; color: string } | null;
   strengthSessionsPerWeek: number;
+  planningMode?: PlanningMode;
+  longRideMinutes?: number;
+  longRunMinutes?: number;
+  longSessionZoneMinutes?: Record<string, number>;
+  slotBudgets?: WeekSlotBudgets;
   byDiscipline: CalendarWeekTargetDiscipline[];
   /** All-discipline zone minutes keyed `DISCIPLINE-zone`. */
   zoneMinutes: Record<string, number>;

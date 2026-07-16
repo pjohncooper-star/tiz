@@ -1,4 +1,4 @@
-import type { PhaseKind } from "@prisma/client";
+import type { PlanningMode, PhaseKind } from "@prisma/client";
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
   defaultPhaseKindZoneDefaults,
@@ -8,6 +8,8 @@ import {
 import type { PhaseKindZoneDefaults, PhaseZoneSplits } from "@/lib/plan/season/zone-split-types";
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import type { ZoneMinutes } from "@/lib/workout/steps";
+import type { LongOffWeekPolicy } from "@prisma/client";
+import type { PoolSlotKind, WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
 
 export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
 
@@ -53,6 +55,15 @@ export type SimplePhase = {
   runIntenseDaysPerWeek: number;
   goal: string | null;
   zoneSplits: PhaseZoneSplits | null;
+  planningMode?: PlanningMode | null;
+  longRideStartMin?: number | null;
+  longRideEndMin?: number | null;
+  longRunStartMin?: number | null;
+  longRunEndMin?: number | null;
+  longRideOffWeekPolicy?: LongOffWeekPolicy;
+  longRunOffWeekPolicy?: LongOffWeekPolicy;
+  longRideOffWeekEndurancePercent?: number;
+  longRunOffWeekEndurancePercent?: number;
 };
 
 export type SimpleWeek = {
@@ -66,6 +77,9 @@ export type SimpleWeek = {
   swimDistanceMeters?: number | null;
   runDistanceMeters?: number | null;
   zoneMinutes: ZoneMinutes;
+  longRideMinutes?: number;
+  longRunMinutes?: number;
+  longSessionZoneMinutes?: ZoneMinutes;
 };
 
 export type SimpleSeason = {
@@ -75,6 +89,7 @@ export type SimpleSeason = {
   endDate: string;
   totalWeeks: number;
   status: string;
+  defaultPlanningMode?: PlanningMode;
   deLoadVolumePercent: number;
   rampDefaults: SimpleRampDefaults;
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
@@ -83,6 +98,8 @@ export type SimpleSeason = {
   goalEvents: SimpleGoalEvent[];
   primaryGoalEvent: SimpleGoalEvent | null;
 };
+
+export type { PoolSlotKind, WeekSlotBudgets };
 
 export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   return {

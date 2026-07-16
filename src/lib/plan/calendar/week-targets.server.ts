@@ -3,8 +3,11 @@ import type {
   CalendarWeekTargetDiscipline,
   TargetDiscipline,
 } from "@/components/calendar/types";
+import type { PlanningMode } from "@prisma/client";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializeSimpleSeasonPlan } from "@/lib/plan/season/simple-planner.server";
+import { resolvePlanningModeForWeek } from "@/lib/plan/season/planning-mode";
+import type { WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
 
 type SerializedSeason = ReturnType<typeof serializeSimpleSeasonPlan>;
 type SerializedPhase = SerializedSeason["phases"][number];
@@ -64,9 +67,39 @@ function disciplineZoneMinutes(
   return out;
 }
 
+function parseSlotBudgets(raw: unknown): WeekSlotBudgets | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, Record<string, number>>;
+  const empty = {
+    endurance: 0,
+    intensity: 0,
+    long: 0,
+    substituteEndurance: 0,
+    substituteDurationMinutes: 0,
+  };
+  const read = (key: string) => ({
+    endurance: row[key]?.endurance ?? 0,
+    intensity: row[key]?.intensity ?? 0,
+    long: row[key]?.long ?? 0,
+    substituteEndurance: row[key]?.substituteEndurance ?? 0,
+    substituteDurationMinutes: row[key]?.substituteDurationMinutes ?? 0,
+  });
+  return {
+    SWIM: read("SWIM"),
+    BIKE: read("BIKE"),
+    RUN: read("RUN"),
+  };
+}
+
 function buildWeekTarget(
-  week: SerializedWeek,
-  phase: SerializedPhase | null
+  week: SerializedWeek & {
+    longRideMinutes?: number;
+    longRunMinutes?: number;
+    longSessionZoneMinutes?: Record<string, number>;
+    slotBudgets?: unknown;
+  },
+  phase: SerializedPhase | null,
+  planningMode: PlanningMode
 ): CalendarWeekTarget {
   const byDiscipline: CalendarWeekTargetDiscipline[] = TARGET_DISCIPLINES.map(
     (discipline) => ({
@@ -85,6 +118,11 @@ function buildWeekTarget(
     totalHours: week.totalHours,
     phase: phase ? { name: phase.name, color: phase.color } : null,
     strengthSessionsPerWeek: phase ? phase.strengthSessionsPerWeek : 0,
+    planningMode,
+    longRideMinutes: week.longRideMinutes ?? 0,
+    longRunMinutes: week.longRunMinutes ?? 0,
+    longSessionZoneMinutes: week.longSessionZoneMinutes ?? {},
+    slotBudgets: parseSlotBudgets(week.slotBudgets) ?? undefined,
     byDiscipline,
     zoneMinutes: week.zoneMinutes,
   };
@@ -115,11 +153,24 @@ export async function getCalendarWeekTargets(
   const requested = new Set(weekStarts);
 
   const targets: CalendarWeekTarget[] = [];
+  const defaultPlanningMode = season.defaultPlanningMode ?? "BY_DISCIPLINE";
+  const phasePlanningSpans = season.phases.map((p) => ({
+    startWeekIndex: p.startWeekIndex,
+    endWeekIndex: p.endWeekIndex,
+    planningMode: p.planningMode ?? null,
+    phaseKind: p.phaseKind,
+  }));
+
   for (const weekStart of requested) {
     const week = weekByStart.get(weekStart);
     if (!week) continue;
     const phase = phaseForWeekIndex(season.phases, week.weekIndex);
-    targets.push(buildWeekTarget(week, phase));
+    const planningMode = resolvePlanningModeForWeek(
+      week.weekIndex,
+      phasePlanningSpans,
+      defaultPlanningMode
+    );
+    targets.push(buildWeekTarget(week, phase, planningMode));
   }
 
   targets.sort((a, b) => a.weekStart.localeCompare(b.weekStart));

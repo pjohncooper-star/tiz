@@ -75,7 +75,50 @@ describe("unscheduled-chips", () => {
       chips.map((chip) => chip.discipline),
       ["SWIM", "RUN", "STRENGTH"]
     );
-    assert.equal(chips[0]?.label, "Swim");
+    assert.equal(chips[0]?.label, "Swim · Endurance");
+    assert.equal(chips[0]?.slotKind, "ENDURANCE");
+  });
+
+  it("emits typed long and intense slots from slot budgets", () => {
+    const chips = computeUnscheduledChips(
+      "2026-07-06",
+      baseWeekTarget({
+        slotBudgets: {
+          SWIM: {
+            endurance: 2,
+            intensity: 1,
+            long: 0,
+            substituteEndurance: 0,
+            substituteDurationMinutes: 0,
+          },
+          BIKE: {
+            endurance: 2,
+            intensity: 1,
+            long: 1,
+            substituteEndurance: 0,
+            substituteDurationMinutes: 0,
+          },
+          RUN: {
+            endurance: 1,
+            intensity: 1,
+            long: 0,
+            substituteEndurance: 1,
+            substituteDurationMinutes: 45,
+          },
+        },
+        longRideMinutes: 120,
+      }),
+      [session("BIKE", "FLEXIBLE")]
+    );
+
+    const bikeLong = chips.filter((c) => c.discipline === "BIKE" && c.slotKind === "LONG");
+    assert.equal(bikeLong.length, 1);
+    assert.equal(bikeLong[0]?.targetDurationMinutes, 120);
+    const runSub = chips.filter(
+      (c) => c.discipline === "RUN" && c.slotKind === "SUBSTITUTE_ENDURANCE"
+    );
+    assert.equal(runSub.length, 1);
+    assert.equal(runSub[0]?.targetDurationMinutes, 45);
   });
 
   it("does not count race sessions toward the scheduled total", () => {

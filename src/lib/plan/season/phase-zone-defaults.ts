@@ -75,10 +75,26 @@ export function normalizeZoneSplitPercents(p: ZoneSplitPercents): ZoneSplitPerce
   };
 }
 
-export function percentsForDisciplineSplit(
+function parseZoneSplitPercentsRaw(raw: unknown): ZoneSplitPercents | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const p = raw as Record<string, unknown>;
+  return normalizeZoneSplitPercents({
+    z1: Number(p.z1) || 0,
+    z2: Number(p.z2) || 0,
+    z3: Number(p.z3) || 0,
+    z4: Number(p.z4) || 0,
+    z5: Number(p.z5) || 0,
+  });
+}
+
+/** End-of-phase zone percents (ramp target). */
+export function endPercentsForDisciplineSplit(
   split: DisciplineZoneSplit,
   catalog?: ZoneFocusCatalog
 ): ZoneSplitPercents {
+  if (split.endPercents) {
+    return normalizeZoneSplitPercents(split.endPercents);
+  }
   if (split.mode === "custom" && split.percents) {
     return normalizeZoneSplitPercents(split.percents);
   }
@@ -91,6 +107,23 @@ export function percentsForDisciplineSplit(
     return { ...FOCUS_TIZ_PRESETS[focusId as PhaseFocus] };
   }
   return { ...FOCUS_TIZ_PRESETS.AEROBIC_BASE };
+}
+
+/** Start-of-phase zone percents when explicitly set. */
+export function startPercentsForDisciplineSplit(
+  split: DisciplineZoneSplit
+): ZoneSplitPercents | null {
+  if (split.startPercents) {
+    return normalizeZoneSplitPercents(split.startPercents);
+  }
+  return null;
+}
+
+export function percentsForDisciplineSplit(
+  split: DisciplineZoneSplit,
+  catalog?: ZoneFocusCatalog
+): ZoneSplitPercents {
+  return endPercentsForDisciplineSplit(split, catalog);
 }
 
 export function parseDisciplineZoneSplit(raw: unknown): DisciplineZoneSplit | null {
@@ -114,22 +147,32 @@ export function parseDisciplineZoneSplit(raw: unknown): DisciplineZoneSplit | nu
         : undefined;
 
   let percents: ZoneSplitPercents | undefined;
-  if (row.percents && typeof row.percents === "object" && !Array.isArray(row.percents)) {
-    const p = row.percents as Record<string, unknown>;
-    percents = normalizeZoneSplitPercents({
-      z1: Number(p.z1) || 0,
-      z2: Number(p.z2) || 0,
-      z3: Number(p.z3) || 0,
-      z4: Number(p.z4) || 0,
-      z5: Number(p.z5) || 0,
-    });
-  }
+  let endPercents: ZoneSplitPercents | undefined;
+  let startPercents: ZoneSplitPercents | undefined;
+  percents = parseZoneSplitPercentsRaw(row.percents);
+  endPercents = parseZoneSplitPercentsRaw(row.endPercents);
+  startPercents = parseZoneSplitPercentsRaw(row.startPercents);
 
-  if (mode === "custom" && percents) {
-    return { mode: "custom", percents, focus, focusId };
+  const resolvedEnd = endPercents ?? percents;
+
+  if (mode === "custom" && resolvedEnd) {
+    return {
+      mode: "custom",
+      percents: resolvedEnd,
+      endPercents: resolvedEnd,
+      startPercents,
+      focus,
+      focusId,
+    };
   }
   if (focusId) {
-    return { mode: "preset", focus, focusId };
+    return {
+      mode: "preset",
+      focus,
+      focusId,
+      ...(startPercents ? { startPercents } : {}),
+      ...(resolvedEnd ? { endPercents: resolvedEnd, percents: resolvedEnd } : {}),
+    };
   }
   return null;
 }

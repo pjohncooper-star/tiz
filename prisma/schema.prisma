@@ -160,6 +160,19 @@ enum VolumePlanningMode {
   DISTANCE
 }
 
+enum PlanningMode {
+  OVERALL
+  BY_DISCIPLINE
+  SEPARATE_LONGS
+  SEPARATE_LONG_TIZ
+}
+
+enum LongOffWeekPolicy {
+  NONE
+  EXTRA_INTENSITY
+  ENDURANCE_PERCENT
+}
+
 enum PhaseKind {
   BASE
   BUILD
@@ -481,6 +494,7 @@ model SeasonPlan {
   longRunPeakMin           Int            @default(90)
   longRideWeekFlags        Json?
   longRunWeekFlags         Json?
+  defaultPlanningMode      PlanningMode   @default(BY_DISCIPLINE)
   primaryGoalEventId       String?        @unique
   setupComplete            Boolean        @default(false)
   createdAt                DateTime       @default(now())
@@ -560,6 +574,11 @@ model SeasonPhase {
   longRideEndMin       Int?
   longRunStartMin      Int?
   longRunEndMin        Int?
+  planningMode         PlanningMode?
+  longRideOffWeekPolicy LongOffWeekPolicy @default(ENDURANCE_PERCENT)
+  longRunOffWeekPolicy  LongOffWeekPolicy @default(ENDURANCE_PERCENT)
+  longRideOffWeekEndurancePercent Float @default(60)
+  longRunOffWeekEndurancePercent  Float @default(60)
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
@@ -618,6 +637,8 @@ model SeasonWeek {
   runSessions      Int
   longRideMinutes  Int
   longRunMinutes   Int
+  longSessionZoneMinutes Json?
+  slotBudgets            Json?
 
   seasonPlan SeasonPlan       @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
   mesocycle  SeasonMesocycle? @relation(fields: [mesocycleId], references: [id], onDelete: SetNull)

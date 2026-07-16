@@ -11,10 +11,20 @@ import {
   phaseKindLabel,
   seedPhaseZoneSplits,
 } from "@/lib/plan/season/phase-zone-defaults";
-import type { PhaseKind } from "@prisma/client";
+import type { PhaseKind, PlanningMode } from "@prisma/client";
+import type { LongOffWeekPolicy } from "@prisma/client";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
+import {
+  PLANNING_MODE_LABELS,
+  PLANNING_MODES,
+  planningModeIncludesLongs,
+} from "@/lib/plan/season/planning-mode";
+import {
+  LONG_OFF_WEEK_POLICIES,
+  LONG_OFF_WEEK_POLICY_LABELS,
+} from "@/lib/plan/season/long-offweek-policy";
 import {
   formatUnassignedWeeks,
   formatWeekRange,
@@ -28,6 +38,7 @@ type SimplePlannerPhasesPaneProps = {
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
+  defaultPlanningMode: PlanningMode;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
   onPhasesChange: (phases: SimplePhase[]) => void;
@@ -38,6 +49,7 @@ export function SimplePlannerPhasesPane({
   phaseKindZoneDefaults,
   zoneFocusCatalog,
   totalWeeks,
+  defaultPlanningMode,
   selectedPhaseId,
   onSelectPhase,
   onPhasesChange,
@@ -137,6 +149,7 @@ export function SimplePlannerPhasesPane({
           phaseKindZoneDefaults={phaseKindZoneDefaults}
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={totalWeeks}
+          defaultPlanningMode={defaultPlanningMode}
           onChange={updatePhase}
           onDelete={() => deletePhase(selected)}
         />
@@ -151,6 +164,7 @@ function PhaseDetailEditor({
   phaseKindZoneDefaults,
   zoneFocusCatalog,
   totalWeeks,
+  defaultPlanningMode,
   onChange,
   onDelete,
 }: {
@@ -159,6 +173,7 @@ function PhaseDetailEditor({
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
+  defaultPlanningMode: PlanningMode;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
@@ -166,6 +181,8 @@ function PhaseDetailEditor({
   const weekLabel = assigned
     ? formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)
     : "Not assigned — click + on a week in the table";
+  const effectiveMode = phase.planningMode ?? defaultPlanningMode;
+  const showLongSettings = planningModeIncludesLongs(effectiveMode);
 
   return (
     <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -215,6 +232,30 @@ function PhaseDetailEditor({
             value={phase.color}
             onChange={(event) => onChange({ ...phase, color: event.target.value })}
           />
+        </div>
+        <div>
+          <Label>Planning mode</Label>
+          <select
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            value={phase.planningMode ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...phase,
+                planningMode: event.target.value
+                  ? (event.target.value as PlanningMode)
+                  : null,
+              })
+            }
+          >
+            <option value="">
+              Season default ({PLANNING_MODE_LABELS[defaultPlanningMode]})
+            </option>
+            {PLANNING_MODES.map((mode) => (
+              <option key={mode} value={mode}>
+                {PLANNING_MODE_LABELS[mode]}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -338,8 +379,45 @@ function PhaseDetailEditor({
           onChange={(zoneSplits) => onChange({ ...phase, zoneSplits })}
           catalog={zoneFocusCatalog}
           showPresetPercents
+          showStartEnd
         />
       </fieldset>
+
+      {showLongSettings ? (
+        <fieldset className="mt-4 space-y-3">
+          <legend className="text-sm font-medium">Long sessions</legend>
+          <p className="text-xs text-zinc-500">
+            Long bike/run ramps are excluded from main volume. Long slots are extra beyond session
+            counts.
+          </p>
+          <LongDisciplineEditor
+            label="Long ride"
+            startMin={phase.longRideStartMin}
+            endMin={phase.longRideEndMin}
+            offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+            offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
+            onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
+            onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
+            onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
+            onPercentChange={(value) =>
+              onChange({ ...phase, longRideOffWeekEndurancePercent: value })
+            }
+          />
+          <LongDisciplineEditor
+            label="Long run"
+            startMin={phase.longRunStartMin}
+            endMin={phase.longRunEndMin}
+            offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+            offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
+            onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
+            onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
+            onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
+            onPercentChange={(value) =>
+              onChange({ ...phase, longRunOffWeekEndurancePercent: value })
+            }
+          />
+        </fieldset>
+      ) : null}
 
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Ramp by discipline</legend>
@@ -377,6 +455,91 @@ function PhaseDetailEditor({
         <Button type="button" variant="secondary" onClick={onDelete}>
           Delete phase
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function LongDisciplineEditor({
+  label,
+  startMin,
+  endMin,
+  offWeekPolicy,
+  offWeekPercent,
+  onStartMinChange,
+  onEndMinChange,
+  onPolicyChange,
+  onPercentChange,
+}: {
+  label: string;
+  startMin?: number | null;
+  endMin?: number | null;
+  offWeekPolicy: LongOffWeekPolicy;
+  offWeekPercent: number;
+  onStartMinChange: (value: number | null) => void;
+  onEndMinChange: (value: number | null) => void;
+  onPolicyChange: (value: LongOffWeekPolicy) => void;
+  onPercentChange: (value: number) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Start (min)</Label>
+          <Input
+            type="number"
+            min={0}
+            className="mt-1"
+            value={startMin ?? ""}
+            placeholder="Season default"
+            onChange={(event) =>
+              onStartMinChange(event.target.value ? Number(event.target.value) : null)
+            }
+          />
+        </div>
+        <div>
+          <Label>End (min)</Label>
+          <Input
+            type="number"
+            min={0}
+            className="mt-1"
+            value={endMin ?? ""}
+            placeholder="Season default"
+            onChange={(event) =>
+              onEndMinChange(event.target.value ? Number(event.target.value) : null)
+            }
+          />
+        </div>
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Off-week policy</Label>
+          <select
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            value={offWeekPolicy}
+            onChange={(event) => onPolicyChange(event.target.value as LongOffWeekPolicy)}
+          >
+            {LONG_OFF_WEEK_POLICIES.map((policy) => (
+              <option key={policy} value={policy}>
+                {LONG_OFF_WEEK_POLICY_LABELS[policy]}
+              </option>
+            ))}
+          </select>
+        </div>
+        {offWeekPolicy === "ENDURANCE_PERCENT" ? (
+          <div>
+            <Label>Endurance % of long</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              className="mt-1"
+              value={offWeekPercent}
+              onChange={(event) => onPercentChange(Number(event.target.value))}
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -258,7 +258,22 @@ const disciplineZoneSplitSchema = z.object({
   focus: phaseFocusSchema.optional(),
   focusId: z.string().optional(),
   percents: zoneSplitPercentsSchema.optional(),
+  startPercents: zoneSplitPercentsSchema.optional(),
+  endPercents: zoneSplitPercentsSchema.optional(),
 });
+
+const planningModeSchema = z.enum([
+  "OVERALL",
+  "BY_DISCIPLINE",
+  "SEPARATE_LONGS",
+  "SEPARATE_LONG_TIZ",
+]);
+
+const longOffWeekPolicySchema = z.enum([
+  "NONE",
+  "EXTRA_INTENSITY",
+  "ENDURANCE_PERCENT",
+]);
 
 export const zoneFocusCatalogSchema = z
   .array(
@@ -317,6 +332,15 @@ export const simplePhaseSchema = z
     runIntenseDaysPerWeek: z.number().int().min(0).max(7),
     goal: z.string().nullable().optional(),
     zoneSplits: phaseZoneSplitsSchema.nullable().optional(),
+    planningMode: planningModeSchema.nullable().optional(),
+    longRideStartMin: z.number().int().nonnegative().nullable().optional(),
+    longRideEndMin: z.number().int().nonnegative().nullable().optional(),
+    longRunStartMin: z.number().int().nonnegative().nullable().optional(),
+    longRunEndMin: z.number().int().nonnegative().nullable().optional(),
+    longRideOffWeekPolicy: longOffWeekPolicySchema.optional(),
+    longRunOffWeekPolicy: longOffWeekPolicySchema.optional(),
+    longRideOffWeekEndurancePercent: z.number().min(0).max(100).optional(),
+    longRunOffWeekEndurancePercent: z.number().min(0).max(100).optional(),
   })
   .refine(
     (phase) =>
@@ -341,6 +365,7 @@ export const createSimpleSeasonSchema = z.object({
   startDate: z.string().regex(DATE_KEY),
   endDate: z.string().regex(DATE_KEY),
   rampDefaults: simpleRampDefaultsSchema.optional(),
+  defaultPlanningMode: planningModeSchema.optional(),
   goalEvent: seasonGoalEventSchema.optional(),
   bGoalEvents: z.array(seasonGoalEventSchema).optional(),
   cGoalEvents: z.array(seasonGoalEventSchema).optional(),
@@ -354,6 +379,7 @@ export const updateSimpleSeasonSchema = z
     rampDefaults: simpleRampDefaultsSchema.optional(),
     deLoadVolumePercent: z.number().min(1).max(100).optional(),
     phaseKindZoneDefaults: phaseKindZoneDefaultsSchema.optional(),
+    defaultPlanningMode: planningModeSchema.optional(),
     phases: z.array(simplePhaseSchema).optional(),
     weeks: z.array(simpleWeekSchema).optional(),
     recalculate: z.boolean().optional(),

@@ -15,7 +15,11 @@ export type DisciplineZoneSplit = {
   /** Legacy enum id; same string as catalog id for seeded focuses. */
   focus?: PhaseFocus;
   focusId?: string;
+  /** Ramp end (last week of phase). Legacy `percents` is an alias. */
   percents?: ZoneSplitPercents;
+  endPercents?: ZoneSplitPercents;
+  /** Ramp start (first week of phase). If omitted, chain from prior phase exit. */
+  startPercents?: ZoneSplitPercents;
 };
 
 export type PhaseZoneSplits = Record<TriPlanDiscipline, DisciplineZoneSplit>;

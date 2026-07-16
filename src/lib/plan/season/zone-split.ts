@@ -2,7 +2,8 @@ import type { DeLoadStrategy } from "@prisma/client";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 import { DE_LOAD_INTENSITY_SHIFT } from "./constants";
 import {
-  percentsForDisciplineSplit,
+  endPercentsForDisciplineSplit,
+  startPercentsForDisciplineSplit,
   normalizeZoneSplitPercents,
 } from "./phase-zone-defaults";
 import type { ZoneFocusCatalog } from "./zone-focus-catalog";
@@ -94,7 +95,8 @@ function targetPercentsForPhase(
   if (!phase) {
     return normalizeZoneSplitPercents({ z1: 100, z2: 0, z3: 0, z4: 0, z5: 0 });
   }
-  return percentsForDisciplineSplit(phase.zoneSplits[discipline], catalog);
+  const split = phase.zoneSplits[discipline];
+  return endPercentsForDisciplineSplit(split, catalog);
 }
 
 function sortedZonePhases(phases: ZonePhaseSpan[]): ZonePhaseSpan[] {
@@ -117,19 +119,22 @@ export function resolveZonePercentsForWeek(input: {
   }
 
   const exitPercents = targetPercentsForPhase(phase, input.discipline, input.catalog);
+  const explicitStart = startPercentsForDisciplineSplit(phase.zoneSplits[input.discipline]);
   const priorPhase = sorted
     .filter((item) => item.endWeekIndex < phase.startWeekIndex)
     .at(-1);
-  const entryPercents = priorPhase
-    ? targetPercentsForPhase(priorPhase, input.discipline, input.catalog)
-    : exitPercents;
+  const entryPercents =
+    explicitStart ??
+    (priorPhase
+      ? targetPercentsForPhase(priorPhase, input.discipline, input.catalog)
+      : exitPercents);
 
   const simpleDiscipline = Object.entries(SIMPLE_TO_TRI).find(
     ([, tri]) => tri === input.discipline
   )?.[0] as SimpleDiscipline | undefined;
 
   if (!simpleDiscipline || !isRampOnForDiscipline(phase, simpleDiscipline)) {
-    return entryPercents;
+    return exitPercents;
   }
 
   const weekCount = phase.endWeekIndex - phase.startWeekIndex + 1;

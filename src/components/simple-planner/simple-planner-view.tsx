@@ -20,6 +20,8 @@ import {
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import { DEFAULT_REST_VOLUME_PERCENT } from "@/lib/plan/season/constants";
 import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { PLANNING_MODE_LABELS, PLANNING_MODES } from "@/lib/plan/season/planning-mode";
+import type { PlanningMode } from "@prisma/client";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { PhaseKindZoneDefaultsEditor } from "@/components/simple-planner/zone-split-editor";
@@ -44,6 +46,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
   return {
     ...season,
     deLoadVolumePercent: season.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
+    defaultPlanningMode: season.defaultPlanningMode ?? "BY_DISCIPLINE",
     phaseKindZoneDefaults: kindDefaults,
     phases: season.phases.map((phase) => ({
       ...phase,
@@ -369,6 +372,7 @@ export function SimplePlannerView({
           name: season.name,
           startDate: season.startDate,
           endDate: season.endDate,
+          defaultPlanningMode: season.defaultPlanningMode,
           ...extra,
         };
       case "races":
@@ -491,6 +495,7 @@ export function SimplePlannerView({
       startDate: season.startDate,
       endDate: season.endDate,
       deLoadVolumePercent: season.deLoadVolumePercent,
+      defaultPlanningMode: season.defaultPlanningMode,
       rampDefaults: season.rampDefaults,
       phaseKindZoneDefaults: season.phaseKindZoneDefaults,
       phases: season.phases,
@@ -677,6 +682,28 @@ export function SimplePlannerView({
               />
             </div>
           </div>
+          <div>
+            <Label>Default planning mode</Label>
+            <select
+              className="mt-1 w-full max-w-md rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
+              onChange={(event) =>
+                setSeason({
+                  ...season,
+                  defaultPlanningMode: event.target.value as PlanningMode,
+                })
+              }
+            >
+              {PLANNING_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {PLANNING_MODE_LABELS[mode]}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-zinc-500">
+              Phases can override this per block. Modes 3–4 add long slots on top of session counts.
+            </p>
+          </div>
         </div>
       </CollapsibleSection>
 
@@ -752,6 +779,7 @@ export function SimplePlannerView({
           phaseKindZoneDefaults={season.phaseKindZoneDefaults}
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={season.totalWeeks}
+          defaultPlanningMode={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}

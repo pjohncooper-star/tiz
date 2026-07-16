@@ -68,4 +68,25 @@ describe("inheritTargetZonesFromRole", () => {
     assert.equal(zones!["2"], 56);
     assert.equal(zones!["1"], undefined);
   });
+
+  it("inherits long-session TiZ from longSessionZoneMinutes", () => {
+    const zones = inheritTargetZonesFromRole({
+      sessionRole: "LONG",
+      discipline: "BIKE",
+      weekTarget: {
+        ...weekTarget(),
+        planningMode: "SEPARATE_LONG_TIZ",
+        longSessionZoneMinutes: {
+          "BIKE-1": 12,
+          "BIKE-2": 108,
+        },
+      },
+      sessions: [],
+      unscheduledCount: 1,
+      targetDurationMinutes: 120,
+    });
+    assert.ok(zones);
+    assert.equal(zones!["1"], 12);
+    assert.equal(zones!["2"], 108);
+  });
 });
