@@ -155,6 +155,19 @@ git commit -m "Your change"
 git push
 ```
 
+### Planning modes (schema migration)
+
+Before or immediately after deploying planning-mode code to production, apply the idempotent SQL migration against Neon:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."   # production Neon URL
+npm run db:migrate:planning-modes
+```
+
+Or paste `prisma/migrations/manual_planning_modes.sql` into the Neon SQL editor.
+
+This adds `PlanningMode` / `LongOffWeekPolicy` enums and columns on `SeasonPlan`, `SeasonPhase`, and `SeasonWeek`. Existing seasons default to `BY_DISCIPLINE` with 60% off-week endurance substitutes.
+
 ---
 
 ## Troubleshooting

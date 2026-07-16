@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:planning-modes": "prisma db execute --file prisma/migrations/manual_planning_modes.sql --schema prisma/schema.prisma",
     "db:studio": "prisma studio",
     "strava:register-webhook": "npx tsx scripts/register-strava-webhook.ts",
     "strava:backfill-swim-laps": "npx tsx scripts/backfill-strava-swim-laps.ts",
