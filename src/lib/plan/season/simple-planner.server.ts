@@ -655,7 +655,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       });
     }
 
-    return getSeasonPlanById(input.athleteId, seasonPlanId);
+    return getSeasonPlanById(input.athleteId, seasonPlanId, tx);
   });
 }
 
@@ -949,7 +949,7 @@ export async function updateSimpleSeasonPlan(
       await removeGoalEvents(tx, input.removedGoalEvents);
     }
 
-    return getSeasonPlanById(athleteId, seasonPlanId);
+    return getSeasonPlanById(athleteId, seasonPlanId, tx);
   });
 }
 

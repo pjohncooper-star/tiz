@@ -33,7 +33,12 @@ export function SeasonsList({ newSeasonHref }: { newSeasonHref: string }) {
 
   async function handleArchive(id: string) {
     if (!window.confirm("Archive this season?")) return;
-    await fetch(`/api/plan/season/${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/plan/season/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      window.alert(body?.error ?? "Could not archive season.");
+      return;
+    }
     await load();
   }
 
