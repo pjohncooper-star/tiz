@@ -789,6 +789,8 @@ export function SimplePlannerView({
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={season.totalWeeks}
           defaultPlanningMode={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
+          rampDefaults={season.rampDefaults}
+          disciplineSettings={disciplineSettings}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PlanDiscipline } from "@/lib/plan/session";
-import { hoursFromDistancePace } from "@/lib/plan/season/distance-pace-rollup";
+import { durationFromDistancePace, hoursFromDistancePace } from "@/lib/plan/season/distance-pace-rollup";
 import type { DisciplineRampDefaults, SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
   swimDisplayUnit,
@@ -133,6 +133,17 @@ export function hoursFromDisciplineDistance(
   def: DisciplineRampDefaults
 ): number {
   return hoursFromDistancePace(discipline, meters, def.referencePaceSeconds);
+}
+
+/** Full-precision hours for phase volume storage (avoids distance round-trip drift). */
+export function exactHoursFromDisciplineDistance(
+  discipline: "SWIM" | "RUN",
+  meters: number,
+  def: DisciplineRampDefaults
+): number {
+  return (
+    durationFromDistancePace(discipline, meters, def.referencePaceSeconds) / 3600
+  );
 }
 
 export function disciplinePlanningMode(

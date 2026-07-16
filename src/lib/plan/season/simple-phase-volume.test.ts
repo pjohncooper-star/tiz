@@ -6,8 +6,20 @@ import {
   recalculatePhaseAwareVolumes,
   type PhaseVolumeSpan,
 } from "./simple-phase-volume";
-import { defaultSimpleRampDefaults } from "./simple-ramp";
+import {
+  buildDisciplineRampDefaults,
+  defaultSimpleRampDefaults,
+} from "./simple-ramp";
 import type { SimpleWeekVolume } from "./simple-ramp";
+import {
+  hoursFromDistancePace,
+  distanceMetersFromHoursPace,
+} from "./distance-pace-rollup";
+import { TAPER_VOLUME_START_FACTOR } from "./constants";
+
+function exactSwimHours(meters: number, paceSeconds = 90): number {
+  return ((meters / 100) * paceSeconds) / 3600;
+}
 
 function basePhase(overrides: Partial<PhaseVolumeSpan> = {}): PhaseVolumeSpan {
   return {
@@ -156,5 +168,243 @@ describe("simple-phase-volume", () => {
     });
 
     assert.equal(result[1]!.bikeHours, 4.4);
+  });
+
+  it("ramps swim in meters when season mode is DISTANCE", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim = buildDisciplineRampDefaults({
+      mode: "DISTANCE",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 5,
+      startDistanceMeters: 3000,
+      peakDistanceMeters: 5000,
+      referencePaceSeconds: 90,
+      paceDiscipline: "SWIM",
+    });
+
+    const startHours = exactSwimHours(3000);
+    const endHours = exactSwimHours(5000);
+    const phases = [
+      basePhase({
+        swimStartHours: startHours,
+        swimEndHours: endHours,
+      }),
+    ];
+    const weeks = [
+      week(0, 2, 4, 2),
+      week(1, 2, 4, 2),
+      week(2, 2, 4, 2),
+      week(3, 2, 4, 2),
+    ];
+
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(result[0]!.swimDistanceMeters, 3000);
+    assert.equal(result[3]!.swimDistanceMeters, 5000);
+    assert.equal(result[1]!.swimDistanceMeters, 3667);
+    assert.equal(
+      result[0]!.swimHours,
+      hoursFromDistancePace("SWIM", 3000, 90)
+    );
+  });
+
+  it("chains swim distance across phases when start is blank", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim = buildDisciplineRampDefaults({
+      mode: "DISTANCE",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 5,
+      startDistanceMeters: 3000,
+      peakDistanceMeters: 5000,
+      referencePaceSeconds: 90,
+      paceDiscipline: "SWIM",
+    });
+
+    const phase1EndHours = exactSwimHours(4000);
+    const phase2EndHours = exactSwimHours(5000);
+    const phases = [
+      basePhase({
+        startWeekIndex: 0,
+        endWeekIndex: 1,
+        swimStartHours: exactSwimHours(3000),
+        swimEndHours: phase1EndHours,
+      }),
+      basePhase({
+        startWeekIndex: 2,
+        endWeekIndex: 3,
+        swimEndHours: phase2EndHours,
+      }),
+    ];
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2), week(2, 2, 4, 2), week(3, 2, 4, 2)];
+
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(result[1]!.swimDistanceMeters, 4000);
+    assert.equal(result[2]!.swimDistanceMeters, 4000);
+    assert.equal(result[3]!.swimDistanceMeters, 5000);
+  });
+
+  it("cuts swim distance on rest weeks", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim = buildDisciplineRampDefaults({
+      mode: "DISTANCE",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 5,
+      startDistanceMeters: 3000,
+      peakDistanceMeters: 5000,
+      referencePaceSeconds: 90,
+      paceDiscipline: "SWIM",
+    });
+
+    const phases = [
+      basePhase({
+        swimStartHours: exactSwimHours(3000),
+        swimEndHours: exactSwimHours(5000),
+      }),
+    ];
+    const weeks = [
+      week(0, 2, 4, 2),
+      week(1, 2, 4, 2),
+      week(2, 2, 4, 2, true),
+      week(3, 2, 4, 2),
+    ];
+
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(result[1]!.swimDistanceMeters, 4000);
+    assert.equal(result[2]!.swimDistanceMeters, 3000);
+  });
+
+  it("applies taper factor to swim distance", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim = buildDisciplineRampDefaults({
+      mode: "DISTANCE",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 5,
+      startDistanceMeters: 3000,
+      peakDistanceMeters: 5000,
+      referencePaceSeconds: 90,
+      paceDiscipline: "SWIM",
+    });
+
+    const phases = [
+      basePhase({
+        startWeekIndex: 0,
+        endWeekIndex: 1,
+        phaseKind: "BASE",
+        swimEndHours: exactSwimHours(5000),
+      }),
+      basePhase({
+        startWeekIndex: 2,
+        endWeekIndex: 2,
+        phaseKind: "TAPER",
+        planningMode: "BY_DISCIPLINE",
+      }),
+    ];
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2), week(2, 2, 4, 2)];
+
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(
+      result[2]!.swimDistanceMeters,
+      Math.round(5000 * TAPER_VOLUME_START_FACTOR)
+    );
+  });
+
+  it("uses season distance compound ramp when no phase volume config", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim = buildDisciplineRampDefaults({
+      mode: "DISTANCE",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 10,
+      startDistanceMeters: 3000,
+      peakDistanceMeters: 5000,
+      referencePaceSeconds: 90,
+      paceDiscipline: "SWIM",
+    });
+    defaults.swim.ratePercent = 10;
+
+    const phases = [basePhase()];
+    const weeks = [week(0, 2, 4, 2), week(1, 2, 4, 2)];
+
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: [
+        {
+          startWeekIndex: 0,
+          endWeekIndex: 1,
+          rampEnabled: { swim: true, bike: true, run: true },
+        },
+      ],
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 16 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(result[1]!.swimDistanceMeters, 3300);
+    assert.equal(
+      result[1]!.swimHours,
+      hoursFromDistancePace("SWIM", 3300, 90)
+    );
   });
 });

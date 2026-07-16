@@ -32,6 +32,17 @@ import {
   isEmptyPhase,
   setPhaseWeekRange,
 } from "@/lib/plan/season/phase-span-utils";
+import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
+import type { PlanDiscipline } from "@/lib/plan/session";
+import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
+import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
+import {
+  distanceDisplayToMeters,
+  distanceInputLabel,
+  distanceMetersToDisplay,
+  disciplinePlanningMode,
+  exactHoursFromDisciplineDistance,
+} from "@/components/simple-planner/simple-planner-volume-display";
 
 type SimplePlannerPhasesPaneProps = {
   phases: SimplePhase[];
@@ -39,6 +50,8 @@ type SimplePlannerPhasesPaneProps = {
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
   defaultPlanningMode: PlanningMode;
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
   onPhasesChange: (phases: SimplePhase[]) => void;
@@ -50,6 +63,8 @@ export function SimplePlannerPhasesPane({
   zoneFocusCatalog,
   totalWeeks,
   defaultPlanningMode,
+  rampDefaults,
+  disciplineSettings,
   selectedPhaseId,
   onSelectPhase,
   onPhasesChange,
@@ -150,6 +165,8 @@ export function SimplePlannerPhasesPane({
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={totalWeeks}
           defaultPlanningMode={defaultPlanningMode}
+          rampDefaults={rampDefaults}
+          disciplineSettings={disciplineSettings}
           onChange={updatePhase}
           onDelete={() => deletePhase(selected)}
         />
@@ -165,6 +182,8 @@ function PhaseDetailEditor({
   zoneFocusCatalog,
   totalWeeks,
   defaultPlanningMode,
+  rampDefaults,
+  disciplineSettings,
   onChange,
   onDelete,
 }: {
@@ -174,6 +193,8 @@ function PhaseDetailEditor({
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
   defaultPlanningMode: PlanningMode;
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
@@ -387,6 +408,8 @@ function PhaseDetailEditor({
         phase={phase}
         effectiveMode={effectiveMode}
         showLongSettings={showLongSettings}
+        rampDefaults={rampDefaults}
+        disciplineSettings={disciplineSettings}
         onChange={onChange}
       />
 
@@ -471,13 +494,21 @@ function PhaseVolumeEditor({
   phase,
   effectiveMode,
   showLongSettings,
+  rampDefaults,
+  disciplineSettings,
   onChange,
 }: {
   phase: SimplePhase;
   effectiveMode: PlanningMode;
   showLongSettings: boolean;
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onChange: (phase: SimplePhase) => void;
 }) {
+  const swimDistance = disciplinePlanningMode("swim", rampDefaults) === "DISTANCE";
+  const runDistance = disciplinePlanningMode("run", rampDefaults) === "DISTANCE";
+  const usesDistance = swimDistance || runDistance;
+
   const disciplineLabels: Record<"swim" | "bike" | "run", string> = {
     swim: "Swim",
     bike: showLongSettings ? "Main bike" : "Bike",
@@ -488,8 +519,9 @@ function PhaseVolumeEditor({
     <fieldset className="mt-4 space-y-3">
       <legend className="text-sm font-medium">Phase volume</legend>
       <p className="text-xs text-zinc-500">
-        Start and end hours for this phase. Blank start chains from the prior phase exit. Linear
-        ramp between weeks.
+        {usesDistance
+          ? "Start and end targets for this phase. Swim/run use distance from season ramp settings; hours are derived from reference pace. Blank start chains from the prior phase exit."
+          : "Start and end hours for this phase. Blank start chains from the prior phase exit. Linear ramp between weeks."}
       </p>
       {effectiveMode === "OVERALL" ? (
         <VolumeHoursRow
@@ -500,38 +532,147 @@ function PhaseVolumeEditor({
           onEndChange={(value) => onChange({ ...phase, volumeEndHours: value })}
         />
       ) : (
-        (["swim", "bike", "run"] as const).map((discipline) => (
-          <VolumeHoursRow
-            key={discipline}
-            label={`${disciplineLabels[discipline]} hours`}
-            startHours={
-              discipline === "swim"
-                ? phase.swimStartHours
-                : discipline === "bike"
-                  ? phase.bikeStartHours
-                  : phase.runStartHours
-            }
-            endHours={
-              discipline === "swim"
-                ? phase.swimEndHours
-                : discipline === "bike"
-                  ? phase.bikeEndHours
-                  : phase.runEndHours
-            }
-            onStartChange={(value) => {
-              if (discipline === "swim") onChange({ ...phase, swimStartHours: value });
-              else if (discipline === "bike") onChange({ ...phase, bikeStartHours: value });
-              else onChange({ ...phase, runStartHours: value });
-            }}
-            onEndChange={(value) => {
-              if (discipline === "swim") onChange({ ...phase, swimEndHours: value });
-              else if (discipline === "bike") onChange({ ...phase, bikeEndHours: value });
-              else onChange({ ...phase, runEndHours: value });
-            }}
-          />
-        ))
+        (["swim", "bike", "run"] as const).map((discipline) => {
+          const distanceMode =
+            discipline !== "bike" && disciplinePlanningMode(discipline, rampDefaults) === "DISTANCE";
+          const paceDiscipline = discipline === "swim" ? "SWIM" : "RUN";
+          const def = rampDefaults[discipline];
+
+          if (distanceMode) {
+            return (
+              <VolumeDistanceRow
+                key={discipline}
+                label={disciplineLabels[discipline]}
+                paceDiscipline={paceDiscipline}
+                def={def}
+                disciplineSettings={disciplineSettings}
+                startHours={
+                  discipline === "swim" ? phase.swimStartHours : phase.runStartHours
+                }
+                endHours={discipline === "swim" ? phase.swimEndHours : phase.runEndHours}
+                onStartChange={(hours) => {
+                  if (discipline === "swim") onChange({ ...phase, swimStartHours: hours });
+                  else onChange({ ...phase, runStartHours: hours });
+                }}
+                onEndChange={(hours) => {
+                  if (discipline === "swim") onChange({ ...phase, swimEndHours: hours });
+                  else onChange({ ...phase, runEndHours: hours });
+                }}
+              />
+            );
+          }
+
+          return (
+            <VolumeHoursRow
+              key={discipline}
+              label={`${disciplineLabels[discipline]} hours`}
+              startHours={
+                discipline === "swim"
+                  ? phase.swimStartHours
+                  : discipline === "bike"
+                    ? phase.bikeStartHours
+                    : phase.runStartHours
+              }
+              endHours={
+                discipline === "swim"
+                  ? phase.swimEndHours
+                  : discipline === "bike"
+                    ? phase.bikeEndHours
+                    : phase.runEndHours
+              }
+              onStartChange={(value) => {
+                if (discipline === "swim") onChange({ ...phase, swimStartHours: value });
+                else if (discipline === "bike") onChange({ ...phase, bikeStartHours: value });
+                else onChange({ ...phase, runStartHours: value });
+              }}
+              onEndChange={(value) => {
+                if (discipline === "swim") onChange({ ...phase, swimEndHours: value });
+                else if (discipline === "bike") onChange({ ...phase, bikeEndHours: value });
+                else onChange({ ...phase, runEndHours: value });
+              }}
+            />
+          );
+        })
       )}
     </fieldset>
+  );
+}
+
+function VolumeDistanceRow({
+  label,
+  paceDiscipline,
+  def,
+  disciplineSettings,
+  startHours,
+  endHours,
+  onStartChange,
+  onEndChange,
+}: {
+  label: string;
+  paceDiscipline: "SWIM" | "RUN";
+  def: SimpleRampDefaults["swim"];
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  startHours?: number | null;
+  endHours?: number | null;
+  onStartChange: (hours: number | null) => void;
+  onEndChange: (hours: number | null) => void;
+}) {
+  const startLabel = distanceInputLabel(paceDiscipline, disciplineSettings).replace("/wk", " start");
+  const endLabel = distanceInputLabel(paceDiscipline, disciplineSettings).replace("/wk", " end");
+
+  function displayFromHours(hours: number | null | undefined): string {
+    if (hours == null) return "";
+    const meters = distanceMetersFromHoursPace(
+      paceDiscipline,
+      hours,
+      def.referencePaceSeconds
+    );
+    return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
+  }
+
+  function commitDistance(input: string, kind: "start" | "end") {
+    if (!input.trim()) {
+      if (kind === "start") onStartChange(null);
+      else onEndChange(null);
+      return;
+    }
+    const meters = distanceDisplayToMeters(input, paceDiscipline, disciplineSettings);
+    if (meters == null) return;
+    const hours = exactHoursFromDisciplineDistance(paceDiscipline, meters, def);
+    if (kind === "start") onStartChange(hours);
+    else onEndChange(hours);
+  }
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>{startLabel}</Label>
+          <Input
+            type="number"
+            min={0}
+            step={0.1}
+            className="mt-1"
+            value={displayFromHours(startHours)}
+            placeholder="Chain from prior phase"
+            onChange={(event) => commitDistance(event.target.value, "start")}
+          />
+        </div>
+        <div>
+          <Label>{endLabel}</Label>
+          <Input
+            type="number"
+            min={0}
+            step={0.1}
+            className="mt-1"
+            value={displayFromHours(endHours)}
+            placeholder="Phase default"
+            onChange={(event) => commitDistance(event.target.value, "end")}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -1,5 +1,9 @@
 import type { PhaseKind, PlanningMode, VolumeMesocycleMode } from "@prisma/client";
 import {
+  distanceMetersFromHoursPace,
+  hoursFromDistancePace,
+} from "./distance-pace-rollup";
+import {
   TAPER_VOLUME_END_FACTOR,
   TAPER_VOLUME_START_FACTOR,
 } from "./constants";
@@ -48,14 +52,154 @@ export type PhaseVolumeSpan = PhasePlanningSpan & {
 
 const DISCIPLINE_KEYS: DisciplineKey[] = ["swim", "bike", "run"];
 
+type PaceDiscipline = "SWIM" | "RUN";
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+function roundMeters(value: number): number {
+  return Math.round(value);
 }
 
 function taperFactor(weekIndexInTaper: number, taperWeekCount: number): number {
   if (taperWeekCount <= 1) return TAPER_VOLUME_START_FACTOR;
   const t = weekIndexInTaper / (taperWeekCount - 1);
   return lerp(TAPER_VOLUME_START_FACTOR, TAPER_VOLUME_END_FACTOR, t);
+}
+
+function paceDisciplineFor(discipline: SimpleDiscipline): PaceDiscipline | null {
+  if (discipline === "swim") return "SWIM";
+  if (discipline === "run") return "RUN";
+  return null;
+}
+
+function isDistanceDiscipline(
+  discipline: SimpleDiscipline,
+  defaults: SimpleRampDefaults
+): boolean {
+  return discipline !== "bike" && defaults[discipline].mode === "DISTANCE";
+}
+
+function phaseStartHours(
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline
+): number | null | undefined {
+  if (discipline === "swim") return phase.swimStartHours;
+  if (discipline === "bike") return phase.bikeStartHours;
+  return phase.runStartHours;
+}
+
+function phaseEndHours(
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline
+): number | null | undefined {
+  if (discipline === "swim") return phase.swimEndHours;
+  if (discipline === "bike") return phase.bikeEndHours;
+  return phase.runEndHours;
+}
+
+function metersFromHours(
+  discipline: SimpleDiscipline,
+  hours: number,
+  defaults: SimpleRampDefaults
+): number {
+  const paceDiscipline = paceDisciplineFor(discipline);
+  if (!paceDiscipline) return 0;
+  return distanceMetersFromHoursPace(
+    paceDiscipline,
+    hours,
+    defaults[discipline].referencePaceSeconds
+  );
+}
+
+function weekMeters(
+  week: SimpleWeekVolume,
+  discipline: SimpleDiscipline,
+  defaults: SimpleRampDefaults
+): number {
+  const paceDiscipline = paceDisciplineFor(discipline);
+  if (!paceDiscipline) return 0;
+  const def = defaults[discipline];
+  if (discipline === "swim") {
+    return (
+      week.swimDistanceMeters ??
+      distanceMetersFromHoursPace("SWIM", week.swimHours, def.referencePaceSeconds)
+    );
+  }
+  return (
+    week.runDistanceMeters ??
+    distanceMetersFromHoursPace("RUN", week.runHours, def.referencePaceSeconds)
+  );
+}
+
+function applyMetersToWeek(
+  week: SimpleWeekVolume,
+  discipline: SimpleDiscipline,
+  meters: number,
+  defaults: SimpleRampDefaults
+): void {
+  const paceDiscipline = paceDisciplineFor(discipline)!;
+  const rounded = roundMeters(meters);
+  const hours = hoursFromDistancePace(
+    paceDiscipline,
+    rounded,
+    defaults[discipline].referencePaceSeconds
+  );
+  if (discipline === "swim") {
+    week.swimDistanceMeters = rounded;
+    week.swimHours = hours;
+  } else {
+    week.runDistanceMeters = rounded;
+    week.runHours = hours;
+  }
+}
+
+function lastNonRestWeekInPhase(
+  weeks: SimpleWeekVolume[],
+  phase: PhaseVolumeSpan
+): SimpleWeekVolume | null {
+  const nonRest = weeks.filter(
+    (w) =>
+      !w.isRestWeek &&
+      w.weekIndex >= phase.startWeekIndex &&
+      w.weekIndex <= phase.endWeekIndex
+  );
+  return nonRest[nonRest.length - 1] ?? null;
+}
+
+function resolveEntryMeters(
+  discipline: SimpleDiscipline,
+  phase: PhaseVolumeSpan,
+  phaseIndex: number,
+  sortedPhases: PhaseVolumeSpan[],
+  weeks: SimpleWeekVolume[],
+  defaults: SimpleRampDefaults
+): number {
+  const explicitStart = phaseStartHours(phase, discipline);
+  if (explicitStart != null) {
+    return metersFromHours(discipline, explicitStart, defaults);
+  }
+  if (phaseIndex > 0) {
+    const priorPhase = sortedPhases[phaseIndex - 1]!;
+    const lastWeek = lastNonRestWeekInPhase(weeks, priorPhase);
+    if (lastWeek) {
+      return weekMeters(lastWeek, discipline, defaults);
+    }
+  }
+  return defaults[discipline].startDistanceMeters;
+}
+
+function resolveExitMeters(
+  discipline: SimpleDiscipline,
+  phase: PhaseVolumeSpan,
+  defaults: SimpleRampDefaults
+): number {
+  const explicitEnd = phaseEndHours(phase, discipline);
+  if (explicitEnd != null) {
+    return metersFromHours(discipline, explicitEnd, defaults);
+  }
+  return defaults[discipline].peakDistanceMeters;
 }
 
 export function phaseHasVolumeConfig(phase: PhaseVolumeSpan): boolean {
@@ -125,6 +269,14 @@ function phaseAtWeek(
   );
 }
 
+function phaseIndexOf(phases: PhaseVolumeSpan[], phase: PhaseVolumeSpan): number {
+  return phases.findIndex(
+    (p) =>
+      p.startWeekIndex === phase.startWeekIndex &&
+      p.endWeekIndex === phase.endWeekIndex
+  );
+}
+
 function nonRestProgressT(
   weeks: SimpleWeekVolume[],
   phase: PhaseVolumeSpan,
@@ -141,6 +293,19 @@ function nonRestProgressT(
   return progressIndex / (nonRest.length - 1);
 }
 
+export function linearNumericAtWeek(
+  entry: number,
+  exit: number,
+  weeks: SimpleWeekVolume[],
+  phase: PhaseVolumeSpan,
+  weekIndex: number,
+  rampOn: boolean
+): number {
+  if (!rampOn) return exit;
+  const t = nonRestProgressT(weeks, phase, weekIndex);
+  return lerp(entry, exit, t);
+}
+
 export function linearVolumeAtWeek(
   entry: number,
   exit: number,
@@ -149,9 +314,7 @@ export function linearVolumeAtWeek(
   weekIndex: number,
   rampOn: boolean
 ): number {
-  if (!rampOn) return roundHours(exit);
-  const t = nonRestProgressT(weeks, phase, weekIndex);
-  return roundHours(lerp(entry, exit, t));
+  return roundHours(linearNumericAtWeek(entry, exit, weeks, phase, weekIndex, rampOn));
 }
 
 function applySeasonSplitHours(
@@ -198,6 +361,66 @@ function lastRampExitDiscipline(
   resolved: ReturnType<typeof resolveDisciplineTargets>
 ): number {
   return resolved[resolved.length - 1]?.exit ?? 0;
+}
+
+function applyDisciplineVolume(
+  week: SimpleWeekVolume,
+  discipline: SimpleDiscipline,
+  phase: PhaseVolumeSpan,
+  sorted: PhaseVolumeSpan[],
+  weeks: SimpleWeekVolume[],
+  targets: { entry: number; exit: number },
+  rampOn: boolean,
+  defaults: SimpleRampDefaults
+): void {
+  if (isDistanceDiscipline(discipline, defaults)) {
+    const phaseIndex = phaseIndexOf(sorted, phase);
+    const entryM = resolveEntryMeters(discipline, phase, phaseIndex, sorted, weeks, defaults);
+    const exitM = resolveExitMeters(discipline, phase, defaults);
+    const meters = linearNumericAtWeek(
+      entryM,
+      exitM,
+      weeks,
+      phase,
+      week.weekIndex,
+      rampOn
+    );
+    applyMetersToWeek(week, discipline, meters, defaults);
+    return;
+  }
+
+  const hours = linearVolumeAtWeek(
+    targets.entry,
+    targets.exit,
+    weeks,
+    phase,
+    week.weekIndex,
+    rampOn
+  );
+  if (discipline === "swim") week.swimHours = hours;
+  else if (discipline === "bike") week.bikeHours = hours;
+  else week.runHours = hours;
+}
+
+function applyTaperDisciplineVolume(
+  week: SimpleWeekVolume,
+  discipline: SimpleDiscipline,
+  factor: number,
+  disciplineTargets: Record<DisciplineKey, ReturnType<typeof resolveDisciplineTargets>>,
+  defaults: SimpleRampDefaults
+): void {
+  if (isDistanceDiscipline(discipline, defaults)) {
+    const exitHours = lastRampExitDiscipline(disciplineTargets[discipline]);
+    const exitM = metersFromHours(discipline, exitHours, defaults);
+    applyMetersToWeek(week, discipline, exitM * factor, defaults);
+    return;
+  }
+
+  const exit = lastRampExitDiscipline(disciplineTargets[discipline]);
+  const hours = roundHours(exit * factor);
+  if (discipline === "swim") week.swimHours = hours;
+  else if (discipline === "bike") week.bikeHours = hours;
+  else week.runHours = hours;
 }
 
 export function recalculatePhaseAwareVolumes(input: {
@@ -276,15 +499,14 @@ export function recalculatePhaseAwareVolumes(input: {
     };
 
     if (phase.phaseKind === "TAPER") {
-      const baseTotal = lastRampExitTotal(totalTargets);
       const factor = taperFactor(taperCounter, taperWeekCount);
       taperCounter += 1;
-      const totalHours = roundHours(baseTotal * factor);
       if (mode === "OVERALL") {
+        const baseTotal = lastRampExitTotal(totalTargets);
         Object.assign(
           week,
           applySeasonSplitHours(
-            totalHours,
+            roundHours(baseTotal * factor),
             input.seasonSplit.swim,
             input.seasonSplit.bike,
             input.seasonSplit.run
@@ -292,8 +514,13 @@ export function recalculatePhaseAwareVolumes(input: {
         );
       } else {
         for (const discipline of SIMPLE_DISCIPLINES) {
-          const exit = lastRampExitDiscipline(disciplineTargets[discipline]);
-          week[`${discipline}Hours`] = roundHours(exit * factor);
+          applyTaperDisciplineVolume(
+            week,
+            discipline,
+            factor,
+            disciplineTargets,
+            input.defaults
+          );
         }
         week.totalHours = sumWeekHours(week);
       }
@@ -329,17 +556,16 @@ export function recalculatePhaseAwareVolumes(input: {
         week.weekIndex
       );
       if (!targets) continue;
-      const value = linearVolumeAtWeek(
-        targets.entry,
-        targets.exit,
-        result,
+      applyDisciplineVolume(
+        week,
+        discipline,
         phase,
-        week.weekIndex,
-        isRampOnForDiscipline(rampSpan, discipline)
+        sorted,
+        result,
+        targets,
+        isRampOnForDiscipline(rampSpan, discipline),
+        input.defaults
       );
-      if (discipline === "swim") week.swimHours = value;
-      else if (discipline === "bike") week.bikeHours = value;
-      else week.runHours = value;
     }
     week.totalHours = sumWeekHours(week);
   }
