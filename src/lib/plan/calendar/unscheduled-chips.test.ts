@@ -6,6 +6,7 @@ import {
   computeUnscheduledChips,
   countScheduledSessionsByDiscipline,
   countScheduledSlotsByDiscipline,
+  hasUsableTypedSlotBudgets,
 } from "./unscheduled-chips";
 
 function baseWeekTarget(overrides: Partial<CalendarWeekTarget> = {}): CalendarWeekTarget {
@@ -69,7 +70,42 @@ function sessionWithSlot(
   return { ...session(discipline), sessionRole, displaySessionRole: sessionRole, poolSlotKind };
 }
 
+const EMPTY_SLOT_BUDGETS = {
+  SWIM: {
+    endurance: 0,
+    intensity: 0,
+    long: 0,
+    substituteEndurance: 0,
+    substituteDurationMinutes: 0,
+  },
+  BIKE: {
+    endurance: 0,
+    intensity: 0,
+    long: 0,
+    substituteEndurance: 0,
+    substituteDurationMinutes: 0,
+  },
+  RUN: {
+    endurance: 0,
+    intensity: 0,
+    long: 0,
+    substituteEndurance: 0,
+    substituteDurationMinutes: 0,
+  },
+};
+
 describe("unscheduled-chips", () => {
+  it("falls back to phase session counts when slot budgets are all-zero", () => {
+    const weekTarget = baseWeekTarget({ slotBudgets: EMPTY_SLOT_BUDGETS });
+    const chips = computeUnscheduledChips("2026-08-10", weekTarget, []);
+
+    assert.equal(hasUsableTypedSlotBudgets(weekTarget), false);
+    assert.equal(chips.filter((c) => c.discipline === "SWIM").length, 3);
+    assert.equal(chips.filter((c) => c.discipline === "BIKE").length, 3);
+    assert.equal(chips.filter((c) => c.discipline === "RUN").length, 2);
+    assert.equal(chips.filter((c) => c.discipline === "STRENGTH").length, 2);
+  });
+
   it("returns chips for session budget minus scheduled count", () => {
     const chips = computeUnscheduledChips("2026-07-06", baseWeekTarget(), [
       session("SWIM"),

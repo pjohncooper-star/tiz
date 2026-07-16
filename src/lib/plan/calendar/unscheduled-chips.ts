@@ -4,6 +4,8 @@ import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import type { PoolSlotKind, WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
 
+export type DisciplineSlotBudget = WeekSlotBudgets[TargetDiscipline];
+
 export type PoolDiscipline = TargetDiscipline | "STRENGTH";
 
 export type UnscheduledChip = {
@@ -110,6 +112,26 @@ export function countScheduledSessionsByDiscipline(
   return counts;
 }
 
+function disciplineSlotBudgetTotal(budget: DisciplineSlotBudget): number {
+  return (
+    budget.endurance +
+    budget.intensity +
+    budget.long +
+    budget.substituteEndurance
+  );
+}
+
+/** True when typed slot budgets exist and at least one tri slot is budgeted. */
+export function hasUsableTypedSlotBudgets(weekTarget: CalendarWeekTarget): boolean {
+  if (!weekTarget.slotBudgets) return false;
+  for (const discipline of TARGET_DISCIPLINES) {
+    if (disciplineSlotBudgetTotal(weekTarget.slotBudgets[discipline]) > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function slotBudgetForDiscipline(
   weekTarget: CalendarWeekTarget,
   discipline: PoolDiscipline
@@ -177,27 +199,35 @@ export function computeUnscheduledChips(
 
     const budget = slotBudgetForDiscipline(weekTarget, discipline);
     const placedMap = scheduled.get(discipline)!;
+    const legacyBudget = legacySessionBudget(weekTarget, discipline);
 
-    if (!budget) {
-      const legacyBudget = legacySessionBudget(weekTarget, discipline);
+    if (
+      !budget ||
+      (disciplineSlotBudgetTotal(budget) === 0 && legacyBudget > 0)
+    ) {
       const placed = [...placedMap.values()].reduce((a, b) => a + b, 0);
       const remaining = Math.max(0, legacyBudget - placed);
       emitChips(chips, weekStart, discipline, "ENDURANCE", remaining);
       continue;
     }
 
+    const placedMapTyped = placedMap;
+
     const enduranceRemaining = Math.max(
       0,
-      budget.endurance - (placedMap.get("ENDURANCE") ?? 0)
+      budget.endurance - (placedMapTyped.get("ENDURANCE") ?? 0)
     );
     const intensityRemaining = Math.max(
       0,
-      budget.intensity - (placedMap.get("INTENSITY") ?? 0)
+      budget.intensity - (placedMapTyped.get("INTENSITY") ?? 0)
     );
-    const longRemaining = Math.max(0, budget.long - (placedMap.get("LONG") ?? 0));
+    const longRemaining = Math.max(
+      0,
+      budget.long - (placedMapTyped.get("LONG") ?? 0)
+    );
     const subRemaining = Math.max(
       0,
-      budget.substituteEndurance - (placedMap.get("SUBSTITUTE_ENDURANCE") ?? 0)
+      budget.substituteEndurance - (placedMapTyped.get("SUBSTITUTE_ENDURANCE") ?? 0)
     );
 
     emitChips(chips, weekStart, discipline, "ENDURANCE", enduranceRemaining);
