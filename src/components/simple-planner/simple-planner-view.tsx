@@ -457,8 +457,12 @@ export function SimplePlannerView({
     });
     setSaving(false);
     if (!res.ok) {
-      const body = (await res.json()) as { error?: string };
-      setError(typeof body.error === "string" ? body.error : "Could not create season.");
+      const body = (await res.json()) as { error?: string | Record<string, unknown> };
+      const message =
+        typeof body.error === "string"
+          ? body.error
+          : "Could not create season.";
+      setError(message);
       return;
     }
     const data = (await res.json()) as {
@@ -471,6 +475,11 @@ export function SimplePlannerView({
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     setCreateMode(false);
     setExpandedSections(DEFAULT_SECTION_EXPANDED);
+    window.history.replaceState(
+      null,
+      "",
+      `/plan?seasonId=${encodeURIComponent(normalized.id)}`
+    );
   }
 
   const { disciplineSettings } = useDisciplineSettings();

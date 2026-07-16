@@ -82,6 +82,7 @@ export async function POST(request: Request) {
     });
 
     if (!plan) {
+      console.error("POST /api/plan/season/simple: create returned no plan");
       return NextResponse.json({ error: "Could not create season" }, { status: 500 });
     }
 
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (err) {
+    console.error("POST /api/plan/season/simple failed", err);
     const message = err instanceof Error ? err.message : "Could not create season";
     return NextResponse.json({ error: message }, { status: 409 });
   }

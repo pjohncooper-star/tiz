@@ -1,4 +1,4 @@
-import { type SeasonStatus } from "@prisma/client";
+import { type SeasonStatus, type Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import { suggestPhasesForWeeks } from "./default-phases";
@@ -39,8 +39,12 @@ export async function listSeasonPlansForAthlete(athleteId: string) {
   });
 }
 
-export async function getSeasonPlanById(athleteId: string, seasonPlanId: string) {
-  return db.seasonPlan.findFirst({
+export async function getSeasonPlanById(
+  athleteId: string,
+  seasonPlanId: string,
+  tx: Prisma.TransactionClient | typeof db = db
+) {
+  return tx.seasonPlan.findFirst({
     where: { id: seasonPlanId, athleteId },
     include: seasonPlanDetailInclude,
   });
@@ -49,7 +53,8 @@ export async function getSeasonPlanById(athleteId: string, seasonPlanId: string)
 /** Most recent non-archived season — used by the simple planner (includes drafts and incomplete plans). */
 export async function getSimplePlannerSeason(athleteId: string, seasonPlanId?: string | null) {
   if (seasonPlanId) {
-    return getSeasonPlanById(athleteId, seasonPlanId);
+    const plan = await getSeasonPlanById(athleteId, seasonPlanId);
+    return plan?.status === "ARCHIVED" ? null : plan;
   }
   return db.seasonPlan.findFirst({
     where: { athleteId, status: { not: "ARCHIVED" } },
