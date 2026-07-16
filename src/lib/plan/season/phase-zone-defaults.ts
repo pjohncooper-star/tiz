@@ -87,6 +87,28 @@ function parseZoneSplitPercentsRaw(raw: unknown): ZoneSplitPercents | undefined 
   });
 }
 
+export function percentsForFocusId(
+  focusId: string,
+  catalog?: ZoneFocusCatalog
+): ZoneSplitPercents {
+  if (catalog) {
+    const fromCatalog = resolveCatalogPercents(catalog, focusId);
+    if (fromCatalog) return fromCatalog;
+  }
+  if (focusId in FOCUS_TIZ_PRESETS) {
+    return { ...FOCUS_TIZ_PRESETS[focusId as PhaseFocus] };
+  }
+  return { ...FOCUS_TIZ_PRESETS.AEROBIC_BASE };
+}
+
+export function isFocusRampSplit(split: DisciplineZoneSplit): boolean {
+  return (
+    split.mode === "custom" &&
+    split.customStyle === "focus_ramp" &&
+    Boolean(split.startFocusId && split.endFocusId)
+  );
+}
+
 /** End-of-phase zone percents (ramp target). */
 export function endPercentsForDisciplineSplit(
   split: DisciplineZoneSplit,
@@ -94,6 +116,9 @@ export function endPercentsForDisciplineSplit(
 ): ZoneSplitPercents {
   if (split.endPercents) {
     return normalizeZoneSplitPercents(split.endPercents);
+  }
+  if (isFocusRampSplit(split) && split.endFocusId) {
+    return percentsForFocusId(split.endFocusId, catalog);
   }
   if (split.mode === "custom" && split.percents) {
     return normalizeZoneSplitPercents(split.percents);
@@ -111,10 +136,14 @@ export function endPercentsForDisciplineSplit(
 
 /** Start-of-phase zone percents when explicitly set. */
 export function startPercentsForDisciplineSplit(
-  split: DisciplineZoneSplit
+  split: DisciplineZoneSplit,
+  catalog?: ZoneFocusCatalog
 ): ZoneSplitPercents | null {
   if (split.startPercents) {
     return normalizeZoneSplitPercents(split.startPercents);
+  }
+  if (isFocusRampSplit(split) && split.startFocusId) {
+    return percentsForFocusId(split.startFocusId, catalog);
   }
   return null;
 }
@@ -154,15 +183,40 @@ export function parseDisciplineZoneSplit(raw: unknown): DisciplineZoneSplit | nu
   startPercents = parseZoneSplitPercentsRaw(row.startPercents);
 
   const resolvedEnd = endPercents ?? percents;
+  const customStyle =
+    row.customStyle === "focus_ramp"
+      ? "focus_ramp"
+      : row.customStyle === "manual"
+        ? "manual"
+        : undefined;
+  const startFocusId = typeof row.startFocusId === "string" ? row.startFocusId : undefined;
+  const endFocusId = typeof row.endFocusId === "string" ? row.endFocusId : undefined;
+
+  if (mode === "custom" && customStyle === "focus_ramp" && startFocusId && endFocusId) {
+    return {
+      mode: "custom",
+      customStyle: "focus_ramp",
+      startFocusId,
+      endFocusId,
+      focusId: endFocusId,
+      focus:
+        endFocusId in FOCUS_TIZ_PRESETS ? (endFocusId as PhaseFocus) : focus,
+      ...(startPercents ? { startPercents } : {}),
+      ...(resolvedEnd ? { endPercents: resolvedEnd, percents: resolvedEnd } : {}),
+    };
+  }
 
   if (mode === "custom" && resolvedEnd) {
     return {
       mode: "custom",
+      customStyle: customStyle ?? "manual",
       percents: resolvedEnd,
       endPercents: resolvedEnd,
       startPercents,
       focus,
       focusId,
+      ...(startFocusId ? { startFocusId } : {}),
+      ...(endFocusId ? { endFocusId } : {}),
     };
   }
   if (focusId) {
@@ -274,6 +328,16 @@ export function disciplineZoneSplitSummary(
   split: DisciplineZoneSplit,
   catalog?: ZoneFocusCatalog
 ): string {
+  if (isFocusRampSplit(split)) {
+    const startLabel = catalog
+      ? catalogFocusLabel(catalog, split.startFocusId!)
+      : focusLabel(split.startFocusId as PhaseFocus);
+    const endLabel = catalog
+      ? catalogFocusLabel(catalog, split.endFocusId!)
+      : focusLabel(split.endFocusId as PhaseFocus);
+    const endPercents = endPercentsForDisciplineSplit(split, catalog);
+    return `${startLabel} → ${endLabel} · Z3 ${Math.round(endPercents.z3)}% end`;
+  }
   const percents = percentsForDisciplineSplit(split, catalog);
   return `Z1 ${Math.round(percents.z1)} · Z2 ${Math.round(percents.z2)} · Z3 ${Math.round(percents.z3)} · Z4 ${Math.round(percents.z4)} · Z5 ${Math.round(percents.z5)}`;
 }

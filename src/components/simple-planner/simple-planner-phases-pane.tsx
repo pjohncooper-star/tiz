@@ -371,8 +371,8 @@ function PhaseDetailEditor({
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Zone focus (TiZ %)</legend>
         <p className="text-xs text-zinc-500">
-          Overrides phase-kind defaults for this phase. Zone minutes are computed from volume ×
-          these splits.
+          Overrides phase-kind defaults for this phase. Choose Custom to ramp between focus presets
+          (e.g. Aerobic Base → Threshold) or set manual TiZ %.
         </p>
         <ZoneSplitEditor
           value={zoneSplitsForPhase(phase, phaseKindZoneDefaults)}

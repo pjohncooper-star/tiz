@@ -87,6 +87,29 @@ describe("zone-split", () => {
     assert.equal(Math.round(w3.z3), 20);
   });
 
+  it("ramps between catalog focus presets within a phase", () => {
+    const phases: ZonePhaseSpan[] = [
+      {
+        startWeekIndex: 0,
+        endWeekIndex: 3,
+        rampEnabled: { swim: true, bike: true, run: true },
+        zoneSplits: {
+          ...defaultZoneSplitsForKind("BASE"),
+          BIKE: {
+            mode: "custom",
+            customStyle: "focus_ramp",
+            startFocusId: "AEROBIC_BASE",
+            endFocusId: "THRESHOLD",
+          },
+        },
+      },
+    ];
+    const w0 = resolveZonePercentsForWeek({ weekIndex: 0, phases, discipline: "BIKE" });
+    const w3 = resolveZonePercentsForWeek({ weekIndex: 3, phases, discipline: "BIKE" });
+    assert.equal(Math.round(w0.z3), 4);
+    assert.equal(Math.round(w3.z3), 15);
+  });
+
   it("holds flat percents when ramp is disabled for discipline", () => {
     const phases: ZonePhaseSpan[] = [
       {

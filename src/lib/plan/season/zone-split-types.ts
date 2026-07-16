@@ -10,11 +10,19 @@ export type ZoneSplitPercents = {
 
 export type TriPlanDiscipline = "SWIM" | "BIKE" | "RUN";
 
+export type DisciplineZoneSplitCustomStyle = "manual" | "focus_ramp";
+
 export type DisciplineZoneSplit = {
   mode: "preset" | "custom";
+  /** When mode is custom: manual sliders vs ramp between catalog focuses. */
+  customStyle?: DisciplineZoneSplitCustomStyle;
   /** Legacy enum id; same string as catalog id for seeded focuses. */
   focus?: PhaseFocus;
   focusId?: string;
+  /** Catalog focus at ramp start (custom focus_ramp). */
+  startFocusId?: string;
+  /** Catalog focus at ramp end (custom focus_ramp). */
+  endFocusId?: string;
   /** Ramp end (last week of phase). Legacy `percents` is an alias. */
   percents?: ZoneSplitPercents;
   endPercents?: ZoneSplitPercents;

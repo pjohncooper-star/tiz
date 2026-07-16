@@ -3,9 +3,11 @@ import { describe, it } from "node:test";
 import { phaseKindZoneDefaultsSchema } from "@/lib/plan/api-schemas";
 import {
   defaultPhaseKindZoneDefaults,
+  endPercentsForDisciplineSplit,
   parsePhaseKindZoneDefaults,
   resolvePhaseKindZoneDefaultsForNewSeason,
   serializePhaseKindZoneDefaults,
+  startPercentsForDisciplineSplit,
 } from "./phase-zone-defaults";
 
 describe("phase-zone-defaults athlete defaults", () => {
@@ -77,5 +79,27 @@ describe("phase-zone-defaults athlete defaults", () => {
 
     const resolved = resolvePhaseKindZoneDefaultsForNewSeason(explicit, athleteStored);
     assert.equal(resolved.BUILD.SWIM.focus, "VO2_MAX");
+  });
+
+  it("round-trips focus ramp custom splits", () => {
+    const custom = defaultPhaseKindZoneDefaults();
+    custom.BUILD = {
+      SWIM: { mode: "preset", focus: "AEROBIC_BASE" },
+      BIKE: {
+        mode: "custom",
+        customStyle: "focus_ramp",
+        startFocusId: "AEROBIC_BASE",
+        endFocusId: "THRESHOLD",
+      },
+      RUN: { mode: "preset", focus: "AEROBIC_BASE" },
+    };
+
+    const parsed = parsePhaseKindZoneDefaults(serializePhaseKindZoneDefaults(custom));
+    const bike = parsed.BUILD.BIKE;
+    assert.equal(bike.customStyle, "focus_ramp");
+    assert.equal(bike.startFocusId, "AEROBIC_BASE");
+    assert.equal(bike.endFocusId, "THRESHOLD");
+    assert.equal(Math.round(startPercentsForDisciplineSplit(bike)!.z3), 4);
+    assert.equal(Math.round(endPercentsForDisciplineSplit(bike).z3), 15);
   });
 });

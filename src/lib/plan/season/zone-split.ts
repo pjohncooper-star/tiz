@@ -119,7 +119,10 @@ export function resolveZonePercentsForWeek(input: {
   }
 
   const exitPercents = targetPercentsForPhase(phase, input.discipline, input.catalog);
-  const explicitStart = startPercentsForDisciplineSplit(phase.zoneSplits[input.discipline]);
+  const explicitStart = startPercentsForDisciplineSplit(
+    phase.zoneSplits[input.discipline],
+    input.catalog
+  );
   const priorPhase = sorted
     .filter((item) => item.endWeekIndex < phase.startWeekIndex)
     .at(-1);

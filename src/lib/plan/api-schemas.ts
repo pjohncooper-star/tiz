@@ -255,8 +255,11 @@ const zoneSplitPercentsSchema = z.object({
 
 const disciplineZoneSplitSchema = z.object({
   mode: z.enum(["preset", "custom"]),
+  customStyle: z.enum(["manual", "focus_ramp"]).optional(),
   focus: phaseFocusSchema.optional(),
   focusId: z.string().optional(),
+  startFocusId: z.string().optional(),
+  endFocusId: z.string().optional(),
   percents: zoneSplitPercentsSchema.optional(),
   startPercents: zoneSplitPercentsSchema.optional(),
   endPercents: zoneSplitPercentsSchema.optional(),
