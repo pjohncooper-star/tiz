@@ -7,6 +7,7 @@ import {
   projectedEcosFromPlannedTiZ,
   tizMinutesForDiscipline,
 } from "@/lib/eco/tiz-to-eco";
+import type { PlannedEcoThresholds } from "@/lib/eco/structured-eco";
 import { ecoDisciplineFactor, weightedEcoFromZoneMinutes } from "@/lib/eco/scores";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 
@@ -22,6 +23,8 @@ export type PlannedSessionForEco = {
   sessionIndex?: number | null;
   /** True when a linked completed activity already contributes scored ECO. */
   linkedActivityHasEcos?: boolean;
+  /** Athlete thresholds at scheduledDate for absolute target scoring. */
+  thresholds?: PlannedEcoThresholds | null;
 };
 
 export type SeasonWeekForEco = {
@@ -105,6 +108,7 @@ export function plannedEcoImpulses(options: {
       durationHintMinutes: session.durationMinutes,
       zoneAllocationMissing: session.zoneAllocationMissing,
       transitionBump,
+      thresholds: session.thresholds,
     });
     if (!projected) continue;
 

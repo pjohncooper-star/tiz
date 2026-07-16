@@ -14,6 +14,7 @@ import {
   seasonWeekEcoImpulses,
   type PlannedSessionForEco,
 } from "@/lib/eco/hybrid-impulses";
+import type { PlannedEcoThresholds } from "@/lib/eco/structured-eco";
 import {
   hoursFromTiZOrDuration,
   plannedHoursImpulses,
@@ -22,7 +23,9 @@ import {
 } from "@/lib/eco/hours-impulses";
 import { formatDateKey, nextDateKey } from "@/lib/dates";
 import { parseDisciplineZoneMinutes } from "@/lib/plan/season/simple-tiz";
+import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
+import type { Discipline } from "@prisma/client";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -142,6 +145,47 @@ async function loadHistoryHoursImpulses(athleteId: string): Promise<EcoImpulse[]
   return impulses;
 }
 
+async function loadThresholdsForPlannedEco(
+  athleteId: string,
+  discipline: Discipline,
+  at: Date,
+  cache: Map<string, PlannedEcoThresholds | null>
+): Promise<PlannedEcoThresholds | null> {
+  const dateKey = formatDateKey(at);
+  const cacheKey = `${discipline}|${dateKey}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey) ?? null;
+
+  const thresholds: PlannedEcoThresholds = {};
+
+  if (discipline === "BIKE") {
+    const power = await getThresholdProfileAtDate(athleteId, "BIKE", "POWER", at);
+    if (power?.thresholdValue && power.thresholdValue > 0) {
+      thresholds.ftpWatts = power.thresholdValue;
+    }
+  }
+
+  const hr = await getThresholdProfileAtDate(athleteId, discipline, "HEART_RATE", at);
+  if (hr?.thresholdValue && hr.thresholdValue > 0) {
+    thresholds.lthrBpm = hr.thresholdValue;
+  }
+
+  if (discipline === "RUN" || discipline === "SWIM") {
+    const pace = await getThresholdProfileAtDate(athleteId, discipline, "PACE", at);
+    if (pace?.thresholdValue && pace.thresholdValue > 0) {
+      thresholds.thresholdPaceSeconds = pace.thresholdValue;
+    }
+  }
+
+  const usable =
+    (thresholds.ftpWatts != null && thresholds.ftpWatts > 0) ||
+    (thresholds.lthrBpm != null && thresholds.lthrBpm > 0) ||
+    (thresholds.thresholdPaceSeconds != null && thresholds.thresholdPaceSeconds > 0)
+      ? thresholds
+      : null;
+  cache.set(cacheKey, usable);
+  return usable;
+}
+
 async function loadPlannedForEco(
   athleteId: string,
   fromDate: Date,
@@ -168,21 +212,39 @@ async function loadPlannedForEco(
     orderBy: [{ scheduledDate: "asc" }, { sessionIndex: "asc" }],
   });
 
-  return rows.map((row) => ({
-    id: row.id,
-    scheduledDate: row.scheduledDate,
-    discipline: row.discipline,
-    targetZones: row.targetZones,
-    durationMinutes: row.estimatedDurationMinutes,
-    zoneAllocationMissing: row.zoneAllocationMissing,
-    structuredSteps: row.structuredWorkout?.steps,
-    multisportGroupId: row.multisportGroupId,
-    sessionIndex: row.sessionIndex,
-    linkedActivityHasEcos:
-      row.linkedActivity?.ecos != null &&
-      Number.isFinite(row.linkedActivity.ecos) &&
-      row.linkedActivity.ecos > 0,
-  }));
+  const thresholdCache = new Map<string, PlannedEcoThresholds | null>();
+  const sessions: PlannedSessionForEco[] = [];
+
+  for (const row of rows) {
+    const hasStructured = row.structuredWorkout?.steps != null;
+    const thresholds = hasStructured
+      ? await loadThresholdsForPlannedEco(
+          athleteId,
+          row.discipline,
+          row.scheduledDate,
+          thresholdCache
+        )
+      : null;
+
+    sessions.push({
+      id: row.id,
+      scheduledDate: row.scheduledDate,
+      discipline: row.discipline,
+      targetZones: row.targetZones,
+      durationMinutes: row.estimatedDurationMinutes,
+      zoneAllocationMissing: row.zoneAllocationMissing,
+      structuredSteps: row.structuredWorkout?.steps,
+      multisportGroupId: row.multisportGroupId,
+      sessionIndex: row.sessionIndex,
+      linkedActivityHasEcos:
+        row.linkedActivity?.ecos != null &&
+        Number.isFinite(row.linkedActivity.ecos) &&
+        row.linkedActivity.ecos > 0,
+      thresholds,
+    });
+  }
+
+  return sessions;
 }
 
 async function loadPlannedForHours(
