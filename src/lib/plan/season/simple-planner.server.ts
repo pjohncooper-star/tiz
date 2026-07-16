@@ -1,4 +1,4 @@
-import type { PhaseKind, PlanningMode, Prisma, type DeLoadStrategy } from "@prisma/client";
+import { Prisma, type DeLoadStrategy, type PhaseKind, type PlanningMode } from "@prisma/client";
 import { db } from "@/lib/db";
 import { calendarDateFromDb, formatDateKey } from "@/lib/dates";
 import {
