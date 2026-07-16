@@ -4,7 +4,6 @@ import { useEffect, useMemo } from "react";
 import { addWeeks, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { Button } from "@/components/ui";
 import { WorkoutPool } from "@/components/calendar/workout-pool";
-import { WorkoutGraphPanel } from "@/components/calendar/workout-graph-composer";
 import type { PoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
@@ -132,7 +131,10 @@ export function WorkoutPoolWizard({
           embedded
         />
       ) : (
-        <WorkoutGraphPanel composer={composer} disciplineSettings={disciplineSettings} />
+        <p className="text-sm text-zinc-500">
+          Build mode uses the step editor and graph beside the calendar. Drag components from the
+          library on the right onto the graph or step list.
+        </p>
       )}
     </div>
   );
