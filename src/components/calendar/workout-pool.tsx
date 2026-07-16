@@ -7,6 +7,7 @@ import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serializ
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import {
   computeUnscheduledChips,
+  hasUsableTypedSlotBudgets,
   type PoolDiscipline,
   type UnscheduledChip,
 } from "@/lib/plan/calendar/unscheduled-chips";
@@ -251,7 +252,7 @@ export function WorkoutPool({
 
   const showSkeleton = activeTab == null || activeTab === "skeleton";
   const showBuild = activeTab == null || activeTab === "build";
-  const usesLegacyBudget = weekTarget.slotBudgets == null;
+  const usesLegacyBudget = !hasUsableTypedSlotBudgets(weekTarget);
 
   const unscheduledEmptyMessage = usesLegacyBudget
     ? "No typed pool slots for this week. Save the season with recalculate to populate slot budgets."
