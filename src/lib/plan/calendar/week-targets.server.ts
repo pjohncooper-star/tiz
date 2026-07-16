@@ -7,6 +7,8 @@ import type { PlanningMode } from "@prisma/client";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializeSimpleSeasonPlan } from "@/lib/plan/season/simple-planner.server";
 import { resolvePlanningModeForWeek } from "@/lib/plan/season/planning-mode";
+import { weekIndexForDate } from "@/lib/plan/season/season-dates";
+import { parseDateKey } from "@/lib/dates";
 import {
   computeCalendarWeekPoolFields,
   needsSlotBudgetBackfill,
@@ -121,7 +123,22 @@ function phaseToCompute(phase: SerializedPhase): SimplePhaseCompute {
   };
 }
 
+function findSeasonWeek(
+  season: SerializedSeason,
+  requestedWeekStart: string
+): SerializedWeek | undefined {
+  const direct = season.weeks.find((week) => week.weekStartDate === requestedWeekStart);
+  if (direct) return direct;
+
+  const seasonStart = parseDateKey(season.startDate);
+  const weekIndex = weekIndexForDate(seasonStart, parseDateKey(requestedWeekStart));
+  if (weekIndex < 0 || weekIndex >= season.totalWeeks) return undefined;
+
+  return season.weeks.find((week) => week.weekIndex === weekIndex);
+}
+
 function buildWeekTarget(
+  requestedWeekStart: string,
   week: SerializedWeek & {
     longRideMinutes?: number;
     longRunMinutes?: number;
@@ -166,7 +183,7 @@ function buildWeekTarget(
   }
 
   return {
-    weekStart: week.weekStartDate,
+    weekStart: requestedWeekStart,
     weekIndex: week.weekIndex,
     isRestWeek: week.isRestWeek,
     totalHours: week.totalHours,
@@ -203,7 +220,6 @@ export async function getCalendarWeekTargets(
     return [];
   }
 
-  const weekByStart = new Map(season.weeks.map((week) => [week.weekStartDate, week]));
   const requested = new Set(weekStarts);
 
   const targets: CalendarWeekTarget[] = [];
@@ -216,7 +232,7 @@ export async function getCalendarWeekTargets(
   }));
 
   for (const weekStart of requested) {
-    const week = weekByStart.get(weekStart);
+    const week = findSeasonWeek(season, weekStart);
     if (!week) continue;
     const phase = phaseForWeekIndex(season.phases, week.weekIndex);
     const planningMode = resolvePlanningModeForWeek(
@@ -224,7 +240,7 @@ export async function getCalendarWeekTargets(
       phasePlanningSpans,
       defaultPlanningMode
     );
-    targets.push(buildWeekTarget(week, phase, planningMode, season));
+    targets.push(buildWeekTarget(weekStart, week, phase, planningMode, season));
   }
 
   targets.sort((a, b) => a.weekStart.localeCompare(b.weekStart));

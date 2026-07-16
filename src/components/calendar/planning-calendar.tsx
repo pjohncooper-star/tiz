@@ -241,6 +241,44 @@ export function PlanningCalendar({
     [data.weekStarts]
   );
 
+  const ensurePoolWeekLoaded = useCallback(
+    async (weekStart: string) => {
+      const hasWeek = data.weekStarts.includes(weekStart);
+      const hasTarget = data.weekTargets.some((target) => target.weekStart === weekStart);
+      if (hasWeek && hasTarget) return;
+
+      const to = format(
+        endOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS),
+        "yyyy-MM-dd"
+      );
+      try {
+        const res = await fetch(
+          `/api/plan/calendar/range?from=${encodeURIComponent(weekStart)}&to=${encodeURIComponent(to)}`
+        );
+        if (res.ok) {
+          const next: CalendarRangeData = await res.json();
+          setData((prev) => mergeRangeData(prev, next));
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [data.weekStarts, data.weekTargets]
+  );
+
+  useEffect(() => {
+    if (!useWizardPool) return;
+    void ensurePoolWeekLoaded(poolWeekStart);
+  }, [ensurePoolWeekLoaded, poolWeekStart, useWizardPool]);
+
+  const handlePoolWeekChange = useCallback(
+    (weekStart: string) => {
+      setPoolWeekStart(weekStart);
+      void ensurePoolWeekLoaded(weekStart);
+    },
+    [ensurePoolWeekLoaded]
+  );
+
   const sessionsForWeek = useCallback(
     (weekStart: string) => {
       const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
@@ -1045,7 +1083,7 @@ export function PlanningCalendar({
             <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
               <WorkoutPoolWizard
                 poolWeekStart={poolWeekStart}
-                onPoolWeekChange={setPoolWeekStart}
+                onPoolWeekChange={handlePoolWeekChange}
                 weekTarget={poolWeekTarget}
                 sessions={poolWeekSessions}
                 activities={poolWeekActivities}

@@ -13,6 +13,7 @@ import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
+import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import {
   calendarDateFromDb,
   endDateKey,
@@ -102,6 +103,17 @@ export default async function CalendarPage({
 
   const futureFloor = endOfWeek(addWeeks(currentWeekStart, 8), WEEK_OPTS);
   if (rangeEnd < futureFloor) rangeEnd = futureFloor;
+
+  const activeSeason = await getSimplePlannerSeason(athleteId);
+  if (activeSeason) {
+    const seasonStart = startOfWeek(
+      calendarDateFromDb(activeSeason.startDate),
+      WEEK_OPTS
+    );
+    const seasonEnd = endOfWeek(calendarDateFromDb(activeSeason.endDate), WEEK_OPTS);
+    if (seasonStart < rangeStart) rangeStart = seasonStart;
+    if (seasonEnd > rangeEnd) rangeEnd = seasonEnd;
+  }
 
   const earliestAllowed = addWeeks(currentWeekStart, -MAX_PAST_WEEKS);
   if (rangeStart < earliestAllowed) rangeStart = earliestAllowed;
