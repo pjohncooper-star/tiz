@@ -166,4 +166,49 @@ describe("simple-week-compute", () => {
       assert.ok((week.longSessionZoneMinutes[zoneKey("BIKE", 2)] ?? 0) > 0);
     }
   });
+
+  it("keeps main bag bike hours when long ride is scheduled", () => {
+    const phases = [basePhase()];
+    const phasesWithBlocks = buildPhaseBlocks({
+      mesocycleLengthWeeks: 4,
+      phases: [
+        {
+          id: "phase-1",
+          name: "Base",
+          startWeekIndex: 0,
+          endWeekIndex: 3,
+        },
+      ],
+    });
+
+    const weeks = enrichSimpleSeasonWeeks({
+      weeks: [
+        {
+          weekIndex: 0,
+          isRestWeek: false,
+          swimHours: 2,
+          bikeHours: 5,
+          runHours: 3,
+          totalHours: 10,
+          swimDistanceMeters: null,
+          runDistanceMeters: null,
+        },
+      ],
+      phases,
+      zonePhaseSpans: [],
+      phasesWithBlocks,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      deLoadStrategy: "VOLUME_ONLY",
+      seasonSplit: { swim: 33.33, bike: 33.34, run: 33.33 },
+      longAnchors: { rideStart: 60, ridePeak: 180, runStart: 30, runPeak: 90 },
+      phaseKindsByWeek: ["BASE"],
+      taperWeekIndices: [],
+      deLoadEveryNWeeks: 4,
+    });
+
+    const week = weeks[0]!;
+    assert.equal(week.planningMode, "SEPARATE_LONGS");
+    assert.equal(week.bikeHours, 5);
+    assert.ok(week.longRideMinutes > 0);
+  });
 });

@@ -383,6 +383,13 @@ function PhaseDetailEditor({
         />
       </fieldset>
 
+      <PhaseVolumeEditor
+        phase={phase}
+        effectiveMode={effectiveMode}
+        showLongSettings={showLongSettings}
+        onChange={onChange}
+      />
+
       {showLongSettings ? (
         <fieldset className="mt-4 space-y-3">
           <legend className="text-sm font-medium">Long sessions</legend>
@@ -455,6 +462,124 @@ function PhaseDetailEditor({
         <Button type="button" variant="secondary" onClick={onDelete}>
           Delete phase
         </Button>
+      </div>
+    </div>
+  );
+}
+
+function PhaseVolumeEditor({
+  phase,
+  effectiveMode,
+  showLongSettings,
+  onChange,
+}: {
+  phase: SimplePhase;
+  effectiveMode: PlanningMode;
+  showLongSettings: boolean;
+  onChange: (phase: SimplePhase) => void;
+}) {
+  const disciplineLabels: Record<"swim" | "bike" | "run", string> = {
+    swim: "Swim",
+    bike: showLongSettings ? "Main bike" : "Bike",
+    run: showLongSettings ? "Main run" : "Run",
+  };
+
+  return (
+    <fieldset className="mt-4 space-y-3">
+      <legend className="text-sm font-medium">Phase volume</legend>
+      <p className="text-xs text-zinc-500">
+        Start and end hours for this phase. Blank start chains from the prior phase exit. Linear
+        ramp between weeks.
+      </p>
+      {effectiveMode === "OVERALL" ? (
+        <VolumeHoursRow
+          label="Total hours"
+          startHours={phase.volumeStartHours}
+          endHours={phase.volumeEndHours}
+          onStartChange={(value) => onChange({ ...phase, volumeStartHours: value })}
+          onEndChange={(value) => onChange({ ...phase, volumeEndHours: value })}
+        />
+      ) : (
+        (["swim", "bike", "run"] as const).map((discipline) => (
+          <VolumeHoursRow
+            key={discipline}
+            label={`${disciplineLabels[discipline]} hours`}
+            startHours={
+              discipline === "swim"
+                ? phase.swimStartHours
+                : discipline === "bike"
+                  ? phase.bikeStartHours
+                  : phase.runStartHours
+            }
+            endHours={
+              discipline === "swim"
+                ? phase.swimEndHours
+                : discipline === "bike"
+                  ? phase.bikeEndHours
+                  : phase.runEndHours
+            }
+            onStartChange={(value) => {
+              if (discipline === "swim") onChange({ ...phase, swimStartHours: value });
+              else if (discipline === "bike") onChange({ ...phase, bikeStartHours: value });
+              else onChange({ ...phase, runStartHours: value });
+            }}
+            onEndChange={(value) => {
+              if (discipline === "swim") onChange({ ...phase, swimEndHours: value });
+              else if (discipline === "bike") onChange({ ...phase, bikeEndHours: value });
+              else onChange({ ...phase, runEndHours: value });
+            }}
+          />
+        ))
+      )}
+    </fieldset>
+  );
+}
+
+function VolumeHoursRow({
+  label,
+  startHours,
+  endHours,
+  onStartChange,
+  onEndChange,
+}: {
+  label: string;
+  startHours?: number | null;
+  endHours?: number | null;
+  onStartChange: (value: number | null) => void;
+  onEndChange: (value: number | null) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Start (h)</Label>
+          <Input
+            type="number"
+            min={0}
+            step={0.1}
+            className="mt-1"
+            value={startHours ?? ""}
+            placeholder="Chain from prior phase"
+            onChange={(event) =>
+              onStartChange(event.target.value ? Number(event.target.value) : null)
+            }
+          />
+        </div>
+        <div>
+          <Label>End (h)</Label>
+          <Input
+            type="number"
+            min={0}
+            step={0.1}
+            className="mt-1"
+            value={endHours ?? ""}
+            placeholder="Phase default"
+            onChange={(event) =>
+              onEndChange(event.target.value ? Number(event.target.value) : null)
+            }
+          />
+        </div>
       </div>
     </div>
   );

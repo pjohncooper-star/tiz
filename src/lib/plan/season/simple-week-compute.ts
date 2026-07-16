@@ -2,6 +2,7 @@ import type {
   LongOffWeekPolicy,
   PhaseKind,
   PlanningMode,
+  VolumeMesocycleMode,
 } from "@prisma/client";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 import {
@@ -70,6 +71,19 @@ export type SimplePhaseCompute = PhasePlanningSpan & {
   longRunOffWeekEndurancePercent: number;
   zoneSplits?: PhaseZoneSplits | null;
   rampEnabled: { swim: boolean; bike: boolean; run: boolean };
+  volumeMesocycleMode?: VolumeMesocycleMode | null;
+  volumeStartHours?: number | null;
+  volumeEndHours?: number | null;
+  volumeRampPercent?: number | null;
+  swimStartHours?: number | null;
+  swimEndHours?: number | null;
+  swimRampPercent?: number | null;
+  bikeStartHours?: number | null;
+  bikeEndHours?: number | null;
+  bikeRampPercent?: number | null;
+  runStartHours?: number | null;
+  runEndHours?: number | null;
+  runRampPercent?: number | null;
   startWeekIndex: number;
   endWeekIndex: number;
 };
@@ -379,14 +393,6 @@ export function enrichSimpleSeasonWeeks(input: {
           endurancePercent: phase.longRunOffWeekEndurancePercent,
         });
       }
-
-      if (longRideMinutes > 0) {
-        bikeHours = Math.max(0, roundHours(bikeHours - longRideMinutes / 60));
-      }
-      if (longRunMinutes > 0) {
-        runHours = Math.max(0, roundHours(runHours - longRunMinutes / 60));
-      }
-      totalHours = roundHours(swimHours + bikeHours + runHours);
     }
 
     const zoneMinutes = computeZoneMinutesForWeekFromSplits({

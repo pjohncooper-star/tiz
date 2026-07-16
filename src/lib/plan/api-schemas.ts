@@ -344,6 +344,18 @@ export const simplePhaseSchema = z
     longRunOffWeekPolicy: longOffWeekPolicySchema.optional(),
     longRideOffWeekEndurancePercent: z.number().min(0).max(100).optional(),
     longRunOffWeekEndurancePercent: z.number().min(0).max(100).optional(),
+    volumeStartHours: z.number().nonnegative().nullable().optional(),
+    volumeEndHours: z.number().nonnegative().nullable().optional(),
+    volumeRampPercent: z.number().nonnegative().nullable().optional(),
+    swimStartHours: z.number().nonnegative().nullable().optional(),
+    swimEndHours: z.number().nonnegative().nullable().optional(),
+    swimRampPercent: z.number().nonnegative().nullable().optional(),
+    bikeStartHours: z.number().nonnegative().nullable().optional(),
+    bikeEndHours: z.number().nonnegative().nullable().optional(),
+    bikeRampPercent: z.number().nonnegative().nullable().optional(),
+    runStartHours: z.number().nonnegative().nullable().optional(),
+    runEndHours: z.number().nonnegative().nullable().optional(),
+    runRampPercent: z.number().nonnegative().nullable().optional(),
   })
   .refine(
     (phase) =>

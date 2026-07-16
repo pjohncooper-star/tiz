@@ -220,7 +220,7 @@ function applyDistanceRamp(
   }
 }
 
-function applyRestVolumeCuts(
+export function applyRestVolumeCuts(
   weeks: SimpleWeekVolume[],
   defaults: SimpleRampDefaults,
   restVolumePercent: number
@@ -266,7 +266,7 @@ function applyRestVolumeCuts(
   }
 }
 
-function syncDerivedDistanceOrHours(
+export function syncDerivedDistanceOrHours(
   weeks: SimpleWeekVolume[],
   defaults: SimpleRampDefaults
 ): void {

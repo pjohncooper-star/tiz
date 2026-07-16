@@ -64,6 +64,18 @@ export type SimplePhase = {
   longRunOffWeekPolicy?: LongOffWeekPolicy;
   longRideOffWeekEndurancePercent?: number;
   longRunOffWeekEndurancePercent?: number;
+  volumeStartHours?: number | null;
+  volumeEndHours?: number | null;
+  volumeRampPercent?: number | null;
+  swimStartHours?: number | null;
+  swimEndHours?: number | null;
+  swimRampPercent?: number | null;
+  bikeStartHours?: number | null;
+  bikeEndHours?: number | null;
+  bikeRampPercent?: number | null;
+  runStartHours?: number | null;
+  runEndHours?: number | null;
+  runRampPercent?: number | null;
 };
 
 export type SimpleWeek = {

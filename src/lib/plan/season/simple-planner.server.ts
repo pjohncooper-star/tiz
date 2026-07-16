@@ -30,6 +30,10 @@ import {
   type SimpleRampDefaults,
   type SimpleWeekVolume,
 } from "./simple-ramp";
+import {
+  recalculatePhaseAwareVolumes,
+  type PhaseVolumeSpan,
+} from "./simple-phase-volume";
 import { fitSimplePhasesToTotalWeeks } from "./phase-span-utils";
 import {
   parsePhaseKindZoneDefaults,
@@ -107,6 +111,19 @@ export type SimplePhaseWrite = {
   longRunOffWeekPolicy?: SimplePhaseCompute["longRunOffWeekPolicy"];
   longRideOffWeekEndurancePercent?: number;
   longRunOffWeekEndurancePercent?: number;
+  volumeStartHours?: number | null;
+  volumeEndHours?: number | null;
+  volumeRampPercent?: number | null;
+  swimStartHours?: number | null;
+  swimEndHours?: number | null;
+  swimRampPercent?: number | null;
+  bikeStartHours?: number | null;
+  bikeEndHours?: number | null;
+  bikeRampPercent?: number | null;
+  runStartHours?: number | null;
+  runEndHours?: number | null;
+  runRampPercent?: number | null;
+  volumeMesocycleMode?: import("@prisma/client").VolumeMesocycleMode | null;
 };
 
 export type SimpleWeekWrite = {
@@ -181,6 +198,19 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         longRunOffWeekPolicy: write.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT",
         longRideOffWeekEndurancePercent: write.longRideOffWeekEndurancePercent ?? 60,
         longRunOffWeekEndurancePercent: write.longRunOffWeekEndurancePercent ?? 60,
+        volumeStartHours: write.volumeStartHours ?? null,
+        volumeEndHours: write.volumeEndHours ?? null,
+        volumeRampPercent: write.volumeRampPercent ?? null,
+        swimStartHours: write.swimStartHours ?? null,
+        swimEndHours: write.swimEndHours ?? null,
+        swimRampPercent: write.swimRampPercent ?? null,
+        bikeStartHours: write.bikeStartHours ?? null,
+        bikeEndHours: write.bikeEndHours ?? null,
+        bikeRampPercent: write.bikeRampPercent ?? null,
+        runStartHours: write.runStartHours ?? null,
+        runEndHours: write.runEndHours ?? null,
+        runRampPercent: write.runRampPercent ?? null,
+        volumeMesocycleMode: write.volumeMesocycleMode ?? null,
         coachNotes: serializePhaseCoachNotes({
           goal: phase.goal ?? null,
           strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
@@ -225,6 +255,19 @@ function phaseComputeFromWrites(
         kindDefaults,
       }),
       rampEnabled: phase.rampEnabled,
+      volumeMesocycleMode: phase.volumeMesocycleMode,
+      volumeStartHours: phase.volumeStartHours,
+      volumeEndHours: phase.volumeEndHours,
+      volumeRampPercent: phase.volumeRampPercent,
+      swimStartHours: phase.swimStartHours,
+      swimEndHours: phase.swimEndHours,
+      swimRampPercent: phase.swimRampPercent,
+      bikeStartHours: phase.bikeStartHours,
+      bikeEndHours: phase.bikeEndHours,
+      bikeRampPercent: phase.bikeRampPercent,
+      runStartHours: phase.runStartHours,
+      runEndHours: phase.runEndHours,
+      runRampPercent: phase.runRampPercent,
     }));
 }
 
@@ -272,6 +315,19 @@ function phaseComputeFromDb(
           bike: phase.rampBikeEnabled,
           run: phase.rampRunEnabled,
         },
+        volumeMesocycleMode: phase.volumeMesocycleMode,
+        volumeStartHours: phase.volumeStartHours,
+        volumeEndHours: phase.volumeEndHours,
+        volumeRampPercent: phase.volumeRampPercent,
+        swimStartHours: phase.swimStartHours,
+        swimEndHours: phase.swimEndHours,
+        swimRampPercent: phase.swimRampPercent,
+        bikeStartHours: phase.bikeStartHours,
+        bikeEndHours: phase.bikeEndHours,
+        bikeRampPercent: phase.bikeRampPercent,
+        runStartHours: phase.runStartHours,
+        runEndHours: phase.runEndHours,
+        runRampPercent: phase.runRampPercent,
       };
     });
 }
@@ -446,6 +502,32 @@ function mergeWeekWrites(
   return weeks;
 }
 
+function phaseVolumeSpansFromCompute(
+  phases: SimplePhaseCompute[]
+): PhaseVolumeSpan[] {
+  return phases.map((phase) => ({
+    startWeekIndex: phase.startWeekIndex,
+    endWeekIndex: phase.endWeekIndex,
+    planningMode: phase.planningMode,
+    phaseKind: phase.phaseKind,
+    id: phase.id,
+    rampEnabled: phase.rampEnabled,
+    volumeMesocycleMode: phase.volumeMesocycleMode,
+    volumeStartHours: phase.volumeStartHours,
+    volumeEndHours: phase.volumeEndHours,
+    volumeRampPercent: phase.volumeRampPercent,
+    swimStartHours: phase.swimStartHours,
+    swimEndHours: phase.swimEndHours,
+    swimRampPercent: phase.swimRampPercent,
+    bikeStartHours: phase.bikeStartHours,
+    bikeEndHours: phase.bikeEndHours,
+    bikeRampPercent: phase.bikeRampPercent,
+    runStartHours: phase.runStartHours,
+    runEndHours: phase.runEndHours,
+    runRampPercent: phase.runRampPercent,
+  }));
+}
+
 function recalculateWeeks(
   weeks: Array<SimpleWeekVolume & { zoneMinutes: ZoneMinutes }>,
   zonePhaseSpans: ZonePhaseSpan[],
@@ -461,14 +543,35 @@ function recalculateWeeks(
     deLoadEveryNWeeks: number;
   },
   totalWeeks: number,
-  catalog?: ZoneFocusCatalog
+  catalog?: ZoneFocusCatalog,
+  seasonAnchors?: { startHours: number; peakHours: number }
 ): ComputedSimpleWeek[] {
-  const volumeWeeks = recalculateSimpleVolumes(
+  const rampPhaseSpans = zonePhaseSpans.map((span) => ({
+    startWeekIndex: span.startWeekIndex,
+    endWeekIndex: span.endWeekIndex,
+    rampEnabled: span.rampEnabled,
+  }));
+  const volumeWeeks = recalculatePhaseAwareVolumes({
     weeks,
-    zonePhaseSpans,
-    rampDefaults,
-    restVolumePercent
-  );
+    phases: phaseVolumeSpansFromCompute(phaseCompute),
+    rampPhaseSpans,
+    defaults: rampDefaults,
+    restVolumePercent,
+    seasonDefaultPlanningMode: seasonContext.defaultPlanningMode,
+    seasonAnchors: seasonAnchors ?? {
+      startHours: roundHours(
+        rampDefaults.swim.startHours +
+          rampDefaults.bike.startHours +
+          rampDefaults.run.startHours
+      ),
+      peakHours: roundHours(
+        rampDefaults.swim.peakHours +
+          rampDefaults.bike.peakHours +
+          rampDefaults.run.peakHours
+      ),
+    },
+    seasonSplit: seasonContext.seasonSplit,
+  });
 
   return enrichSimpleSeasonWeeks({
     weeks: volumeWeeks,
@@ -611,7 +714,9 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       },
       deLoadEveryNWeeks: 4,
     },
-    bounds.totalWeeks
+    bounds.totalWeeks,
+    undefined,
+    { startHours: rampFields.startHours, peakHours: rampFields.peakHours }
   );
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
@@ -812,7 +917,8 @@ export async function updateSimpleSeasonPlan(
       restVolumePercent,
       seasonContext,
       bounds.totalWeeks,
-      catalog
+      catalog,
+      { startHours: existing.startHours, peakHours: existing.peakHours }
     );
   }
 
@@ -1006,6 +1112,19 @@ export function serializeSimpleSeasonPlan(
         longRunOffWeekPolicy: phase.longRunOffWeekPolicy,
         longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
         longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
+        volumeMesocycleMode: phase.volumeMesocycleMode,
+        volumeStartHours: phase.volumeStartHours,
+        volumeEndHours: phase.volumeEndHours,
+        volumeRampPercent: phase.volumeRampPercent,
+        swimStartHours: phase.swimStartHours,
+        swimEndHours: phase.swimEndHours,
+        swimRampPercent: phase.swimRampPercent,
+        bikeStartHours: phase.bikeStartHours,
+        bikeEndHours: phase.bikeEndHours,
+        bikeRampPercent: phase.bikeRampPercent,
+        runStartHours: phase.runStartHours,
+        runEndHours: phase.runEndHours,
+        runRampPercent: phase.runRampPercent,
       };
     });
 
