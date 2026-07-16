@@ -120,6 +120,7 @@ function revertSection(
         totalWeeks: baseline.totalWeeks,
         weeks: baseline.weeks,
         phases: baseline.phases,
+        defaultPlanningMode: baseline.defaultPlanningMode,
       };
     case "races":
       return {
@@ -386,6 +387,7 @@ export function SimplePlannerView({
           startDate: season.startDate,
           endDate: season.endDate,
           defaultPlanningMode: season.defaultPlanningMode,
+          recalculate: true,
           ...extra,
         };
       case "races":

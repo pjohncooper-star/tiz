@@ -79,6 +79,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         : undefined,
       deLoadVolumePercent: data.deLoadVolumePercent,
       phaseKindZoneDefaults: data.phaseKindZoneDefaults,
+      defaultPlanningMode: data.defaultPlanningMode,
       phases: data.phases,
       weeks: data.weeks,
       recalculate: data.recalculate,
