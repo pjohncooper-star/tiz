@@ -12,6 +12,7 @@ import {
   nullableMetric,
   planDisciplineSchema,
   planSessionMetricsSchema,
+  poolSlotKindSchema,
   sessionRoleSchema,
   goalEventDisciplineSchema,
 } from "@/lib/plan/api-schemas";
