@@ -251,6 +251,11 @@ export function WorkoutPool({
 
   const showSkeleton = activeTab == null || activeTab === "skeleton";
   const showBuild = activeTab == null || activeTab === "build";
+  const usesLegacyBudget = weekTarget.slotBudgets == null;
+
+  const unscheduledEmptyMessage = usesLegacyBudget
+    ? "No typed pool slots for this week. Save the season with recalculate to populate slot budgets."
+    : "All budgeted sessions are on the calendar.";
 
   const inner = (
     <div className="space-y-4">
@@ -276,7 +281,7 @@ export function WorkoutPool({
               ))}
             </div>
           ) : (
-            <p className="text-[11px] text-zinc-500">All budgeted sessions are on the calendar.</p>
+            <p className="text-[11px] text-zinc-500">{unscheduledEmptyMessage}</p>
           )}
         </PoolSection>
       ) : null}

@@ -122,6 +122,13 @@ export const planDisciplineSchema = z.enum(DISCIPLINES);
 
 export const sessionRoleSchema = z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]);
 
+export const poolSlotKindSchema = z.enum([
+  "ENDURANCE",
+  "INTENSITY",
+  "LONG",
+  "SUBSTITUTE_ENDURANCE",
+]);
+
 export function nullableMetric(value: number | null | undefined): number | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;

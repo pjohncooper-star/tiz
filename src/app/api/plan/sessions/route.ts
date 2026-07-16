@@ -30,6 +30,7 @@ const createSchema = z
     estimatedDurationMinutes: z.number().int().positive().nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).optional(),
     sessionRole: sessionRoleSchema.optional(),
+    poolSlotKind: poolSlotKindSchema.optional(),
   })
   .merge(planSessionMetricsSchema)
   .refine((d) => d.discipline != null || (d.disciplines?.length ?? 0) > 0, {
@@ -69,6 +70,7 @@ export async function POST(request: Request) {
     source,
     estimatedDurationMinutes,
     sessionRole: sessionRoleInput,
+    poolSlotKind,
   } = parsed.data;
 
   const scheduled = parseDateKey(scheduledDate);
@@ -125,6 +127,7 @@ export async function POST(request: Request) {
       targetZones: zonesJson,
       zoneAllocationMissing,
       sessionRole,
+      poolSlotKind: poolSlotKind ?? null,
       distanceMeters: nullableMetric(distanceMeters) ?? null,
       targetSpeedMps: resolvedDiscipline === "BIKE" ? nullableMetric(targetSpeedMps) ?? null : null,
       targetPaceSeconds:

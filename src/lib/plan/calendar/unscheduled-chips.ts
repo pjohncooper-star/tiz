@@ -25,6 +25,34 @@ const SLOT_KIND_LABEL: Record<PoolSlotKind, string> = {
   SUBSTITUTE_ENDURANCE: "Endurance",
 };
 
+export function formatChipDurationMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+export function formatUnscheduledChipLabel(
+  discipline: PoolDiscipline,
+  slotKind: PoolSlotKind,
+  targetDurationMinutes?: number
+): string {
+  const baseLabel = DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline;
+  const kindLabel = SLOT_KIND_LABEL[slotKind];
+  const parts = [baseLabel, kindLabel];
+  if (slotKind === "SUBSTITUTE_ENDURANCE") {
+    parts[1] = "Endurance (sub)";
+  }
+  if (
+    targetDurationMinutes != null &&
+    targetDurationMinutes > 0 &&
+    (slotKind === "LONG" || slotKind === "SUBSTITUTE_ENDURANCE")
+  ) {
+    parts.push(formatChipDurationMinutes(targetDurationMinutes));
+  }
+  return parts.join(" · ");
+}
+
 /** Count scheduled training sessions per discipline and slot kind (races excluded). */
 export function countScheduledSlotsByDiscipline(
   sessions: CalendarPlannedSession[]
@@ -49,9 +77,13 @@ export function countScheduledSlotsByDiscipline(
     if (!row) continue;
 
     let kind: PoolSlotKind = "ENDURANCE";
-    if (session.sessionRole === "INTENSITY") kind = "INTENSITY";
-    else if (session.sessionRole === "LONG") kind = "LONG";
-    else if (session.sessionRole === "EASY" || session.sessionRole === "MODERATE") {
+    if (session.poolSlotKind) {
+      kind = session.poolSlotKind;
+    } else if (session.sessionRole === "INTENSITY") {
+      kind = "INTENSITY";
+    } else if (session.sessionRole === "LONG") {
+      kind = "LONG";
+    } else if (session.sessionRole === "EASY" || session.sessionRole === "MODERATE") {
       kind = "ENDURANCE";
     }
 
@@ -105,14 +137,17 @@ function emitChips(
   count: number,
   targetDurationMinutes?: number
 ) {
-  const baseLabel = DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline;
-  const kindLabel = SLOT_KIND_LABEL[slotKind];
+  const label = formatUnscheduledChipLabel(
+    discipline,
+    slotKind,
+    targetDurationMinutes
+  );
   for (let i = 0; i < count; i++) {
     chips.push({
       id: `unscheduled-${weekStart}-${discipline}-${slotKind}-${i}`,
       discipline,
       slotKind,
-      label: `${baseLabel} · ${kindLabel}`,
+      label,
       ...(targetDurationMinutes != null && targetDurationMinutes > 0
         ? { targetDurationMinutes }
         : {}),

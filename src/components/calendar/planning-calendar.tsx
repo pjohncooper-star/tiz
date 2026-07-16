@@ -632,7 +632,11 @@ export function PlanningCalendar({
     return res.ok;
   }
 
-  async function createSessionWithWorkout(dateKey: string, workout: GeneratedWorkout) {
+  async function createSessionWithWorkout(
+    dateKey: string,
+    workout: GeneratedWorkout,
+    chip: UnscheduledChip
+  ) {
     const res = await fetch(`/api/plan/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -640,6 +644,8 @@ export function PlanningCalendar({
         scheduledDate: dateKey,
         discipline: workout.discipline,
         title: workout.label,
+        sessionRole: sessionRoleForChip(chip),
+        poolSlotKind: chip.slotKind,
       }),
     });
     if (!res.ok) return false;
@@ -651,12 +657,13 @@ export function PlanningCalendar({
 
   async function placeUnscheduledAttachment(
     dateKey: string,
-    attachment: UnscheduledAttachment
+    attachment: UnscheduledAttachment,
+    chip: UnscheduledChip
   ): Promise<boolean> {
     if (attachment.kind === "library") {
-      return createSessionWithTemplate(dateKey, attachment.template);
+      return createSessionWithTemplate(dateKey, attachment.template, chip);
     }
-    return createSessionWithWorkout(dateKey, attachment.workout);
+    return createSessionWithWorkout(dateKey, attachment.workout, chip);
   }
 
   async function handleUnscheduledAttachmentCombo(
@@ -671,7 +678,7 @@ export function PlanningCalendar({
 
     if (selectedDateKey) {
       if (!poolWeekAllowsDate(selectedDateKey)) return;
-      const ok = await placeUnscheduledAttachment(selectedDateKey, attachment);
+      const ok = await placeUnscheduledAttachment(selectedDateKey, attachment, chip);
       if (ok) {
         clearArmedUnscheduled(chip.id);
         await handleRefresh();
@@ -690,7 +697,7 @@ export function PlanningCalendar({
     if (overData?.type !== "day") return;
     const dateKey = overData?.dateKey as string | undefined;
     if (!poolWeekAllowsDate(dateKey)) return;
-    const ok = await placeUnscheduledAttachment(dateKey!, attachment);
+    const ok = await placeUnscheduledAttachment(dateKey!, attachment, chip);
     if (ok) {
       clearArmedUnscheduled(chip.id);
       await handleRefresh();
@@ -734,6 +741,7 @@ export function PlanningCalendar({
         discipline: chip.discipline,
         title: unscheduledSessionTitle(chip.discipline),
         sessionRole,
+        poolSlotKind: chip.slotKind,
         ...(chip.targetDurationMinutes != null && chip.targetDurationMinutes > 0
           ? { estimatedDurationMinutes: chip.targetDurationMinutes }
           : {}),
@@ -777,7 +785,11 @@ export function PlanningCalendar({
     return true;
   }
 
-  async function createSessionWithTemplate(dateKey: string, template: PoolLibraryTemplate) {
+  async function createSessionWithTemplate(
+    dateKey: string,
+    template: PoolLibraryTemplate,
+    chip?: UnscheduledChip
+  ) {
     const res = await fetch(`/api/plan/sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -785,6 +797,15 @@ export function PlanningCalendar({
         scheduledDate: dateKey,
         discipline: template.discipline,
         title: template.name,
+        ...(chip
+          ? {
+              sessionRole: sessionRoleForChip(chip),
+              poolSlotKind: chip.slotKind,
+              ...(chip.targetDurationMinutes != null && chip.targetDurationMinutes > 0
+                ? { estimatedDurationMinutes: chip.targetDurationMinutes }
+                : {}),
+            }
+          : {}),
       }),
     });
     if (!res.ok) return false;
