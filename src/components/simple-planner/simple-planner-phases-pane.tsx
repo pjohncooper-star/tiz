@@ -445,8 +445,8 @@ function PhaseDetailEditor({
         <fieldset className="mt-4 space-y-3">
           <legend className="text-sm font-medium">Long sessions</legend>
           <p className="text-xs text-zinc-500">
-            Long bike/run ramps are excluded from main volume. Long slots are extra beyond session
-            counts.
+            Sessions per week includes the long on long weeks; off-week policy replaces or drops that
+            seat. Long bike/run volume ramps stay outside main hours.
           </p>
           <LongDisciplineEditor
             label="Long ride"
