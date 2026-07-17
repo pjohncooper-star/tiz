@@ -95,7 +95,8 @@ describe("calendar week slot budget backfill", () => {
       },
     });
 
-    assert.equal(fields.slotBudgets.BIKE.endurance, 2);
+    // sessions=4 includes the long seat → mainSessions=3 → intensity 2 + endurance 1 + long 1
+    assert.equal(fields.slotBudgets.BIKE.endurance, 1);
     assert.equal(fields.slotBudgets.BIKE.intensity, 2);
     assert.equal(fields.slotBudgets.BIKE.long, 1);
     assert.equal(fields.slotBudgets.RUN.long, 0);

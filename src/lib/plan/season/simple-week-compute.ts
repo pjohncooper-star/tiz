@@ -360,17 +360,26 @@ function buildSlotBudgets(input: {
     },
   } as const;
 
+  const modesWithLongSeat =
+    input.mode === "SEPARATE_LONGS" || input.mode === "SEPARATE_LONG_TIZ";
+
   for (const discipline of TRI) {
     const { sessions, intense } = map[discipline];
-    const intenseCapped = Math.min(intense, sessions);
+    // Modes 3–4: sessions includes the long seat for bike/run; swim has no long.
+    const mainSessions =
+      modesWithLongSeat && discipline !== "SWIM"
+        ? Math.max(0, sessions - 1)
+        : sessions;
+    const intenseCapped = Math.min(intense, mainSessions);
     budgets[discipline].intensity = intenseCapped;
-    budgets[discipline].endurance = Math.max(0, sessions - intenseCapped);
+    budgets[discipline].endurance = Math.max(0, mainSessions - intenseCapped);
   }
 
-  if (!input.mode || input.mode === "OVERALL" || input.mode === "BY_DISCIPLINE") {
+  if (!modesWithLongSeat) {
     return budgets;
   }
 
+  // Off-week policies fill the reserved long seat (replace), not add on top.
   if (input.longRideFull) {
     budgets.BIKE.long = 1;
   } else if (input.longRideResult.kind === "extra_intensity") {

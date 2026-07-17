@@ -727,7 +727,7 @@ export function SimplePlannerView({
               ))}
             </select>
             <p className="mt-1 text-xs text-zinc-500">
-              Phases can override this per block. Modes 3–4 add long slots on top of session counts.
+              Phases can override this per block. Modes 3–4 include the long in Sessions per week.
             </p>
           </div>
         </div>
