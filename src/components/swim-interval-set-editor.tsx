@@ -25,6 +25,7 @@ type SwimIntervalSetEditorProps = {
   onChange: (next: SwimIntervalSet) => void;
   onRemove: () => void;
   canRemove: boolean;
+  dense?: boolean;
 };
 
 function RestTimeInput({
@@ -62,6 +63,7 @@ export function SwimIntervalSetEditor({
   onChange,
   onRemove,
   canRemove,
+  dense = false,
 }: SwimIntervalSetEditorProps) {
   const swimPool = poolSizeForSwimStep(poolSize);
   const distanceLabel = swimPool === "SCY" ? "Distance (yd)" : "Distance (m)";
@@ -74,9 +76,17 @@ export function SwimIntervalSetEditor({
   const label = formatSwimIntervalLabel(set, poolSize, displayUnit);
 
   return (
-    <div className="space-y-3 rounded-md border border-cyan-200 bg-cyan-50/50 p-3 dark:border-cyan-900 dark:bg-cyan-950/20">
+    <div
+      className={`rounded-md border border-cyan-200 bg-cyan-50/50 dark:border-cyan-900 dark:bg-cyan-950/20 ${
+        dense ? "space-y-1.5 p-2" : "space-y-3 p-3"
+      }`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-cyan-800 dark:text-cyan-300">
+        <span
+          className={`font-medium uppercase tracking-wide text-cyan-800 dark:text-cyan-300 ${
+            dense ? "text-[10px]" : "text-xs"
+          }`}
+        >
           {label}
         </span>
         <Button
@@ -90,7 +100,7 @@ export function SwimIntervalSetEditor({
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid sm:grid-cols-2 ${dense ? "gap-2" : "gap-3"}`}>
         <div>
           <Label>Repeats</Label>
           <Input
@@ -121,7 +131,7 @@ export function SwimIntervalSetEditor({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid sm:grid-cols-2 ${dense ? "gap-2" : "gap-3"}`}>
         <div>
           <Label>Between reps</Label>
           <Select
