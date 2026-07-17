@@ -5,7 +5,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline } from "@prisma/client";
 import Link from "next/link";
-import { Button, Select } from "@/components/ui";
+import { Button, Select, SegmentedControl } from "@/components/ui";
 import { WorkoutTreeEditor } from "@/components/workout-tree-editor";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import {
@@ -29,6 +29,8 @@ import {
 } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisplayUnit } from "@/lib/workout/metrics";
+
+type BuildBodyTab = "steps" | "components";
 
 function toMiniProfile(
   nodes: ReturnType<typeof templateNodes>,
@@ -136,45 +138,8 @@ function SegmentLibraryCard({
   );
 }
 
-/** Step editor docked on the left in Build mode (beside collapsed nav). */
-export function WorkoutBuildStepsPane({
-  composer,
-  disciplineSettings,
-}: {
-  composer: PoolWorkoutComposer;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-}) {
-  const unitSettings = unitSettingsForDiscipline(composer.discipline, disciplineSettings);
-  const poolSize = resolveSessionPoolSize(composer.discipline, null, disciplineSettings);
-  const displayUnit: DisplayUnit =
-    composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
-
-  return (
-    <aside
-      className="fixed bottom-0 left-12 top-0 z-20 w-56 overflow-y-auto border-r border-zinc-200 bg-zinc-50/95 p-2 pt-20 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
-      aria-label="Workout step editor"
-    >
-      <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-        Steps
-      </p>
-      <WorkoutTreeEditor
-        discipline={composer.discipline}
-        displayUnit={displayUnit}
-        poolSize={poolSize}
-        tree={composer.workoutTree}
-        onChange={composer.setWorkoutTree}
-        stepsPanel
-      />
-    </aside>
-  );
-}
-
-/** Warm-up / Main / Cool-down library docked on the right in Build mode. */
-export function SegmentLibraryPane({
-  composer,
-}: {
-  composer: PoolWorkoutComposer;
-}) {
+/** Inline warm-up / main / cool-down library for the expanded build panel. */
+export function SegmentLibraryContent({ composer }: { composer: PoolWorkoutComposer }) {
   const columnTemplates = useMemo(() => {
     const map = {} as Record<SegmentFolderKind, PoolLibraryTemplate[]>;
     for (const kind of SEGMENT_FOLDER_KINDS) {
@@ -184,11 +149,8 @@ export function SegmentLibraryPane({
   }, [composer.tree]);
 
   return (
-    <aside
-      className="fixed bottom-0 right-0 top-0 z-20 w-56 overflow-y-auto border-l border-zinc-200 bg-zinc-50/95 p-2 pt-20 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
-      aria-label="Workout component library"
-    >
-      <div className="mb-2 flex items-center justify-between gap-1 px-1">
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-1">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
           Components
         </p>
@@ -200,12 +162,12 @@ export function SegmentLibraryPane({
         </Link>
       </div>
       {composer.loadingTree ? (
-        <p className="px-1 text-[11px] text-zinc-400">Loading…</p>
+        <p className="text-[11px] text-zinc-400">Loading…</p>
       ) : null}
-      <div className="space-y-3 pb-8">
+      <div className="grid gap-3 sm:grid-cols-3">
         {SEGMENT_FOLDER_KINDS.map((kind) => (
           <section key={kind}>
-            <h3 className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+            <h3 className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
               {SEGMENT_COLUMN_LABELS[kind]}
             </h3>
             <div className="space-y-1.5">
@@ -226,7 +188,7 @@ export function SegmentLibraryPane({
                   />
                 ))
               ) : (
-                <p className="px-1 text-[10px] leading-snug text-zinc-400">
+                <p className="text-[10px] leading-snug text-zinc-400">
                   {kind === "MAIN_SET"
                     ? "No main-set or library workouts."
                     : `Create a ${SEGMENT_COLUMN_LABELS[kind]} folder in the library.`}
@@ -236,7 +198,7 @@ export function SegmentLibraryPane({
           </section>
         ))}
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -270,50 +232,57 @@ function AssembledDragHandle({ composer }: { composer: PoolWorkoutComposer }) {
   );
 }
 
+function disciplineLabel(discipline: Discipline): string {
+  return discipline.charAt(0) + discipline.slice(1).toLowerCase();
+}
+
+function useComposerUnits(
+  composer: PoolWorkoutComposer,
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>
+) {
+  const unitSettings = unitSettingsForDiscipline(composer.discipline, disciplineSettings);
+  const poolSize = resolveSessionPoolSize(composer.discipline, null, disciplineSettings);
+  const displayUnit: DisplayUnit =
+    composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
+  return { poolSize, displayUnit };
+}
+
 type WorkoutGraphPanelProps = {
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  /** Pool strip: toolbar + compact chart only (steps live in the left gutter). */
-  chartOnly?: boolean;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 };
 
-function WorkoutGraphToolbar({
+function CollapsedBuildBar({
   composer,
-  disciplineSettings,
-  compact = false,
+  onEdit,
 }: {
   composer: PoolWorkoutComposer;
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  compact?: boolean;
+  onEdit: () => void;
 }) {
   return (
-    <div
-      className={`flex flex-wrap items-center justify-between gap-2 ${
-        compact ? "border-b border-zinc-200 pb-2 dark:border-zinc-800" : ""
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <Select
-          value={composer.discipline}
-          onChange={(e) => composer.setDiscipline(e.target.value as typeof composer.discipline)}
-          aria-label="Build discipline"
-        >
-          <option value="SWIM">Swim</option>
-          <option value="BIKE">Bike</option>
-          <option value="RUN">Run</option>
-        </Select>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] tabular-nums text-zinc-500">
+        <span className="font-medium text-zinc-700 dark:text-zinc-200">
+          {disciplineLabel(composer.discipline)}
+        </span>
+        {composer.durationMinutes > 0 ? <span>· {composer.durationMinutes} min</span> : null}
         {composer.historySource ? (
-          <span className="text-[10px] text-zinc-500">Source: {composer.historySource}</span>
+          <span className="truncate text-[10px]">Source: {composer.historySource}</span>
+        ) : null}
+        {!composer.hasWorkout ? (
+          <span className="text-[10px] text-zinc-400">No steps yet</span>
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] tabular-nums text-zinc-500">
-          {composer.discipline.charAt(0) + composer.discipline.slice(1).toLowerCase()}
-          {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
-        </span>
+        <Button type="button" variant="secondary" className="px-3 py-1 text-xs" onClick={onEdit}>
+          Edit workout
+        </Button>
         <Button
           type="button"
           variant="secondary"
+          className="px-3 py-1 text-xs"
           onClick={composer.clear}
           disabled={!composer.hasWorkout}
         >
@@ -325,51 +294,126 @@ function WorkoutGraphToolbar({
   );
 }
 
-/** Sticky Build surface in the pool strip: toolbar + compact workout graph. */
+/** Expandable build panel in the pool strip: collapse to drag bar, expand to edit. */
 export function WorkoutGraphPanel({
   composer,
   disciplineSettings,
-  chartOnly = false,
+  expanded,
+  onExpandedChange,
 }: WorkoutGraphPanelProps) {
+  const [bodyTab, setBodyTab] = useState<BuildBodyTab>("steps");
   const { setNodeRef, isOver } = useDroppable({
     id: "pool-workout-graph",
     data: { type: "pool-workout-graph" },
   });
 
-  const unitSettings = unitSettingsForDiscipline(composer.discipline, disciplineSettings);
-  const poolSize = resolveSessionPoolSize(composer.discipline, null, disciplineSettings);
-  const displayUnit: DisplayUnit =
-    composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
+  const { poolSize, displayUnit } = useComposerUnits(composer, disciplineSettings);
+
+  if (!expanded) {
+    return <CollapsedBuildBar composer={composer} onEdit={() => onExpandedChange(true)} />;
+  }
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`rounded-md ${chartOnly ? "space-y-2" : "space-y-3"} ${
-        isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
-      }`}
-    >
-      <WorkoutGraphToolbar composer={composer} disciplineSettings={disciplineSettings} />
+    <div className="relative">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[11px] text-zinc-500">
+          Editing {disciplineLabel(composer.discipline)} workout
+          {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
+        </span>
+        <Button
+          type="button"
+          className="px-3 py-1 text-xs"
+          onClick={() => onExpandedChange(false)}
+        >
+          Done
+        </Button>
+      </div>
 
-      <WorkoutTreeEditor
-        discipline={composer.discipline}
-        displayUnit={displayUnit}
-        poolSize={poolSize}
-        tree={composer.workoutTree}
-        onChange={composer.setWorkoutTree}
-        compact={!chartOnly}
-        chartOnly={chartOnly}
-      />
+      <div
+        className={`absolute left-0 right-0 top-full z-40 mt-1 max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950 ${
+          isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
+        }`}
+        ref={setNodeRef}
+      >
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 dark:border-zinc-800">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={composer.discipline}
+              onChange={(e) =>
+                composer.setDiscipline(e.target.value as typeof composer.discipline)
+              }
+              aria-label="Build discipline"
+              className="px-2 py-1 text-xs"
+            >
+              <option value="SWIM">Swim</option>
+              <option value="BIKE">Bike</option>
+              <option value="RUN">Run</option>
+            </Select>
+            <SegmentedControl
+              value={bodyTab}
+              onChange={setBodyTab}
+              options={[
+                { value: "steps", label: "Steps" },
+                { value: "components", label: "Components" },
+              ]}
+              className="text-xs"
+            />
+            {composer.historySource ? (
+              <span className="text-[10px] text-zinc-500">Source: {composer.historySource}</span>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] tabular-nums text-zinc-500">
+              {disciplineLabel(composer.discipline)}
+              {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
+            </span>
+            <Button
+              type="button"
+              variant="secondary"
+              className="px-3 py-1 text-xs"
+              onClick={composer.clear}
+              disabled={!composer.hasWorkout}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
 
-      <p className="text-[10px] text-zinc-400">
-        {chartOnly
-          ? "Drop components from the library on the right onto the graph. Edit steps in the left pane, then drag the assembled workout onto the pool week."
-          : "Drop warm-up / main / cool-down from the library, or use Add step / Add repeat. Then drag the assembled workout onto an empty skeleton on the pool week."}
-      </p>
+        <WorkoutTreeEditor
+          discipline={composer.discipline}
+          displayUnit={displayUnit}
+          poolSize={poolSize}
+          tree={composer.workoutTree}
+          onChange={composer.setWorkoutTree}
+          chartOnly
+        />
+
+        <div className="mt-3 max-h-[min(40vh,20rem)] overflow-y-auto overscroll-contain">
+          {bodyTab === "steps" ? (
+            <WorkoutTreeEditor
+              discipline={composer.discipline}
+              displayUnit={displayUnit}
+              poolSize={poolSize}
+              tree={composer.workoutTree}
+              onChange={composer.setWorkoutTree}
+              stepsPanel
+            />
+          ) : (
+            <SegmentLibraryContent composer={composer} />
+          )}
+        </div>
+
+        <p className="mt-2 text-[10px] text-zinc-400">
+          {bodyTab === "steps"
+            ? "Add and edit steps below the graph, or switch to Components to append library segments. Click Done, then drag the workout onto a session."
+            : "Click + or drag a component onto the graph. Switch to Steps to fine-tune, then Done and drag onto a session."}
+        </p>
+      </div>
     </div>
   );
 }
 
-/** @deprecated Prefer SegmentLibraryPane + WorkoutGraphPanel */
+/** @deprecated Use WorkoutGraphPanel with expand/collapse props */
 export function WorkoutGraphComposer({
   composer,
   disciplineSettings,
@@ -377,5 +421,13 @@ export function WorkoutGraphComposer({
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
 }) {
-  return <WorkoutGraphPanel composer={composer} disciplineSettings={disciplineSettings} />;
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <WorkoutGraphPanel
+      composer={composer}
+      disciplineSettings={disciplineSettings}
+      expanded={expanded}
+      onExpandedChange={setExpanded}
+    />
+  );
 }
