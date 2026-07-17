@@ -15,6 +15,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline, SignalType } from "@prisma/client";
 import { Button, Input, Label, Select } from "@/components/ui";
+import {
+  PanelDensityProvider,
+  PanelLabel,
+  panelButtonClass,
+  panelHeaderClass,
+  usePanelDensity,
+} from "@/components/panel-density";
 import { SwimIntervalSetEditor } from "@/components/swim-interval-set-editor";
 import { WorkoutProfileChart } from "@/components/workout-profile-chart";
 import type { PlanDiscipline } from "@/lib/plan/session";
@@ -101,6 +108,10 @@ const STEP_TYPES: StepIntensity[] = [
   "cooldown",
 ];
 
+/** Shrinks default form controls inside the build-mode steps gutter. */
+const DENSE_FORM_CLASS =
+  "[&_label]:mb-0.5 [&_label]:text-[10px] [&_label]:leading-none [&_label]:text-zinc-500 dark:[&_label]:text-zinc-400 [&_input]:px-1.5 [&_input]:py-0.5 [&_input]:text-xs [&_input]:leading-tight [&_select]:px-1.5 [&_select]:py-0.5 [&_select]:text-xs [&_select]:leading-tight";
+
 function SegmentedControl<T extends string>({
   label,
   value,
@@ -112,16 +123,19 @@ function SegmentedControl<T extends string>({
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
 }) {
+  const dense = usePanelDensity();
   return (
     <div>
-      <Label>{label}</Label>
-      <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-700 dark:bg-zinc-900">
+      {dense ? <PanelLabel>{label}</PanelLabel> : <Label>{label}</Label>}
+      <div className="mt-1 flex flex-wrap gap-1 rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-zinc-700 dark:bg-zinc-900">
         {options.map((opt) => (
           <button
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+            className={`rounded-md font-medium transition ${
+              dense ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-sm"
+            } ${
               value === opt.value
                 ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
                 : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 dark:text-zinc-400"
@@ -321,6 +335,7 @@ function DraggableNodeShell({
   dimmed: boolean;
   children: ReactNode;
 }) {
+  const dense = usePanelDensity();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: nodeDragId(path),
     data: { path },
@@ -335,7 +350,9 @@ function DraggableNodeShell({
     >
       <button
         type="button"
-        className="mt-3 flex h-8 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 active:cursor-grabbing dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
+        className={`flex shrink-0 cursor-grab touch-none items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 active:cursor-grabbing dark:hover:bg-zinc-800 dark:hover:text-zinc-300 ${
+          dense ? "mt-2 h-6 w-5" : "mt-3 h-8 w-7"
+        }`}
         aria-label="Drag to reorder"
         {...listeners}
         {...attributes}
@@ -1094,6 +1111,9 @@ function NodeEditor({
   activeDragPath: number[] | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
+  const dense = usePanelDensity();
+  const cardPad = dense ? "p-2" : "p-3";
+  const cardGap = dense ? "space-y-1.5" : "space-y-2";
   const canRemove = siblingCount > 1;
   const dimmed = activeDragPath != null && !pathsEqual(activeDragPath, path);
 
@@ -1106,6 +1126,7 @@ function NodeEditor({
           poolSize={poolSize}
           displayUnit={displayUnit}
           targetView={targetView}
+          dense={dense}
           canRemove={canRemove}
           onChange={(next) =>
             onTreeChange((nodes) =>
@@ -1125,9 +1146,9 @@ function NodeEditor({
 
     return (
       <DraggableNodeShell path={path} dimmed={dimmed}>
-        <div className="space-y-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
-        <div className="flex flex-nowrap items-end gap-2 overflow-x-auto">
-          <div className="w-[7.5rem] shrink-0">
+        <div className={`${cardGap} rounded-md border border-zinc-200 ${cardPad} dark:border-zinc-700`}>
+        <div className={`flex flex-nowrap items-end gap-2 overflow-x-auto ${dense ? "gap-1.5" : ""}`}>
+          <div className={`shrink-0 ${dense ? "w-[6.5rem]" : "w-[7.5rem]"}`}>
             <Label>Step type</Label>
             <Select
               value={step.intensity}
@@ -1230,9 +1251,9 @@ function NodeEditor({
     const step = node;
     return (
       <DraggableNodeShell path={path} dimmed={dimmed}>
-        <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+        <div className={`${cardGap} rounded-md border border-amber-200 bg-amber-50/50 ${cardPad} dark:border-amber-900 dark:bg-amber-950/20`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400">
+          <span className={`${panelHeaderClass(dense)} text-amber-700 dark:text-amber-400`}>
             Ramp
           </span>
           <Button
@@ -1508,9 +1529,9 @@ function NodeEditor({
   const block = node as RepeatBlock;
   return (
     <DraggableNodeShell path={path} dimmed={dimmed}>
-      <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50/50 p-3 dark:border-sky-900 dark:bg-sky-950/20">
+      <div className={`${cardGap} rounded-md border border-sky-200 bg-sky-50/50 ${cardPad} dark:border-sky-900 dark:bg-sky-950/20`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-sky-700 dark:text-sky-400">
+        <span className={`${panelHeaderClass(dense)} text-sky-700 dark:text-sky-400`}>
           Repeat × {block.repeatCount}
         </span>
         <Button
@@ -1738,7 +1759,7 @@ export function WorkoutTreeEditor({
 
   const controls = (
     <>
-      <div className="grid gap-3 border-b border-zinc-200 pb-3 dark:border-zinc-700 sm:grid-cols-2">
+      <div className="grid gap-2 border-b border-zinc-200 pb-2 dark:border-zinc-700 sm:grid-cols-2">
         <SegmentedControl
           label="Target"
           value={targetView}
@@ -1756,12 +1777,13 @@ export function WorkoutTreeEditor({
         />
       </div>
 
-      <p className="text-xs text-zinc-500">Total: {totalLabel}</p>
+      <p className="text-[10px] text-zinc-500">Total: {totalLabel}</p>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         <Button
           type="button"
           variant="secondary"
+          className={panelButtonClass(true)}
           onClick={() => onTreeChange((nodes) => [...nodes, newLeafStep()])}
         >
           Add step
@@ -1770,6 +1792,7 @@ export function WorkoutTreeEditor({
           <Button
             type="button"
             variant="secondary"
+            className={panelButtonClass(true)}
             onClick={() => onTreeChange((nodes) => [...nodes, defaultSwimIntervalSet()])}
           >
             Add interval set
@@ -1778,6 +1801,7 @@ export function WorkoutTreeEditor({
         <Button
           type="button"
           variant="secondary"
+          className={panelButtonClass(true)}
           onClick={() => onTreeChange((nodes) => [...nodes, defaultRepeatBlock()])}
         >
           Add repeat
@@ -1785,6 +1809,7 @@ export function WorkoutTreeEditor({
         <Button
           type="button"
           variant="secondary"
+          className={panelButtonClass(true)}
           onClick={() => onTreeChange((nodes) => [...nodes, defaultRampStep()])}
         >
           Add ramp
@@ -1816,24 +1841,26 @@ export function WorkoutTreeEditor({
       primarySignal={primarySignal}
       displayUnit={displayUnit}
       thresholdPaceSeconds={thresholdPaceSeconds}
-      compact={compact || stepsPanel || chartOnly}
+      compact={compact && !chartOnly}
+      poolStrip={chartOnly}
     />
   );
 
   if (chartOnly) {
     return (
-      <div className="max-h-56 overflow-y-auto overscroll-contain rounded-md border border-zinc-200 p-2 dark:border-zinc-700">
+      <PanelDensityProvider dense>
         {profileChart}
-      </div>
+      </PanelDensityProvider>
     );
   }
 
   return (
+    <PanelDensityProvider dense={stepsPanel}>
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       {stepsPanel ? (
-        <div className="flex flex-col gap-3">
+        <div className={`flex flex-col gap-2 ${DENSE_FORM_CLASS}`}>
           {controls}
-          <div className="min-h-0 flex-1 space-y-2">{nodeList}</div>
+          <div className="min-h-0 flex-1 space-y-1.5">{nodeList}</div>
         </div>
       ) : (
       <div className="space-y-4">
@@ -1902,11 +1929,12 @@ export function WorkoutTreeEditor({
 
       <DragOverlay>
         {draggedNode ? (
-          <div className="rounded-md border border-sky-300 bg-white px-3 py-2 text-sm font-medium shadow-lg dark:border-sky-700 dark:bg-zinc-900">
+          <div className="rounded-md border border-sky-300 bg-white px-2 py-1 text-xs font-medium shadow-lg dark:border-sky-700 dark:bg-zinc-900">
             {nodeDragSummary(draggedNode, poolSize, displayUnit)}
           </div>
         ) : null}
       </DragOverlay>
     </DndContext>
+    </PanelDensityProvider>
   );
 }

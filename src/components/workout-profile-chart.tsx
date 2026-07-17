@@ -21,16 +21,22 @@ type WorkoutProfileChartProps = {
   thresholdHrBpm?: number | null;
   /** ~half plot height for constrained layouts (e.g. calendar Build panel). */
   compact?: boolean;
+  /** Fixed short strip for the pool header graph (Build mode). */
+  poolStrip?: boolean;
 };
 
 const PLOT_HEIGHT = 128;
 const PLOT_HEIGHT_COMPACT = 64;
+const PLOT_HEIGHT_POOL_STRIP = 36;
 const MARGIN_LEFT = 52;
+const MARGIN_LEFT_POOL_STRIP = 44;
 const MARGIN_RIGHT = 8;
 const MARGIN_TOP = 8;
 const MARGIN_BOTTOM = 24;
 const MARGIN_TOP_COMPACT = 4;
 const MARGIN_BOTTOM_COMPACT = 16;
+const MARGIN_TOP_POOL_STRIP = 2;
+const MARGIN_BOTTOM_POOL_STRIP = 12;
 
 export function WorkoutProfileChart({
   nodes,
@@ -42,6 +48,7 @@ export function WorkoutProfileChart({
   thresholdFtpWatts = null,
   thresholdHrBpm = null,
   compact = false,
+  poolStrip = false,
 }: WorkoutProfileChartProps) {
   const ySignal = primarySignal ?? defaultPrimarySignalForDiscipline(discipline);
 
@@ -72,25 +79,34 @@ export function WorkoutProfileChart({
 
   if (profile.segments.length === 0) {
     return (
-      <p className="text-sm text-zinc-500">
+      <p className={`text-zinc-500 ${poolStrip ? "text-[10px]" : "text-sm"}`}>
         Add steps with {lengthView === "distance" ? "distance" : "duration"} to see the workout
         profile.
       </p>
     );
   }
 
-  const plotHeight = compact ? PLOT_HEIGHT_COMPACT : PLOT_HEIGHT;
-  const marginTop = compact ? MARGIN_TOP_COMPACT : MARGIN_TOP;
-  const marginBottom = compact ? MARGIN_BOTTOM_COMPACT : MARGIN_BOTTOM;
+  const plotHeight = poolStrip
+    ? PLOT_HEIGHT_POOL_STRIP
+    : compact
+      ? PLOT_HEIGHT_COMPACT
+      : PLOT_HEIGHT;
+  const marginLeft = poolStrip ? MARGIN_LEFT_POOL_STRIP : MARGIN_LEFT;
+  const marginTop = poolStrip ? MARGIN_TOP_POOL_STRIP : compact ? MARGIN_TOP_COMPACT : MARGIN_TOP;
+  const marginBottom = poolStrip
+    ? MARGIN_BOTTOM_POOL_STRIP
+    : compact
+      ? MARGIN_BOTTOM_COMPACT
+      : MARGIN_BOTTOM;
   const plotWidth = 640;
-  const width = MARGIN_LEFT + plotWidth + MARGIN_RIGHT;
+  const width = marginLeft + plotWidth + MARGIN_RIGHT;
   const height = marginTop + plotHeight + marginBottom;
   const { yMin, yMax, totalX } = profile;
 
   const plotBottom = marginTop + plotHeight;
 
   function xToPx(x: number): number {
-    return MARGIN_LEFT + (x / totalX) * plotWidth;
+    return marginLeft + (x / totalX) * plotWidth;
   }
 
   function yToPx(y: number): number {
@@ -98,43 +114,46 @@ export function WorkoutProfileChart({
     return marginTop + plotHeight - t * plotHeight;
   }
 
-  const yTicks = compact ? 2 : 4;
+  const yTicks = poolStrip ? 1 : compact ? 2 : 4;
   const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) => yMin + ((yMax - yMin) * i) / yTicks);
   const xTickValues = [0, totalX * 0.25, totalX * 0.5, totalX * 0.75, totalX];
 
+  const shellPad = poolStrip ? "p-1.5" : compact ? "p-2" : "p-3";
+  const headerMb = poolStrip ? "mb-0.5" : compact ? "mb-1" : "mb-2";
+
   return (
     <div
-      className={`rounded-lg border border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/50 ${
-        compact ? "p-2" : "p-3"
-      }`}
+      className={`rounded-lg border border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/50 ${shellPad}`}
     >
-      <div className={`flex items-center justify-between gap-2 ${compact ? "mb-1" : "mb-2"}`}>
-        <p className="text-xs font-medium text-zinc-500">Workout profile</p>
+      <div className={`flex items-center justify-between gap-2 ${headerMb}`}>
+        <p className="text-[10px] font-medium text-zinc-500">Workout profile</p>
         <p className="text-[10px] text-zinc-400">
           {profile.xLabel} × {profile.yLabel}
         </p>
       </div>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-auto w-full"
-        role="img"
-        aria-label="Workout intensity profile"
-      >
+      <div className={poolStrip ? "h-12 w-full" : undefined}>
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className={poolStrip ? "h-full w-full" : "h-auto w-full"}
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="Workout intensity profile"
+        >
         {yTickValues.map((tick) => {
           const y = yToPx(tick);
           return (
             <g key={`y-${tick}`}>
               <line
-                x1={MARGIN_LEFT}
+                x1={marginLeft}
                 y1={y}
-                x2={MARGIN_LEFT + plotWidth}
+                x2={marginLeft + plotWidth}
                 y2={y}
                 stroke="currentColor"
                 className="text-zinc-200 dark:text-zinc-700"
                 strokeDasharray="4 4"
               />
               <text
-                x={MARGIN_LEFT - 6}
+                x={marginLeft - 6}
                 y={y + 4}
                 textAnchor="end"
                 className="fill-zinc-500 text-[10px]"
@@ -172,17 +191,17 @@ export function WorkoutProfileChart({
         })}
 
         <line
-          x1={MARGIN_LEFT}
+          x1={marginLeft}
           y1={marginTop + plotHeight}
-          x2={MARGIN_LEFT + plotWidth}
+          x2={marginLeft + plotWidth}
           y2={marginTop + plotHeight}
           stroke="currentColor"
           className="text-zinc-300 dark:text-zinc-600"
         />
         <line
-          x1={MARGIN_LEFT}
+          x1={marginLeft}
           y1={marginTop}
-          x2={MARGIN_LEFT}
+          x2={marginLeft}
           y2={marginTop + plotHeight}
           stroke="currentColor"
           className="text-zinc-300 dark:text-zinc-600"
@@ -202,7 +221,8 @@ export function WorkoutProfileChart({
             </text>
           );
         })}
-      </svg>
+        </svg>
+      </div>
     </div>
   );
 }

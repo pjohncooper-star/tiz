@@ -344,7 +344,7 @@ export function WorkoutGraphPanel({
   return (
     <div
       ref={setNodeRef}
-      className={`space-y-3 rounded-md ${
+      className={`rounded-md ${chartOnly ? "space-y-2" : "space-y-3"} ${
         isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
       }`}
     >
