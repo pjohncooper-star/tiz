@@ -24,17 +24,81 @@ import {
   combinedZoneTotals,
   linkedActivityIdsExcludedFromCompletedRollup,
   mergeWeekSummaries,
+  sportZoneTotals,
   summarizeWeekCompletedActivities,
   summarizeWeekCompletedSessions,
   summarizeWeekPlannedSessions,
+  type WeekPlannedSummary,
 } from "@/lib/plan/calendar/week-summary";
 import { poolSessionCardDragId } from "@/lib/plan/workout-builder-dnd";
-import type { CalendarWeekTarget } from "@/components/calendar/types";
+import type { CalendarWeekTarget, TargetDiscipline } from "@/components/calendar/types";
 import { formatZoneMinutes } from "@/lib/workout/steps";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
+import { planningModeIncludesLongTiz } from "@/lib/plan/season/planning-mode";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
 import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
+import type { Discipline, PlanningMode } from "@prisma/client";
+
+const TIZ_ZONES = [1, 2, 3, 4, 5] as const;
+const TIZ_DISCIPLINES: TargetDiscipline[] = ["SWIM", "BIKE", "RUN"];
+const LONG_TIZ_DISCIPLINES = ["BIKE", "RUN"] as const;
+
+const ZONE_BAR_COLORS: Record<number, string> = {
+  1: "bg-sky-200 dark:bg-sky-900",
+  2: "bg-sky-400 dark:bg-sky-700",
+  3: "bg-amber-400 dark:bg-amber-700",
+  4: "bg-orange-500 dark:bg-orange-700",
+  5: "bg-red-500 dark:bg-red-700",
+};
+
+function zoneArrayHasTarget(zones: number[]): boolean {
+  return zones.some((minutes) => minutes > 0);
+}
+
+function ZoneProgressRows({
+  targetZones,
+  doneZones,
+}: {
+  targetZones: number[];
+  doneZones: number[];
+}) {
+  return (
+    <div className="space-y-1.5">
+      {TIZ_ZONES.map((zone) => {
+        const target = targetZones[zone - 1] ?? 0;
+        if (target <= 0) return null;
+        const done = doneZones[zone - 1] ?? 0;
+        const pct = Math.min(100, Math.round((done / target) * 100));
+        return (
+          <div key={zone}>
+            <div className="mb-0.5 flex justify-between tabular-nums text-zinc-600 dark:text-zinc-300">
+              <span>Z{zone}</span>
+              <span>
+                {formatZoneMinutes(done)} / {formatZoneMinutes(target)}
+              </span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+              <div
+                className={`h-full rounded-full ${ZONE_BAR_COLORS[zone] ?? "bg-sky-500"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function doneZonesFromSummary(
+  summary: WeekPlannedSummary | null,
+  discipline?: Discipline
+): number[] {
+  if (!summary) return [0, 0, 0, 0, 0];
+  if (discipline) return sportZoneTotals(discipline, summary.total.zoneMinutes);
+  return combinedZoneTotals(summary.total.zoneMinutes);
+}
 
 function PoolSection({
   title,
@@ -192,72 +256,99 @@ function WeekTizFooter({
   weekStart: string;
   currentWeekStart: string;
 }) {
-  const plannedSummary = summarizeWeekPlannedSessions(sessions);
+  const mode: PlanningMode = weekTarget.planningMode ?? "BY_DISCIPLINE";
+  const separateLongTiz = planningModeIncludesLongTiz(mode);
   const showCompleted = weekStart <= currentWeekStart;
-  const completedSummary = showCompleted
+
+  const mainSessions = separateLongTiz
+    ? sessions.filter((session) => session.sessionRole !== "LONG")
+    : sessions;
+  const longSessions = separateLongTiz
+    ? sessions.filter(
+        (session) =>
+          session.sessionRole === "LONG" &&
+          (session.discipline === "BIKE" || session.discipline === "RUN")
+      )
+    : [];
+
+  const plannedMain = summarizeWeekPlannedSessions(mainSessions);
+  const excludedActivityIds = linkedActivityIdsExcludedFromCompletedRollup(sessions);
+  const completedMain = showCompleted
     ? mergeWeekSummaries(
-        summarizeWeekCompletedSessions(sessions),
+        summarizeWeekCompletedSessions(mainSessions),
         summarizeWeekCompletedActivities(
-          activities.filter(
-            (activity) =>
-              !linkedActivityIdsExcludedFromCompletedRollup(sessions).has(activity.id)
-          )
+          activities.filter((activity) => !excludedActivityIds.has(activity.id))
         )
       )
     : null;
+  const mainDoneSummary = showCompleted && completedMain ? completedMain : plannedMain;
 
-  const targetZones = combinedZoneTotals(weekTarget.zoneMinutes);
-  const plannedZones = combinedZoneTotals(plannedSummary.total.zoneMinutes);
-  const completedZones = completedSummary
-    ? combinedZoneTotals(completedSummary.total.zoneMinutes)
-    : [0, 0, 0, 0, 0];
+  const plannedLong = summarizeWeekPlannedSessions(longSessions);
+  const completedLong = showCompleted
+    ? summarizeWeekCompletedSessions(longSessions)
+    : null;
+  const longDoneSummary = showCompleted && completedLong ? completedLong : plannedLong;
 
-  const z12Target = (targetZones[0] ?? 0) + (targetZones[1] ?? 0);
-  const z12Done = showCompleted
-    ? (completedZones[0] ?? 0) + (completedZones[1] ?? 0)
-    : (plannedZones[0] ?? 0) + (plannedZones[1] ?? 0);
-  const z3PlusTarget = (targetZones[2] ?? 0) + (targetZones[3] ?? 0) + (targetZones[4] ?? 0);
-  const z3PlusDone = showCompleted
-    ? (completedZones[2] ?? 0) + (completedZones[3] ?? 0) + (completedZones[4] ?? 0)
-    : (plannedZones[2] ?? 0) + (plannedZones[3] ?? 0) + (plannedZones[4] ?? 0);
+  const overallTarget = combinedZoneTotals(weekTarget.zoneMinutes);
+  const longTargetByDiscipline = LONG_TIZ_DISCIPLINES.map((discipline) => ({
+    discipline,
+    target: sportZoneTotals(discipline, weekTarget.longSessionZoneMinutes ?? {}),
+    done: doneZonesFromSummary(longDoneSummary, discipline),
+  }));
+  const hasLongTarget = longTargetByDiscipline.some((row) => zoneArrayHasTarget(row.target));
+  const hasMainTarget = zoneArrayHasTarget(overallTarget);
+  if (!hasMainTarget && !(separateLongTiz && hasLongTarget)) return null;
 
-  if (z12Target <= 0 && z3PlusTarget <= 0) return null;
-
-  function bar(done: number, target: number) {
-    const pct = target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0;
-    return (
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-        <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
-      </div>
-    );
-  }
+  const showOverall = mode === "OVERALL";
 
   return (
     <PoolSection
       title="Week TiZ"
       hint={showCompleted ? "Completed vs season target" : "Scheduled vs season target"}
     >
-      <div className="space-y-2 text-[11px]">
-        {z12Target > 0 ? (
-          <div>
-            <div className="mb-0.5 flex justify-between tabular-nums text-zinc-600 dark:text-zinc-300">
-              <span>Z1–2</span>
-              <span>
-                {formatZoneMinutes(z12Done)} / {formatZoneMinutes(z12Target)}
-              </span>
-            </div>
-            {bar(z12Done, z12Target)}
+      <div className="space-y-3 text-[11px]">
+        {showOverall ? (
+          <ZoneProgressRows
+            targetZones={overallTarget}
+            doneZones={doneZonesFromSummary(mainDoneSummary)}
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {TIZ_DISCIPLINES.map((discipline) => {
+              const entry = weekTarget.byDiscipline.find((row) => row.discipline === discipline);
+              const target = sportZoneTotals(discipline, entry?.zoneMinutes ?? {});
+              if (!zoneArrayHasTarget(target)) return null;
+              return (
+                <div key={discipline} className="space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                    {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
+                  </p>
+                  <ZoneProgressRows
+                    targetZones={target}
+                    doneZones={doneZonesFromSummary(mainDoneSummary, discipline)}
+                  />
+                </div>
+              );
+            })}
           </div>
-        ) : null}
-        {z3PlusTarget > 0 ? (
-          <div>
-            <div className="mb-0.5 flex justify-between tabular-nums text-zinc-600 dark:text-zinc-300">
-              <span>Z3+</span>
-              <span>
-                {formatZoneMinutes(z3PlusDone)} / {formatZoneMinutes(z3PlusTarget)}
-              </span>
-            </div>
-            {bar(z3PlusDone, z3PlusTarget)}
+        )}
+
+        {separateLongTiz && hasLongTarget ? (
+          <div className="space-y-2 border-t border-zinc-200 pt-2 dark:border-zinc-800">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+              Long
+            </p>
+            {longTargetByDiscipline.map(({ discipline, target, done }) => {
+              if (!zoneArrayHasTarget(target)) return null;
+              return (
+                <div key={`long-${discipline}`} className="space-y-1">
+                  <p className="text-[10px] font-medium text-zinc-500">
+                    {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
+                  </p>
+                  <ZoneProgressRows targetZones={target} doneZones={done} />
+                </div>
+              );
+            })}
           </div>
         ) : null}
       </div>
