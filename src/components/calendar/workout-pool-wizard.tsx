@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { addWeeks, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { Button } from "@/components/ui";
 import { WorkoutPool } from "@/components/calendar/workout-pool";
@@ -55,6 +55,8 @@ export function WorkoutPoolWizard({
   composer,
   disciplineSettings,
 }: WorkoutPoolWizardProps) {
+  const [buildExpanded, setBuildExpanded] = useState(false);
+
   const unscheduledCount = useMemo(() => {
     if (!weekTarget) return 0;
     return computeUnscheduledChips(poolWeekStart, weekTarget, sessions).length;
@@ -66,13 +68,21 @@ export function WorkoutPoolWizard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [poolWeekStart]);
 
+  useEffect(() => {
+    if (activeTab === "build") {
+      setBuildExpanded(true);
+    } else {
+      setBuildExpanded(false);
+    }
+  }, [activeTab]);
+
   function shiftPoolWeek(delta: number) {
     const next = addWeeks(parseISO(`${poolWeekStart}T12:00:00`), delta);
     onPoolWeekChange(format(startOfWeek(next, WEEK_OPTS), "yyyy-MM-dd"));
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div className="relative rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/90">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-1">
           <Button
@@ -135,7 +145,8 @@ export function WorkoutPoolWizard({
         <WorkoutGraphPanel
           composer={composer}
           disciplineSettings={disciplineSettings}
-          chartOnly
+          expanded={buildExpanded}
+          onExpandedChange={setBuildExpanded}
         />
       )}
     </div>

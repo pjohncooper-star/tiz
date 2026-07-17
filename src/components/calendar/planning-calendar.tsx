@@ -55,8 +55,6 @@ import {
 import { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
 import { usePoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
-import { SegmentLibraryPane, WorkoutBuildStepsPane } from "@/components/calendar/workout-graph-composer";
-import { useCalendarBuildMode } from "@/components/calendar/calendar-build-mode";
 import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
@@ -163,7 +161,6 @@ export function PlanningCalendar({
 
   const useWizardPool = poolOpen && isXl;
   const showBuildLayout = useWizardPool && poolTab === "build";
-  const { setActive: setCalendarBuildMode } = useCalendarBuildMode();
 
   const poolComposer = usePoolWorkoutComposer({
     active: showBuildLayout,
@@ -173,11 +170,6 @@ export function PlanningCalendar({
   const setPoolTabStable = useCallback((tab: PoolTab) => {
     setPoolTab(tab);
   }, []);
-
-  useEffect(() => {
-    setCalendarBuildMode(showBuildLayout);
-    return () => setCalendarBuildMode(false);
-  }, [showBuildLayout, setCalendarBuildMode]);
 
   const clearArmedUnscheduled = useCallback((chipId: string) => {
     setArmedUnscheduled((prev) => {
@@ -1083,7 +1075,7 @@ export function PlanningCalendar({
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveDragId(null)}
     >
-      <div className={showBuildLayout ? "w-full space-y-4 pl-56 pr-56" : "w-full space-y-4"}>
+      <div className="w-full space-y-4">
         <div className="sticky top-0 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
           <div className="flex items-center justify-between gap-3 overflow-x-auto">
             <div className="flex shrink-0 gap-2">
@@ -1180,16 +1172,6 @@ export function PlanningCalendar({
             </div>
           )}
         </div>
-
-        {showBuildLayout ? (
-          <>
-            <WorkoutBuildStepsPane
-              composer={poolComposer}
-              disciplineSettings={disciplineSettings}
-            />
-            <SegmentLibraryPane composer={poolComposer} />
-          </>
-        ) : null}
 
         {calendarWeeksContent}
       </div>
