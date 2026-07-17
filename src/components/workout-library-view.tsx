@@ -6,7 +6,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { Discipline, WorkoutFolderKind } from "@prisma/client";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 import type { FolderTreeNode } from "@/lib/workout/workout-folder-library";
-import { libraryNewTemplateHref, libraryTemplateHref } from "@/lib/plan/library-href";
+import {
+  libraryHref,
+  libraryNewTemplateHref,
+  libraryTemplateHref,
+} from "@/lib/plan/library-href";
 
 type WorkoutLibraryViewProps = {
   initialTree: FolderTreeNode[];
@@ -109,6 +113,13 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
     if (folder) setSelectedId(folder);
   }, [searchParams]);
 
+  function clearSelection() {
+    setSelectedId(null);
+    if (searchParams.get("folder")) {
+      router.replace(libraryHref());
+    }
+  }
+
   async function createFolder() {
     const name = newFolderName.trim();
     if (!name) return;
@@ -192,8 +203,19 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
           Folders
         </h2>
         <div className="max-h-[60vh] space-y-0.5 overflow-y-auto">
+          <button
+            type="button"
+            onClick={clearSelection}
+            className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm ${
+              selectedId === null
+                ? "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-100"
+                : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <span className="truncate font-medium">Root (none selected)</span>
+          </button>
           {tree.length === 0 ? (
-            <p className="text-sm text-zinc-500">No folders yet.</p>
+            <p className="px-2 py-1 text-sm text-zinc-500">No folders yet.</p>
           ) : (
             tree.map((node) => (
               <FolderTreeItem
@@ -208,6 +230,11 @@ export function WorkoutLibraryView({ initialTree }: WorkoutLibraryViewProps) {
         </div>
         <div className="mt-4 space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
           <Label>New folder</Label>
+          <p className="text-xs text-zinc-500">
+            {selected?.folderKind === "LIBRARY"
+              ? `Creates under: ${selected.name}`
+              : "Creates as root folder"}
+          </p>
           <Input
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
