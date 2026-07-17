@@ -28,26 +28,32 @@ import type { CalendarRangeData } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { totalZoneMinutes } from "@/lib/workout/steps";
-import type { GeneratedWorkout } from "@/lib/plan/calendar/generate-workouts";
-import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
 import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
-import {
-  unscheduledDisciplinesMatch,
-  type UnscheduledAttachment,
-} from "@/lib/plan/calendar/pool-unscheduled-attachment";
-import { unscheduledSessionTitle, WorkoutPool } from "@/components/calendar/workout-pool";
+import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
+import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
 import {
   WorkoutPoolWizard,
   dateKeyInWeek,
-  type PoolTab,
 } from "@/components/calendar/workout-pool-wizard";
 import { SessionRolePickerDialog } from "@/components/calendar/session-role-picker-dialog";
 import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-zones";
 import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
+import {
+  draftFromNodes,
+  isEndurancePoolDiscipline,
+  pruneDraftsToChips,
+  treeFromDraft,
+  type PoolCardDraft,
+  type PoolCardDraftMap,
+  type PoolDisciplineFilter,
+} from "@/lib/plan/calendar/pool-session-card";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import type { SessionRole, Discipline } from "@prisma/client";
-import { isAssembledWorkoutDrag, isPoolPlacementDragId } from "@/lib/plan/workout-builder-dnd";
+import {
+  isAssembledWorkoutDrag,
+  isPoolPlacementDragId,
+} from "@/lib/plan/workout-builder-dnd";
 import {
   parseActivityDragId,
   parseSessionLinkDropId,
@@ -125,9 +131,6 @@ export function PlanningCalendar({
   const [applyWeekStart, setApplyWeekStart] = useState(currentWeekStart);
   const [applyHasSessions, setApplyHasSessions] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [armedUnscheduled, setArmedUnscheduled] = useState<
-    Record<string, UnscheduledAttachment>
-  >({});
   const [focusedWeekStart, setFocusedWeekStart] = useState(
     () => initialScrollWeekStart ?? currentWeekStart
   );
@@ -141,7 +144,11 @@ export function PlanningCalendar({
     chip: UnscheduledChip;
     dateKey: string;
   } | null>(null);
-  const [poolTab, setPoolTab] = useState<PoolTab>("skeleton");
+  const [poolDrafts, setPoolDrafts] = useState<PoolCardDraftMap>({});
+  const [poolDisciplineFilter, setPoolDisciplineFilter] =
+    useState<PoolDisciplineFilter>("ALL");
+  const [selectedPoolCardId, setSelectedPoolCardId] = useState<string | null>(null);
+  const [builderExpanded, setBuilderExpanded] = useState(false);
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
@@ -160,29 +167,12 @@ export function PlanningCalendar({
   });
 
   const useWizardPool = poolOpen && isXl;
-  const showBuildLayout = useWizardPool && poolTab === "build";
+  const composerActive = useWizardPool && selectedPoolCardId != null && builderExpanded;
 
   const poolComposer = usePoolWorkoutComposer({
-    active: showBuildLayout,
+    active: composerActive || useWizardPool,
     onApplied: () => void handleRefresh(),
   });
-
-  const setPoolTabStable = useCallback((tab: PoolTab) => {
-    setPoolTab(tab);
-  }, []);
-
-  const clearArmedUnscheduled = useCallback((chipId: string) => {
-    setArmedUnscheduled((prev) => {
-      if (!(chipId in prev)) return prev;
-      const next = { ...prev };
-      delete next[chipId];
-      return next;
-    });
-  }, []);
-
-  const armUnscheduled = useCallback((chipId: string, attachment: UnscheduledAttachment) => {
-    setArmedUnscheduled((prev) => ({ ...prev, [chipId]: attachment }));
-  }, []);
 
   const setFocusedWeek = useCallback((weekStart: string, options?: { lockMs?: number }) => {
     if (options?.lockMs) {
@@ -287,6 +277,66 @@ export function PlanningCalendar({
   const poolWeekTarget = targetsByWeek.get(poolWeekStart) ?? null;
   const poolWeekSessions = sessionsForWeek(poolWeekStart);
   const poolWeekActivities = activitiesForWeek(poolWeekStart);
+
+  const poolChips = useMemo(() => {
+    if (!poolWeekTarget) return [];
+    return computeUnscheduledChips(poolWeekStart, poolWeekTarget, poolWeekSessions);
+  }, [poolWeekStart, poolWeekTarget, poolWeekSessions]);
+
+  useEffect(() => {
+    setPoolDrafts((prev) => pruneDraftsToChips(prev, poolChips));
+    setSelectedPoolCardId((prev) => {
+      if (!prev) return prev;
+      return poolChips.some((c) => c.id === prev) ? prev : null;
+    });
+  }, [poolChips]);
+
+  const handleSelectPoolCard = useCallback(
+    (cardId: string) => {
+      const chip = poolChips.find((c) => c.id === cardId);
+      if (!chip || !isEndurancePoolDiscipline(chip.discipline)) return;
+
+      if (selectedPoolCardId && builderExpanded && selectedPoolCardId !== cardId) {
+        const draft = draftFromNodes(
+          poolComposer.workoutTree.nodes,
+          poolComposer.discipline
+        );
+        setPoolDrafts((prev) => {
+          const next = { ...prev };
+          if (draft) next[selectedPoolCardId] = draft;
+          else delete next[selectedPoolCardId];
+          return next;
+        });
+      }
+
+      setSelectedPoolCardId(cardId);
+      poolComposer.setDiscipline(chip.discipline);
+      poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
+      setBuilderExpanded(true);
+    },
+    [
+      poolChips,
+      selectedPoolCardId,
+      builderExpanded,
+      poolComposer,
+      poolDrafts,
+    ]
+  );
+
+  const handleBuilderDone = useCallback(() => {
+    if (!selectedPoolCardId) {
+      setBuilderExpanded(false);
+      return;
+    }
+    const draft = draftFromNodes(poolComposer.workoutTree.nodes, poolComposer.discipline);
+    setPoolDrafts((prev) => {
+      const next = { ...prev };
+      if (draft) next[selectedPoolCardId] = draft;
+      else delete next[selectedPoolCardId];
+      return next;
+    });
+    setBuilderExpanded(false);
+  }, [selectedPoolCardId, poolComposer]);
 
   function poolWeekAllowsDate(dateKey: string | undefined): boolean {
     if (!dateKey) return false;
@@ -554,35 +604,16 @@ export function PlanningCalendar({
     if (await poolComposer.handleDragEnd(event)) return;
     if (await workoutBuilder.handleDragEnd(event)) return;
 
-    if (over.data.current?.type === "pool-unscheduled-drop") {
-      const chip = over.data.current.chip as UnscheduledChip;
-      const selectedDateKey =
-        (over.data.current.selectedDateKey as string | null | undefined) ?? null;
-
-      if (active.data.current?.type === "pool-library-template") {
-        await handleUnscheduledAttachmentCombo(chip, {
-          kind: "library",
-          template: active.data.current.template as PoolLibraryTemplate,
-        }, selectedDateKey);
-        return;
+    if (active.data.current?.type === "pool-session-card") {
+      const chip = active.data.current.chip as UnscheduledChip;
+      let draft: PoolCardDraft | null =
+        (active.data.current.draft as PoolCardDraft | null) ??
+        poolDrafts[chip.id] ??
+        null;
+      if (selectedPoolCardId === chip.id && builderExpanded) {
+        draft = draftFromNodes(poolComposer.workoutTree.nodes, poolComposer.discipline);
       }
-      return;
-    }
-
-    if (active.data.current?.type === "pool-armed-unscheduled") {
-      await handleArmedUnscheduledDrop(
-        active.data.current.chip as UnscheduledChip,
-        active.data.current.attachment as UnscheduledAttachment,
-        over.data.current
-      );
-      return;
-    }
-
-    if (active.data.current?.type === "pool-unscheduled") {
-      await handleUnscheduledPoolDrop(
-        active.data.current.chip as UnscheduledChip,
-        over.data.current
-      );
+      await handlePoolSessionCardDrop(chip, draft, over.data.current);
       return;
     }
 
@@ -636,93 +667,24 @@ export function PlanningCalendar({
 
   async function attachStepsToSession(
     sessionId: string,
-    tree: GeneratedWorkout["tree"]
+    nodes: PoolCardDraft["nodes"]
   ): Promise<boolean> {
     const res = await fetch(`/api/plan/sessions/${sessionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ steps: tree }),
-    });
-    return res.ok;
-  }
-
-  async function createSessionWithWorkout(
-    dateKey: string,
-    workout: GeneratedWorkout,
-    chip: UnscheduledChip
-  ) {
-    const res = await fetch(`/api/plan/sessions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        scheduledDate: dateKey,
-        discipline: workout.discipline,
-        title: workout.label,
-        sessionRole: sessionRoleForChip(chip),
-        poolSlotKind: chip.slotKind,
+        steps: { version: WORKOUT_TREE_VERSION, nodes },
       }),
     });
-    if (!res.ok) return false;
-    const data = (await res.json().catch(() => ({}))) as { session?: { id?: string } };
-    const id = data.session?.id;
-    if (!id) return false;
-    return attachStepsToSession(id, workout.tree);
-  }
-
-  async function placeUnscheduledAttachment(
-    dateKey: string,
-    attachment: UnscheduledAttachment,
-    chip: UnscheduledChip
-  ): Promise<boolean> {
-    if (attachment.kind === "library") {
-      return createSessionWithTemplate(dateKey, attachment.template, chip);
-    }
-    return createSessionWithWorkout(dateKey, attachment.workout, chip);
-  }
-
-  async function handleUnscheduledAttachmentCombo(
-    chip: UnscheduledChip,
-    attachment: UnscheduledAttachment,
-    selectedDateKey: string | null
-  ) {
-    if (!unscheduledDisciplinesMatch(chip.discipline, attachment)) {
-      alert("Workout discipline does not match unscheduled session");
-      return;
-    }
-
-    if (selectedDateKey) {
-      if (!poolWeekAllowsDate(selectedDateKey)) return;
-      const ok = await placeUnscheduledAttachment(selectedDateKey, attachment, chip);
-      if (ok) {
-        clearArmedUnscheduled(chip.id);
-        await handleRefresh();
-      }
-      return;
-    }
-
-    armUnscheduled(chip.id, attachment);
-  }
-
-  async function handleArmedUnscheduledDrop(
-    chip: UnscheduledChip,
-    attachment: UnscheduledAttachment,
-    overData: Record<string, unknown> | undefined
-  ) {
-    if (overData?.type !== "day") return;
-    const dateKey = overData?.dateKey as string | undefined;
-    if (!poolWeekAllowsDate(dateKey)) return;
-    const ok = await placeUnscheduledAttachment(dateKey!, attachment, chip);
-    if (ok) {
-      clearArmedUnscheduled(chip.id);
-      await handleRefresh();
-    }
+    return res.ok;
   }
 
   async function createUnscheduledSession(
     dateKey: string,
     chip: UnscheduledChip,
-    sessionRole: SessionRole
-  ) {
+    sessionRole: SessionRole,
+    options?: { estimatedDurationMinutes?: number }
+  ): Promise<string | null> {
     const dropWeekStart = format(
       startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS),
       "yyyy-MM-dd"
@@ -735,6 +697,12 @@ export function PlanningCalendar({
         ).length
       : 1;
 
+    const estimatedDurationMinutes =
+      options?.estimatedDurationMinutes ??
+      (chip.targetDurationMinutes != null && chip.targetDurationMinutes > 0
+        ? chip.targetDurationMinutes
+        : undefined);
+
     const targetZones =
       weekTarget && chip.discipline !== "STRENGTH"
         ? inheritTargetZonesFromRole({
@@ -743,7 +711,7 @@ export function PlanningCalendar({
             weekTarget,
             sessions: weekSessions,
             unscheduledCount: Math.max(1, unscheduledCount),
-            targetDurationMinutes: chip.targetDurationMinutes,
+            targetDurationMinutes: estimatedDurationMinutes,
           })
         : undefined;
 
@@ -756,33 +724,70 @@ export function PlanningCalendar({
         title: unscheduledSessionTitle(chip.discipline),
         sessionRole,
         poolSlotKind: chip.slotKind,
-        ...(chip.targetDurationMinutes != null && chip.targetDurationMinutes > 0
-          ? { estimatedDurationMinutes: chip.targetDurationMinutes }
+        ...(estimatedDurationMinutes != null && estimatedDurationMinutes > 0
+          ? { estimatedDurationMinutes }
           : {}),
         ...(targetZones ? { targetZones } : {}),
       }),
     });
-    return res.ok;
+    if (!res.ok) return null;
+    const data = (await res.json().catch(() => ({}))) as { session?: { id?: string } };
+    return data.session?.id ?? null;
   }
 
-  async function handleUnscheduledPoolDrop(
+  async function handlePoolSessionCardDrop(
     chip: UnscheduledChip,
+    draft: PoolCardDraft | null,
     overData: Record<string, unknown> | undefined
   ) {
     if (overData?.type !== "day") return;
     const dateKey = overData?.dateKey as string | undefined;
     if (!poolWeekAllowsDate(dateKey)) return;
+
     const sessionRole = sessionRoleForChip(chip);
-    const ok = await createUnscheduledSession(dateKey!, chip, sessionRole);
-    if (ok) await handleRefresh();
+    const estimatedDurationMinutes =
+      draft && draft.durationMinutes > 0
+        ? draft.durationMinutes
+        : chip.targetDurationMinutes;
+
+    const sessionId = await createUnscheduledSession(dateKey!, chip, sessionRole, {
+      estimatedDurationMinutes:
+        estimatedDurationMinutes != null && estimatedDurationMinutes > 0
+          ? estimatedDurationMinutes
+          : undefined,
+    });
+    if (!sessionId) {
+      alert("Could not create session");
+      return;
+    }
+
+    if (draft && draft.nodes.length > 0) {
+      const ok = await attachStepsToSession(sessionId, draft.nodes);
+      if (!ok) {
+        alert("Session created but workout steps could not be attached");
+      }
+    }
+
+    setPoolDrafts((prev) => {
+      if (!(chip.id in prev)) return prev;
+      const next = { ...prev };
+      delete next[chip.id];
+      return next;
+    });
+    if (selectedPoolCardId === chip.id) {
+      setSelectedPoolCardId(null);
+      setBuilderExpanded(false);
+      poolComposer.clear();
+    }
+    await handleRefresh();
   }
 
   async function confirmRolePick(sessionRole: SessionRole) {
     if (!pendingRolePick) return;
     const { chip, dateKey } = pendingRolePick;
     setPendingRolePick(null);
-    const ok = await createUnscheduledSession(dateKey, chip, sessionRole);
-    if (ok) await handleRefresh();
+    const id = await createUnscheduledSession(dateKey, chip, sessionRole);
+    if (id) await handleRefresh();
   }
 
   async function applyTemplateToSession(sessionId: string, templateId: string): Promise<boolean> {
@@ -945,7 +950,6 @@ export function PlanningCalendar({
   }
 
   async function handleRefresh() {
-    setArmedUnscheduled({});
     await reloadCalendarData();
     setPmcRefreshKey((k) => k + 1);
   }
@@ -971,14 +975,22 @@ export function PlanningCalendar({
       return;
     }
     if (!poolOpen) setPoolOpen(true);
-    setPoolTab("build");
+    const card = poolChips.find(
+      (c) =>
+        c.discipline === session.discipline && isEndurancePoolDiscipline(c.discipline)
+    );
+    if (!card) {
+      alert("No open pool card for this discipline this week.");
+      return;
+    }
     const sourceLabel = `${session.title} · ${format(
       parseISO(`${session.scheduledDate}T12:00:00`),
       "EEE MMM d"
     )}`;
     const ok = await poolComposer.loadFromSession(session.id, sourceLabel);
     if (ok) {
-      // Ensure pool week stays put; toast-ish via historySource label on graph
+      setSelectedPoolCardId(card.id);
+      setBuilderExpanded(true);
     }
   }
 
@@ -1050,8 +1062,11 @@ export function PlanningCalendar({
               if (!poolOpen) setPoolOpen(true);
             }}
             onClearSelection={() => setSelectedDateKey(null)}
-            armedUnscheduled={armedUnscheduled}
-            onClearArmedUnscheduled={clearArmedUnscheduled}
+            poolDrafts={poolDrafts}
+            poolDisciplineFilter={poolDisciplineFilter}
+            onPoolDisciplineFilterChange={setPoolDisciplineFilter}
+            selectedPoolCardId={selectedPoolCardId}
+            onSelectPoolCard={handleSelectPoolCard}
             onLoadIntoBuilder={
               useWizardPool ? (session) => void handleLoadIntoBuilder(session) : undefined
             }
@@ -1135,11 +1150,14 @@ export function PlanningCalendar({
                 sessions={poolWeekSessions}
                 activities={poolWeekActivities}
                 currentWeekStart={currentWeekStart}
-                selectedDateKey={selectedDateKey}
-                armedUnscheduled={armedUnscheduled}
-                onClearArmedUnscheduled={clearArmedUnscheduled}
-                activeTab={poolTab}
-                onActiveTabChange={setPoolTabStable}
+                drafts={poolDrafts}
+                disciplineFilter={poolDisciplineFilter}
+                onDisciplineFilterChange={setPoolDisciplineFilter}
+                selectedCardId={selectedPoolCardId}
+                onSelectCard={handleSelectPoolCard}
+                builderExpanded={builderExpanded}
+                onBuilderExpandedChange={setBuilderExpanded}
+                onBuilderDone={handleBuilderDone}
                 composer={poolComposer}
                 disciplineSettings={disciplineSettings}
               />

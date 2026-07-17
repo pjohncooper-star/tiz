@@ -202,36 +202,6 @@ export function SegmentLibraryContent({ composer }: { composer: PoolWorkoutCompo
   );
 }
 
-function AssembledDragHandle({ composer }: { composer: PoolWorkoutComposer }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: composer.assembledDragId,
-    data: {
-      type: "assembled-workout",
-      discipline: composer.discipline,
-      nodes: composer.mergedNodes,
-    },
-    disabled: !composer.hasWorkout,
-  });
-
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
-    : undefined;
-
-  return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      style={style}
-      disabled={!composer.hasWorkout}
-      className="cursor-grab rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-800 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-700 dark:bg-sky-950/40 dark:text-sky-200"
-      {...listeners}
-      {...attributes}
-    >
-      Drag to session ▶
-    </button>
-  );
-}
-
 function disciplineLabel(discipline: Discipline): string {
   return discipline.charAt(0) + discipline.slice(1).toLowerCase();
 }
@@ -252,20 +222,25 @@ type WorkoutGraphPanelProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
+  /** When true, discipline comes from the selected pool card and cannot be changed. */
+  lockDiscipline?: boolean;
+  cardLabel?: string;
 };
 
 function CollapsedBuildBar({
   composer,
   onEdit,
+  cardLabel,
 }: {
   composer: PoolWorkoutComposer;
   onEdit: () => void;
+  cardLabel?: string;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] tabular-nums text-zinc-500">
         <span className="font-medium text-zinc-700 dark:text-zinc-200">
-          {disciplineLabel(composer.discipline)}
+          {cardLabel ?? disciplineLabel(composer.discipline)}
         </span>
         {composer.durationMinutes > 0 ? <span>· {composer.durationMinutes} min</span> : null}
         {composer.historySource ? (
@@ -288,18 +263,19 @@ function CollapsedBuildBar({
         >
           Clear
         </Button>
-        <AssembledDragHandle composer={composer} />
       </div>
     </div>
   );
 }
 
-/** Expandable build panel in the pool strip: collapse to drag bar, expand to edit. */
+/** Expandable build panel bound to a selected pool session card. */
 export function WorkoutGraphPanel({
   composer,
   disciplineSettings,
   expanded,
   onExpandedChange,
+  lockDiscipline = false,
+  cardLabel,
 }: WorkoutGraphPanelProps) {
   const [bodyTab, setBodyTab] = useState<BuildBodyTab>("steps");
   const { setNodeRef, isOver } = useDroppable({
@@ -310,14 +286,20 @@ export function WorkoutGraphPanel({
   const { poolSize, displayUnit } = useComposerUnits(composer, disciplineSettings);
 
   if (!expanded) {
-    return <CollapsedBuildBar composer={composer} onEdit={() => onExpandedChange(true)} />;
+    return (
+      <CollapsedBuildBar
+        composer={composer}
+        onEdit={() => onExpandedChange(true)}
+        cardLabel={cardLabel}
+      />
+    );
   }
 
   return (
-    <div className="relative">
+    <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[11px] text-zinc-500">
-          Editing {disciplineLabel(composer.discipline)} workout
+          Editing {cardLabel ?? `${disciplineLabel(composer.discipline)} workout`}
           {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
         </span>
         <Button
@@ -330,25 +312,31 @@ export function WorkoutGraphPanel({
       </div>
 
       <div
-        className={`absolute left-0 right-0 top-full z-40 mt-1 max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-800 dark:bg-zinc-950 ${
+        className={`max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${
           isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
         }`}
         ref={setNodeRef}
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 dark:border-zinc-800">
           <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={composer.discipline}
-              onChange={(e) =>
-                composer.setDiscipline(e.target.value as typeof composer.discipline)
-              }
-              aria-label="Build discipline"
-              className="px-2 py-1 text-xs"
-            >
-              <option value="SWIM">Swim</option>
-              <option value="BIKE">Bike</option>
-              <option value="RUN">Run</option>
-            </Select>
+            {lockDiscipline ? (
+              <span className="text-[11px] font-medium text-zinc-700 dark:text-zinc-200">
+                {disciplineLabel(composer.discipline)}
+              </span>
+            ) : (
+              <Select
+                value={composer.discipline}
+                onChange={(e) =>
+                  composer.setDiscipline(e.target.value as typeof composer.discipline)
+                }
+                aria-label="Build discipline"
+                className="px-2 py-1 text-xs"
+              >
+                <option value="SWIM">Swim</option>
+                <option value="BIKE">Bike</option>
+                <option value="RUN">Run</option>
+              </Select>
+            )}
             <SegmentedControl
               value={bodyTab}
               onChange={setBodyTab}
@@ -405,8 +393,8 @@ export function WorkoutGraphPanel({
 
         <p className="mt-2 text-[10px] text-zinc-400">
           {bodyTab === "steps"
-            ? "Add and edit steps below the graph, or switch to Components to append library segments. Click Done, then drag the workout onto a session."
-            : "Click + or drag a component onto the graph. Switch to Steps to fine-tune, then Done and drag onto a session."}
+            ? "Add and edit steps below the graph, or switch to Components to append library segments. Click Done, then drag the card onto a pool-week day."
+            : "Click + or drag a component onto the graph. Switch to Steps to fine-tune, then Done and drag the card onto a day."}
         </p>
       </div>
     </div>

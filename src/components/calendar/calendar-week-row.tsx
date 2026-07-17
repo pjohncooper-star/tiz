@@ -27,7 +27,10 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
-import type { UnscheduledAttachment } from "@/lib/plan/calendar/pool-unscheduled-attachment";
+import type {
+  PoolCardDraftMap,
+  PoolDisciplineFilter,
+} from "@/lib/plan/calendar/pool-session-card";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -54,8 +57,11 @@ type CalendarWeekRowProps = {
   selectedDateKey: string | null;
   onSelectDay: (dateKey: string) => void;
   onClearSelection: () => void;
-  armedUnscheduled: Record<string, UnscheduledAttachment>;
-  onClearArmedUnscheduled: (chipId: string) => void;
+  poolDrafts: PoolCardDraftMap;
+  poolDisciplineFilter: PoolDisciplineFilter;
+  onPoolDisciplineFilterChange: (filter: PoolDisciplineFilter) => void;
+  selectedPoolCardId: string | null;
+  onSelectPoolCard: (cardId: string) => void;
   onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
@@ -82,8 +88,11 @@ export function CalendarWeekRow({
   selectedDateKey,
   onSelectDay,
   onClearSelection,
-  armedUnscheduled,
-  onClearArmedUnscheduled,
+  poolDrafts,
+  poolDisciplineFilter,
+  onPoolDisciplineFilterChange,
+  selectedPoolCardId,
+  onSelectPoolCard,
   onLoadIntoBuilder,
   onUnassignWorkout,
 }: CalendarWeekRowProps) {
@@ -204,9 +213,11 @@ export function CalendarWeekRow({
                 activities={activities}
                 weekStart={weekStart}
                 currentWeekStart={currentWeekStart}
-                selectedDateKey={selectedDateKey}
-                armedUnscheduled={armedUnscheduled}
-                onClearArmedUnscheduled={onClearArmedUnscheduled}
+                drafts={poolDrafts}
+                disciplineFilter={poolDisciplineFilter}
+                onDisciplineFilterChange={onPoolDisciplineFilterChange}
+                selectedCardId={selectedPoolCardId}
+                onSelectCard={onSelectPoolCard}
               />
             ) : (
               <aside className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
