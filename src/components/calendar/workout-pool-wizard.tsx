@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { addWeeks, endOfWeek, format, parseISO, startOfWeek } from "date-fns";
 import { Button } from "@/components/ui";
 import { WorkoutPool } from "@/components/calendar/workout-pool";
@@ -9,14 +9,17 @@ import type { PoolWorkoutComposer } from "@/components/calendar/use-pool-workout
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
-import type { UnscheduledAttachment } from "@/lib/plan/calendar/pool-unscheduled-attachment";
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
+import {
+  isEndurancePoolDiscipline,
+  mergeChipsWithDrafts,
+  type PoolCardDraftMap,
+  type PoolDisciplineFilter,
+} from "@/lib/plan/calendar/pool-session-card";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
-
-export type PoolTab = "skeleton" | "build";
 
 type WorkoutPoolWizardProps = {
   poolWeekStart: string;
@@ -25,11 +28,14 @@ type WorkoutPoolWizardProps = {
   sessions: CalendarPlannedSession[];
   activities: CalendarWeekActivity[];
   currentWeekStart: string;
-  selectedDateKey: string | null;
-  armedUnscheduled: Record<string, UnscheduledAttachment>;
-  onClearArmedUnscheduled: (chipId: string) => void;
-  activeTab: PoolTab;
-  onActiveTabChange: (tab: PoolTab) => void;
+  drafts: PoolCardDraftMap;
+  disciplineFilter: PoolDisciplineFilter;
+  onDisciplineFilterChange: (filter: PoolDisciplineFilter) => void;
+  selectedCardId: string | null;
+  onSelectCard: (cardId: string) => void;
+  builderExpanded: boolean;
+  onBuilderExpandedChange: (expanded: boolean) => void;
+  onBuilderDone: () => void;
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
 };
@@ -47,34 +53,43 @@ export function WorkoutPoolWizard({
   sessions,
   activities,
   currentWeekStart,
-  selectedDateKey,
-  armedUnscheduled,
-  onClearArmedUnscheduled,
-  activeTab,
-  onActiveTabChange,
+  drafts,
+  disciplineFilter,
+  onDisciplineFilterChange,
+  selectedCardId,
+  onSelectCard,
+  builderExpanded,
+  onBuilderExpandedChange,
+  onBuilderDone,
   composer,
   disciplineSettings,
 }: WorkoutPoolWizardProps) {
-  const [buildExpanded, setBuildExpanded] = useState(false);
-
-  const unscheduledCount = useMemo(() => {
-    if (!weekTarget) return 0;
-    return computeUnscheduledChips(poolWeekStart, weekTarget, sessions).length;
+  const chips = useMemo(() => {
+    if (!weekTarget) return [];
+    return computeUnscheduledChips(poolWeekStart, weekTarget, sessions);
   }, [poolWeekStart, weekTarget, sessions]);
 
-  useEffect(() => {
-    onActiveTabChange(unscheduledCount > 0 ? "skeleton" : "build");
-    // Default tab only when the pool week changes — not when chip count updates mid-edit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poolWeekStart]);
+  const selectedCard = useMemo(() => {
+    if (!selectedCardId) return null;
+    return mergeChipsWithDrafts(chips, drafts).find((c) => c.id === selectedCardId) ?? null;
+  }, [chips, drafts, selectedCardId]);
+
+  const showBuilder =
+    selectedCard != null &&
+    isEndurancePoolDiscipline(selectedCard.discipline) &&
+    builderExpanded;
 
   useEffect(() => {
-    if (activeTab === "build") {
-      setBuildExpanded(true);
-    } else {
-      setBuildExpanded(false);
+    if (
+      selectedCard &&
+      isEndurancePoolDiscipline(selectedCard.discipline) &&
+      composer.discipline !== selectedCard.discipline
+    ) {
+      composer.setDiscipline(selectedCard.discipline);
     }
-  }, [activeTab]);
+    // Only sync when the selected card identity/discipline changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCard?.id, selectedCard?.discipline]);
 
   function shiftPoolWeek(delta: number) {
     const next = addWeeks(parseISO(`${poolWeekStart}T12:00:00`), delta);
@@ -105,49 +120,44 @@ export function WorkoutPoolWizard({
             ▶
           </Button>
         </div>
-
-        <div className="flex rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
-          {(["skeleton", "build"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition ${
-                activeTab === tab
-                  ? "bg-sky-600 text-white"
-                  : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              }`}
-              onClick={() => onActiveTabChange(tab)}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
       </div>
 
       {!weekTarget ? (
         <p className="text-sm text-zinc-500">
           No season targets for this week. The pool works for weeks inside your active plan.
         </p>
-      ) : activeTab === "skeleton" ? (
-        <WorkoutPool
-          weekTarget={weekTarget}
-          sessions={sessions}
-          activities={activities}
-          weekStart={poolWeekStart}
-          currentWeekStart={currentWeekStart}
-          selectedDateKey={selectedDateKey}
-          armedUnscheduled={armedUnscheduled}
-          onClearArmedUnscheduled={onClearArmedUnscheduled}
-          activeTab="skeleton"
-          embedded
-        />
       ) : (
-        <WorkoutGraphPanel
-          composer={composer}
-          disciplineSettings={disciplineSettings}
-          expanded={buildExpanded}
-          onExpandedChange={setBuildExpanded}
-        />
+        <>
+          <WorkoutPool
+            weekTarget={weekTarget}
+            sessions={sessions}
+            activities={activities}
+            weekStart={poolWeekStart}
+            currentWeekStart={currentWeekStart}
+            drafts={drafts}
+            disciplineFilter={disciplineFilter}
+            onDisciplineFilterChange={onDisciplineFilterChange}
+            selectedCardId={selectedCardId}
+            onSelectCard={onSelectCard}
+            embedded
+          />
+
+          {showBuilder ? (
+            <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+              <WorkoutGraphPanel
+                composer={composer}
+                disciplineSettings={disciplineSettings}
+                expanded
+                onExpandedChange={(expanded) => {
+                  if (!expanded) onBuilderDone();
+                  else onBuilderExpandedChange(true);
+                }}
+                lockDiscipline
+                cardLabel={selectedCard.label}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   );

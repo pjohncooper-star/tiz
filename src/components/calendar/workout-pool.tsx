@@ -1,20 +1,25 @@
 "use client";
 
-import { PoolLibrarySection } from "@/components/calendar/pool-library-section";
 import { useMemo } from "react";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import {
   computeUnscheduledChips,
+  formatChipDurationMinutes,
   hasUsableTypedSlotBudgets,
   type PoolDiscipline,
   type UnscheduledChip,
 } from "@/lib/plan/calendar/unscheduled-chips";
 import {
-  unscheduledAttachmentLabel,
-  type UnscheduledAttachment,
-} from "@/lib/plan/calendar/pool-unscheduled-attachment";
+  filterPoolCards,
+  isEndurancePoolDiscipline,
+  mergeChipsWithDrafts,
+  type PoolCardDraftMap,
+  type PoolDisciplineFilter,
+  type PoolSessionCard,
+} from "@/lib/plan/calendar/pool-session-card";
 import {
   combinedZoneTotals,
   linkedActivityIdsExcludedFromCompletedRollup,
@@ -23,14 +28,13 @@ import {
   summarizeWeekCompletedSessions,
   summarizeWeekPlannedSessions,
 } from "@/lib/plan/calendar/week-summary";
-import {
-  poolArmedUnscheduledDragId,
-  poolUnscheduledDragId,
-  poolUnscheduledDropId,
-} from "@/lib/plan/workout-builder-dnd";
+import { poolSessionCardDragId } from "@/lib/plan/workout-builder-dnd";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import { formatZoneMinutes } from "@/lib/workout/steps";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
+import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
+import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
+import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
 
 function PoolSection({
   title,
@@ -52,83 +56,125 @@ function PoolSection({
   );
 }
 
-function UnscheduledChipCard({
-  chip,
-  attachment,
-  selectedDateKey,
-  onClearAttachment,
+const SLOT_KIND_SHORT: Record<UnscheduledChip["slotKind"], string> = {
+  ENDURANCE: "Endurance",
+  INTENSITY: "Intense",
+  LONG: "Long",
+  SUBSTITUTE_ENDURANCE: "Endurance (sub)",
+};
+
+function PoolSessionCardView({
+  card,
+  selected,
+  onSelect,
 }: {
-  chip: UnscheduledChip;
-  attachment?: UnscheduledAttachment;
-  selectedDateKey: string | null;
-  onClearAttachment?: (chipId: string) => void;
+  card: PoolSessionCard;
+  selected: boolean;
+  onSelect: () => void;
 }) {
-  const armed = !!attachment;
-
-  const {
-    attributes,
-    listeners,
-    setNodeRef: setDragRef,
-    isDragging,
-  } = useDraggable({
-    id: armed ? poolArmedUnscheduledDragId(chip.id) : poolUnscheduledDragId(chip.id),
-    data: armed
-      ? { type: "pool-armed-unscheduled", chip, attachment }
-      : { type: "pool-unscheduled", chip },
+  const canBuild = isEndurancePoolDiscipline(card.discipline);
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: poolSessionCardDragId(card.id),
+    data: {
+      type: "pool-session-card",
+      chip: card,
+      draft: card.draft ?? null,
+    },
   });
 
-  const { setNodeRef: setDropRef, isOver } = useDroppable({
-    id: poolUnscheduledDropId(chip.id),
-    data: { type: "pool-unscheduled-drop", chip, selectedDateKey },
-  });
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
+    : undefined;
 
-  const setNodeRef = (node: HTMLElement | null) => {
-    setDragRef(node);
-    setDropRef(node);
-  };
+  const durationLabel = card.draft
+    ? formatChipDurationMinutes(card.draft.durationMinutes)
+    : card.targetDurationMinutes != null && card.targetDurationMinutes > 0
+      ? formatChipDurationMinutes(card.targetDurationMinutes)
+      : null;
 
   return (
     <div
       ref={setNodeRef}
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
-        armed
-          ? "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40"
-          : "border-dashed border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-900"
-      } ${isDragging ? "opacity-50" : ""} ${
-        isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
-      }`}
+      style={style}
+      className={`w-full max-w-[11rem] rounded-md border bg-white p-2 text-xs shadow-sm dark:bg-zinc-900 ${
+        selected
+          ? "border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500"
+          : "border-zinc-200 dark:border-zinc-700"
+      } ${isDragging ? "opacity-50" : ""}`}
     >
-      <span className="font-medium text-zinc-700 dark:text-zinc-200">{chip.label}</span>
-      <span className="text-zinc-400">×1</span>
-      {armed ? (
-        <>
-          <span className="truncate text-zinc-500">· {unscheduledAttachmentLabel(attachment)}</span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClearAttachment?.(chip.id);
-            }}
-            className="shrink-0 text-zinc-400 hover:text-zinc-600"
-            aria-label="Clear attached workout"
-          >
-            ×
-          </button>
-        </>
-      ) : null}
       <button
         type="button"
-        className="shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-        aria-label={
-          armed
-            ? `Drag ${chip.label} with workout to a day`
-            : `Drag unscheduled ${chip.label}`
-        }
+        className="w-full text-left"
+        onClick={() => {
+          if (canBuild) onSelect();
+        }}
+        disabled={!canBuild}
+      >
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0">
+            <p className="truncate font-medium text-zinc-800 dark:text-zinc-100">
+              {DISCIPLINE_DISPLAY_LABELS[card.discipline] ?? card.discipline}
+            </p>
+            <p className="truncate text-[10px] text-zinc-400">{SLOT_KIND_SHORT[card.slotKind]}</p>
+          </div>
+          <SessionRoleBadge role={sessionRoleForChip(card)} />
+        </div>
+        {card.draft?.profile ? (
+          <div className="mt-1.5">
+            <WorkoutProfileMiniChart profile={card.draft.profile} />
+          </div>
+        ) : (
+          <div className="mt-1.5 flex h-8 items-center justify-center rounded bg-zinc-100 text-[10px] text-zinc-400 dark:bg-zinc-800">
+            {canBuild ? "Click to build" : "Drag to day"}
+          </div>
+        )}
+        {durationLabel ? (
+          <p className="mt-1 tabular-nums text-[10px] text-zinc-500">{durationLabel}</p>
+        ) : null}
+      </button>
+      <button
+        type="button"
+        className="mt-1 w-full cursor-grab touch-none rounded border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:bg-zinc-50 active:cursor-grabbing dark:border-zinc-700 dark:hover:bg-zinc-800"
+        aria-label={`Drag ${card.label} to calendar`}
         {...listeners}
         {...attributes}
       >
-        ⠿
+        Drag to calendar
       </button>
+    </div>
+  );
+}
+
+function DisciplineFilterBar({
+  value,
+  onChange,
+}: {
+  value: PoolDisciplineFilter;
+  onChange: (v: PoolDisciplineFilter) => void;
+}) {
+  const options: { value: PoolDisciplineFilter; label: string }[] = [
+    { value: "ALL", label: "All" },
+    { value: "SWIM", label: "Swim" },
+    { value: "BIKE", label: "Bike" },
+    { value: "RUN", label: "Run" },
+    { value: "STRENGTH", label: "Strength" },
+  ];
+  return (
+    <div className="flex flex-wrap gap-1 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          className={`rounded px-2 py-0.5 text-[11px] font-medium transition ${
+            value === opt.value
+              ? "bg-sky-600 text-white"
+              : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          }`}
+          onClick={() => onChange(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -225,11 +271,11 @@ export type WorkoutPoolProps = {
   activities: CalendarWeekActivity[];
   weekStart: string;
   currentWeekStart: string;
-  selectedDateKey: string | null;
-  armedUnscheduled: Record<string, UnscheduledAttachment>;
-  onClearArmedUnscheduled: (chipId: string) => void;
-  /** When set, show only skeleton (unscheduled) or build (library/TiZ) sections. */
-  activeTab?: "skeleton" | "build";
+  drafts: PoolCardDraftMap;
+  disciplineFilter: PoolDisciplineFilter;
+  onDisciplineFilterChange: (filter: PoolDisciplineFilter) => void;
+  selectedCardId: string | null;
+  onSelectCard: (cardId: string) => void;
   embedded?: boolean;
 };
 
@@ -239,72 +285,62 @@ export function WorkoutPool({
   activities,
   weekStart,
   currentWeekStart,
-  selectedDateKey,
-  armedUnscheduled,
-  onClearArmedUnscheduled,
-  activeTab,
+  drafts,
+  disciplineFilter,
+  onDisciplineFilterChange,
+  selectedCardId,
+  onSelectCard,
   embedded = false,
 }: WorkoutPoolProps) {
-  const unscheduled = useMemo(
+  const chips = useMemo(
     () => computeUnscheduledChips(weekStart, weekTarget, sessions),
     [weekStart, weekTarget, sessions]
   );
 
-  const showSkeleton = activeTab == null || activeTab === "skeleton";
-  const showBuild = activeTab == null || activeTab === "build";
+  const cards = useMemo(
+    () => filterPoolCards(mergeChipsWithDrafts(chips, drafts), disciplineFilter),
+    [chips, drafts, disciplineFilter]
+  );
+
   const usesLegacyBudget = !hasUsableTypedSlotBudgets(weekTarget);
 
-  const unscheduledEmptyMessage = usesLegacyBudget
+  const emptyMessage = usesLegacyBudget
     ? "No typed pool slots for this week. Save the season with recalculate to populate slot budgets."
-    : "All budgeted sessions are on the calendar.";
+    : chips.length === 0
+      ? "All budgeted sessions are on the calendar."
+      : "No cards match this discipline filter.";
 
   const inner = (
-    <div className="space-y-4">
-      {showSkeleton ? (
-        <PoolSection
-          title="Unscheduled"
-          hint={
-            selectedDateKey
-              ? "Drop a workout on a chip to place on the selected day, or drag a chip to a pool-week day."
-              : "Drag a chip to a day in the pool week — you'll pick a session role."
-          }
-        >
-          {unscheduled.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {unscheduled.map((chip) => (
-                <UnscheduledChipCard
-                  key={chip.id}
-                  chip={chip}
-                  attachment={armedUnscheduled[chip.id]}
-                  selectedDateKey={selectedDateKey}
-                  onClearAttachment={onClearArmedUnscheduled}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-[11px] text-zinc-500">{unscheduledEmptyMessage}</p>
-          )}
-        </PoolSection>
-      ) : null}
+    <div className="space-y-3">
+      <DisciplineFilterBar value={disciplineFilter} onChange={onDisciplineFilterChange} />
 
-      {showBuild ? (
-        <>
-          <PoolSection
-            title="Library"
-            hint="Saved templates from your workout library. Drag onto a pool-week day or empty session."
-          >
-            <PoolLibrarySection />
-          </PoolSection>
+      <PoolSection
+        title="Session cards"
+        hint="Select a card to build a workout, then drag it onto a pool-week day."
+      >
+        {cards.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {cards.map((card) => (
+              <PoolSessionCardView
+                key={card.id}
+                card={card}
+                selected={selectedCardId === card.id}
+                onSelect={() => onSelectCard(card.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-zinc-500">{emptyMessage}</p>
+        )}
+      </PoolSection>
 
-          <WeekTizFooter
-            weekTarget={weekTarget}
-            sessions={sessions}
-            activities={activities}
-            weekStart={weekStart}
-            currentWeekStart={currentWeekStart}
-          />
-        </>
-      ) : null}
+      <WeekTizFooter
+        weekTarget={weekTarget}
+        sessions={sessions}
+        activities={activities}
+        weekStart={weekStart}
+        currentWeekStart={currentWeekStart}
+      />
     </div>
   );
 
