@@ -55,7 +55,7 @@ import {
 import { useWorkoutBuilder } from "@/components/calendar/use-workout-builder";
 import { usePoolWorkoutComposer } from "@/components/calendar/use-pool-workout-composer";
 import { WorkoutBuilderPane } from "@/components/calendar/workout-builder-pane";
-import { SegmentLibraryPane, WorkoutGraphPanel } from "@/components/calendar/workout-graph-composer";
+import { SegmentLibraryPane, WorkoutBuildStepsPane } from "@/components/calendar/workout-graph-composer";
 import { useCalendarBuildMode } from "@/components/calendar/calendar-build-mode";
 import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
@@ -178,25 +178,6 @@ export function PlanningCalendar({
     setCalendarBuildMode(showBuildLayout);
     return () => setCalendarBuildMode(false);
   }, [showBuildLayout, setCalendarBuildMode]);
-
-  useEffect(() => {
-    const main = document.querySelector("main");
-    if (!(main instanceof HTMLElement)) return;
-
-    const centered = ["mx-auto"];
-
-    if (showBuildLayout) {
-      main.classList.remove(...centered);
-    } else if (!main.classList.contains("mx-auto")) {
-      main.classList.add("mx-auto");
-    }
-
-    return () => {
-      if (!main.classList.contains("mx-auto")) {
-        main.classList.add("mx-auto");
-      }
-    };
-  }, [showBuildLayout]);
 
   const clearArmedUnscheduled = useCallback((chipId: string) => {
     setArmedUnscheduled((prev) => {
@@ -1102,7 +1083,7 @@ export function PlanningCalendar({
       onDragEnd={handleDragEnd}
       onDragCancel={() => setActiveDragId(null)}
     >
-      <div className={showBuildLayout ? "space-y-4 pr-56" : "space-y-4"}>
+      <div className={showBuildLayout ? "space-y-4 pl-56 pr-56" : "space-y-4"}>
         <div className="sticky top-0 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
           <div className="flex items-center justify-between gap-3 overflow-x-auto">
             <div className="flex shrink-0 gap-2">
@@ -1200,24 +1181,17 @@ export function PlanningCalendar({
           )}
         </div>
 
-        {showBuildLayout ? <SegmentLibraryPane composer={poolComposer} /> : null}
-
         {showBuildLayout ? (
-          <div className="-mx-4 flex min-h-[calc(100vh-11rem)] border-t border-zinc-200 dark:border-zinc-800">
-            <div className="sticky top-[4.5rem] h-[calc(100vh-11rem)] w-[608px] shrink-0 overflow-hidden border-r border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-              <WorkoutGraphPanel
-                composer={poolComposer}
-                disciplineSettings={disciplineSettings}
-                build
-              />
-            </div>
-            <div className="min-w-0 flex-1 overflow-y-auto px-4">
-              {calendarWeeksContent}
-            </div>
-          </div>
-        ) : (
-          calendarWeeksContent
-        )}
+          <>
+            <WorkoutBuildStepsPane
+              composer={poolComposer}
+              disciplineSettings={disciplineSettings}
+            />
+            <SegmentLibraryPane composer={poolComposer} />
+          </>
+        ) : null}
+
+        {calendarWeeksContent}
       </div>
 
       <DragOverlay>
