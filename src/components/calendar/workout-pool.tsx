@@ -249,16 +249,29 @@ function WeekTizFooter({
   activities,
   weekStart,
   currentWeekStart,
+  disciplineFilter,
 }: {
   weekTarget: CalendarWeekTarget;
   sessions: CalendarPlannedSession[];
   activities: CalendarWeekActivity[];
   weekStart: string;
   currentWeekStart: string;
+  disciplineFilter: PoolDisciplineFilter;
 }) {
   const mode: PlanningMode = weekTarget.planningMode ?? "BY_DISCIPLINE";
   const separateLongTiz = planningModeIncludesLongTiz(mode);
   const showCompleted = weekStart <= currentWeekStart;
+  const showOverall = mode === "OVERALL";
+
+  // Strength has no TiZ; hide the footer when that filter is active.
+  if (disciplineFilter === "STRENGTH") return null;
+
+  const filteredDiscipline: TargetDiscipline | null =
+    disciplineFilter === "SWIM" ||
+    disciplineFilter === "BIKE" ||
+    disciplineFilter === "RUN"
+      ? disciplineFilter
+      : null;
 
   const mainSessions = separateLongTiz
     ? sessions.filter((session) => session.sessionRole !== "LONG")
@@ -290,16 +303,38 @@ function WeekTizFooter({
   const longDoneSummary = showCompleted && completedLong ? completedLong : plannedLong;
 
   const overallTarget = combinedZoneTotals(weekTarget.zoneMinutes);
-  const longTargetByDiscipline = LONG_TIZ_DISCIPLINES.map((discipline) => ({
-    discipline,
-    target: sportZoneTotals(discipline, weekTarget.longSessionZoneMinutes ?? {}),
-    done: doneZonesFromSummary(longDoneSummary, discipline),
-  }));
-  const hasLongTarget = longTargetByDiscipline.some((row) => zoneArrayHasTarget(row.target));
-  const hasMainTarget = zoneArrayHasTarget(overallTarget);
-  if (!hasMainTarget && !(separateLongTiz && hasLongTarget)) return null;
+  const visibleDisciplines = filteredDiscipline
+    ? TIZ_DISCIPLINES.filter((d) => d === filteredDiscipline)
+    : TIZ_DISCIPLINES;
+  const disciplineColumns = visibleDisciplines
+    .map((discipline) => {
+      const entry = weekTarget.byDiscipline.find((row) => row.discipline === discipline);
+      const target = sportZoneTotals(discipline, entry?.zoneMinutes ?? {});
+      return {
+        discipline,
+        target,
+        done: doneZonesFromSummary(mainDoneSummary, discipline),
+      };
+    })
+    .filter((row) => zoneArrayHasTarget(row.target));
 
-  const showOverall = mode === "OVERALL";
+  const longTargetByDiscipline = LONG_TIZ_DISCIPLINES.filter(
+    (discipline) => !filteredDiscipline || discipline === filteredDiscipline
+  )
+    .map((discipline) => ({
+      discipline,
+      target: sportZoneTotals(discipline, weekTarget.longSessionZoneMinutes ?? {}),
+      done: doneZonesFromSummary(longDoneSummary, discipline),
+    }))
+    .filter((row) => zoneArrayHasTarget(row.target));
+
+  const hasLongTarget = separateLongTiz && longTargetByDiscipline.length > 0;
+  const hasMainTarget = showOverall
+    ? zoneArrayHasTarget(overallTarget)
+    : disciplineColumns.length > 0;
+  if (!hasMainTarget && !hasLongTarget) return null;
+
+  const columnCount = Math.max(1, disciplineColumns.length);
 
   return (
     <PoolSection
@@ -313,42 +348,41 @@ function WeekTizFooter({
             doneZones={doneZonesFromSummary(mainDoneSummary)}
           />
         ) : (
-          <div className="space-y-2.5">
-            {TIZ_DISCIPLINES.map((discipline) => {
-              const entry = weekTarget.byDiscipline.find((row) => row.discipline === discipline);
-              const target = sportZoneTotals(discipline, entry?.zoneMinutes ?? {});
-              if (!zoneArrayHasTarget(target)) return null;
-              return (
-                <div key={discipline} className="space-y-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
-                    {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
-                  </p>
-                  <ZoneProgressRows
-                    targetZones={target}
-                    doneZones={doneZonesFromSummary(mainDoneSummary, discipline)}
-                  />
-                </div>
-              );
-            })}
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+          >
+            {disciplineColumns.map(({ discipline, target, done }) => (
+              <div key={discipline} className="min-w-0 space-y-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                  {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
+                </p>
+                <ZoneProgressRows targetZones={target} doneZones={done} />
+              </div>
+            ))}
           </div>
         )}
 
-        {separateLongTiz && hasLongTarget ? (
+        {hasLongTarget ? (
           <div className="space-y-2 border-t border-zinc-200 pt-2 dark:border-zinc-800">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
               Long
             </p>
-            {longTargetByDiscipline.map(({ discipline, target, done }) => {
-              if (!zoneArrayHasTarget(target)) return null;
-              return (
-                <div key={`long-${discipline}`} className="space-y-1">
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(1, longTargetByDiscipline.length)}, minmax(0, 1fr))`,
+              }}
+            >
+              {longTargetByDiscipline.map(({ discipline, target, done }) => (
+                <div key={`long-${discipline}`} className="min-w-0 space-y-1">
                   <p className="text-[10px] font-medium text-zinc-500">
                     {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
                   </p>
                   <ZoneProgressRows targetZones={target} doneZones={done} />
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
@@ -431,6 +465,7 @@ export function WorkoutPool({
         activities={activities}
         weekStart={weekStart}
         currentWeekStart={currentWeekStart}
+        disciplineFilter={disciplineFilter}
       />
     </div>
   );
