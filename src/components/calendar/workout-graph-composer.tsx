@@ -136,6 +136,39 @@ function SegmentLibraryCard({
   );
 }
 
+/** Step editor docked on the left in Build mode (beside collapsed nav). */
+export function WorkoutBuildStepsPane({
+  composer,
+  disciplineSettings,
+}: {
+  composer: PoolWorkoutComposer;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+}) {
+  const unitSettings = unitSettingsForDiscipline(composer.discipline, disciplineSettings);
+  const poolSize = resolveSessionPoolSize(composer.discipline, null, disciplineSettings);
+  const displayUnit: DisplayUnit =
+    composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
+
+  return (
+    <aside
+      className="fixed bottom-0 left-12 top-0 z-20 w-56 overflow-y-auto border-r border-zinc-200 bg-zinc-50/95 p-2 pt-20 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+      aria-label="Workout step editor"
+    >
+      <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+        Steps
+      </p>
+      <WorkoutTreeEditor
+        discipline={composer.discipline}
+        displayUnit={displayUnit}
+        poolSize={poolSize}
+        tree={composer.workoutTree}
+        onChange={composer.setWorkoutTree}
+        stepsPanel
+      />
+    </aside>
+  );
+}
+
 /** Warm-up / Main / Cool-down library docked on the right in Build mode. */
 export function SegmentLibraryPane({
   composer,
@@ -240,7 +273,8 @@ function AssembledDragHandle({ composer }: { composer: PoolWorkoutComposer }) {
 type WorkoutGraphPanelProps = {
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  build?: boolean;
+  /** Pool strip: toolbar + compact chart only (steps live in the left gutter). */
+  chartOnly?: boolean;
 };
 
 function WorkoutGraphToolbar({
@@ -291,11 +325,11 @@ function WorkoutGraphToolbar({
   );
 }
 
-/** Sticky Build surface: discipline + WorkoutTreeEditor (session-style). */
+/** Sticky Build surface in the pool strip: toolbar + compact workout graph. */
 export function WorkoutGraphPanel({
   composer,
   disciplineSettings,
-  build = false,
+  chartOnly = false,
 }: WorkoutGraphPanelProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: "pool-workout-graph",
@@ -306,35 +340,6 @@ export function WorkoutGraphPanel({
   const poolSize = resolveSessionPoolSize(composer.discipline, null, disciplineSettings);
   const displayUnit: DisplayUnit =
     composer.discipline === "SWIM" ? swimDisplayUnit(poolSize) : unitSettings.displayUnit;
-
-  if (build) {
-    return (
-      <div
-        ref={setNodeRef}
-        className={`flex h-full min-h-0 flex-col ${
-          isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
-        }`}
-      >
-        <div className="shrink-0 border-b border-zinc-200 bg-zinc-50/95 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/90">
-          <WorkoutGraphToolbar
-            composer={composer}
-            disciplineSettings={disciplineSettings}
-            compact
-          />
-        </div>
-        <div className="min-h-0 flex-1">
-          <WorkoutTreeEditor
-            discipline={composer.discipline}
-            displayUnit={displayUnit}
-            poolSize={poolSize}
-            tree={composer.workoutTree}
-            onChange={composer.setWorkoutTree}
-            build
-          />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -351,12 +356,14 @@ export function WorkoutGraphPanel({
         poolSize={poolSize}
         tree={composer.workoutTree}
         onChange={composer.setWorkoutTree}
-        compact
+        compact={!chartOnly}
+        chartOnly={chartOnly}
       />
 
       <p className="text-[10px] text-zinc-400">
-        Drop warm-up / main / cool-down from the left pane, or use Add step / Add repeat. Then drag
-        the assembled workout onto an empty skeleton on the pool week.
+        {chartOnly
+          ? "Drop components from the library on the right onto the graph. Edit steps in the left pane, then drag the assembled workout onto the pool week."
+          : "Drop warm-up / main / cool-down from the library, or use Add step / Add repeat. Then drag the assembled workout onto an empty skeleton on the pool week."}
       </p>
     </div>
   );
