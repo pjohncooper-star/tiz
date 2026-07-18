@@ -2,6 +2,7 @@
 
 import type { Discipline } from "@prisma/client";
 import { Button, Input, Label, Select } from "@/components/ui";
+import { NumberEditorInput } from "@/components/number-editor-input";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { poolSizeForSwimStep, type PoolSize } from "@/lib/units/discipline-settings";
 import type { DisplayUnit } from "@/lib/workout/metrics";
@@ -101,34 +102,23 @@ export function SwimIntervalSetEditor({
       </div>
 
       <div className={`grid sm:grid-cols-2 ${dense ? "gap-2" : "gap-3"}`}>
-        <div>
-          <Label>Repeats</Label>
-          <Input
-            type="number"
-            min={1}
-            max={99}
-            value={set.repeatCount}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (n >= 1) onChange({ ...set, repeatCount: n });
-            }}
-          />
-        </div>
-        <div>
-          <Label>{distanceLabel}</Label>
-          <Input
-            type="number"
-            min={distanceStep}
-            step={distanceStep}
-            value={displayDistance}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              if (!Number.isFinite(v) || v <= 0) return;
-              const meters = swimPool === "SCY" ? v / 1.09361 : v;
-              onChange({ ...set, distanceMeters: meters });
-            }}
-          />
-        </div>
+        <NumberEditorInput
+          label="Repeats"
+          value={set.repeatCount}
+          min={1}
+          max={99}
+          onCommit={(n) => onChange({ ...set, repeatCount: n })}
+        />
+        <NumberEditorInput
+          label={distanceLabel}
+          value={displayDistance}
+          min={distanceStep}
+          step={distanceStep}
+          onCommit={(v) => {
+            const meters = swimPool === "SCY" ? v / 1.09361 : v;
+            onChange({ ...set, distanceMeters: meters });
+          }}
+        />
       </div>
 
       <div className={`grid sm:grid-cols-2 ${dense ? "gap-2" : "gap-3"}`}>

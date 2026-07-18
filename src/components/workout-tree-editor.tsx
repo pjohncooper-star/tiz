@@ -15,6 +15,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline, SignalType } from "@prisma/client";
 import { Button, Input, Label, Select } from "@/components/ui";
+import { NumberEditorInput } from "@/components/number-editor-input";
 import {
   PanelDensityProvider,
   PanelLabel,
@@ -580,26 +581,22 @@ function StepDurationInput({
           : meters;
 
     return (
-      <div className="min-w-0">
-        <Label>{distanceLabel}</Label>
-        <Input
-          type="number"
-          min={1}
-          step={planDiscipline === "SWIM" ? (swimPool === "SCY" ? 25 : 50) : 0.1}
-          value={displayValue}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            if (!Number.isFinite(v) || v <= 0) return;
-            let metersValue = v;
-            if (planDiscipline === "SWIM" && swimPool === "SCY") {
-              metersValue = v / 1.09361;
-            } else if (displayUnit === "IMPERIAL" && planDiscipline !== "SWIM") {
-              metersValue = v * 1609.344;
-            }
-            onChange({ type: "distance", value: metersValue });
-          }}
-        />
-      </div>
+      <NumberEditorInput
+        label={distanceLabel}
+        value={displayValue}
+        min={1}
+        step={planDiscipline === "SWIM" ? (swimPool === "SCY" ? 25 : 50) : 0.1}
+        integer={planDiscipline === "SWIM" || displayUnit === "METRIC"}
+        onCommit={(v) => {
+          let metersValue = v;
+          if (planDiscipline === "SWIM" && swimPool === "SCY") {
+            metersValue = v / 1.09361;
+          } else if (displayUnit === "IMPERIAL" && planDiscipline !== "SWIM") {
+            metersValue = v * 1609.344;
+          }
+          onChange({ type: "distance", value: metersValue });
+        }}
+      />
     );
   }
 
@@ -971,35 +968,27 @@ function StepTargetField({
         <div className="min-w-0">
           <Label>{label} range</Label>
           <div className="grid grid-cols-2 gap-1">
-            <Input
-              type="number"
-              min={1}
-              step={5}
+            <NumberEditorInput
               value={low}
-              aria-label="Low power watts"
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (v > 0) {
-                  onChange({
-                    target: { signal: "power", mode: "range", low: v, high },
-                  });
-                }
-              }}
-            />
-            <Input
-              type="number"
               min={1}
               step={5}
+              ariaLabel="Low power watts"
+              onCommit={(v) =>
+                onChange({
+                  target: { signal: "power", mode: "range", low: v, high },
+                })
+              }
+            />
+            <NumberEditorInput
               value={high}
-              aria-label="High power watts"
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (v > 0) {
-                  onChange({
-                    target: { signal: "power", mode: "range", low, high: v },
-                  });
-                }
-              }}
+              min={1}
+              step={5}
+              ariaLabel="High power watts"
+              onCommit={(v) =>
+                onChange({
+                  target: { signal: "power", mode: "range", low, high: v },
+                })
+              }
             />
           </div>
         </div>
@@ -1007,23 +996,17 @@ function StepTargetField({
     }
     const watts = step.target.value ?? 200;
     return (
-      <div className="min-w-0">
-        <Label>{label}</Label>
-        <Input
-          type="number"
-          min={1}
-          step={5}
-          value={watts}
-          onChange={(e) => {
-            const v = Number(e.target.value);
-            if (v > 0) {
-              onChange({
-                target: { signal: "power", mode: "value", value: v },
-              });
-            }
-          }}
-        />
-      </div>
+      <NumberEditorInput
+        label={label}
+        value={watts}
+        min={1}
+        step={5}
+        onCommit={(v) =>
+          onChange({
+            target: { signal: "power", mode: "value", value: v },
+          })
+        }
+      />
     );
   }
 
@@ -1281,76 +1264,64 @@ function NodeEditor({
         />
         {targetView === "zone" && (
           <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <Label>Start zone</Label>
-              <Input
-                type="number"
-                min={1}
-                max={7}
-                value={step.target.lowZone ?? step.target.low}
-                onChange={(e) => {
-                  const low = Number(e.target.value);
-                  if (low >= 1 && low <= 7) {
-                    const signal =
-                      discipline === "RUN" || discipline === "SWIM"
-                        ? "pace"
-                        : discipline === "STRENGTH"
-                          ? "heart_rate"
-                          : "power";
-                    onTreeChange((nodes) =>
-                      updateAtPath(nodes, path, (n) =>
-                        n.kind === "ramp"
-                          ? {
-                              ...n,
-                              target: {
-                                ...n.target,
-                                signal,
-                                low,
-                                lowZone: low,
-                              },
-                            }
-                          : n
-                      )
-                    );
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <Label>End zone</Label>
-              <Input
-                type="number"
-                min={1}
-                max={7}
-                value={step.target.highZone ?? step.target.high}
-                onChange={(e) => {
-                  const high = Number(e.target.value);
-                  if (high >= 1 && high <= 7) {
-                    const signal =
-                      discipline === "RUN" || discipline === "SWIM"
-                        ? "pace"
-                        : discipline === "STRENGTH"
-                          ? "heart_rate"
-                          : "power";
-                    onTreeChange((nodes) =>
-                      updateAtPath(nodes, path, (n) =>
-                        n.kind === "ramp"
-                          ? {
-                              ...n,
-                              target: {
-                                ...n.target,
-                                signal,
-                                high,
-                                highZone: high,
-                              },
-                            }
-                          : n
-                      )
-                    );
-                  }
-                }}
-              />
-            </div>
+            <NumberEditorInput
+              label="Start zone"
+              value={step.target.lowZone ?? step.target.low}
+              min={1}
+              max={7}
+              onCommit={(low) => {
+                const signal =
+                  discipline === "RUN" || discipline === "SWIM"
+                    ? "pace"
+                    : discipline === "STRENGTH"
+                      ? "heart_rate"
+                      : "power";
+                onTreeChange((nodes) =>
+                  updateAtPath(nodes, path, (n) =>
+                    n.kind === "ramp"
+                      ? {
+                          ...n,
+                          target: {
+                            ...n.target,
+                            signal,
+                            low,
+                            lowZone: low,
+                          },
+                        }
+                      : n
+                  )
+                );
+              }}
+            />
+            <NumberEditorInput
+              label="End zone"
+              value={step.target.highZone ?? step.target.high}
+              min={1}
+              max={7}
+              onCommit={(high) => {
+                const signal =
+                  discipline === "RUN" || discipline === "SWIM"
+                    ? "pace"
+                    : discipline === "STRENGTH"
+                      ? "heart_rate"
+                      : "power";
+                onTreeChange((nodes) =>
+                  updateAtPath(nodes, path, (n) =>
+                    n.kind === "ramp"
+                      ? {
+                          ...n,
+                          target: {
+                            ...n.target,
+                            signal,
+                            high,
+                            highZone: high,
+                          },
+                        }
+                      : n
+                  )
+                );
+              }}
+            />
           </div>
         )}
         {targetView === "heart_rate" && (
@@ -1409,64 +1380,52 @@ function NodeEditor({
         )}
         {targetView === "pace_power" && discipline === "BIKE" && (
           <div className="grid gap-2 sm:grid-cols-2">
-            <div>
-              <Label>Start power (W)</Label>
-              <Input
-                type="number"
-                min={1}
-                step={5}
-                value={step.target.low}
-                onChange={(e) => {
-                  const low = Number(e.target.value);
-                  if (low > 0) {
-                    onTreeChange((nodes) =>
-                      updateAtPath(nodes, path, (n) =>
-                        n.kind === "ramp"
-                          ? {
-                              ...n,
-                              target: {
-                                signal: "power",
-                                mode: "range",
-                                low,
-                                high: n.target.high,
-                              },
-                            }
-                          : n
-                      )
-                    );
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <Label>End power (W)</Label>
-              <Input
-                type="number"
-                min={1}
-                step={5}
-                value={step.target.high}
-                onChange={(e) => {
-                  const high = Number(e.target.value);
-                  if (high > 0) {
-                    onTreeChange((nodes) =>
-                      updateAtPath(nodes, path, (n) =>
-                        n.kind === "ramp"
-                          ? {
-                              ...n,
-                              target: {
-                                signal: "power",
-                                mode: "range",
-                                low: n.target.low,
-                                high,
-                              },
-                            }
-                          : n
-                      )
-                    );
-                  }
-                }}
-              />
-            </div>
+            <NumberEditorInput
+              label="Start power (W)"
+              value={step.target.low}
+              min={1}
+              step={5}
+              onCommit={(low) =>
+                onTreeChange((nodes) =>
+                  updateAtPath(nodes, path, (n) =>
+                    n.kind === "ramp"
+                      ? {
+                          ...n,
+                          target: {
+                            signal: "power",
+                            mode: "range",
+                            low,
+                            high: n.target.high,
+                          },
+                        }
+                      : n
+                  )
+                )
+              }
+            />
+            <NumberEditorInput
+              label="End power (W)"
+              value={step.target.high}
+              min={1}
+              step={5}
+              onCommit={(high) =>
+                onTreeChange((nodes) =>
+                  updateAtPath(nodes, path, (n) =>
+                    n.kind === "ramp"
+                      ? {
+                          ...n,
+                          target: {
+                            signal: "power",
+                            mode: "range",
+                            low: n.target.low,
+                            high,
+                          },
+                        }
+                      : n
+                  )
+                )
+              }
+            />
           </div>
         )}
         {targetView === "pace_power" && (discipline === "RUN" || discipline === "SWIM") && (
@@ -1544,25 +1503,19 @@ function NodeEditor({
           Remove
         </Button>
       </div>
-      <div>
-        <Label>Repeat count</Label>
-        <Input
-          type="number"
-          min={1}
-          max={99}
-          value={block.repeatCount}
-          onChange={(e) => {
-            const n = Number(e.target.value);
-            if (n >= 1) {
-              onTreeChange((nodes) =>
-                updateAtPath(nodes, path, (node) =>
-                  node.kind === "repeat" ? { ...node, repeatCount: n } : node
-                )
-              );
-            }
-          }}
-        />
-      </div>
+      <NumberEditorInput
+        label="Repeat count"
+        value={block.repeatCount}
+        min={1}
+        max={99}
+        onCommit={(n) =>
+          onTreeChange((nodes) =>
+            updateAtPath(nodes, path, (node) =>
+              node.kind === "repeat" ? { ...node, repeatCount: n } : node
+            )
+          )
+        }
+      />
       <div className="space-y-0 border-l-2 border-sky-300 pl-3 dark:border-sky-800">
         <WorkoutNodeList
           parentPath={path}
