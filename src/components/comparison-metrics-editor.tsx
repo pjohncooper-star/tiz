@@ -11,6 +11,7 @@ import type { PoolSize } from "@/lib/units/discipline-settings";
 import { useMetricsTriad } from "@/lib/plan/use-metrics-triad";
 import type { PlannedMetricsTriadValues } from "@/lib/plan/planned-metrics-triad";
 import { Input } from "@/components/ui";
+import { TextEditorInput } from "@/components/number-editor-input";
 
 const FIELD_CLASS =
   "box-border w-full min-w-0 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm tabular-nums text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
@@ -53,7 +54,6 @@ export function ComparisonMetricsEditor({
   const distanceLabel = reportingDistanceInputLabel(discipline, displayUnit);
   const paceLabel =
     discipline === "BIKE" ? speedInputLabel(displayUnit) : paceInputLabel(discipline, displayUnit);
-  const swimUnit = discipline === "SWIM" ? plannedTriad.effectiveUnit : displayUnit;
 
   return (
     <div>
@@ -66,29 +66,21 @@ export function ComparisonMetricsEditor({
         <div>
           <dt className="text-xs text-zinc-500">Duration (min)</dt>
           <dd className="mt-1 grid grid-cols-2 gap-x-6">
-            <Input
-              type="number"
-              min={0}
-              step={1}
+            <TextEditorInput
+              ariaLabel="Planned duration"
+              placeholder="60"
+              inputMode="decimal"
               className={FIELD_CLASS}
-              aria-label="Planned duration"
               value={plannedTriad.state.durationMinutes}
-              onChange={(e) =>
-                plannedTriad.applyTriad("duration", { durationMinutes: e.target.value })
-              }
-              placeholder="60"
+              onCommit={(raw) => plannedTriad.applyTriad("duration", { durationMinutes: raw })}
             />
-            <Input
-              type="number"
-              min={0}
-              step={1}
-              className={FIELD_CLASS}
-              aria-label="Completed duration"
-              value={completedTriad.state.durationMinutes}
-              onChange={(e) =>
-                completedTriad.applyTriad("duration", { durationMinutes: e.target.value })
-              }
+            <TextEditorInput
+              ariaLabel="Completed duration"
               placeholder="60"
+              inputMode="decimal"
+              className={FIELD_CLASS}
+              value={completedTriad.state.durationMinutes}
+              onCommit={(raw) => completedTriad.applyTriad("duration", { durationMinutes: raw })}
             />
           </dd>
         </div>
@@ -96,23 +88,19 @@ export function ComparisonMetricsEditor({
         <div>
           <dt className="text-xs text-zinc-500">{distanceLabel}</dt>
           <dd className="mt-1 grid grid-cols-2 gap-x-6">
-            <Input
-              type="number"
-              min={0}
-              step="any"
+            <TextEditorInput
+              ariaLabel="Planned distance"
+              inputMode="decimal"
               className={FIELD_CLASS}
-              aria-label="Planned distance"
               value={plannedTriad.distanceInput()}
-              onChange={(e) => plannedTriad.setDistanceFromInput(e.target.value)}
+              onCommit={(raw) => plannedTriad.setDistanceFromInput(raw)}
             />
-            <Input
-              type="number"
-              min={0}
-              step="any"
+            <TextEditorInput
+              ariaLabel="Completed distance"
+              inputMode="decimal"
               className={FIELD_CLASS}
-              aria-label="Completed distance"
               value={completedTriad.distanceInput()}
-              onChange={(e) => completedTriad.setDistanceFromInput(e.target.value)}
+              onCommit={(raw) => completedTriad.setDistanceFromInput(raw)}
             />
           </dd>
         </div>
@@ -122,23 +110,19 @@ export function ComparisonMetricsEditor({
           <dd className="mt-1 grid grid-cols-2 gap-x-6">
             {discipline === "BIKE" ? (
               <>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
+                <TextEditorInput
+                  ariaLabel="Planned speed"
+                  inputMode="decimal"
                   className={FIELD_CLASS}
-                  aria-label="Planned speed"
                   value={plannedTriad.speedInput}
-                  onChange={(e) => plannedTriad.setSpeedFromInput(e.target.value)}
+                  onCommit={(raw) => plannedTriad.setSpeedFromInput(raw)}
                 />
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.1}
+                <TextEditorInput
+                  ariaLabel="Completed speed"
+                  inputMode="decimal"
                   className={FIELD_CLASS}
-                  aria-label="Completed speed"
                   value={completedTriad.speedInput}
-                  onChange={(e) => completedTriad.setSpeedFromInput(e.target.value)}
+                  onCommit={(raw) => completedTriad.setSpeedFromInput(raw)}
                 />
               </>
             ) : (

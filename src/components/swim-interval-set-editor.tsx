@@ -107,7 +107,10 @@ export function SwimIntervalSetEditor({
           value={set.repeatCount}
           min={1}
           max={99}
-          onCommit={(n) => onChange({ ...set, repeatCount: n })}
+          onCommit={(n) => {
+            if (n == null) return;
+            onChange({ ...set, repeatCount: n });
+          }}
         />
         <NumberEditorInput
           label={distanceLabel}
@@ -115,6 +118,7 @@ export function SwimIntervalSetEditor({
           min={distanceStep}
           step={distanceStep}
           onCommit={(v) => {
+            if (v == null) return;
             const meters = swimPool === "SCY" ? v / 1.09361 : v;
             onChange({ ...set, distanceMeters: meters });
           }}

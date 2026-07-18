@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import type { Discipline, SignalType } from "@prisma/client";
-import { Button, Input, Label } from "@/components/ui";
+import { Button, Label } from "@/components/ui";
+import { NumberEditorInput } from "@/components/number-editor-input";
 import {
   DEFAULT_ZONE_COUNT,
   boundariesToEditorValues,
@@ -77,10 +78,9 @@ export function ZoneBoundariesEditor({
     [editorValues, signalType]
   );
 
-  function setValueAt(index: number, raw: string) {
+  function setValueAt(index: number, value: number) {
     const next = [...editorValues];
-    const n = Number(raw);
-    next[index] = Number.isFinite(n) ? n : 0;
+    next[index] = value;
     setEditorValues(next);
     setError("");
   }
@@ -132,12 +132,14 @@ export function ZoneBoundariesEditor({
             <span className="w-44 shrink-0 text-xs text-zinc-500">
               {cutoffLabel(signalType, index)}
             </span>
-            <Input
-              type="number"
-              step="0.1"
+            <NumberEditorInput
+              integer={false}
+              step={0.1}
               className="w-28"
-              value={Number.isFinite(value) ? value : ""}
-              onChange={(e) => setValueAt(index, e.target.value)}
+              value={Number.isFinite(value) ? value : 0}
+              onCommit={(n) => {
+                if (n != null) setValueAt(index, n);
+              }}
             />
             <span className="text-xs text-zinc-500">
               {absoluteHint(

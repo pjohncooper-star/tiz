@@ -588,6 +588,7 @@ function StepDurationInput({
         step={planDiscipline === "SWIM" ? (swimPool === "SCY" ? 25 : 50) : 0.1}
         integer={planDiscipline === "SWIM" || displayUnit === "METRIC"}
         onCommit={(v) => {
+          if (v == null) return;
           let metersValue = v;
           if (planDiscipline === "SWIM" && swimPool === "SCY") {
             metersValue = v / 1.09361;
@@ -973,22 +974,24 @@ function StepTargetField({
               min={1}
               step={5}
               ariaLabel="Low power watts"
-              onCommit={(v) =>
+              onCommit={(v) => {
+                if (v == null) return;
                 onChange({
                   target: { signal: "power", mode: "range", low: v, high },
-                })
-              }
+                });
+              }}
             />
             <NumberEditorInput
               value={high}
               min={1}
               step={5}
               ariaLabel="High power watts"
-              onCommit={(v) =>
+              onCommit={(v) => {
+                if (v == null) return;
                 onChange({
                   target: { signal: "power", mode: "range", low, high: v },
-                })
-              }
+                });
+              }}
             />
           </div>
         </div>
@@ -1001,11 +1004,12 @@ function StepTargetField({
         value={watts}
         min={1}
         step={5}
-        onCommit={(v) =>
+        onCommit={(v) => {
+          if (v == null) return;
           onChange({
             target: { signal: "power", mode: "value", value: v },
-          })
-        }
+          });
+        }}
       />
     );
   }
@@ -1270,6 +1274,7 @@ function NodeEditor({
               min={1}
               max={7}
               onCommit={(low) => {
+                if (low == null) return;
                 const signal =
                   discipline === "RUN" || discipline === "SWIM"
                     ? "pace"
@@ -1299,6 +1304,7 @@ function NodeEditor({
               min={1}
               max={7}
               onCommit={(high) => {
+                if (high == null) return;
                 const signal =
                   discipline === "RUN" || discipline === "SWIM"
                     ? "pace"
@@ -1385,7 +1391,8 @@ function NodeEditor({
               value={step.target.low}
               min={1}
               step={5}
-              onCommit={(low) =>
+              onCommit={(low) => {
+                if (low == null) return;
                 onTreeChange((nodes) =>
                   updateAtPath(nodes, path, (n) =>
                     n.kind === "ramp"
@@ -1400,15 +1407,16 @@ function NodeEditor({
                         }
                       : n
                   )
-                )
-              }
+                );
+              }}
             />
             <NumberEditorInput
               label="End power (W)"
               value={step.target.high}
               min={1}
               step={5}
-              onCommit={(high) =>
+              onCommit={(high) => {
+                if (high == null) return;
                 onTreeChange((nodes) =>
                   updateAtPath(nodes, path, (n) =>
                     n.kind === "ramp"
@@ -1423,8 +1431,8 @@ function NodeEditor({
                         }
                       : n
                   )
-                )
-              }
+                );
+              }}
             />
           </div>
         )}
@@ -1508,13 +1516,14 @@ function NodeEditor({
         value={block.repeatCount}
         min={1}
         max={99}
-        onCommit={(n) =>
+        onCommit={(n) => {
+          if (n == null) return;
           onTreeChange((nodes) =>
             updateAtPath(nodes, path, (node) =>
               node.kind === "repeat" ? { ...node, repeatCount: n } : node
             )
-          )
-        }
+          );
+        }}
       />
       <div className="space-y-0 border-l-2 border-sky-300 pl-3 dark:border-sky-800">
         <WorkoutNodeList

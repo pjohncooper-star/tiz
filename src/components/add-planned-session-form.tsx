@@ -24,6 +24,7 @@ import {
 import { PoolSizeSelect } from "@/components/pool-size-select";
 import { buildSessionTargetZones } from "@/lib/plan/session-target-zones";
 import { Button, Input, Label, Select, SegmentedControl } from "@/components/ui";
+import { NumberEditorInput } from "@/components/number-editor-input";
 import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
@@ -238,14 +239,12 @@ export function AddPlannedSessionForm({
               </div>
               <div>
                 <span className={INLINE_LABEL}>Distance (m)</span>
-                <input
-                  type="number"
+                <NumberEditorInput
                   min={0}
+                  nullable
                   className={INLINE_FIELD}
-                  value={distanceMeters ?? ""}
-                  onChange={(e) =>
-                    setDistanceMeters(e.target.value ? Number(e.target.value) : null)
-                  }
+                  value={distanceMeters}
+                  onCommit={setDistanceMeters}
                 />
               </div>
               <GoalTimeInput
@@ -376,14 +375,12 @@ export function AddPlannedSessionForm({
               </div>
             </div>
             <div>
-              <Label>Distance (m)</Label>
-              <Input
-                type="number"
+              <NumberEditorInput
+                label="Distance (m)"
                 min={0}
-                value={distanceMeters ?? ""}
-                onChange={(e) =>
-                  setDistanceMeters(e.target.value ? Number(e.target.value) : null)
-                }
+                nullable
+                value={distanceMeters}
+                onCommit={setDistanceMeters}
               />
             </div>
             <GoalTimeInput value={goalTimeMinutes} onChange={setGoalTimeMinutes} />

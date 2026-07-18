@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
+import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
 import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
@@ -846,17 +847,13 @@ export function SimplePlannerView({
           <div>
             <Label>Rest week volume</Label>
             <div className="mt-1 flex items-center gap-2">
-              <Input
-                id="rest-volume-percent"
-                type="number"
+              <NumberEditorInput
                 min={1}
                 max={100}
-                step={1}
                 className="w-24"
                 value={season.deLoadVolumePercent}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (!Number.isFinite(next)) return;
+                onCommit={(next) => {
+                  if (next == null) return;
                   setSeason({
                     ...season,
                     deLoadVolumePercent: Math.min(100, Math.max(1, next)),
@@ -979,19 +976,17 @@ function RampDefaultsEditor({
                   </td>
                   <td className="py-2 pr-4">
                     {distanceMode && row.paceDiscipline ? (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <TextEditorInput
+                        inputMode="decimal"
                         className="w-28"
                         value={distanceMetersToDisplay(
                           def.startDistanceMeters,
                           row.paceDiscipline,
                           disciplineSettings
                         )}
-                        onChange={(event) => {
+                        onCommit={(raw) => {
                           const meters = distanceDisplayToMeters(
-                            event.target.value,
+                            raw,
                             row.paceDiscipline!,
                             disciplineSettings
                           );
@@ -1007,35 +1002,31 @@ function RampDefaultsEditor({
                         }}
                       />
                     ) : (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <NumberEditorInput
+                        min={0}
+                        integer={false}
                         className="w-24"
                         value={def.startHours}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            startHours: Number(event.target.value),
-                          })
-                        }
+                        onCommit={(v) => {
+                          if (v == null) return;
+                          updateDiscipline(row.key, { startHours: v });
+                        }}
                       />
                     )}
                   </td>
                   <td className="py-2 pr-4">
                     {distanceMode && row.paceDiscipline ? (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <TextEditorInput
+                        inputMode="decimal"
                         className="w-28"
                         value={distanceMetersToDisplay(
                           def.peakDistanceMeters,
                           row.paceDiscipline,
                           disciplineSettings
                         )}
-                        onChange={(event) => {
+                        onCommit={(raw) => {
                           const meters = distanceDisplayToMeters(
-                            event.target.value,
+                            raw,
                             row.paceDiscipline!,
                             disciplineSettings
                           );
@@ -1051,34 +1042,30 @@ function RampDefaultsEditor({
                         }}
                       />
                     ) : (
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                      <NumberEditorInput
+                        min={0}
+                        integer={false}
                         className="w-24"
                         value={def.peakHours}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            peakHours: Number(event.target.value),
-                          })
-                        }
+                        onCommit={(v) => {
+                          if (v == null) return;
+                          updateDiscipline(row.key, { peakHours: v });
+                        }}
                       />
                     )}
                   </td>
                   <td className="py-2 pr-4">
                     <div className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
-                        max="100"
+                      <NumberEditorInput
+                        min={0}
+                        max={100}
+                        integer={false}
                         className="w-20"
                         value={def.ratePercent}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            ratePercent: Number(event.target.value),
-                          })
-                        }
+                        onCommit={(v) => {
+                          if (v == null) return;
+                          updateDiscipline(row.key, { ratePercent: v });
+                        }}
                       />
                       <span className="text-zinc-500">%</span>
                     </div>
