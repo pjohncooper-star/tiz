@@ -1370,7 +1370,7 @@ export function PlanningCalendar({
             <div className="min-w-0 flex-1 space-y-4">
               <div
                 ref={editorBandRef}
-                className="scroll-mt-[4.5rem] xl:sticky xl:top-[4.5rem] xl:z-20 xl:max-h-[calc(100vh-4.5rem)] xl:overflow-y-auto"
+                className="scroll-mt-[4.5rem] bg-white dark:bg-black xl:sticky xl:top-[4.5rem] xl:z-20 xl:max-h-[calc(100vh-4.5rem)] xl:overflow-y-auto"
               >
                 <WorkoutPoolWizardBand {...poolWizardProps} />
               </div>
