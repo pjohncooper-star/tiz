@@ -346,12 +346,6 @@ export function PlanningCalendar({
     handleAutoFillEasyTizForWeek(poolWeekStart);
   }, [handleAutoFillEasyTizForWeek, poolWeekStart]);
 
-  const scrollEditorBandIntoView = useCallback(() => {
-    requestAnimationFrame(() => {
-      editorBandRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
-
   const handleSelectPoolCard = useCallback(
     (cardId: string) => {
       const chip = poolChips.find((c) => c.id === cardId);
@@ -374,7 +368,6 @@ export function PlanningCalendar({
       poolComposer.setDiscipline(chip.discipline);
       poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
       setBuilderExpanded(true);
-      scrollEditorBandIntoView();
     },
     [
       poolChips,
@@ -382,7 +375,6 @@ export function PlanningCalendar({
       builderExpanded,
       poolComposer,
       poolDrafts,
-      scrollEditorBandIntoView,
     ]
   );
 
@@ -1168,7 +1160,6 @@ export function PlanningCalendar({
     if (ok) {
       setSelectedPoolCardId(card.id);
       setBuilderExpanded(true);
-      scrollEditorBandIntoView();
     }
   }
 
@@ -1377,7 +1368,10 @@ export function PlanningCalendar({
               <WorkoutPoolWizardSideColumn {...poolWizardProps} />
             </aside>
             <div className="min-w-0 flex-1 space-y-4">
-              <div ref={editorBandRef} className="scroll-mt-[4.5rem]">
+              <div
+                ref={editorBandRef}
+                className="scroll-mt-[4.5rem] xl:sticky xl:top-[4.5rem] xl:z-20 xl:max-h-[calc(100vh-4.5rem)] xl:overflow-y-auto"
+              >
                 <WorkoutPoolWizardBand {...poolWizardProps} />
               </div>
               {calendarWeeksContent}
