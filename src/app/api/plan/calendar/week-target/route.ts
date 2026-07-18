@@ -6,6 +6,7 @@ import { parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { summarizeWeekPlannedSessions } from "@/lib/plan/calendar/week-summary";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
+import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { PoolSize } from "@/lib/units/discipline-settings";
@@ -72,11 +73,13 @@ export async function GET(request: Request) {
     disciplineSettings.map((s) => [s.discipline, s.primarySignal])
   );
 
+  const paceContext = await loadPaceThresholdContext(athleteId);
   const serialized = serializePlannedSessions(
     plannedSessions,
     displayUnits,
     defaultPoolSizes,
-    primarySignals
+    primarySignals,
+    paceContext
   );
   const summary = summarizeWeekPlannedSessions(serialized);
 

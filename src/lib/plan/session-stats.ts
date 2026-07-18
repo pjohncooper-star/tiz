@@ -80,11 +80,19 @@ export function buildPlannedSessionStats(
   } = options ?? {};
   const structured =
     structuredSteps != null ? parseWorkoutTree(structuredSteps) : null;
+  const flattenOptions =
+    discipline === "RUN" || discipline === "SWIM"
+      ? {
+          discipline,
+          thresholdPaceSeconds: paceOptions.thresholdPaceSeconds,
+          zoneBoundaries: paceOptions.zoneBoundaries,
+        }
+      : undefined;
   const fromPlanning =
     structured && (discipline === "RUN" || discipline === "SWIM")
       ? derivePlannedMetricsFromPlanningSteps(
           discipline,
-          flattenForPlanning(structured.nodes),
+          flattenForPlanning(structured.nodes, flattenOptions),
           paceOptions
         )
       : null;
@@ -101,6 +109,7 @@ export function buildPlannedSessionStats(
     targetZones,
     structuredSteps: structuredSteps ?? steps,
     durationHintMinutes,
+    flattenOptions,
   });
   const stats: SummaryStat[] = [];
 
