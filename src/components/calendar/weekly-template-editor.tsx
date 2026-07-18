@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
+import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { PoolSizeSelect } from "@/components/pool-size-select";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import {
@@ -206,17 +207,12 @@ function TemplateDayColumn({
               <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
                 <div className="min-w-0">
                   <span className={FIELD_LABEL}>Min</span>
-                  <input
-                    type="number"
+                  <NumberEditorInput
                     min={0}
-                    inputMode="numeric"
+                    nullable
                     className={COMPACT_NUMBER_FIELD}
-                    value={row.durationMinutes ?? ""}
-                    onChange={(e) =>
-                      onUpdate(row.key, {
-                        durationMinutes: e.target.value ? parseInt(e.target.value, 10) : null,
-                      })
-                    }
+                    value={row.durationMinutes}
+                    onCommit={(v) => onUpdate(row.key, { durationMinutes: v })}
                   />
                 </div>
                 <div className="min-w-0">
@@ -228,36 +224,36 @@ function TemplateDayColumn({
                         )
                       : "Dist (m)"}
                   </span>
-                  <input
-                    type="number"
-                    min={0}
-                    inputMode="decimal"
-                    className={COMPACT_NUMBER_FIELD}
-                    value={
-                      row.discipline === "SWIM"
-                        ? reportingDistanceMetersToInput(
-                            row.distanceMeters,
-                            "SWIM",
-                            swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                          )
-                        : (row.distanceMeters ?? "")
-                    }
-                    onChange={(e) => {
-                      if (row.discipline === "SWIM") {
+                  {row.discipline === "SWIM" ? (
+                    <TextEditorInput
+                      inputMode="decimal"
+                      className={COMPACT_NUMBER_FIELD}
+                      value={reportingDistanceMetersToInput(
+                        row.distanceMeters,
+                        "SWIM",
+                        swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
+                      )}
+                      onCommit={(raw) =>
                         onUpdate(row.key, {
                           distanceMeters: reportingDistanceInputToMeters(
-                            e.target.value,
+                            raw,
                             "SWIM",
                             swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
                           ),
-                        });
-                        return;
+                        })
                       }
-                      onUpdate(row.key, {
-                        distanceMeters: e.target.value ? parseFloat(e.target.value) : null,
-                      });
-                    }}
-                  />
+                    />
+                  ) : (
+                    <NumberEditorInput
+                      min={0}
+                      nullable
+                      integer={false}
+                      inputMode="decimal"
+                      className={COMPACT_NUMBER_FIELD}
+                      value={row.distanceMeters}
+                      onCommit={(v) => onUpdate(row.key, { distanceMeters: v })}
+                    />
+                  )}
                 </div>
               </div>
               <button

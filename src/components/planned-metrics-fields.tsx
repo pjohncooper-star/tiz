@@ -23,6 +23,7 @@ import {
   type TriadField,
 } from "@/lib/plan/planned-metrics-triad";
 import { Input, Label } from "@/components/ui";
+import { TextEditorInput } from "@/components/number-editor-input";
 
 type PlannedMetricsFieldsProps = {
   discipline: PlanDiscipline;
@@ -99,6 +100,15 @@ export function PlannedMetricsFields({
     discipline,
     effectiveUnit
   );
+
+  const distancePlaceholder =
+    discipline === "SWIM"
+      ? effectiveUnit === "METRIC"
+        ? "1500"
+        : "1650"
+      : effectiveUnit === "METRIC"
+        ? "40"
+        : "25";
 
   useEffect(() => {
     autoFieldRef.current = null;
@@ -207,26 +217,13 @@ export function PlannedMetricsFields({
         showClear={durationMinutes.trim().length > 0}
         onClear={() => clearField("duration")}
       >
-        {compact ? (
-          <input
-            type="number"
-            min={0}
-            step={1}
-            className={COMPACT_FIELD}
-            value={durationMinutes}
-            onChange={(e) => applyTriad("duration", { durationMinutes: e.target.value })}
-            placeholder="60"
-          />
-        ) : (
-          <Input
-            type="number"
-            min={0}
-            step={1}
-            value={durationMinutes}
-            onChange={(e) => applyTriad("duration", { durationMinutes: e.target.value })}
-            placeholder="60"
-          />
-        )}
+        <TextEditorInput
+          value={durationMinutes}
+          placeholder="60"
+          inputMode="decimal"
+          className={compact ? COMPACT_FIELD : undefined}
+          onCommit={(raw) => applyTriad("duration", { durationMinutes: raw })}
+        />
       </MetricInputWrap>
     </>
   );
@@ -245,58 +242,21 @@ export function PlannedMetricsFields({
         showClear={distanceInput.length > 0}
         onClear={() => clearField("distance")}
       >
-        {compact ? (
-          <input
-            type="number"
-            min={0}
-            step="any"
-            className={COMPACT_FIELD}
-            value={distanceInput}
-            onChange={(e) =>
-              applyTriad("distance", {
-                distanceMeters: reportingDistanceInputToMeters(
-                  e.target.value,
-                  discipline,
-                  effectiveUnit
-                ),
-              })
-            }
-            placeholder={
-              discipline === "SWIM"
-                ? effectiveUnit === "METRIC"
-                  ? "1500"
-                  : "1650"
-                : effectiveUnit === "METRIC"
-                  ? "40"
-                  : "25"
-            }
-          />
-        ) : (
-          <Input
-            type="number"
-            min={0}
-            step="any"
-            value={distanceInput}
-            onChange={(e) =>
-              applyTriad("distance", {
-                distanceMeters: reportingDistanceInputToMeters(
-                  e.target.value,
-                  discipline,
-                  effectiveUnit
-                ),
-              })
-            }
-            placeholder={
-              discipline === "SWIM"
-                ? effectiveUnit === "METRIC"
-                  ? "1500"
-                  : "1650"
-                : effectiveUnit === "METRIC"
-                  ? "40"
-                  : "25"
-            }
-          />
-        )}
+        <TextEditorInput
+          value={distanceInput}
+          placeholder={distancePlaceholder}
+          inputMode="decimal"
+          className={compact ? COMPACT_FIELD : undefined}
+          onCommit={(raw) =>
+            applyTriad("distance", {
+              distanceMeters: reportingDistanceInputToMeters(
+                raw,
+                discipline,
+                effectiveUnit
+              ),
+            })
+          }
+        />
       </MetricInputWrap>
     </>
   );
@@ -319,34 +279,17 @@ export function PlannedMetricsFields({
           showClear={paceShowClear}
           onClear={() => clearField("pace")}
         >
-          {compact ? (
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              className={COMPACT_FIELD}
-              value={speedMpsToInput(targetSpeedMps, effectiveUnit)}
-              onChange={(e) =>
-                applyTriad("pace", {
-                  targetSpeedMps: speedInputToMps(e.target.value, effectiveUnit),
-                })
-              }
-              placeholder={effectiveUnit === "METRIC" ? "30" : "18"}
-            />
-          ) : (
-            <Input
-              type="number"
-              min={0}
-              step={0.1}
-              value={speedMpsToInput(targetSpeedMps, effectiveUnit)}
-              onChange={(e) =>
-                applyTriad("pace", {
-                  targetSpeedMps: speedInputToMps(e.target.value, effectiveUnit),
-                })
-              }
-              placeholder={effectiveUnit === "METRIC" ? "30" : "18"}
-            />
-          )}
+          <TextEditorInput
+            value={speedMpsToInput(targetSpeedMps, effectiveUnit)}
+            placeholder={effectiveUnit === "METRIC" ? "30" : "18"}
+            inputMode="decimal"
+            className={compact ? COMPACT_FIELD : undefined}
+            onCommit={(raw) =>
+              applyTriad("pace", {
+                targetSpeedMps: speedInputToMps(raw, effectiveUnit),
+              })
+            }
+          />
         </MetricInputWrap>
       </>
     ) : (

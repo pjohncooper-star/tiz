@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Input, Label } from "@/components/ui";
+import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { ZoneSplitEditor } from "@/components/simple-planner/zone-split-editor";
 import {
   createEmptyPhase,
@@ -366,18 +367,18 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <Input
-                type="number"
+              <NumberEditorInput
                 min={0}
                 max={7}
                 className="mt-1"
                 value={phase[field.key]}
-                onChange={(event) =>
+                onCommit={(v) => {
+                  if (v == null) return;
                   onChange({
                     ...phase,
-                    [field.key]: Number(event.target.value),
-                  })
-                }
+                    [field.key]: v,
+                  });
+                }}
               />
             </div>
           ))}
@@ -399,18 +400,18 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <Input
-                type="number"
+              <NumberEditorInput
                 min={0}
                 max={7}
                 className="mt-1"
                 value={phase[field.key]}
-                onChange={(event) =>
+                onCommit={(v) => {
+                  if (v == null) return;
                   onChange({
                     ...phase,
-                    [field.key]: Number(event.target.value),
-                  })
-                }
+                    [field.key]: v,
+                  });
+                }}
               />
             </div>
           ))}
@@ -689,26 +690,24 @@ function VolumeDistanceRow({
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <Label>{startLabel}</Label>
-          <Input
-            type="number"
-            min={0}
-            step={0.1}
+          <TextEditorInput
+            inputMode="decimal"
             className="mt-1"
             value={displayFromHours(startHours)}
             placeholder="Chain from prior phase"
-            onChange={(event) => commitDistance(event.target.value, "start")}
+            allowEmpty
+            onCommit={(raw) => commitDistance(raw, "start")}
           />
         </div>
         <div>
           <Label>{endLabel}</Label>
-          <Input
-            type="number"
-            min={0}
-            step={0.1}
+          <TextEditorInput
+            inputMode="decimal"
             className="mt-1"
             value={displayFromHours(endHours)}
             placeholder="Phase default"
-            onChange={(event) => commitDistance(event.target.value, "end")}
+            allowEmpty
+            onCommit={(raw) => commitDistance(raw, "end")}
           />
         </div>
       </div>
@@ -735,30 +734,26 @@ function VolumeHoursRow({
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <Label>Start (h)</Label>
-          <Input
-            type="number"
+          <NumberEditorInput
             min={0}
-            step={0.1}
+            nullable
+            integer={false}
             className="mt-1"
-            value={startHours ?? ""}
             placeholder="Chain from prior phase"
-            onChange={(event) =>
-              onStartChange(event.target.value ? Number(event.target.value) : null)
-            }
+            value={startHours ?? null}
+            onCommit={onStartChange}
           />
         </div>
         <div>
           <Label>End (h)</Label>
-          <Input
-            type="number"
+          <NumberEditorInput
             min={0}
-            step={0.1}
+            nullable
+            integer={false}
             className="mt-1"
-            value={endHours ?? ""}
             placeholder="Phase default"
-            onChange={(event) =>
-              onEndChange(event.target.value ? Number(event.target.value) : null)
-            }
+            value={endHours ?? null}
+            onCommit={onEndChange}
           />
         </div>
       </div>
@@ -793,28 +788,24 @@ function LongDisciplineEditor({
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <div>
           <Label>Start (min)</Label>
-          <Input
-            type="number"
+          <NumberEditorInput
             min={0}
+            nullable
             className="mt-1"
-            value={startMin ?? ""}
             placeholder="Season default"
-            onChange={(event) =>
-              onStartMinChange(event.target.value ? Number(event.target.value) : null)
-            }
+            value={startMin ?? null}
+            onCommit={onStartMinChange}
           />
         </div>
         <div>
           <Label>End (min)</Label>
-          <Input
-            type="number"
+          <NumberEditorInput
             min={0}
+            nullable
             className="mt-1"
-            value={endMin ?? ""}
             placeholder="Season default"
-            onChange={(event) =>
-              onEndMinChange(event.target.value ? Number(event.target.value) : null)
-            }
+            value={endMin ?? null}
+            onCommit={onEndMinChange}
           />
         </div>
       </div>
@@ -836,13 +827,15 @@ function LongDisciplineEditor({
         {offWeekPolicy === "ENDURANCE_PERCENT" ? (
           <div>
             <Label>Endurance % of long</Label>
-            <Input
-              type="number"
+            <NumberEditorInput
               min={0}
               max={100}
               className="mt-1"
               value={offWeekPercent}
-              onChange={(event) => onPercentChange(Number(event.target.value))}
+              onCommit={(v) => {
+                if (v == null) return;
+                onPercentChange(v);
+              }}
             />
           </div>
         ) : null}
