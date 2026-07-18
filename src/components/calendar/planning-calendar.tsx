@@ -71,8 +71,7 @@ import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
-import { Button, Card } from "@/components/ui";
-import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
+import { Button } from "@/components/ui";
 import { computeEasyTizSpread, computeLongPoolDrafts } from "@/lib/plan/calendar/spread-easy-tiz";
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 
@@ -147,7 +146,6 @@ export function PlanningCalendar({
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
   const [isXl, setIsXl] = useState(false);
-  const [pmcRefreshKey, setPmcRefreshKey] = useState(0);
   // Pool week for the wizard; changing it scrolls the calendar to match.
   const [poolWeekStart, setPoolWeekStart] = useState(
     () => initialScrollWeekStart ?? currentWeekStart
@@ -164,6 +162,7 @@ export function PlanningCalendar({
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const editorBandRef = useRef<HTMLDivElement>(null);
+  const pendingPoolScrollRef = useRef<string | null>(null);
   const scrolledRef = useRef(false);
   const canLoadPreviousRef = useRef(false);
   const focusLockUntilRef = useRef(0);
@@ -478,10 +477,27 @@ export function PlanningCalendar({
     (weekStart: string) => {
       setPoolWeekStart(weekStart);
       void ensurePoolWeekLoaded(weekStart);
-      void scrollToWeekAsync(weekStart);
+      pendingPoolScrollRef.current = weekStart;
     },
-    [ensurePoolWeekLoaded, scrollToWeekAsync]
+    [ensurePoolWeekLoaded]
   );
+
+  useEffect(() => {
+    if (pendingPoolScrollRef.current !== poolWeekStart) return;
+
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled || pendingPoolScrollRef.current !== poolWeekStart) return;
+        pendingPoolScrollRef.current = null;
+        void scrollToWeekAsync(poolWeekStart);
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [poolWeekStart, selectedPoolCardId, builderExpanded, poolWeekTarget, scrollToWeekAsync]);
 
   const weekHasUnplanned = useCallback(
     (weekStart: string) =>
@@ -1109,7 +1125,6 @@ export function PlanningCalendar({
 
   async function handleRefresh() {
     await reloadCalendarData();
-    setPmcRefreshKey((k) => k + 1);
   }
 
   function handleTemplateApplied(appliedWeekStart: string) {
@@ -1195,11 +1210,6 @@ export function PlanningCalendar({
   const calendarWeeksContent = (
     <>
       <div className="space-y-8">
-        {ecoLoadEnabled ? (
-          <Card title="Fitness / fatigue (plan + history)">
-            <FitnessFatigueChart key={pmcRefreshKey} includePlan compact />
-          </Card>
-        ) : null}
         <div
           ref={loadPreviousSentinelRef}
           className="py-2 text-center text-sm text-zinc-500"
