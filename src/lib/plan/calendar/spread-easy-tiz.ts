@@ -299,6 +299,44 @@ function longMinutesForChip(
   return 0;
 }
 
+export type LongPoolDraftInput = {
+  weekTarget: CalendarWeekTarget;
+  drafts: PoolCardDraftMap;
+  chips: UnscheduledChip[];
+  paceContext?: PaceThresholdContext | null;
+};
+
+/** Seed long ride/run pool cards with warm Z1 / main Z2 / cool Z1 drafts + derived metrics. */
+export function computeLongPoolDrafts(input: LongPoolDraftInput): PoolCardDraftMap {
+  const { weekTarget, drafts, chips, paceContext } = input;
+  const generated: PoolCardDraftMap = {};
+
+  for (const discipline of ["BIKE", "RUN"] as const) {
+    const longCards = chips.filter(
+      (chip) =>
+        chip.discipline === discipline &&
+        chip.slotKind === "LONG" &&
+        !drafts[chip.id] &&
+        !generated[chip.id]
+    );
+
+    for (const chip of longCards) {
+      const totalMinutes = longMinutesForChip(chip, weekTarget);
+      if (!(totalMinutes > 0)) continue;
+      const nodes = buildLongDraftNodes(discipline, totalMinutes);
+      if (nodes.length === 0) continue;
+      const draft = draftFromNodes(
+        nodes,
+        discipline,
+        metricsForNodes(discipline, nodes, paceContext)
+      );
+      if (draft) generated[chip.id] = draft;
+    }
+  }
+
+  return generated;
+}
+
 export type EasyTizSpreadInput = {
   weekTarget: CalendarWeekTarget;
   sessions: CalendarPlannedSession[];
@@ -366,26 +404,13 @@ export function computeEasyTizSpread(input: EasyTizSpreadInput): PoolCardDraftMa
 
     if (!longDiscipline(discipline)) continue;
 
-    const longCards = chips.filter(
-      (chip) =>
-        chip.discipline === discipline &&
-        chip.slotKind === "LONG" &&
-        !drafts[chip.id] &&
-        !generated[chip.id]
-    );
-
-    for (const chip of longCards) {
-      const totalMinutes = longMinutesForChip(chip, weekTarget);
-      if (!(totalMinutes > 0)) continue;
-      const nodes = buildLongDraftNodes(discipline, totalMinutes);
-      if (nodes.length === 0) continue;
-      const draft = draftFromNodes(
-        nodes,
-        discipline,
-        metricsForNodes(discipline, nodes, paceContext)
-      );
-      if (draft) generated[chip.id] = draft;
-    }
+    const longGenerated = computeLongPoolDrafts({
+      weekTarget,
+      drafts: { ...drafts, ...generated },
+      chips: chips.filter((c) => c.discipline === discipline),
+      paceContext,
+    });
+    Object.assign(generated, longGenerated);
   }
 
   return generated;

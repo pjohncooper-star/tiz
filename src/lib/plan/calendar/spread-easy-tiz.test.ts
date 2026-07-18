@@ -10,6 +10,7 @@ import {
   buildEnduranceDraftNodes,
   buildLongDraftNodes,
   canAutoFillEasyTiz,
+  computeLongPoolDrafts,
   computeEasyTizSpread,
 } from "./spread-easy-tiz";
 import { treeFromDraft } from "./pool-session-card";
@@ -267,6 +268,57 @@ describe("spread-easy-tiz", () => {
       disciplineFilter: "ALL",
     });
     assert.equal(generated["swim-long-0"], undefined);
+  });
+
+  it("computeLongPoolDrafts seeds long cards without touching endurance", () => {
+    const weekTarget = baseWeekTarget();
+    const chips = [
+      chip("run-end-0", "RUN", "ENDURANCE"),
+      chip("run-long-0", "RUN", "LONG", 90),
+      chip("bike-long-0", "BIKE", "LONG", 120),
+    ];
+    const generated = computeLongPoolDrafts({
+      weekTarget,
+      drafts: {},
+      chips,
+      paceContext: {
+        RUN: {
+          thresholdPaceSeconds: 300,
+          zoneBoundaries: zoneBoundariesFor("RUN", "PACE"),
+        },
+        BIKE: {
+          thresholdPaceSeconds: 240,
+          zoneBoundaries: zoneBoundariesFor("BIKE", "PACE"),
+        },
+      },
+    });
+
+    assert.equal(generated["run-end-0"], undefined);
+    assert.ok(generated["run-long-0"]);
+    assert.ok(generated["bike-long-0"]);
+
+    const runRollup = rollupTreeToZoneMinutes(treeFromDraft(generated["run-long-0"]));
+    assert.equal(runRollup["1"], 15);
+    assert.equal(runRollup["2"], 75);
+    assert.ok((generated["run-long-0"]!.distanceMeters ?? 0) > 0);
+    assert.ok((generated["run-long-0"]!.targetPaceSeconds ?? 0) > 0);
+    assert.ok((generated["bike-long-0"]!.distanceMeters ?? 0) > 0);
+  });
+
+  it("computeLongPoolDrafts skips cards that already have drafts", () => {
+    const weekTarget = baseWeekTarget();
+    const chips = [chip("run-long-0", "RUN", "LONG", 90)];
+    const existing = {
+      nodes: buildEnduranceDraftNodes("RUN", 5, 5),
+      durationMinutes: 10,
+      profile: null,
+    };
+    const generated = computeLongPoolDrafts({
+      weekTarget,
+      drafts: { "run-long-0": existing },
+      chips,
+    });
+    assert.equal(Object.keys(generated).length, 0);
   });
 
   it("derives run distance from pace context", () => {

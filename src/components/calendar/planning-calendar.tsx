@@ -67,7 +67,7 @@ import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/wo
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { Button, Card } from "@/components/ui";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
-import { computeEasyTizSpread } from "@/lib/plan/calendar/spread-easy-tiz";
+import { computeEasyTizSpread, computeLongPoolDrafts } from "@/lib/plan/calendar/spread-easy-tiz";
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
@@ -288,12 +288,34 @@ export function PlanningCalendar({
   }, [poolWeekStart, poolWeekTarget, poolWeekSessions]);
 
   useEffect(() => {
-    setPoolDrafts((prev) => pruneDraftsToChips(prev, poolChips));
+    setPoolDrafts((prev) => {
+      const pruned = pruneDraftsToChips(prev, poolChips);
+      if (!poolWeekTarget) return pruned;
+
+      const longDrafts = computeLongPoolDrafts({
+        weekTarget: poolWeekTarget,
+        drafts: pruned,
+        chips: poolChips,
+        paceContext,
+      });
+
+      if (Object.keys(longDrafts).length === 0) return pruned;
+
+      const next = { ...pruned };
+      let changed = pruned !== prev;
+      for (const [id, draft] of Object.entries(longDrafts)) {
+        if (!(id in next)) {
+          next[id] = draft;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
     setSelectedPoolCardId((prev) => {
       if (!prev) return prev;
       return poolChips.some((c) => c.id === prev) ? prev : null;
     });
-  }, [poolChips]);
+  }, [poolChips, poolWeekTarget, paceContext]);
 
   const handleAutoFillEasyTizForWeek = useCallback(
     (weekStart: string) => {
