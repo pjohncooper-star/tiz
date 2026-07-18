@@ -31,6 +31,16 @@ export function zoneMidSpeedPct(zone: number, boundaries: number[]): number {
   return 100;
 }
 
+/** Speed (m/s) at the planning midpoint of a pace zone (% of threshold speed). */
+export function speedMpsAtZoneMidpoint(
+  zone: number,
+  thresholdSpeedMps: number,
+  boundaries: number[] = zoneBoundariesFor("RUN", "PACE")
+): number {
+  if (!Number.isFinite(thresholdSpeedMps) || thresholdSpeedMps <= 0) return 0;
+  return thresholdSpeedMps * (zoneMidSpeedPct(zone, boundaries) / 100);
+}
+
 /** Pace zones use % of threshold speed; higher % = faster (fewer seconds). */
 export function paceSecondsAtZoneMidpoint(
   zone: number,

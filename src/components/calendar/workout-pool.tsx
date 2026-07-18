@@ -34,7 +34,11 @@ import { poolSessionCardDragId } from "@/lib/plan/workout-builder-dnd";
 import type { CalendarWeekTarget, TargetDiscipline } from "@/components/calendar/types";
 import { formatZoneMinutes } from "@/lib/workout/steps";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
+import {
+  canAutoFillEasyTiz,
+} from "@/lib/plan/calendar/spread-easy-tiz";
 import { planningModeIncludesLongTiz } from "@/lib/plan/season/planning-mode";
+import { formatSessionDistance } from "@/lib/workout/metrics";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
 import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
@@ -156,6 +160,11 @@ function PoolSessionCardView({
       ? formatChipDurationMinutes(card.targetDurationMinutes)
       : null;
 
+  const distanceLabel =
+    card.draft?.distanceMeters != null && card.draft.distanceMeters > 0
+      ? formatSessionDistance(card.draft.distanceMeters, card.discipline, "METRIC")
+      : null;
+
   return (
     <div
       ref={setNodeRef}
@@ -192,8 +201,10 @@ function PoolSessionCardView({
             {canBuild ? "Click to build" : "Drag to day"}
           </div>
         )}
-        {durationLabel ? (
-          <p className="mt-1 tabular-nums text-[10px] text-zinc-500">{durationLabel}</p>
+        {durationLabel || distanceLabel ? (
+          <p className="mt-1 tabular-nums text-[10px] text-zinc-500">
+            {[durationLabel, distanceLabel].filter(Boolean).join(" · ")}
+          </p>
         ) : null}
       </button>
       <button
@@ -212,9 +223,13 @@ function PoolSessionCardView({
 function DisciplineFilterBar({
   value,
   onChange,
+  onAutoFillEasyTiz,
+  showAutoFill,
 }: {
   value: PoolDisciplineFilter;
   onChange: (v: PoolDisciplineFilter) => void;
+  onAutoFillEasyTiz?: () => void;
+  showAutoFill?: boolean;
 }) {
   const options: { value: PoolDisciplineFilter; label: string }[] = [
     { value: "ALL", label: "All" },
@@ -224,21 +239,32 @@ function DisciplineFilterBar({
     { value: "STRENGTH", label: "Strength" },
   ];
   return (
-    <div className="flex flex-wrap gap-1 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700">
-      {options.map((opt) => (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap gap-1 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700">
+        {options.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`rounded px-2 py-0.5 text-[11px] font-medium transition ${
+              value === opt.value
+                ? "bg-sky-600 text-white"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {showAutoFill && onAutoFillEasyTiz ? (
         <button
-          key={opt.value}
           type="button"
-          className={`rounded px-2 py-0.5 text-[11px] font-medium transition ${
-            value === opt.value
-              ? "bg-sky-600 text-white"
-              : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          }`}
-          onClick={() => onChange(opt.value)}
+          className="rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-950/70"
+          onClick={onAutoFillEasyTiz}
         >
-          {opt.label}
+          Auto-fill easy TiZ
         </button>
-      ))}
+      ) : null}
     </div>
   );
 }
@@ -402,6 +428,7 @@ export type WorkoutPoolProps = {
   selectedCardId: string | null;
   onSelectCard: (cardId: string) => void;
   embedded?: boolean;
+  onAutoFillEasyTiz?: () => void;
 };
 
 export function WorkoutPool({
@@ -416,10 +443,21 @@ export function WorkoutPool({
   selectedCardId,
   onSelectCard,
   embedded = false,
+  onAutoFillEasyTiz,
 }: WorkoutPoolProps) {
   const chips = useMemo(
     () => computeUnscheduledChips(weekStart, weekTarget, sessions),
     [weekStart, weekTarget, sessions]
+  );
+
+  const showAutoFill = useMemo(
+    () =>
+      canAutoFillEasyTiz({
+        chips,
+        drafts,
+        disciplineFilter,
+      }),
+    [chips, drafts, disciplineFilter]
   );
 
   const cards = useMemo(
@@ -437,7 +475,12 @@ export function WorkoutPool({
 
   const inner = (
     <div className="space-y-3">
-      <DisciplineFilterBar value={disciplineFilter} onChange={onDisciplineFilterChange} />
+      <DisciplineFilterBar
+        value={disciplineFilter}
+        onChange={onDisciplineFilterChange}
+        onAutoFillEasyTiz={onAutoFillEasyTiz}
+        showAutoFill={showAutoFill}
+      />
 
       <PoolSection
         title="Session cards"

@@ -273,6 +273,7 @@ export default async function CalendarPage({
         activityDates={activityDates}
         minDate={minDate}
         maxDate={maxDate}
+        paceContext={paceContext}
       />
     </main>
   );

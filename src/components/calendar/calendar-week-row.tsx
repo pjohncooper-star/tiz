@@ -64,6 +64,7 @@ type CalendarWeekRowProps = {
   onSelectPoolCard: (cardId: string) => void;
   onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
+  onAutoFillEasyTiz?: () => void;
 };
 
 export function CalendarWeekRow({
@@ -95,6 +96,7 @@ export function CalendarWeekRow({
   onSelectPoolCard,
   onLoadIntoBuilder,
   onUnassignWorkout,
+  onAutoFillEasyTiz,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -218,6 +220,7 @@ export function CalendarWeekRow({
                 onDisciplineFilterChange={onPoolDisciplineFilterChange}
                 selectedCardId={selectedPoolCardId}
                 onSelectCard={onSelectPoolCard}
+                onAutoFillEasyTiz={onAutoFillEasyTiz}
               />
             ) : (
               <aside className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">

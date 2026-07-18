@@ -12,10 +12,19 @@ import {
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
 
+export type PoolCardDraftMetrics = {
+  distanceMeters?: number;
+  targetPaceSeconds?: number;
+  targetSpeedMps?: number;
+};
+
 export type PoolCardDraft = {
   nodes: WorkoutNode[];
   durationMinutes: number;
   profile: CalendarWorkoutProfile | null;
+  distanceMeters?: number;
+  targetPaceSeconds?: number;
+  targetSpeedMps?: number;
 };
 
 export type PoolSessionCard = UnscheduledChip & {
@@ -30,7 +39,11 @@ export function emptyWorkoutTree(): WorkoutTreeDocument {
   return { version: WORKOUT_TREE_VERSION, nodes: [] };
 }
 
-export function draftFromNodes(nodes: WorkoutNode[], discipline: Discipline): PoolCardDraft | null {
+export function draftFromNodes(
+  nodes: WorkoutNode[],
+  discipline: Discipline,
+  metrics?: PoolCardDraftMetrics
+): PoolCardDraft | null {
   if (nodes.length === 0) return null;
   const durationMinutes = totalTreeDurationMinutes(nodes);
   const built = buildWorkoutProfile(nodes, {
@@ -53,7 +66,20 @@ export function draftFromNodes(nodes: WorkoutNode[], discipline: Discipline): Po
             fill: s.fill,
           })),
         };
-  return { nodes: structuredClone(nodes), durationMinutes, profile };
+  return {
+    nodes: structuredClone(nodes),
+    durationMinutes,
+    profile,
+    ...(metrics?.distanceMeters != null && metrics.distanceMeters > 0
+      ? { distanceMeters: metrics.distanceMeters }
+      : {}),
+    ...(metrics?.targetPaceSeconds != null && metrics.targetPaceSeconds > 0
+      ? { targetPaceSeconds: metrics.targetPaceSeconds }
+      : {}),
+    ...(metrics?.targetSpeedMps != null && metrics.targetSpeedMps > 0
+      ? { targetSpeedMps: metrics.targetSpeedMps }
+      : {}),
+  };
 }
 
 export function treeFromDraft(draft: PoolCardDraft | undefined): WorkoutTreeDocument {

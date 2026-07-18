@@ -38,6 +38,7 @@ type WorkoutPoolWizardProps = {
   onBuilderDone: () => void;
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  onAutoFillEasyTiz?: () => void;
 };
 
 function weekLabel(weekStart: string): string {
@@ -63,6 +64,7 @@ export function WorkoutPoolWizard({
   onBuilderDone,
   composer,
   disciplineSettings,
+  onAutoFillEasyTiz,
 }: WorkoutPoolWizardProps) {
   const chips = useMemo(() => {
     if (!weekTarget) return [];
@@ -140,6 +142,7 @@ export function WorkoutPoolWizard({
             selectedCardId={selectedCardId}
             onSelectCard={onSelectCard}
             embedded
+            onAutoFillEasyTiz={onAutoFillEasyTiz}
           />
 
           {showBuilder ? (

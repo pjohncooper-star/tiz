@@ -67,6 +67,8 @@ import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/wo
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { Button, Card } from "@/components/ui";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
+import { computeEasyTizSpread } from "@/lib/plan/calendar/spread-easy-tiz";
+import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const MAX_PAST_WEEKS_WITHOUT_ACTIVITIES = 52;
@@ -84,6 +86,7 @@ type PlanningCalendarProps = {
   activityDates: string[];
   minDate: string | null;
   maxDate: string | null;
+  paceContext?: PaceThresholdContext | null;
 };
 
 function mergeRangeData(
@@ -121,6 +124,7 @@ export function PlanningCalendar({
   activityDates,
   minDate,
   maxDate,
+  paceContext = null,
 }: PlanningCalendarProps) {
   const router = useRouter();
   const [data, setData] = useState(initialData);
@@ -290,6 +294,35 @@ export function PlanningCalendar({
       return poolChips.some((c) => c.id === prev) ? prev : null;
     });
   }, [poolChips]);
+
+  const handleAutoFillEasyTizForWeek = useCallback(
+    (weekStart: string) => {
+      const weekTarget = targetsByWeek.get(weekStart);
+      if (!weekTarget) return;
+      const weekSessions = sessionsForWeek(weekStart);
+      const chips = computeUnscheduledChips(weekStart, weekTarget, weekSessions);
+      const generated = computeEasyTizSpread({
+        weekTarget,
+        sessions: weekSessions,
+        drafts: poolDrafts,
+        chips,
+        disciplineFilter: poolDisciplineFilter,
+        paceContext,
+      });
+      setPoolDrafts((prev) => {
+        const next = { ...prev };
+        for (const [id, draft] of Object.entries(generated)) {
+          if (!(id in next)) next[id] = draft;
+        }
+        return next;
+      });
+    },
+    [targetsByWeek, sessionsForWeek, poolDrafts, poolDisciplineFilter, paceContext]
+  );
+
+  const handleAutoFillEasyTiz = useCallback(() => {
+    handleAutoFillEasyTizForWeek(poolWeekStart);
+  }, [handleAutoFillEasyTizForWeek, poolWeekStart]);
 
   const handleSelectPoolCard = useCallback(
     (cardId: string) => {
@@ -683,7 +716,12 @@ export function PlanningCalendar({
     dateKey: string,
     chip: UnscheduledChip,
     sessionRole: SessionRole,
-    options?: { estimatedDurationMinutes?: number }
+    options?: {
+      estimatedDurationMinutes?: number;
+      distanceMeters?: number;
+      targetPaceSeconds?: number;
+      targetSpeedMps?: number;
+    }
   ): Promise<string | null> {
     const dropWeekStart = format(
       startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS),
@@ -727,6 +765,15 @@ export function PlanningCalendar({
         ...(estimatedDurationMinutes != null && estimatedDurationMinutes > 0
           ? { estimatedDurationMinutes }
           : {}),
+        ...(options?.distanceMeters != null && options.distanceMeters > 0
+          ? { distanceMeters: options.distanceMeters }
+          : {}),
+        ...(options?.targetPaceSeconds != null && options.targetPaceSeconds > 0
+          ? { targetPaceSeconds: options.targetPaceSeconds }
+          : {}),
+        ...(options?.targetSpeedMps != null && options.targetSpeedMps > 0
+          ? { targetSpeedMps: options.targetSpeedMps }
+          : {}),
         ...(targetZones ? { targetZones } : {}),
       }),
     });
@@ -755,6 +802,9 @@ export function PlanningCalendar({
         estimatedDurationMinutes != null && estimatedDurationMinutes > 0
           ? estimatedDurationMinutes
           : undefined,
+      distanceMeters: draft?.distanceMeters,
+      targetPaceSeconds: draft?.targetPaceSeconds,
+      targetSpeedMps: draft?.targetSpeedMps,
     });
     if (!sessionId) {
       alert("Could not create session");
@@ -1073,6 +1123,7 @@ export function PlanningCalendar({
             onUnassignWorkout={
               useWizardPool ? (session) => void handleUnassignWorkout(session) : undefined
             }
+            onAutoFillEasyTiz={() => handleAutoFillEasyTizForWeek(weekStart)}
           />
         ))}
       </div>
@@ -1160,6 +1211,7 @@ export function PlanningCalendar({
                 onBuilderDone={handleBuilderDone}
                 composer={poolComposer}
                 disciplineSettings={disciplineSettings}
+                onAutoFillEasyTiz={handleAutoFillEasyTiz}
               />
             </div>
           ) : null}
