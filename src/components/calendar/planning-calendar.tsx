@@ -38,7 +38,11 @@ import {
 import { SessionRolePickerDialog } from "@/components/calendar/session-role-picker-dialog";
 import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-zones";
 import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
-import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
+import {
+  computeUnscheduledChips,
+  findNextUnplannedWeekStart,
+  weekHasUnplannedPoolSessions,
+} from "@/lib/plan/calendar/unscheduled-chips";
 import {
   draftFromNodes,
   isEndurancePoolDiscipline,
@@ -467,6 +471,74 @@ export function PlanningCalendar({
     },
     [ensurePoolWeekLoaded, scrollToWeekAsync]
   );
+
+  const weekHasUnplanned = useCallback(
+    (weekStart: string) =>
+      weekHasUnplannedPoolSessions(
+        weekStart,
+        targetsByWeek.get(weekStart),
+        sessionsForWeek(weekStart)
+      ),
+    [targetsByWeek, sessionsForWeek]
+  );
+
+  const poolNavigationWeekStart = useWizardPool ? poolWeekStart : focusedWeekStart;
+
+  const goToNextUnplannedWeek = useCallback(async () => {
+    setCalendarOpen(false);
+
+    const fromWeek = poolNavigationWeekStart;
+    const loaded = findNextUnplannedWeekStart(fromWeek, sortedWeeks, weekHasUnplanned);
+    if (loaded) {
+      handlePoolWeekChange(loaded);
+      return;
+    }
+
+    let cursor = addWeeks(parseISO(`${fromWeek}T12:00:00`), 1);
+    const maxWeekStart = maxDate
+      ? format(startOfWeek(parseISO(`${maxDate}T12:00:00`), WEEK_OPTS), "yyyy-MM-dd")
+      : null;
+
+    for (let i = 0; i < 104; i++) {
+      const weekStart = format(startOfWeek(cursor, WEEK_OPTS), "yyyy-MM-dd");
+      if (maxWeekStart && weekStart > maxWeekStart) break;
+
+      const to = format(endOfWeek(cursor, WEEK_OPTS), "yyyy-MM-dd");
+      try {
+        const res = await fetch(
+          `/api/plan/calendar/range?from=${encodeURIComponent(weekStart)}&to=${encodeURIComponent(to)}`
+        );
+        if (!res.ok) break;
+        const next: CalendarRangeData = await res.json();
+        setData((prev) => mergeRangeData(prev, next));
+
+        const target = next.weekTargets.find((row) => row.weekStart === weekStart) ?? null;
+        const weekSessions = next.sessions.filter((session) => {
+          const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
+          const end = endOfWeek(start, WEEK_OPTS);
+          const d = parseISO(`${session.scheduledDate}T12:00:00`);
+          return d >= start && d <= end;
+        });
+
+        if (weekHasUnplannedPoolSessions(weekStart, target, weekSessions)) {
+          handlePoolWeekChange(weekStart);
+          return;
+        }
+      } catch {
+        break;
+      }
+
+      cursor = addWeeks(cursor, 1);
+    }
+
+    alert("No upcoming weeks with unplanned pool sessions.");
+  }, [
+    handlePoolWeekChange,
+    maxDate,
+    poolNavigationWeekStart,
+    sortedWeeks,
+    weekHasUnplanned,
+  ]);
 
   useEffect(() => {
     if (scrolledRef.current) return;
@@ -1040,7 +1112,11 @@ export function PlanningCalendar({
 
   function scrollToToday() {
     setCalendarOpen(false);
-    void scrollToWeekAsync(currentWeekStart);
+    if (poolOpen) {
+      handlePoolWeekChange(currentWeekStart);
+    } else {
+      void scrollToWeekAsync(currentWeekStart);
+    }
   }
 
   async function handleLoadIntoBuilder(session: CalendarPlannedSession) {
@@ -1200,6 +1276,15 @@ export function PlanningCalendar({
               <Button type="button" variant="secondary" onClick={scrollToToday}>
                 Today
               </Button>
+              {poolOpen ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void goToNextUnplannedWeek()}
+                >
+                  Next unplanned week
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="secondary"

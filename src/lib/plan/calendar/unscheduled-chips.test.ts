@@ -6,7 +6,9 @@ import {
   computeUnscheduledChips,
   countScheduledSessionsByDiscipline,
   countScheduledSlotsByDiscipline,
+  findNextUnplannedWeekStart,
   hasUsableTypedSlotBudgets,
+  weekHasUnplannedPoolSessions,
 } from "./unscheduled-chips";
 
 function baseWeekTarget(overrides: Partial<CalendarWeekTarget> = {}): CalendarWeekTarget {
@@ -263,5 +265,45 @@ describe("unscheduled-chips", () => {
     assert.equal(counts.get("BIKE"), 1);
     assert.equal(counts.get("RUN"), 1);
     assert.equal(counts.get("SWIM"), 0);
+  });
+});
+
+describe("findNextUnplannedWeekStart", () => {
+  it("returns the next loaded week after fromWeek with unplanned chips", () => {
+    const weekTarget = baseWeekTarget();
+    const hasUnplanned = (weekStart: string) => {
+      if (weekStart === "2026-07-13") {
+        return weekHasUnplannedPoolSessions(weekStart, weekTarget, []);
+      }
+      if (weekStart === "2026-07-20") {
+        return weekHasUnplannedPoolSessions(weekStart, weekTarget, [session("SWIM")]);
+      }
+      return false;
+    };
+
+    assert.equal(
+      findNextUnplannedWeekStart(
+        "2026-07-06",
+        ["2026-07-06", "2026-07-13", "2026-07-20"],
+        hasUnplanned
+      ),
+      "2026-07-13"
+    );
+    assert.equal(
+      findNextUnplannedWeekStart(
+        "2026-07-13",
+        ["2026-07-06", "2026-07-13", "2026-07-20"],
+        hasUnplanned
+      ),
+      "2026-07-20"
+    );
+    assert.equal(
+      findNextUnplannedWeekStart(
+        "2026-07-20",
+        ["2026-07-06", "2026-07-13", "2026-07-20"],
+        hasUnplanned
+      ),
+      null
+    );
   });
 });
