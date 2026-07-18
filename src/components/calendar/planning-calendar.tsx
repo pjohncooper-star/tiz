@@ -32,8 +32,10 @@ import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
 import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
 import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
 import {
-  WorkoutPoolWizard,
+  WorkoutPoolWizardBand,
+  WorkoutPoolWizardSideColumn,
   dateKeyInWeek,
+  type WorkoutPoolWizardProps,
 } from "@/components/calendar/workout-pool-wizard";
 import { SessionRolePickerDialog } from "@/components/calendar/session-role-picker-dialog";
 import { inheritTargetZonesFromRole } from "@/lib/plan/calendar/inherit-target-zones";
@@ -161,6 +163,7 @@ export function PlanningCalendar({
   const [builderExpanded, setBuilderExpanded] = useState(false);
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
+  const editorBandRef = useRef<HTMLDivElement>(null);
   const scrolledRef = useRef(false);
   const canLoadPreviousRef = useRef(false);
   const focusLockUntilRef = useRef(0);
@@ -344,6 +347,12 @@ export function PlanningCalendar({
     handleAutoFillEasyTizForWeek(poolWeekStart);
   }, [handleAutoFillEasyTizForWeek, poolWeekStart]);
 
+  const scrollEditorBandIntoView = useCallback(() => {
+    requestAnimationFrame(() => {
+      editorBandRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
   const handleSelectPoolCard = useCallback(
     (cardId: string) => {
       const chip = poolChips.find((c) => c.id === cardId);
@@ -366,6 +375,7 @@ export function PlanningCalendar({
       poolComposer.setDiscipline(chip.discipline);
       poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
       setBuilderExpanded(true);
+      scrollEditorBandIntoView();
     },
     [
       poolChips,
@@ -373,6 +383,7 @@ export function PlanningCalendar({
       builderExpanded,
       poolComposer,
       poolDrafts,
+      scrollEditorBandIntoView,
     ]
   );
 
@@ -1142,6 +1153,7 @@ export function PlanningCalendar({
     if (ok) {
       setSelectedPoolCardId(card.id);
       setBuilderExpanded(true);
+      scrollEditorBandIntoView();
     }
   }
 
@@ -1159,6 +1171,26 @@ export function PlanningCalendar({
     }
     await handleRefresh();
   }
+
+  const poolWizardProps: WorkoutPoolWizardProps = {
+    poolWeekStart,
+    onPoolWeekChange: handlePoolWeekChange,
+    weekTarget: poolWeekTarget,
+    sessions: poolWeekSessions,
+    activities: poolWeekActivities,
+    currentWeekStart,
+    drafts: poolDrafts,
+    disciplineFilter: poolDisciplineFilter,
+    onDisciplineFilterChange: setPoolDisciplineFilter,
+    selectedCardId: selectedPoolCardId,
+    onSelectCard: handleSelectPoolCard,
+    builderExpanded,
+    onBuilderExpandedChange: setBuilderExpanded,
+    onBuilderDone: handleBuilderDone,
+    composer: poolComposer,
+    disciplineSettings,
+    onAutoFillEasyTiz: handleAutoFillEasyTiz,
+  };
 
   const calendarWeeksContent = (
     <>
@@ -1302,30 +1334,6 @@ export function PlanningCalendar({
             />
           ) : null}
 
-          {useWizardPool ? (
-            <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
-              <WorkoutPoolWizard
-                poolWeekStart={poolWeekStart}
-                onPoolWeekChange={handlePoolWeekChange}
-                weekTarget={poolWeekTarget}
-                sessions={poolWeekSessions}
-                activities={poolWeekActivities}
-                currentWeekStart={currentWeekStart}
-                drafts={poolDrafts}
-                disciplineFilter={poolDisciplineFilter}
-                onDisciplineFilterChange={setPoolDisciplineFilter}
-                selectedCardId={selectedPoolCardId}
-                onSelectCard={handleSelectPoolCard}
-                builderExpanded={builderExpanded}
-                onBuilderExpandedChange={setBuilderExpanded}
-                onBuilderDone={handleBuilderDone}
-                composer={poolComposer}
-                disciplineSettings={disciplineSettings}
-                onAutoFillEasyTiz={handleAutoFillEasyTiz}
-              />
-            </div>
-          ) : null}
-
           {calendarOpen && (
             <div className="mt-3 max-h-[min(70vh,32rem)] overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800">
               <p className="mb-3 text-xs text-zinc-500">
@@ -1353,7 +1361,22 @@ export function PlanningCalendar({
           )}
         </div>
 
-        {calendarWeeksContent}
+        {useWizardPool && poolOpen ? (
+          <div ref={editorBandRef} className="scroll-mt-[4.5rem]">
+            <WorkoutPoolWizardBand {...poolWizardProps} />
+          </div>
+        ) : null}
+
+        {useWizardPool && poolOpen ? (
+          <div className="xl:flex xl:items-start xl:gap-4">
+            <aside className="mb-4 w-full shrink-0 xl:sticky xl:top-[4.5rem] xl:mb-0 xl:w-72 xl:max-h-[calc(100vh-4.5rem)] xl:overflow-y-auto">
+              <WorkoutPoolWizardSideColumn {...poolWizardProps} />
+            </aside>
+            <div className="min-w-0 flex-1">{calendarWeeksContent}</div>
+          </div>
+        ) : (
+          calendarWeeksContent
+        )}
       </div>
 
       <DragOverlay>
