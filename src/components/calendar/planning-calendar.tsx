@@ -1372,17 +1372,16 @@ export function PlanningCalendar({
         </div>
 
         {useWizardPool && poolOpen ? (
-          <div ref={editorBandRef} className="scroll-mt-[4.5rem]">
-            <WorkoutPoolWizardBand {...poolWizardProps} />
-          </div>
-        ) : null}
-
-        {useWizardPool && poolOpen ? (
           <div className="xl:flex xl:items-start xl:gap-4">
-            <aside className="mb-4 w-full shrink-0 xl:sticky xl:top-[4.5rem] xl:mb-0 xl:w-72 xl:max-h-[calc(100vh-4.5rem)] xl:overflow-y-auto">
+            <aside className="mb-4 w-full shrink-0 xl:sticky xl:top-[4.5rem] xl:mb-0 xl:h-[calc(100vh-4.5rem)] xl:w-72">
               <WorkoutPoolWizardSideColumn {...poolWizardProps} />
             </aside>
-            <div className="min-w-0 flex-1">{calendarWeeksContent}</div>
+            <div className="min-w-0 flex-1 space-y-4">
+              <div ref={editorBandRef} className="scroll-mt-[4.5rem]">
+                <WorkoutPoolWizardBand {...poolWizardProps} />
+              </div>
+              {calendarWeeksContent}
+            </div>
           </div>
         ) : (
           calendarWeeksContent
