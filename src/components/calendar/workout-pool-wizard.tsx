@@ -185,7 +185,7 @@ export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
   if (!weekTarget) return null;
 
   return (
-    <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <WorkoutPool
         weekTarget={weekTarget}
         sessions={props.sessions}
