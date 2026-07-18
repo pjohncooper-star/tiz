@@ -136,7 +136,7 @@ export function WorkoutPoolWizardSideColumn(props: WorkoutPoolWizardProps) {
 
   if (!weekTarget) {
     return (
-      <div className="rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 dark:border-zinc-800 dark:bg-zinc-900/90">
+      <div className="flex h-full flex-col rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 dark:border-zinc-800 dark:bg-zinc-900/90">
         <PoolWeekNav
           poolWeekStart={props.poolWeekStart}
           onPoolWeekChange={props.onPoolWeekChange}
@@ -150,13 +150,13 @@ export function WorkoutPoolWizardSideColumn(props: WorkoutPoolWizardProps) {
   }
 
   return (
-    <div className="rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 dark:border-zinc-800 dark:bg-zinc-900/90">
+    <div className="flex h-full flex-col rounded-lg border border-zinc-200 bg-zinc-50/95 p-3 dark:border-zinc-800 dark:bg-zinc-900/90">
       <PoolWeekNav
         poolWeekStart={props.poolWeekStart}
         onPoolWeekChange={props.onPoolWeekChange}
         weekTarget={weekTarget}
       />
-      <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+      <div className="mt-3 flex-1 overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800">
         <WorkoutPool
           weekTarget={weekTarget}
           sessions={props.sessions}
@@ -177,7 +177,7 @@ export function WorkoutPoolWizardSideColumn(props: WorkoutPoolWizardProps) {
   );
 }
 
-/** Full-width band above calendar: Week TiZ and workout editor. */
+/** Week TiZ and workout editor band (calendar column width in xl wizard mode). */
 export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
   const { weekTarget, composer, disciplineSettings } = props;
   const { selectedCard, showBuilder } = usePoolWizardSelection(props);
