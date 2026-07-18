@@ -429,6 +429,8 @@ export type WorkoutPoolProps = {
   onSelectCard: (cardId: string) => void;
   embedded?: boolean;
   onAutoFillEasyTiz?: () => void;
+  /** When set, render only session cards or Week TiZ (default all). */
+  section?: "all" | "cards" | "tiz";
 };
 
 export function WorkoutPool({
@@ -444,6 +446,7 @@ export function WorkoutPool({
   onSelectCard,
   embedded = false,
   onAutoFillEasyTiz,
+  section = "all",
 }: WorkoutPoolProps) {
   const chips = useMemo(
     () => computeUnscheduledChips(weekStart, weekTarget, sessions),
@@ -473,8 +476,8 @@ export function WorkoutPool({
       ? "All budgeted sessions are on the calendar."
       : "No cards match this discipline filter.";
 
-  const inner = (
-    <div className="space-y-3">
+  const cardsSection = (
+    <>
       <DisciplineFilterBar
         value={disciplineFilter}
         onChange={onDisciplineFilterChange}
@@ -487,7 +490,7 @@ export function WorkoutPool({
         hint="Select a card to build a workout, then drag it onto a pool-week day."
       >
         {cards.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
             {cards.map((card) => (
               <PoolSessionCardView
                 key={card.id}
@@ -501,15 +504,32 @@ export function WorkoutPool({
           <p className="text-[11px] text-zinc-500">{emptyMessage}</p>
         )}
       </PoolSection>
+    </>
+  );
 
-      <WeekTizFooter
-        weekTarget={weekTarget}
-        sessions={sessions}
-        activities={activities}
-        weekStart={weekStart}
-        currentWeekStart={currentWeekStart}
-        disciplineFilter={disciplineFilter}
-      />
+  const tizSection = (
+    <WeekTizFooter
+      weekTarget={weekTarget}
+      sessions={sessions}
+      activities={activities}
+      weekStart={weekStart}
+      currentWeekStart={currentWeekStart}
+      disciplineFilter={disciplineFilter}
+    />
+  );
+
+  if (section === "cards") {
+    return embedded ? cardsSection : <div className="space-y-3">{cardsSection}</div>;
+  }
+
+  if (section === "tiz") {
+    return embedded ? tizSection : <div className="space-y-3">{tizSection}</div>;
+  }
+
+  const inner = (
+    <div className="space-y-3">
+      {cardsSection}
+      {tizSection}
     </div>
   );
 
