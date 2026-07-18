@@ -265,3 +265,28 @@ export function computeUnscheduledChips(
 
   return chips;
 }
+
+/** True when the week has at least one unscheduled pool chip. */
+export function weekHasUnplannedPoolSessions(
+  weekStart: string,
+  weekTarget: CalendarWeekTarget | null | undefined,
+  sessions: CalendarPlannedSession[]
+): boolean {
+  if (!weekTarget) return false;
+  return computeUnscheduledChips(weekStart, weekTarget, sessions).length > 0;
+}
+
+/**
+ * First week after `fromWeekStart` (exclusive) in `sortedWeekStarts` with unplanned pool sessions.
+ */
+export function findNextUnplannedWeekStart(
+  fromWeekStart: string,
+  sortedWeekStarts: string[],
+  weekHasUnplanned: (weekStart: string) => boolean
+): string | null {
+  for (const weekStart of sortedWeekStarts) {
+    if (weekStart <= fromWeekStart) continue;
+    if (weekHasUnplanned(weekStart)) return weekStart;
+  }
+  return null;
+}
