@@ -142,8 +142,10 @@ export function PlanningCalendar({
   const [poolOpen, setPoolOpen] = useState(false);
   const [isXl, setIsXl] = useState(false);
   const [pmcRefreshKey, setPmcRefreshKey] = useState(0);
-  // Pool week starts on this week and stays independent of calendar scroll.
-  const [poolWeekStart, setPoolWeekStart] = useState(currentWeekStart);
+  // Pool week for the wizard; changing it scrolls the calendar to match.
+  const [poolWeekStart, setPoolWeekStart] = useState(
+    () => initialScrollWeekStart ?? currentWeekStart
+  );
   const [pendingRolePick, setPendingRolePick] = useState<{
     chip: UnscheduledChip;
     dateKey: string;
@@ -240,14 +242,6 @@ export function PlanningCalendar({
     if (!useWizardPool) return;
     void ensurePoolWeekLoaded(poolWeekStart);
   }, [ensurePoolWeekLoaded, poolWeekStart, useWizardPool]);
-
-  const handlePoolWeekChange = useCallback(
-    (weekStart: string) => {
-      setPoolWeekStart(weekStart);
-      void ensurePoolWeekLoaded(weekStart);
-    },
-    [ensurePoolWeekLoaded]
-  );
 
   const sessionsForWeek = useCallback(
     (weekStart: string) => {
@@ -463,6 +457,15 @@ export function PlanningCalendar({
       }
     },
     [setFocusedWeek, sortedWeeks]
+  );
+
+  const handlePoolWeekChange = useCallback(
+    (weekStart: string) => {
+      setPoolWeekStart(weekStart);
+      void ensurePoolWeekLoaded(weekStart);
+      void scrollToWeekAsync(weekStart);
+    },
+    [ensurePoolWeekLoaded, scrollToWeekAsync]
   );
 
   useEffect(() => {
