@@ -1,8 +1,7 @@
 import type { Discipline, SignalType } from "@prisma/client";
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { formatPace } from "@/lib/units/pace";
-import { zonePctRanges } from "@/lib/zones/display";
-import { paceSecondsAtZoneMidpoint } from "@/lib/workout/zone-pace";
+import { paceSecondsAtZoneMidpoint, zoneMidSpeedPct } from "@/lib/workout/zone-pace";
 import type {
   LeafStep,
   RampStep,
@@ -91,31 +90,9 @@ function isZoneRange(target: StepTarget): boolean {
   );
 }
 
-function zoneMidPct(
-  signal: SignalType,
-  zone: number,
-  zoneCount = 5
-): number {
-  const z = Math.max(1, Math.min(zoneCount, Math.round(zone)));
-  const discipline =
-    signal === "PACE" ? "RUN" : signal === "POWER" ? "BIKE" : "BIKE";
-  const ranges = zonePctRanges(
-    signal,
-    zoneBoundariesFor(discipline, signal),
-    zoneCount
-  );
-  const range = ranges.find((r) => r.zone === z);
-  if (!range) return 100;
-  if (range.minPct != null && range.maxPct != null) {
-    return (range.minPct + range.maxPct) / 2;
-  }
-  if (range.maxPct != null) return (range.maxPct + 100) / 2;
-  if (range.minPct != null) return (range.minPct + 120) / 2;
-  return 100;
-}
-
 function wattsAtZoneMidpoint(zone: number, ftp: number): number {
-  const pct = zoneMidPct("POWER", zone, 5);
+  const boundaries = zoneBoundariesFor("BIKE", "POWER");
+  const pct = zoneMidSpeedPct(zone, boundaries);
   return (ftp * pct) / 100;
 }
 
