@@ -312,7 +312,7 @@ export function WorkoutGraphPanel({
       </div>
 
       <div
-        className={`max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${
+        className={`max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${
           isOver ? "ring-2 ring-sky-400 ring-offset-1 dark:ring-sky-600" : ""
         }`}
         ref={setNodeRef}
