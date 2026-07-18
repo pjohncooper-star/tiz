@@ -1,5 +1,6 @@
 ﻿import type { PoolSize } from "@prisma/client";
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
+import { enrichDistanceFlatStep, type DistanceDurationOptions } from "@/lib/workout/distance-duration";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import { paceSecondsAtZoneMidpoint } from "@/lib/workout/zone-pace";
 import type {
@@ -63,10 +64,13 @@ function formatClockDuration(seconds: number): string {
   return `${s}s`;
 }
 
-function swimLeafToFlat(step: LeafStep): FlatPlanningStep {
+function swimLeafToFlat(
+  step: LeafStep,
+  options: DistanceDurationOptions = {}
+): FlatPlanningStep {
   const targetZone = targetZoneFromTargetLocal(step.target);
   if (step.duration.type === "distance") {
-    return {
+    const flat: FlatPlanningStep = {
       type: step.intensity === "recovery" || step.intensity === "rest" ? "rest" : "steady",
       durationMinutes: 0,
       durationSeconds: 0,
@@ -75,6 +79,7 @@ function swimLeafToFlat(step: LeafStep): FlatPlanningStep {
       openDuration: false,
       ...(step.targetPaceSeconds ? { targetPaceSeconds: step.targetPaceSeconds } : {}),
     };
+    return enrichDistanceFlatStep(flat, { ...options, discipline: "SWIM" });
   }
   const durationSeconds = step.duration.type === "time" ? step.duration.value : 0;
   return {
@@ -225,13 +230,19 @@ export function swimIntervalToRepeatBlock(
 
 export function swimIntervalToFlatSteps(
   set: SwimIntervalSet,
-  thresholdPaceSeconds?: number | null
+  thresholdOrOptions?: number | null | DistanceDurationOptions
 ): FlatPlanningStep[] {
-  const block = swimIntervalToRepeatBlock(set, thresholdPaceSeconds);
+  const options: DistanceDurationOptions =
+    thresholdOrOptions == null
+      ? {}
+      : typeof thresholdOrOptions === "number"
+        ? { thresholdPaceSeconds: thresholdOrOptions, discipline: "SWIM" }
+        : { ...thresholdOrOptions, discipline: "SWIM" };
+  const block = swimIntervalToRepeatBlock(set, options.thresholdPaceSeconds);
   const out: FlatPlanningStep[] = [];
   for (let i = 0; i < block.repeatCount; i++) {
     for (const child of block.children) {
-      if (child.kind === "step") out.push(swimLeafToFlat(child));
+      if (child.kind === "step") out.push(swimLeafToFlat(child, options));
     }
   }
   return out;

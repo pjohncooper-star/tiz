@@ -624,6 +624,7 @@ export function PlannedSessionEditor({
                 structuredWorkoutActive ? serializeTree(workoutTree!) : undefined
               }
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdZoneBoundaries={thresholdZoneBoundaries}
               plannedTriad={plannedTriad}
               completedTriad={completedTriad}
               onPlannedTriadChange={handlePlannedTriadChange}
@@ -679,6 +680,8 @@ export function PlannedSessionEditor({
               scheduledDate={scheduledDate}
               discipline={discipline}
               workoutTree={workoutTree}
+              thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdZoneBoundaries={thresholdZoneBoundaries}
             />
             <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <Button type="button" variant="secondary" onClick={handleRemoveWorkout}>

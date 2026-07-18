@@ -1,6 +1,10 @@
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import type { SessionMetrics } from "@/lib/workout/metrics";
+import {
+  durationSecondsFromDistancePace,
+  effectiveThresholdPaceSeconds,
+} from "@/lib/workout/distance-duration";
 import { paceSecondsAtZoneMidpoint } from "@/lib/workout/zone-pace";
 import type { FlatPlanningStep } from "@/lib/workout/workout-tree";
 import type { WorkoutStep } from "@/lib/workout/workout-types";
@@ -8,25 +12,10 @@ import type { WorkoutStep } from "@/lib/workout/workout-types";
 const METERS_PER_KM = 1000;
 const METERS_PER_100M = 100;
 
-const FALLBACK_THRESHOLD_PACE: Record<"RUN" | "SWIM", number> = {
-  RUN: 300,
-  SWIM: 90,
-};
-
 export type DerivePlannedMetricsOptions = {
   thresholdPaceSeconds?: number | null;
   zoneBoundaries?: number[];
 };
-
-function effectiveThreshold(
-  discipline: "RUN" | "SWIM",
-  thresholdPaceSeconds?: number | null
-): number {
-  if (thresholdPaceSeconds != null && thresholdPaceSeconds > 0) {
-    return thresholdPaceSeconds;
-  }
-  return FALLBACK_THRESHOLD_PACE[discipline];
-}
 
 function stepDurationSeconds(step: FlatPlanningStep): number {
   if (step.durationSeconds > 0) return step.durationSeconds;
@@ -43,17 +32,6 @@ function distanceFromDurationPace(
     return (durationSeconds / paceSeconds) * METERS_PER_KM;
   }
   return (durationSeconds / paceSeconds) * METERS_PER_100M;
-}
-
-function durationFromDistancePace(
-  discipline: "RUN" | "SWIM",
-  distanceMeters: number,
-  paceSeconds: number
-): number {
-  if (discipline === "RUN") {
-    return (distanceMeters / METERS_PER_KM) * paceSeconds;
-  }
-  return (distanceMeters / METERS_PER_100M) * paceSeconds;
 }
 
 function resolveStepPaceSeconds(
@@ -79,7 +57,10 @@ export function derivePlannedMetricsFromPlanningSteps(
 ): SessionMetrics {
   const boundaries =
     options.zoneBoundaries ?? zoneBoundariesFor(discipline, "PACE");
-  const threshold = effectiveThreshold(discipline, options.thresholdPaceSeconds);
+  const threshold = effectiveThresholdPaceSeconds(
+    discipline,
+    options.thresholdPaceSeconds
+  );
 
   let totalDistance = 0;
   let paceWeighted = 0;
@@ -93,7 +74,7 @@ export function derivePlannedMetricsFromPlanningSteps(
     if (distanceM > 0 && durationSec > 0) {
       // both set on step
     } else if (distanceM > 0 && pace) {
-      durationSec = durationFromDistancePace(discipline, distanceM, pace);
+      durationSec = durationSecondsFromDistancePace(discipline, distanceM, pace);
     } else if (durationSec > 0 && pace) {
       distanceM = distanceFromDurationPace(discipline, durationSec, pace);
     }

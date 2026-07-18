@@ -20,6 +20,7 @@ import { endDateKey, formatDateKey, parseDateKey } from "@/lib/dates";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
+import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import { sessionCompletionRollup } from "@/lib/plan/session-completion";
 import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
@@ -113,11 +114,13 @@ export default async function DashboardPage() {
   );
   const runDisplayUnit = settings.RUN?.displayUnit ?? "METRIC";
 
+  const paceContext = await loadPaceThresholdContext(athleteId);
   const planned = serializePlannedSessions(
     plannedRows,
     displayUnits,
     defaultPoolSizes,
-    primarySignals
+    primarySignals,
+    paceContext
   );
   const activities = serializeCalendarActivities(activityRows);
   const linkedActivityIds = new Set(

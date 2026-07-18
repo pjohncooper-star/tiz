@@ -4,6 +4,7 @@ import { resolveActivityNumericMetrics } from "@/lib/activity/summary";
 import { calendarDateFromDb } from "@/lib/dates";
 import type { NormalizedStreams } from "@/lib/zones/compute";
 import { sessionPlannedZoneRollup } from "@/lib/plan/rollup";
+import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import { hasSessionCompletionOverride } from "@/lib/plan/session-completion";
 import {
   resolveSessionPoolSize,
@@ -163,7 +164,8 @@ export function serializePlannedSessions(
   sessions: SessionRow[],
   displayUnits: Partial<Record<Discipline, DisplayUnit>>,
   defaultPoolSizes: Partial<Record<PlanDiscipline, PoolSizeSetting | null>> = {},
-  primarySignals: Partial<Record<Discipline, SignalType>> = {}
+  primarySignals: Partial<Record<Discipline, SignalType>> = {},
+  paceContext: PaceThresholdContext | null = null
 ): CalendarPlannedSession[] {
   return sessions.map((s) => {
     const steps = s.structuredWorkout ? parseWorkoutSteps(s.structuredWorkout.steps) : [];
@@ -171,6 +173,7 @@ export function serializePlannedSessions(
     const rollup = sessionPlannedZoneRollup(s.discipline, {
       targetZones: s.targetZones,
       structuredSteps: structuredRaw,
+      paceContext,
     });
     const raceMinutes = s.estimatedDurationMinutes ?? 0;
     const resolvedPlannedMinutes =

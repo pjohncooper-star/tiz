@@ -20,6 +20,8 @@ type SessionZoneBudgetProps = {
   scheduledDate: string;
   discipline: Discipline;
   workoutTree: WorkoutTreeDocument | null;
+  thresholdPaceSeconds?: number | null;
+  thresholdZoneBoundaries?: number[];
 };
 
 export function SessionZoneBudget({
@@ -27,6 +29,8 @@ export function SessionZoneBudget({
   scheduledDate,
   discipline,
   workoutTree,
+  thresholdPaceSeconds = null,
+  thresholdZoneBoundaries,
 }: SessionZoneBudgetProps) {
   const [data, setData] = useState<WeekTargetResponse | null>(null);
 
@@ -57,7 +61,13 @@ export function SessionZoneBudget({
   );
   if (!disciplineTarget) return null;
 
-  const liveRollup = workoutTree ? rollupTreeToZoneMinutes(workoutTree) : {};
+  const liveRollup = workoutTree
+    ? rollupTreeToZoneMinutes(workoutTree, {
+        discipline: discipline === "RUN" || discipline === "SWIM" ? discipline : undefined,
+        thresholdPaceSeconds,
+        zoneBoundaries: thresholdZoneBoundaries,
+      })
+    : {};
 
   const rows = ZONES.map((zone) => {
     const key = `${discipline}-${zone}`;

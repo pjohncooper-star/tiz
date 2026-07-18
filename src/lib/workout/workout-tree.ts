@@ -1,10 +1,16 @@
 import type { Discipline } from "@prisma/client";
 import {
+  enrichDistanceFlatStep,
+  type DistanceDurationOptions,
+} from "@/lib/workout/distance-duration";
+import {
   parseSwimIntervalSet,
   swimIntervalSetDurationSeconds,
   swimIntervalToFlatSteps,
 } from "@/lib/workout/swim-interval-set";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
+
+export type FlattenPlanningOptions = DistanceDurationOptions;
 
 export const WORKOUT_TREE_VERSION = 2 as const;
 
@@ -387,12 +393,23 @@ function leafPlanningExtras(step: LeafStep): Pick<
   };
 }
 
-export function leafToFlatPlanningStep(step: LeafStep): FlatPlanningStep | null {
+function normalizeFlattenOptions(
+  arg?: number | null | FlattenPlanningOptions
+): FlattenPlanningOptions {
+  if (arg == null) return {};
+  if (typeof arg === "number") return { thresholdPaceSeconds: arg };
+  return arg;
+}
+
+export function leafToFlatPlanningStep(
+  step: LeafStep,
+  options: FlattenPlanningOptions = {}
+): FlatPlanningStep | null {
   const type = INTENSITY_TO_LEGACY[step.intensity];
   const targetZone = targetZoneFromTarget(step.target);
   const extras = leafPlanningExtras(step);
   if (step.duration.type === "distance") {
-    return {
+    const flat: FlatPlanningStep = {
       type,
       durationMinutes: 0,
       durationSeconds: 0,
@@ -401,6 +418,7 @@ export function leafToFlatPlanningStep(step: LeafStep): FlatPlanningStep | null 
       openDuration: false,
       ...extras,
     };
+    return enrichDistanceFlatStep(flat, options);
   }
   if (step.duration.type === "open") {
     const sec = step.duration.estimateSeconds ?? 0;
@@ -445,20 +463,21 @@ function rampToFlatPlanningSteps(step: RampStep): FlatPlanningStep[] {
 
 export function flattenNodeForPlanning(
   node: WorkoutNode,
-  thresholdPaceSeconds?: number | null
+  thresholdOrOptions?: number | null | FlattenPlanningOptions
 ): FlatPlanningStep[] {
+  const options = normalizeFlattenOptions(thresholdOrOptions);
   if (node.kind === "step") {
-    const flat = leafToFlatPlanningStep(node);
+    const flat = leafToFlatPlanningStep(node, options);
     return flat ? [flat] : [];
   }
   if (node.kind === "ramp") return rampToFlatPlanningSteps(node);
   if (node.kind === "swim_interval") {
-    return swimIntervalToFlatSteps(node, thresholdPaceSeconds);
+    return swimIntervalToFlatSteps(node, options);
   }
   const out: FlatPlanningStep[] = [];
   for (let i = 0; i < node.repeatCount; i++) {
     for (const child of node.children) {
-      out.push(...flattenNodeForPlanning(child, thresholdPaceSeconds));
+      out.push(...flattenNodeForPlanning(child, options));
     }
   }
   return out;
@@ -466,9 +485,9 @@ export function flattenNodeForPlanning(
 
 export function flattenForPlanning(
   nodes: WorkoutNode[],
-  thresholdPaceSeconds?: number | null
+  thresholdOrOptions?: number | null | FlattenPlanningOptions
 ): FlatPlanningStep[] {
-  return nodes.flatMap((node) => flattenNodeForPlanning(node, thresholdPaceSeconds));
+  return nodes.flatMap((node) => flattenNodeForPlanning(node, thresholdOrOptions));
 }
 
 export function flatPlanningToLegacySteps(flat: FlatPlanningStep[]): WorkoutStep[] {
@@ -501,22 +520,26 @@ export function rollupFlatPlanningToZoneMinutes(flat: FlatPlanningStep[]): ZoneM
   return totals;
 }
 
-export function rollupTreeToZoneMinutes(raw: unknown): ZoneMinutes {
+export function rollupTreeToZoneMinutes(
+  raw: unknown,
+  options?: FlattenPlanningOptions
+): ZoneMinutes {
   const tree = parseWorkoutTree(raw);
-  return rollupFlatPlanningToZoneMinutes(flattenForPlanning(tree.nodes));
+  return rollupFlatPlanningToZoneMinutes(flattenForPlanning(tree.nodes, options));
 }
 
 export function totalTreeDurationSeconds(
   nodes: WorkoutNode[],
-  thresholdPaceSeconds?: number | null
+  thresholdOrOptions?: number | null | FlattenPlanningOptions
 ): number {
+  const options = normalizeFlattenOptions(thresholdOrOptions);
   let sum = 0;
   for (const node of nodes) {
     if (node.kind === "swim_interval") {
-      sum += swimIntervalSetDurationSeconds(node, thresholdPaceSeconds);
+      sum += swimIntervalSetDurationSeconds(node, options.thresholdPaceSeconds);
       continue;
     }
-    sum += flattenNodeForPlanning(node, thresholdPaceSeconds).reduce(
+    sum += flattenNodeForPlanning(node, options).reduce(
       (acc, s) => acc + s.durationSeconds,
       0
     );

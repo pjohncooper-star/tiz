@@ -1,8 +1,13 @@
 import type { Discipline } from "@prisma/client";
 import {
+  flattenOptionsForDiscipline,
+  type PaceThresholdContext,
+} from "@/lib/plan/pace-threshold-context";
+import {
   flattenForPlanning,
   parseWorkoutTree,
   rollupFlatPlanningToZoneMinutes,
+  type FlattenPlanningOptions,
 } from "@/lib/workout/workout-tree";
 import {
   parseTargetZones,
@@ -60,10 +65,17 @@ export function sessionBudgetRollup(
 /** TiZ rollup from structured workout steps only. */
 export function workoutZoneRollup(
   discipline: Discipline,
-  structuredSteps: unknown
+  structuredSteps: unknown,
+  options: FlattenPlanningOptions = {}
 ): SessionZoneRollup {
+  const flattenOpts: FlattenPlanningOptions = {
+    ...options,
+    ...(discipline === "RUN" || discipline === "SWIM"
+      ? { discipline: options.discipline ?? discipline }
+      : {}),
+  };
   const tree = parseWorkoutTree(structuredSteps);
-  const flat = flattenForPlanning(tree.nodes);
+  const flat = flattenForPlanning(tree.nodes, flattenOpts);
   const legacySteps = parseWorkoutSteps(structuredSteps);
   const fromSteps =
     flat.length > 0
@@ -124,10 +136,15 @@ export function sessionPlannedZoneRollup(
     targetZones?: unknown;
     structuredSteps?: unknown;
     durationHintMinutes?: number | null;
+    paceContext?: PaceThresholdContext | null;
+    flattenOptions?: FlattenPlanningOptions;
   }
 ): SessionZoneRollup {
   if (hasStructuredWorkoutContent(options.structuredSteps)) {
-    return workoutZoneRollup(discipline, options.structuredSteps);
+    const flattenOptions =
+      options.flattenOptions ??
+      flattenOptionsForDiscipline(discipline, options.paceContext);
+    return workoutZoneRollup(discipline, options.structuredSteps, flattenOptions);
   }
   return sessionBudgetRollup(
     discipline,

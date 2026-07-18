@@ -7,6 +7,7 @@ import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
+import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { PoolSize } from "@/lib/units/discipline-settings";
@@ -88,14 +89,18 @@ export async function GET(request: Request) {
 
   const weekActivities = serializeCalendarActivities(activities);
   const weekStarts = weekStartsInRange(from, to);
-  const weekTargets = await getCalendarWeekTargets(athleteId, weekStarts);
+  const [weekTargets, paceContext] = await Promise.all([
+    getCalendarWeekTargets(athleteId, weekStarts),
+    loadPaceThresholdContext(athleteId),
+  ]);
 
   return NextResponse.json({
     sessions: serializePlannedSessions(
       plannedSessions,
       displayUnits,
       defaultPoolSizes,
-      primarySignals
+      primarySignals,
+      paceContext
     ),
     activities: weekActivities,
     weekStarts,
