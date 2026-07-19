@@ -1,4 +1,11 @@
-import type { Discipline, Weekday, PoolSize, SessionRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type {
+  Discipline,
+  Weekday,
+  PoolSize,
+  SessionRole,
+  WeeklyTemplateKind,
+} from "@prisma/client";
 import { normalizeWeekStart, parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { weekdayToDate } from "@/lib/plan/calendar/weekday-to-date";
@@ -22,6 +29,9 @@ export type WeeklyTemplateItemInput = {
 export type WeeklyTemplateDto = {
   id: string;
   name: string;
+  kind: WeeklyTemplateKind;
+  seasonPlanId: string | null;
+  seasonPhaseId: string | null;
   items: Array<{
     id: string;
     weekday: Weekday;
@@ -35,25 +45,123 @@ export type WeeklyTemplateDto = {
   }>;
 };
 
-export async function getOrCreateWeeklyTemplate(athleteId: string): Promise<WeeklyTemplateDto> {
-  let template = await db.weeklyScheduleTemplate.findUnique({
-    where: { athleteId },
-    include: { items: { orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }] } },
-  });
+/**
+ * Identifies which template to read or create. `DEFAULT` is the athlete-global
+ * template (the /calendar/template quick-apply); `PHASE` is bound to a season
+ * phase; `REST` / `TEST` are one per season plan.
+ */
+export type TemplateScope =
+  | { kind: "DEFAULT"; athleteId: string }
+  | {
+      kind: "PHASE";
+      athleteId: string;
+      seasonPlanId: string;
+      seasonPhaseId: string;
+    }
+  | { kind: "REST"; athleteId: string; seasonPlanId: string }
+  | { kind: "TEST"; athleteId: string; seasonPlanId: string };
 
-  if (!template) {
-    template = await db.weeklyScheduleTemplate.create({
-      data: { athleteId },
-      include: { items: { orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }] } },
+const TEMPLATE_ITEM_INCLUDE = {
+  items: { orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }] },
+} satisfies Prisma.WeeklyScheduleTemplateInclude;
+
+const DEFAULT_TEMPLATE_NAME: Record<WeeklyTemplateKind, string> = {
+  DEFAULT: "Weekly template",
+  PHASE: "Phase template",
+  REST: "Rest week template",
+  TEST: "Test week template",
+};
+
+function scopeCreateData(scope: TemplateScope) {
+  switch (scope.kind) {
+    case "DEFAULT":
+      return { athleteId: scope.athleteId, kind: "DEFAULT" as const };
+    case "PHASE":
+      return {
+        athleteId: scope.athleteId,
+        kind: "PHASE" as const,
+        seasonPlanId: scope.seasonPlanId,
+        seasonPhaseId: scope.seasonPhaseId,
+      };
+    case "REST":
+      return {
+        athleteId: scope.athleteId,
+        kind: "REST" as const,
+        seasonPlanId: scope.seasonPlanId,
+      };
+    case "TEST":
+      return {
+        athleteId: scope.athleteId,
+        kind: "TEST" as const,
+        seasonPlanId: scope.seasonPlanId,
+      };
+  }
+}
+
+async function findScopedTemplate(scope: TemplateScope) {
+  if (scope.kind === "PHASE") {
+    return db.weeklyScheduleTemplate.findFirst({
+      where: { seasonPhaseId: scope.seasonPhaseId, kind: "PHASE" },
+      include: TEMPLATE_ITEM_INCLUDE,
     });
   }
+  if (scope.kind === "DEFAULT") {
+    return db.weeklyScheduleTemplate.findFirst({
+      where: { athleteId: scope.athleteId, kind: "DEFAULT" },
+      include: TEMPLATE_ITEM_INCLUDE,
+    });
+  }
+  return db.weeklyScheduleTemplate.findFirst({
+    where: { seasonPlanId: scope.seasonPlanId, kind: scope.kind },
+    include: TEMPLATE_ITEM_INCLUDE,
+  });
+}
 
+/** Read or lazily create the template for a scope. */
+export async function getOrCreateScopedTemplate(
+  scope: TemplateScope
+): Promise<WeeklyTemplateDto> {
+  let template = await findScopedTemplate(scope);
+  if (!template) {
+    template = await db.weeklyScheduleTemplate.create({
+      data: { ...scopeCreateData(scope), name: DEFAULT_TEMPLATE_NAME[scope.kind] },
+      include: TEMPLATE_ITEM_INCLUDE,
+    });
+  }
   return serializeTemplate(template);
+}
+
+/** Read the template for a scope without creating it. */
+export async function getScopedTemplate(
+  scope: TemplateScope
+): Promise<WeeklyTemplateDto | null> {
+  const template = await findScopedTemplate(scope);
+  return template ? serializeTemplate(template) : null;
+}
+
+/** All plan-scoped templates (PHASE / REST / TEST) for a season plan. */
+export async function getPlanWeeklyTemplates(
+  seasonPlanId: string
+): Promise<WeeklyTemplateDto[]> {
+  const templates = await db.weeklyScheduleTemplate.findMany({
+    where: { seasonPlanId },
+    include: TEMPLATE_ITEM_INCLUDE,
+  });
+  return templates.map(serializeTemplate);
+}
+
+export async function getOrCreateWeeklyTemplate(
+  athleteId: string
+): Promise<WeeklyTemplateDto> {
+  return getOrCreateScopedTemplate({ kind: "DEFAULT", athleteId });
 }
 
 function serializeTemplate(template: {
   id: string;
   name: string;
+  kind: WeeklyTemplateKind;
+  seasonPlanId: string | null;
+  seasonPhaseId: string | null;
   items: Array<{
     id: string;
     weekday: Weekday;
@@ -69,6 +177,9 @@ function serializeTemplate(template: {
   return {
     id: template.id,
     name: template.name,
+    kind: template.kind,
+    seasonPlanId: template.seasonPlanId,
+    seasonPhaseId: template.seasonPhaseId,
     items: template.items.map((item) => ({
       id: item.id,
       weekday: item.weekday,
@@ -83,12 +194,12 @@ function serializeTemplate(template: {
   };
 }
 
-export async function replaceWeeklyTemplate(
-  athleteId: string,
+export async function replaceScopedTemplate(
+  scope: TemplateScope,
   name: string,
   items: WeeklyTemplateItemInput[]
 ): Promise<WeeklyTemplateDto> {
-  const template = await getOrCreateWeeklyTemplate(athleteId);
+  const template = await getOrCreateScopedTemplate(scope);
 
   await db.$transaction(async (tx) => {
     await tx.weeklyScheduleTemplate.update({
@@ -117,7 +228,15 @@ export async function replaceWeeklyTemplate(
     }
   });
 
-  return getOrCreateWeeklyTemplate(athleteId);
+  return getScopedTemplate(scope) as Promise<WeeklyTemplateDto>;
+}
+
+export async function replaceWeeklyTemplate(
+  athleteId: string,
+  name: string,
+  items: WeeklyTemplateItemInput[]
+): Promise<WeeklyTemplateDto> {
+  return replaceScopedTemplate({ kind: "DEFAULT", athleteId }, name, items);
 }
 
 export async function weekHasPlannedSessions(

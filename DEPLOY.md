@@ -168,6 +168,19 @@ Or paste `prisma/migrations/manual_planning_modes.sql` into the Neon SQL editor.
 
 This adds `PlanningMode` / `LongOffWeekPolicy` enums and columns on `SeasonPlan`, `SeasonPhase`, and `SeasonWeek`. Existing seasons default to `BY_DISCIPLINE` with 60% off-week endurance substitutes.
 
+### Phase-aware weekly templates (schema migration)
+
+Before or immediately after deploying phase-template code to production, apply the idempotent SQL migration against Neon:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."   # production Neon URL
+npm run db:migrate:phase-templates
+```
+
+Or paste `prisma/migrations/manual_phase_templates.sql` into the Neon SQL editor.
+
+This adds the `WeeklyTemplateKind` enum, `kind` / `seasonPlanId` / `seasonPhaseId` columns on `WeeklyScheduleTemplate` (dropping the old one-per-athlete unique), scoped unique indexes, and `testWeekFlags` on `SeasonPlan`. Existing templates become `kind = 'DEFAULT'`, so the `/calendar/template` quick-apply is unchanged.
+
 ---
 
 ## Troubleshooting

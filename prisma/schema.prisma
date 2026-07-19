@@ -304,7 +304,7 @@ model Athlete {
   workoutFolders      WorkoutFolder[]
   workoutTemplates    WorkoutTemplate[]
   structuredWorkouts  StructuredWorkout[]
-  weeklyScheduleTemplate WeeklyScheduleTemplate?
+  weeklyScheduleTemplates WeeklyScheduleTemplate[]
   surveyResponses     SurveyResponse[]
   interactionInsights InteractionInsight[]
   consentGrants       ConsentGrant[]           @relation("AthleteGrants")
@@ -501,6 +501,7 @@ model SeasonPlan {
   longRunPeakMin           Int            @default(90)
   longRideWeekFlags        Json?
   longRunWeekFlags         Json?
+  testWeekFlags            Json?
   defaultPlanningMode      PlanningMode   @default(BY_DISCIPLINE)
   primaryGoalEventId       String?        @unique
   setupComplete            Boolean        @default(false)
@@ -512,6 +513,7 @@ model SeasonPlan {
   phases            SeasonPhase[]
   weeks             SeasonWeek[]
   goalEvents        GoalEvent[]    @relation("SeasonGoalEvents")
+  weeklyTemplates   WeeklyScheduleTemplate[]
 
   @@index([athleteId, startDate])
   @@index([athleteId, status])
@@ -592,6 +594,7 @@ model SeasonPhase {
   seasonPlan   SeasonPlan              @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
   mesocycles   SeasonMesocycle[]
   disciplines  SeasonPhaseDiscipline[]
+  weeklyTemplate WeeklyScheduleTemplate?
 
   @@index([seasonPlanId, sortOrder])
 }
@@ -822,15 +825,30 @@ model ConsentGrant {
   @@unique([athleteId, superUserId])
 }
 
-model WeeklyScheduleTemplate {
-  id        String   @id @default(cuid())
-  athleteId String   @unique
-  name      String   @default("Weekly template")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+enum WeeklyTemplateKind {
+  DEFAULT
+  PHASE
+  REST
+  TEST
+}
 
-  athlete Athlete                      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  items   WeeklyScheduleTemplateItem[]
+model WeeklyScheduleTemplate {
+  id            String             @id @default(cuid())
+  athleteId     String
+  kind          WeeklyTemplateKind @default(DEFAULT)
+  seasonPlanId  String?
+  seasonPhaseId String?            @unique
+  name          String             @default("Weekly template")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  athlete     Athlete                      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  seasonPlan  SeasonPlan?                  @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
+  seasonPhase SeasonPhase?                 @relation(fields: [seasonPhaseId], references: [id], onDelete: Cascade)
+  items       WeeklyScheduleTemplateItem[]
+
+  @@index([athleteId])
+  @@index([seasonPlanId])
 }
 
 model WeeklyScheduleTemplateItem {
