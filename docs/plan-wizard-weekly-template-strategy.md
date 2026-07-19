@@ -134,6 +134,16 @@ Test weeks are a genuine special case: **TiZ planning does not apply.**
 
 Templates pre-fill the week; the pool fills the remaining gap. Template **intensity slots** become the anchor points for the pool's intensity-recipe suggestions (see [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md), pool phases P3/P4). Reconciliation against `slotBudgets` is unchanged: manual sessions and template sessions both reduce the unscheduled chip counts.
 
+### TiZ seeding is being superseded
+
+When a session is placed or materialized it currently seeds provisional `targetZones` via `inheritTargetZonesFromRole` (`src/lib/plan/calendar/inherit-target-zones.ts`) — a fixed per-role zone split (`ROLE_ZONE_SHARE`). **This is a first-pass heuristic, not the target behavior**, and templated sessions should not entrench it:
+
+- **Intensity slots** — the fixed `INTENSITY` split (55% Z3 / 30% Z4 / 15% Z5, applied identically to every hard session) does **not** reflect how athletes train. It is superseded by **intensity recipes** (over/under, tempo, threshold, VO2) that claim the week's hard budget asymmetrically — pool phase **P3**.
+- **Easy / moderate / long** — per-session role shares (notably `MODERATE = 100% Z2`, so endurance sessions never inherit Z1) are superseded by **week distribute/balance** that pours remaining Z1/Z2 to reconcile the week `zoneMinutes` pie — pool phase **P4** (generalizing `computeEasyTizSpread`).
+- **Keep:** the `LONG` + mode 4 (`SEPARATE_LONG_TIZ`) path that already allocates from the real `longSessionZoneMinutes` budget.
+
+Net: on materialize, defer to **recipes** (intensity) and **week-distribute** (easy/long); demote `inheritTargetZonesFromRole` to a fallback when no recipe or budget is available. Whether TiZ re-seeds on role change / workout attach (today it does not) is resolved by that same distribute pass.
+
 ---
 
 ## Proposed work sequence
