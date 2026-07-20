@@ -10,6 +10,7 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
+import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import {
   isEndurancePoolDiscipline,
   type PoolCardDraftMap,
@@ -40,6 +41,7 @@ export type WorkoutPoolWizardProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onAutoFillEasyTiz?: () => void;
   onApplyToSession?: () => void;
+  paceContext?: PaceThresholdContext | null;
 };
 
 function weekLabel(weekStart: string): string {
@@ -81,6 +83,18 @@ function usePoolWizardSelection(props: WorkoutPoolWizardProps) {
   }, [selectedCard?.id, selectedCard?.discipline]);
 
   return { selectedCard, showBuilder, applyTargetId };
+}
+
+function usePoolLiveOverlay(props: WorkoutPoolWizardProps) {
+  const { selectedCardId, composer } = props;
+  return useMemo(() => {
+    if (!selectedCardId || composer.workoutTree.nodes.length === 0) return null;
+    return {
+      cardId: selectedCardId,
+      nodes: composer.workoutTree.nodes,
+      discipline: composer.discipline,
+    };
+  }, [selectedCardId, composer.discipline, composer.workoutTree.nodes]);
 }
 
 function PoolWeekNav({
@@ -186,6 +200,7 @@ export function WorkoutPoolWizardSideColumn(props: WorkoutPoolWizardProps) {
 export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
   const { weekTarget, composer, disciplineSettings } = props;
   const { selectedCard, showBuilder, applyTargetId } = usePoolWizardSelection(props);
+  const liveOverlay = usePoolLiveOverlay(props);
 
   if (!weekTarget) return null;
 
@@ -204,6 +219,8 @@ export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
         onSelectCard={props.onSelectCard}
         embedded
         section="tiz"
+        paceContext={props.paceContext}
+        liveOverlay={liveOverlay}
       />
 
       {showBuilder && selectedCard ? (

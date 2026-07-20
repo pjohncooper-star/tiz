@@ -3,8 +3,12 @@
 import { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import type { Discipline, PlanningMode } from "@prisma/client";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+import { computeEffectiveScheduledTiz } from "@/lib/plan/calendar/effective-scheduled-tiz";
+import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
+import type { WorkoutNode } from "@/lib/workout/workout-tree";
 import {
   computeUnscheduledChips,
   formatChipDurationMinutes,
@@ -22,13 +26,7 @@ import {
 } from "@/lib/plan/calendar/pool-session-card";
 import {
   combinedZoneTotals,
-  linkedActivityIdsExcludedFromCompletedRollup,
-  mergeWeekSummaries,
   sportZoneTotals,
-  summarizeWeekCompletedActivities,
-  summarizeWeekCompletedSessions,
-  summarizeWeekPlannedSessions,
-  type WeekPlannedSummary,
 } from "@/lib/plan/calendar/week-summary";
 import { poolSessionCardDragId } from "@/lib/plan/workout-builder-dnd";
 import type { CalendarWeekTarget, TargetDiscipline } from "@/components/calendar/types";
@@ -42,7 +40,6 @@ import { formatSessionDistance } from "@/lib/workout/metrics";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
 import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
-import type { Discipline, PlanningMode } from "@prisma/client";
 
 const TIZ_ZONES = [1, 2, 3, 4, 5] as const;
 const TIZ_DISCIPLINES: TargetDiscipline[] = ["SWIM", "BIKE", "RUN"];
@@ -62,24 +59,24 @@ function zoneArrayHasTarget(zones: number[]): boolean {
 
 function ZoneProgressRows({
   targetZones,
-  doneZones,
+  scheduledZones,
 }: {
   targetZones: number[];
-  doneZones: number[];
+  scheduledZones: number[];
 }) {
   return (
     <div className="space-y-1.5">
       {TIZ_ZONES.map((zone) => {
         const target = targetZones[zone - 1] ?? 0;
         if (target <= 0) return null;
-        const done = doneZones[zone - 1] ?? 0;
-        const pct = Math.min(100, Math.round((done / target) * 100));
+        const scheduled = scheduledZones[zone - 1] ?? 0;
+        const pct = Math.min(100, Math.round((scheduled / target) * 100));
         return (
           <div key={zone}>
             <div className="mb-0.5 flex justify-between tabular-nums text-zinc-600 dark:text-zinc-300">
               <span>Z{zone}</span>
               <span>
-                {formatZoneMinutes(done)} / {formatZoneMinutes(target)}
+                {formatZoneMinutes(scheduled)} / {formatZoneMinutes(target)}
               </span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
@@ -95,13 +92,12 @@ function ZoneProgressRows({
   );
 }
 
-function doneZonesFromSummary(
-  summary: WeekPlannedSummary | null,
+function scheduledZonesFromRollup(
+  zoneMinutes: Record<string, number>,
   discipline?: Discipline
 ): number[] {
-  if (!summary) return [0, 0, 0, 0, 0];
-  if (discipline) return sportZoneTotals(discipline, summary.total.zoneMinutes);
-  return combinedZoneTotals(summary.total.zoneMinutes);
+  if (discipline) return sportZoneTotals(discipline, zoneMinutes);
+  return combinedZoneTotals(zoneMinutes);
 }
 
 function PoolSection({
@@ -272,21 +268,26 @@ function DisciplineFilterBar({
 function WeekTizFooter({
   weekTarget,
   sessions,
-  activities,
-  weekStart,
-  currentWeekStart,
+  drafts,
+  chips,
   disciplineFilter,
+  paceContext,
+  liveOverlay,
 }: {
   weekTarget: CalendarWeekTarget;
   sessions: CalendarPlannedSession[];
-  activities: CalendarWeekActivity[];
-  weekStart: string;
-  currentWeekStart: string;
+  drafts: PoolCardDraftMap;
+  chips: UnscheduledChip[];
   disciplineFilter: PoolDisciplineFilter;
+  paceContext?: PaceThresholdContext | null;
+  liveOverlay?: {
+    cardId: string;
+    nodes: WorkoutNode[];
+    discipline: Discipline;
+  } | null;
 }) {
   const mode: PlanningMode = weekTarget.planningMode ?? "BY_DISCIPLINE";
   const separateLongTiz = planningModeIncludesLongTiz(mode);
-  const showCompleted = weekStart <= currentWeekStart;
   const showOverall = mode === "OVERALL";
 
   // Strength has no TiZ; hide the footer when that filter is active.
@@ -299,34 +300,14 @@ function WeekTizFooter({
       ? disciplineFilter
       : null;
 
-  const mainSessions = separateLongTiz
-    ? sessions.filter((session) => session.sessionRole !== "LONG")
-    : sessions;
-  const longSessions = separateLongTiz
-    ? sessions.filter(
-        (session) =>
-          session.sessionRole === "LONG" &&
-          (session.discipline === "BIKE" || session.discipline === "RUN")
-      )
-    : [];
-
-  const plannedMain = summarizeWeekPlannedSessions(mainSessions);
-  const excludedActivityIds = linkedActivityIdsExcludedFromCompletedRollup(sessions);
-  const completedMain = showCompleted
-    ? mergeWeekSummaries(
-        summarizeWeekCompletedSessions(mainSessions),
-        summarizeWeekCompletedActivities(
-          activities.filter((activity) => !excludedActivityIds.has(activity.id))
-        )
-      )
-    : null;
-  const mainDoneSummary = showCompleted && completedMain ? completedMain : plannedMain;
-
-  const plannedLong = summarizeWeekPlannedSessions(longSessions);
-  const completedLong = showCompleted
-    ? summarizeWeekCompletedSessions(longSessions)
-    : null;
-  const longDoneSummary = showCompleted && completedLong ? completedLong : plannedLong;
+  const effectiveScheduled = computeEffectiveScheduledTiz({
+    weekTarget,
+    sessions,
+    drafts,
+    chips,
+    paceContext,
+    liveOverlay,
+  });
 
   const overallTarget = combinedZoneTotals(weekTarget.zoneMinutes);
   const visibleDisciplines = filteredDiscipline
@@ -339,7 +320,7 @@ function WeekTizFooter({
       return {
         discipline,
         target,
-        done: doneZonesFromSummary(mainDoneSummary, discipline),
+        scheduled: scheduledZonesFromRollup(effectiveScheduled.main, discipline),
       };
     })
     .filter((row) => zoneArrayHasTarget(row.target));
@@ -350,7 +331,7 @@ function WeekTizFooter({
     .map((discipline) => ({
       discipline,
       target: sportZoneTotals(discipline, weekTarget.longSessionZoneMinutes ?? {}),
-      done: doneZonesFromSummary(longDoneSummary, discipline),
+      scheduled: scheduledZonesFromRollup(effectiveScheduled.long, discipline),
     }))
     .filter((row) => zoneArrayHasTarget(row.target));
 
@@ -363,27 +344,24 @@ function WeekTizFooter({
   const columnCount = Math.max(1, disciplineColumns.length);
 
   return (
-    <PoolSection
-      title="Week TiZ"
-      hint={showCompleted ? "Completed vs season target" : "Scheduled vs season target"}
-    >
+    <PoolSection title="Week TiZ" hint="Scheduled vs season target">
       <div className="space-y-3 text-[11px]">
         {showOverall ? (
           <ZoneProgressRows
             targetZones={overallTarget}
-            doneZones={doneZonesFromSummary(mainDoneSummary)}
+            scheduledZones={scheduledZonesFromRollup(effectiveScheduled.main)}
           />
         ) : (
           <div
             className="grid gap-3"
             style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
           >
-            {disciplineColumns.map(({ discipline, target, done }) => (
+            {disciplineColumns.map(({ discipline, target, scheduled }) => (
               <div key={discipline} className="min-w-0 space-y-1">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
                   {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
                 </p>
-                <ZoneProgressRows targetZones={target} doneZones={done} />
+                <ZoneProgressRows targetZones={target} scheduledZones={scheduled} />
               </div>
             ))}
           </div>
@@ -400,12 +378,12 @@ function WeekTizFooter({
                 gridTemplateColumns: `repeat(${Math.max(1, longTargetByDiscipline.length)}, minmax(0, 1fr))`,
               }}
             >
-              {longTargetByDiscipline.map(({ discipline, target, done }) => (
+              {longTargetByDiscipline.map(({ discipline, target, scheduled }) => (
                 <div key={`long-${discipline}`} className="min-w-0 space-y-1">
                   <p className="text-[10px] font-medium text-zinc-500">
                     {DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
                   </p>
-                  <ZoneProgressRows targetZones={target} doneZones={done} />
+                  <ZoneProgressRows targetZones={target} scheduledZones={scheduled} />
                 </div>
               ))}
             </div>
@@ -429,6 +407,12 @@ export type WorkoutPoolProps = {
   onSelectCard: (cardId: string) => void;
   embedded?: boolean;
   onAutoFillEasyTiz?: () => void;
+  paceContext?: PaceThresholdContext | null;
+  liveOverlay?: {
+    cardId: string;
+    nodes: WorkoutNode[];
+    discipline: Discipline;
+  } | null;
   /** When set, render only session cards or Week TiZ (default all). */
   section?: "all" | "cards" | "tiz";
 };
@@ -446,6 +430,8 @@ export function WorkoutPool({
   onSelectCard,
   embedded = false,
   onAutoFillEasyTiz,
+  paceContext,
+  liveOverlay,
   section = "all",
 }: WorkoutPoolProps) {
   const chips = useMemo(
@@ -512,10 +498,11 @@ export function WorkoutPool({
     <WeekTizFooter
       weekTarget={weekTarget}
       sessions={sessions}
-      activities={activities}
-      weekStart={weekStart}
-      currentWeekStart={currentWeekStart}
+      drafts={drafts}
+      chips={chips}
       disciplineFilter={disciplineFilter}
+      paceContext={paceContext}
+      liveOverlay={liveOverlay}
     />
   );
 

@@ -248,10 +248,10 @@ function MetricTripletSubheaders() {
 }
 
 function MetricsDesktopHeader({
-  hasPlanned,
+  hasScheduled,
   hasCompleted,
 }: {
-  hasPlanned: boolean;
+  hasScheduled: boolean;
   hasCompleted: boolean;
 }) {
   return (
@@ -260,9 +260,9 @@ function MetricsDesktopHeader({
         Sport
       </span>
       <div className={METRICS_MIDDLE_CLASS}>
-        {hasPlanned ? (
+        {hasScheduled ? (
           <div className={METRIC_HEADER_TRIPLET}>
-            <span className="col-span-3 text-zinc-600 dark:text-zinc-300">Planned</span>
+            <span className="col-span-3 text-zinc-600 dark:text-zinc-300">Scheduled</span>
             <MetricTripletSubheaders />
           </div>
         ) : null}
@@ -297,9 +297,9 @@ function SummaryMetricCells({
 }: {
   row: WeekSportSummary | null;
   distanceLabel: string;
-  side: "planned" | "completed";
+  side: "scheduled" | "completed";
 }) {
-  const sideLabel = side === "planned" ? "Planned" : "Completed";
+  const sideLabel = side === "scheduled" ? "Scheduled" : "Completed";
 
   if (!row) {
     return (
@@ -355,28 +355,28 @@ function SummaryMetricCells({
 
 function StackedTizColumn({
   sportLabel,
-  plannedZoneMinutes,
+  scheduledZoneMinutes,
   completedZoneMinutes,
   maxZoneMinutes,
-  showPlanned,
+  showScheduled,
   showCompleted,
 }: {
   sportLabel: string;
-  plannedZoneMinutes: number[];
+  scheduledZoneMinutes: number[];
   completedZoneMinutes: number[];
   maxZoneMinutes: number;
-  showPlanned: boolean;
+  showScheduled: boolean;
   showCompleted: boolean;
 }) {
   return (
     <div className={`${TIZ_COL_CLASS} flex justify-end`}>
       <div className={`flex flex-col gap-2 ${TIZ_STACK_CLASS}`}>
         <span className="sr-only">Time in zone for {sportLabel}</span>
-        {showPlanned ? (
+        {showScheduled ? (
           <TizBarRow
-            sideLabel="Planned"
-            tizTitle="Planned TiZ"
-            zoneMinutes={plannedZoneMinutes}
+            sideLabel="Scheduled"
+            tizTitle="Scheduled TiZ"
+            zoneMinutes={scheduledZoneMinutes}
             maxMinutes={maxZoneMinutes}
           />
         ) : null}
@@ -395,32 +395,32 @@ function StackedTizColumn({
 
 function CombinedSummaryRow({
   sportLabel,
-  plannedRow,
+  scheduledRow,
   completedRow,
-  plannedDistanceLabel,
+  scheduledDistanceLabel,
   completedDistanceLabel,
-  plannedZoneMinutes,
+  scheduledZoneMinutes,
   completedZoneMinutes,
   maxZoneMinutes,
-  showPlanned,
+  showScheduled,
   showCompleted,
   isTotal,
 }: {
   sportLabel: string;
-  plannedRow: WeekSportSummary | null;
+  scheduledRow: WeekSportSummary | null;
   completedRow: WeekSportSummary | null;
-  plannedDistanceLabel: string;
+  scheduledDistanceLabel: string;
   completedDistanceLabel: string;
-  plannedZoneMinutes: number[];
+  scheduledZoneMinutes: number[];
   completedZoneMinutes: number[];
   maxZoneMinutes: number;
-  showPlanned: boolean;
+  showScheduled: boolean;
   showCompleted: boolean;
   isTotal?: boolean;
 }) {
   const showRow =
     isTotal ||
-    (showPlanned && rowHasData(plannedRow ?? emptySportRow(), plannedZoneMinutes)) ||
+    (showScheduled && rowHasData(scheduledRow ?? emptySportRow(), scheduledZoneMinutes)) ||
     (showCompleted && rowHasData(completedRow ?? emptySportRow(), completedZoneMinutes));
   if (!showRow) return null;
 
@@ -432,11 +432,11 @@ function CombinedSummaryRow({
         >
           {sportLabel}
         </p>
-        {showPlanned ? (
+        {showScheduled ? (
           <SummaryMetricCells
-            row={plannedRow}
-            distanceLabel={plannedDistanceLabel}
-            side="planned"
+            row={scheduledRow}
+            distanceLabel={scheduledDistanceLabel}
+            side="scheduled"
           />
         ) : null}
         {showCompleted ? (
@@ -448,10 +448,10 @@ function CombinedSummaryRow({
         ) : null}
         <StackedTizColumn
           sportLabel={sportLabel}
-          plannedZoneMinutes={plannedZoneMinutes}
+          scheduledZoneMinutes={scheduledZoneMinutes}
           completedZoneMinutes={completedZoneMinutes}
           maxZoneMinutes={maxZoneMinutes}
-          showPlanned={showPlanned}
+          showScheduled={showScheduled}
           showCompleted={showCompleted}
         />
       </div>
@@ -465,11 +465,11 @@ function CombinedSummaryRow({
           {sportLabel}
         </div>
         <div className={METRICS_MIDDLE_CLASS}>
-          {showPlanned ? (
+          {showScheduled ? (
             <SummaryMetricCells
-              row={plannedRow}
-              distanceLabel={plannedDistanceLabel}
-              side="planned"
+              row={scheduledRow}
+              distanceLabel={scheduledDistanceLabel}
+              side="scheduled"
             />
           ) : null}
           {showCompleted ? (
@@ -482,10 +482,10 @@ function CombinedSummaryRow({
         </div>
         <StackedTizColumn
           sportLabel={sportLabel}
-          plannedZoneMinutes={plannedZoneMinutes}
+          scheduledZoneMinutes={scheduledZoneMinutes}
           completedZoneMinutes={completedZoneMinutes}
           maxZoneMinutes={maxZoneMinutes}
-          showPlanned={showPlanned}
+          showScheduled={showScheduled}
           showCompleted={showCompleted}
         />
       </div>
@@ -505,31 +505,33 @@ function emptySportRow(): WeekSportSummary {
 }
 
 function CombinedExpandedMetricsSection({
-  plannedSummary,
+  scheduledSummary,
   completedSummary,
   disciplineSettings,
 }: {
-  plannedSummary: WeekPlannedSummary | null;
+  scheduledSummary: WeekPlannedSummary | null;
   completedSummary: WeekPlannedSummary | null;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
 }) {
-  const hasPlanned = plannedSummary ? weekSummaryHasData(plannedSummary) : false;
+  const hasScheduled = scheduledSummary ? weekSummaryHasData(scheduledSummary) : false;
   const hasCompleted = completedSummary ? weekSummaryHasData(completedSummary) : false;
-  if (!hasPlanned && !hasCompleted) return null;
+  if (!hasScheduled && !hasCompleted) return null;
 
   const disciplines = SUMMARY_DISCIPLINE_ORDER;
   const sportRows = disciplines.map((discipline) => {
-    const plannedRow = plannedSummary?.bySport.find((r) => r.discipline === discipline) ?? null;
+    const scheduledRow = scheduledSummary?.bySport.find((r) => r.discipline === discipline) ?? null;
     const completedRow = completedSummary?.bySport.find((r) => r.discipline === discipline) ?? null;
-    const plannedZones = plannedRow ? sportZoneTotals(plannedRow.discipline, plannedRow.zoneMinutes) : [0, 0, 0, 0, 0];
+    const scheduledZones = scheduledRow
+      ? sportZoneTotals(scheduledRow.discipline, scheduledRow.zoneMinutes)
+      : [0, 0, 0, 0, 0];
     const completedZones = completedRow
       ? sportZoneTotals(completedRow.discipline, completedRow.zoneMinutes)
       : [0, 0, 0, 0, 0];
-    return { discipline, plannedRow, completedRow, plannedZones, completedZones };
+    return { discipline, scheduledRow, completedRow, scheduledZones, completedZones };
   });
 
-  const plannedTotalZones = plannedSummary
-    ? combinedZoneTotals(plannedSummary.total.zoneMinutes)
+  const scheduledTotalZones = scheduledSummary
+    ? combinedZoneTotals(scheduledSummary.total.zoneMinutes)
     : [0, 0, 0, 0, 0];
   const completedTotalZones = completedSummary
     ? combinedZoneTotals(completedSummary.total.zoneMinutes)
@@ -537,21 +539,21 @@ function CombinedExpandedMetricsSection({
 
   return (
     <div className="rounded-md border border-zinc-200 bg-white/90 p-3 dark:border-zinc-700 dark:bg-zinc-950/60">
-      <MetricsDesktopHeader hasPlanned={hasPlanned} hasCompleted={hasCompleted} />
+      <MetricsDesktopHeader hasScheduled={hasScheduled} hasCompleted={hasCompleted} />
       <div className="divide-y divide-zinc-200 dark:divide-zinc-800 sm:divide-y-0">
-        {sportRows.map(({ discipline, plannedRow, completedRow, plannedZones, completedZones }) => (
+        {sportRows.map(({ discipline, scheduledRow, completedRow, scheduledZones, completedZones }) => (
           <CombinedSummaryRow
             key={discipline}
             sportLabel={DISCIPLINE_DISPLAY_LABELS[discipline] ?? discipline}
-            showPlanned={hasPlanned}
+            showScheduled={hasScheduled}
             showCompleted={hasCompleted}
-            plannedRow={plannedRow}
+            scheduledRow={scheduledRow}
             completedRow={completedRow}
-            plannedDistanceLabel={
-              plannedRow
+            scheduledDistanceLabel={
+              scheduledRow
                 ? formatSummaryDistance(
-                    plannedRow.discipline,
-                    plannedRow.distanceMeters,
+                    scheduledRow.discipline,
+                    scheduledRow.distanceMeters,
                     disciplineSettings
                   )
                 : "—"
@@ -565,22 +567,22 @@ function CombinedExpandedMetricsSection({
                   )
                 : "—"
             }
-            plannedZoneMinutes={plannedZones}
+            scheduledZoneMinutes={scheduledZones}
             completedZoneMinutes={completedZones}
-            maxZoneMinutes={maxZoneBarMinutes(plannedZones, completedZones)}
+            maxZoneMinutes={maxZoneBarMinutes(scheduledZones, completedZones)}
           />
         ))}
         <CombinedSummaryRow
           sportLabel="Total"
           isTotal
-          showPlanned={hasPlanned}
+          showScheduled={hasScheduled}
           showCompleted={hasCompleted}
-          plannedRow={plannedSummary?.total ?? null}
+          scheduledRow={scheduledSummary?.total ?? null}
           completedRow={completedSummary?.total ?? null}
-          plannedDistanceLabel={
-            plannedSummary
+          scheduledDistanceLabel={
+            scheduledSummary
               ? formatTotalDistanceSummary(
-                  plannedSummary.total.distanceMeters,
+                  scheduledSummary.total.distanceMeters,
                   disciplineSettings
                 )
               : "—"
@@ -593,9 +595,9 @@ function CombinedExpandedMetricsSection({
                 )
               : "—"
           }
-          plannedZoneMinutes={plannedTotalZones}
+          scheduledZoneMinutes={scheduledTotalZones}
           completedZoneMinutes={completedTotalZones}
-          maxZoneMinutes={maxZoneBarMinutes(plannedTotalZones, completedTotalZones)}
+          maxZoneMinutes={maxZoneBarMinutes(scheduledTotalZones, completedTotalZones)}
         />
       </div>
     </div>
@@ -605,22 +607,22 @@ function CombinedExpandedMetricsSection({
 const SUMMARY_DISCIPLINE_ORDER: Discipline[] = ["BIKE", "RUN", "SWIM", "STRENGTH"];
 
 function CollapsedCombinedMetrics({
-  plannedPills,
+  scheduledPills,
   completedPills,
-  hasPlanned,
+  hasScheduled,
   hasCompleted,
 }: {
-  plannedPills: CollapsedSummaryPill[];
+  scheduledPills: CollapsedSummaryPill[];
   completedPills: CollapsedSummaryPill[];
-  hasPlanned: boolean;
+  hasScheduled: boolean;
   hasCompleted: boolean;
 }) {
-  if (!hasPlanned && !hasCompleted) return null;
+  if (!hasScheduled && !hasCompleted) return null;
 
-  if (hasPlanned && hasCompleted) {
+  if (hasScheduled && hasCompleted) {
     return (
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
-        <CollapsedMetricsSection label="Planned" pills={plannedPills} />
+        <CollapsedMetricsSection label="Scheduled" pills={scheduledPills} />
         <CollapsedMetricsSection label="Completed" pills={completedPills} />
       </div>
     );
@@ -628,8 +630,8 @@ function CollapsedCombinedMetrics({
 
   return (
     <div className="mt-2">
-      {hasPlanned ? (
-        <CollapsedMetricsSection label="Planned" pills={plannedPills} />
+      {hasScheduled ? (
+        <CollapsedMetricsSection label="Scheduled" pills={scheduledPills} />
       ) : (
         <CollapsedMetricsSection label="Completed" pills={completedPills} />
       )}
@@ -765,6 +767,7 @@ type CalendarWeekSummaryProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   defaultExpanded?: boolean;
   ecoLoadEnabled?: boolean;
+  hideSeasonTarget?: boolean;
 };
 
 export function CalendarWeekSummary({
@@ -776,10 +779,11 @@ export function CalendarWeekSummary({
   disciplineSettings,
   defaultExpanded = false,
   ecoLoadEnabled = false,
+  hideSeasonTarget = false,
 }: CalendarWeekSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
-  const plannedSummary = summarizeWeekPlannedSessions(sessions);
+  const scheduledSummary = summarizeWeekPlannedSessions(sessions);
   const showCompleted = weekStart <= currentWeekStart;
   const completedSummary = showCompleted
     ? (() => {
@@ -792,16 +796,16 @@ export function CalendarWeekSummary({
       })()
     : null;
 
-  const hasPlanned = weekSummaryHasData(plannedSummary);
+  const hasScheduled = weekSummaryHasData(scheduledSummary);
   const hasCompleted = completedSummary ? weekSummaryHasData(completedSummary) : false;
-  const hasTarget = !!weekTarget;
+  const hasTarget = !!weekTarget && !hideSeasonTarget;
   const hasEcos =
     ecoLoadEnabled &&
-    ((completedSummary?.total.ecos ?? 0) > 0 || plannedSummary.total.ecos > 0);
+    ((completedSummary?.total.ecos ?? 0) > 0 || scheduledSummary.total.ecos > 0);
 
-  if (!hasPlanned && !hasCompleted && !hasTarget && !hasEcos) return null;
+  if (!hasScheduled && !hasCompleted && !hasTarget && !hasEcos) return null;
 
-  const plannedPills = buildCollapsedWeekSummaryPills(plannedSummary, disciplineSettings, {
+  const scheduledPills = buildCollapsedWeekSummaryPills(scheduledSummary, disciplineSettings, {
     includeEcos: ecoLoadEnabled,
   });
   const completedPills = completedSummary
@@ -829,22 +833,22 @@ export function CalendarWeekSummary({
 
       {!expanded ? (
         <CollapsedCombinedMetrics
-          plannedPills={plannedPills}
+          scheduledPills={scheduledPills}
           completedPills={completedPills}
-          hasPlanned={hasPlanned}
+          hasScheduled={hasScheduled}
           hasCompleted={hasCompleted}
         />
       ) : (
         <div className="mt-3 space-y-2">
-          {weekTarget ? (
+          {weekTarget && !hideSeasonTarget ? (
             <WeekTargetSection
               weekTarget={weekTarget}
-              plannedSummary={plannedSummary}
+              plannedSummary={scheduledSummary}
             />
           ) : null}
-          {hasPlanned || hasCompleted ? (
+          {hasScheduled || hasCompleted ? (
             <CombinedExpandedMetricsSection
-              plannedSummary={hasPlanned ? plannedSummary : null}
+              scheduledSummary={hasScheduled ? scheduledSummary : null}
               completedSummary={hasCompleted ? completedSummary : null}
               disciplineSettings={disciplineSettings}
             />

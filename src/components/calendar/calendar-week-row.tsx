@@ -28,6 +28,7 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
+import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import type {
   PoolCardDraftMap,
   PoolDisciplineFilter,
@@ -67,6 +68,7 @@ type CalendarWeekRowProps = {
   onArmBuildFromSession?: (session: CalendarPlannedSession) => void;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
   onAutoFillEasyTiz?: () => void;
+  paceContext?: PaceThresholdContext | null;
 };
 
 export function CalendarWeekRow({
@@ -100,6 +102,7 @@ export function CalendarWeekRow({
   onArmBuildFromSession,
   onUnassignWorkout,
   onAutoFillEasyTiz,
+  paceContext = null,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -277,6 +280,7 @@ export function CalendarWeekRow({
                 selectedCardId={selectedPoolCardId}
                 onSelectCard={onSelectPoolCard}
                 onAutoFillEasyTiz={onAutoFillEasyTiz}
+                paceContext={paceContext}
               />
             ) : (
               <aside className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
@@ -301,6 +305,7 @@ export function CalendarWeekRow({
         disciplineSettings={disciplineSettings}
         defaultExpanded={current}
         ecoLoadEnabled={ecoLoadEnabled}
+        hideSeasonTarget={isPoolWeek}
       />
     </section>
   );
