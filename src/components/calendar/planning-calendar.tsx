@@ -1340,6 +1340,7 @@ export function PlanningCalendar({
     disciplineSettings,
     onAutoFillEasyTiz: handleAutoFillEasyTiz,
     onApplyToSession: () => void handleApplyToBuildTarget(),
+    paceContext,
   };
 
   const calendarWeeksContent = (
@@ -1405,6 +1406,7 @@ export function PlanningCalendar({
               useWizardPool ? (session) => void handleUnassignWorkout(session) : undefined
             }
             onAutoFillEasyTiz={() => handleAutoFillEasyTizForWeek(weekStart)}
+            paceContext={paceContext}
           />
         ))}
       </div>
