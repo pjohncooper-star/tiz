@@ -2,8 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import {
+  applyTargetSessionId,
   generatedPoolCardId,
   resolveSelectedPoolCard,
+  stagingPoolCardId,
 } from "./generated-pool-cards";
 
 function generatedSession(
@@ -51,6 +53,20 @@ describe("generated-pool-cards", () => {
     assert.equal(card!.id, cardId);
     assert.equal(card!.discipline, "RUN");
     assert.equal(card!.label, "Easy run");
+  });
+
+  it("resolveSelectedPoolCard returns staging card for copied workouts", () => {
+    const card = resolveSelectedPoolCard(stagingPoolCardId("RUN"), [], {}, []);
+    assert.ok(card);
+    assert.equal(card!.label, "Copied workout");
+    assert.equal(card!.discipline, "RUN");
+  });
+
+  it("applyTargetSessionId is set only for generated session targets", () => {
+    const session = generatedSession();
+    assert.equal(applyTargetSessionId(generatedPoolCardId(session.id)), session.id);
+    assert.equal(applyTargetSessionId(stagingPoolCardId("RUN")), null);
+    assert.equal(applyTargetSessionId("run-end-0"), null);
   });
 
   it("resolveSelectedPoolCard prefers chip cards over generated ids", () => {

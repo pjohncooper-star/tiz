@@ -110,7 +110,7 @@ function ProgressionPickerModal({
   );
 }
 
-function AssembledWorkoutHandle({ disabled }: { disabled: boolean }) {
+export function AssembledWorkoutHandle({ disabled }: { disabled: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: ASSEMBLED_WORKOUT_DRAG_ID,
     data: { type: "assembled-workout" },

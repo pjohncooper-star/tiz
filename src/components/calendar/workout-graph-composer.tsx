@@ -15,6 +15,7 @@ import {
   type SegmentFolderKind,
 } from "@/lib/plan/calendar/workout-graph-compose";
 import { poolSegmentDragId } from "@/lib/plan/workout-builder-dnd";
+import { AssembledWorkoutHandle } from "@/components/calendar/workout-builder-pane";
 import { buildWorkoutProfile, defaultPrimarySignalForDiscipline } from "@/lib/workout/workout-profile";
 import { templateNodes } from "@/lib/workout/apply-workout-template";
 import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
@@ -225,45 +226,90 @@ type WorkoutGraphPanelProps = {
   /** When true, discipline comes from the selected pool card and cannot be changed. */
   lockDiscipline?: boolean;
   cardLabel?: string;
+  /** Set when the graph applies to a generated calendar session. */
+  applyTargetSessionId?: string | null;
+  onApplyToSession?: () => void;
 };
+
+function BuildActionBar({
+  composer,
+  applyTargetSessionId,
+  onApplyToSession,
+  onEdit,
+}: {
+  composer: PoolWorkoutComposer;
+  applyTargetSessionId?: string | null;
+  onApplyToSession?: () => void;
+  onEdit?: () => void;
+}) {
+  const canApply = Boolean(applyTargetSessionId && composer.hasWorkout && onApplyToSession);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {canApply ? (
+        <Button type="button" className="px-3 py-1 text-xs" onClick={onApplyToSession}>
+          Apply to session
+        </Button>
+      ) : null}
+      <AssembledWorkoutHandle disabled={!composer.hasWorkout} />
+      {onEdit ? (
+        <Button type="button" variant="secondary" className="px-3 py-1 text-xs" onClick={onEdit}>
+          Edit workout
+        </Button>
+      ) : null}
+      <Button
+        type="button"
+        variant="secondary"
+        className="px-3 py-1 text-xs"
+        onClick={composer.clear}
+        disabled={!composer.hasWorkout}
+      >
+        Clear
+      </Button>
+    </div>
+  );
+}
 
 function CollapsedBuildBar({
   composer,
   onEdit,
   cardLabel,
+  applyTargetSessionId,
+  onApplyToSession,
 }: {
   composer: PoolWorkoutComposer;
   onEdit: () => void;
   cardLabel?: string;
+  applyTargetSessionId?: string | null;
+  onApplyToSession?: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] tabular-nums text-zinc-500">
-        <span className="font-medium text-zinc-700 dark:text-zinc-200">
-          {cardLabel ?? disciplineLabel(composer.discipline)}
-        </span>
-        {composer.durationMinutes > 0 ? <span>· {composer.durationMinutes} min</span> : null}
-        {composer.historySource ? (
-          <span className="truncate text-[10px]">Source: {composer.historySource}</span>
-        ) : null}
-        {!composer.hasWorkout ? (
-          <span className="text-[10px] text-zinc-400">No steps yet</span>
-        ) : null}
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[11px] tabular-nums text-zinc-500">
+          <span className="font-medium text-zinc-700 dark:text-zinc-200">
+            {cardLabel ?? disciplineLabel(composer.discipline)}
+          </span>
+          {composer.durationMinutes > 0 ? <span>· {composer.durationMinutes} min</span> : null}
+          {composer.historySource ? (
+            <span className="truncate text-[10px]">Source: {composer.historySource}</span>
+          ) : null}
+          {!composer.hasWorkout ? (
+            <span className="text-[10px] text-zinc-400">No steps yet</span>
+          ) : null}
+        </div>
+        <BuildActionBar
+          composer={composer}
+          applyTargetSessionId={applyTargetSessionId}
+          onApplyToSession={onApplyToSession}
+          onEdit={onEdit}
+        />
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="secondary" className="px-3 py-1 text-xs" onClick={onEdit}>
-          Edit workout
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          className="px-3 py-1 text-xs"
-          onClick={composer.clear}
-          disabled={!composer.hasWorkout}
-        >
-          Clear
-        </Button>
-      </div>
+      {!applyTargetSessionId && composer.hasWorkout ? (
+        <p className="text-[10px] text-zinc-400">
+          Select a generated session on the calendar, then Apply or drag onto that session card.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -276,6 +322,8 @@ export function WorkoutGraphPanel({
   onExpandedChange,
   lockDiscipline = false,
   cardLabel,
+  applyTargetSessionId = null,
+  onApplyToSession,
 }: WorkoutGraphPanelProps) {
   const [bodyTab, setBodyTab] = useState<BuildBodyTab>("steps");
   const { setNodeRef, isOver } = useDroppable({
@@ -291,6 +339,8 @@ export function WorkoutGraphPanel({
         composer={composer}
         onEdit={() => onExpandedChange(true)}
         cardLabel={cardLabel}
+        applyTargetSessionId={applyTargetSessionId}
+        onApplyToSession={onApplyToSession}
       />
     );
   }
@@ -355,15 +405,11 @@ export function WorkoutGraphPanel({
               {disciplineLabel(composer.discipline)}
               {composer.durationMinutes > 0 ? ` · ${composer.durationMinutes} min` : ""}
             </span>
-            <Button
-              type="button"
-              variant="secondary"
-              className="px-3 py-1 text-xs"
-              onClick={composer.clear}
-              disabled={!composer.hasWorkout}
-            >
-              Clear
-            </Button>
+            <BuildActionBar
+              composer={composer}
+              applyTargetSessionId={applyTargetSessionId}
+              onApplyToSession={onApplyToSession}
+            />
           </div>
         </div>
 
@@ -392,9 +438,13 @@ export function WorkoutGraphPanel({
         </div>
 
         <p className="mt-2 text-[10px] text-zinc-400">
-          {bodyTab === "steps"
-            ? "Add and edit steps below the graph, or switch to Components to append library segments. Click Done, then drag the card onto a pool-week day."
-            : "Click + or drag a component onto the graph. Switch to Steps to fine-tune, then Done and drag the card onto a day."}
+          {applyTargetSessionId
+            ? bodyTab === "steps"
+              ? "Add and edit steps, then Apply to session or drag onto the armed calendar card."
+              : "Append library segments, then Apply to session or drag onto the armed calendar card."
+            : bodyTab === "steps"
+              ? "Add and edit steps below the graph. For pool chips, Done then drag the chip to a day. For generated sessions, select one on the calendar then Apply."
+              : "Append library segments. Select a generated session on the calendar to Apply, or drag a pool chip to a day."}
         </p>
       </div>
     </div>
