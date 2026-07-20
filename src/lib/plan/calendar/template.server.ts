@@ -8,6 +8,7 @@ import type {
 } from "@prisma/client";
 import { normalizeWeekStart, parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { db } from "@/lib/db";
+import type { TemplateScopeInput } from "@/lib/plan/calendar/template-scope";
 import { weekdayToDate } from "@/lib/plan/calendar/weekday-to-date";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { inferSessionRole } from "@/lib/plan/session-role";
@@ -154,6 +155,43 @@ export async function getOrCreateWeeklyTemplate(
   athleteId: string
 ): Promise<WeeklyTemplateDto> {
   return getOrCreateScopedTemplate({ kind: "DEFAULT", athleteId });
+}
+
+/**
+ * Turn a wire scope into a fully-resolved, authorized {@link TemplateScope}.
+ * Verifies the referenced phase / plan belongs to the athlete and derives the
+ * plan id for phase scopes. Throws when the target is missing or not owned.
+ */
+export async function resolveTemplateScope(
+  athleteId: string,
+  input: TemplateScopeInput
+): Promise<TemplateScope> {
+  switch (input.kind) {
+    case "DEFAULT":
+      return { kind: "DEFAULT", athleteId };
+    case "PHASE": {
+      const phase = await db.seasonPhase.findFirst({
+        where: { id: input.seasonPhaseId, seasonPlan: { athleteId } },
+        select: { id: true, seasonPlanId: true },
+      });
+      if (!phase) throw new Error("Season phase not found");
+      return {
+        kind: "PHASE",
+        athleteId,
+        seasonPlanId: phase.seasonPlanId,
+        seasonPhaseId: phase.id,
+      };
+    }
+    case "REST":
+    case "TEST": {
+      const plan = await db.seasonPlan.findFirst({
+        where: { id: input.seasonPlanId, athleteId },
+        select: { id: true },
+      });
+      if (!plan) throw new Error("Season plan not found");
+      return { kind: input.kind, athleteId, seasonPlanId: plan.id };
+    }
+  }
 }
 
 function serializeTemplate(template: {
