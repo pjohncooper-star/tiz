@@ -23,8 +23,8 @@ export default async function CalendarTemplatePage() {
   const templates = await listWeeklyTemplateSummaries(athleteId);
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
-      <div>
+    <main className="mx-auto w-full max-w-[100rem] space-y-6 px-4 py-8">
+      <div className="max-w-3xl">
         <Link href="/calendar" className="text-sm text-sky-600 hover:underline">
           ← Back to calendar
         </Link>

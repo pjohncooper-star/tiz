@@ -15,11 +15,6 @@ import {
   reportingDistanceInputToMeters,
   reportingDistanceMetersToInput,
 } from "@/lib/workout/metrics";
-import {
-  WEEK_DAY_HEADER_ROW_CLASS,
-  WEEK_DAY_ROW_CLASS,
-  weekDayColumnClass,
-} from "@/components/calendar/week-day-layout";
 import type { WeeklyTemplate, WeeklyTemplateItem } from "@/components/calendar/types";
 import { SESSION_ROLE_LABELS, SESSION_ROLES } from "@/lib/plan/session-role";
 import type { WeeklyTemplateKind } from "@prisma/client";
@@ -60,7 +55,8 @@ const COMPACT_FIELD =
 
 const COMPACT_NUMBER_FIELD = `${COMPACT_FIELD} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
 
-const FIELD_LABEL = "mb-0.5 block text-[10px] font-medium leading-none text-zinc-500";
+const FIELD_LABEL =
+  "mb-0.5 block truncate whitespace-nowrap text-[10px] font-medium leading-none text-zinc-500";
 
 const SESSION_CARD_CLASS =
   "min-w-0 overflow-hidden rounded-md border border-dashed border-sky-300 bg-white p-1.5 dark:border-sky-800 dark:bg-zinc-950";
@@ -120,9 +116,9 @@ function TemplateDayColumn({
   onRemove,
 }: TemplateDayColumnProps) {
   return (
-    <div className={weekDayColumnClass(isSelected)}>
+    <div className="min-w-0">
       <div
-        className={`flex h-full min-h-[10rem] flex-col rounded-md border p-2 transition ${
+        className={`flex h-full min-h-[10rem] flex-col rounded-md border p-2.5 transition ${
           isSelected
             ? "border-sky-500 bg-sky-50/40 ring-1 ring-sky-500/40 dark:border-sky-600 dark:bg-sky-950/40"
             : "border-zinc-200 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/30"
@@ -418,26 +414,28 @@ export function WeeklyTemplateEditor({
           Add sessions to each day. New sessions default to the sport name (Bike, Run, Swim).
         </p>
 
-        <div className={WEEK_DAY_HEADER_ROW_CLASS}>
-          {WEEKDAYS.map((d) => (
-            <div key={d} className={weekDayColumnClass(d === selectedWeekday)}>
-              {WEEKDAY_SHORT[d]}
+        <div className="overflow-x-auto pb-2">
+          <div className="min-w-[68rem]">
+            <div className="mb-1 grid grid-cols-7 gap-3 text-center text-xs font-medium text-zinc-500">
+              {WEEKDAYS.map((d) => (
+                <div key={d}>{WEEKDAY_SHORT[d]}</div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        <div className={WEEK_DAY_ROW_CLASS}>
-          {WEEKDAYS.map((weekday) => (
-            <TemplateDayColumn
-              key={weekday}
-              weekday={weekday}
-              items={itemsByWeekday.get(weekday) ?? []}
-              isSelected={selectedWeekday === weekday}
-              onAdd={() => addSession(weekday)}
-              onUpdate={updateItem}
-              onRemove={removeItem}
-            />
-          ))}
+            <div className="grid grid-cols-7 items-start gap-3">
+              {WEEKDAYS.map((weekday) => (
+                <TemplateDayColumn
+                  key={weekday}
+                  weekday={weekday}
+                  items={itemsByWeekday.get(weekday) ?? []}
+                  isSelected={selectedWeekday === weekday}
+                  onAdd={() => addSession(weekday)}
+                  onUpdate={updateItem}
+                  onRemove={removeItem}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
