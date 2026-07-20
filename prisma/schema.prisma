@@ -502,6 +502,8 @@ model SeasonPlan {
   longRideWeekFlags        Json?
   longRunWeekFlags         Json?
   testWeekFlags            Json?
+  restWeekTemplateId       String?
+  testWeekTemplateId       String?
   defaultPlanningMode      PlanningMode   @default(BY_DISCIPLINE)
   primaryGoalEventId       String?        @unique
   setupComplete            Boolean        @default(false)
@@ -513,10 +515,13 @@ model SeasonPlan {
   phases            SeasonPhase[]
   weeks             SeasonWeek[]
   goalEvents        GoalEvent[]    @relation("SeasonGoalEvents")
-  weeklyTemplates   WeeklyScheduleTemplate[]
+  restWeekTemplate  WeeklyScheduleTemplate? @relation("PlanRestTemplate", fields: [restWeekTemplateId], references: [id], onDelete: SetNull)
+  testWeekTemplate  WeeklyScheduleTemplate? @relation("PlanTestTemplate", fields: [testWeekTemplateId], references: [id], onDelete: SetNull)
 
   @@index([athleteId, startDate])
   @@index([athleteId, status])
+  @@index([restWeekTemplateId])
+  @@index([testWeekTemplateId])
 }
 
 model GoalEvent {
@@ -588,15 +593,17 @@ model SeasonPhase {
   longRunOffWeekPolicy  LongOffWeekPolicy @default(ENDURANCE_PERCENT)
   longRideOffWeekEndurancePercent Float @default(60)
   longRunOffWeekEndurancePercent  Float @default(60)
+  weeklyTemplateId     String?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
-  seasonPlan   SeasonPlan              @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
-  mesocycles   SeasonMesocycle[]
-  disciplines  SeasonPhaseDiscipline[]
-  weeklyTemplate WeeklyScheduleTemplate?
+  seasonPlan     SeasonPlan              @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
+  mesocycles     SeasonMesocycle[]
+  disciplines    SeasonPhaseDiscipline[]
+  weeklyTemplate WeeklyScheduleTemplate? @relation("PhaseWeeklyTemplate", fields: [weeklyTemplateId], references: [id], onDelete: SetNull)
 
   @@index([seasonPlanId, sortOrder])
+  @@index([weeklyTemplateId])
 }
 
 model SeasonPhaseDiscipline {
@@ -833,22 +840,20 @@ enum WeeklyTemplateKind {
 }
 
 model WeeklyScheduleTemplate {
-  id            String             @id @default(cuid())
-  athleteId     String
-  kind          WeeklyTemplateKind @default(DEFAULT)
-  seasonPlanId  String?
-  seasonPhaseId String?            @unique
-  name          String             @default("Weekly template")
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id        String             @id @default(cuid())
+  athleteId String
+  category  WeeklyTemplateKind @default(DEFAULT)
+  name      String             @default("Weekly template")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
 
-  athlete     Athlete                      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
-  seasonPlan  SeasonPlan?                  @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
-  seasonPhase SeasonPhase?                 @relation(fields: [seasonPhaseId], references: [id], onDelete: Cascade)
-  items       WeeklyScheduleTemplateItem[]
+  athlete       Athlete                      @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  items         WeeklyScheduleTemplateItem[]
+  phases        SeasonPhase[]                @relation("PhaseWeeklyTemplate")
+  restForPlans  SeasonPlan[]                 @relation("PlanRestTemplate")
+  testForPlans  SeasonPlan[]                 @relation("PlanTestTemplate")
 
   @@index([athleteId])
-  @@index([seasonPlanId])
 }
 
 model WeeklyScheduleTemplateItem {

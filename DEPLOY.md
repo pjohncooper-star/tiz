@@ -181,6 +181,19 @@ Or paste `prisma/migrations/manual_phase_templates.sql` into the Neon SQL editor
 
 This adds the `WeeklyTemplateKind` enum, `kind` / `seasonPlanId` / `seasonPhaseId` columns on `WeeklyScheduleTemplate` (dropping the old one-per-athlete unique), scoped unique indexes, and `testWeekFlags` on `SeasonPlan`. Existing templates become `kind = 'DEFAULT'`, so the `/calendar/template` quick-apply is unchanged.
 
+### Reusable weekly template library (schema migration)
+
+Supersedes the previous phase-templates migration: weekly templates become a reusable, athlete-owned library, and seasons reference them by id. Apply against Neon:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."   # production Neon URL
+npm run db:migrate:template-library
+```
+
+Or paste `prisma/migrations/manual_template_library.sql` into the Neon SQL editor.
+
+This drops the `seasonPlanId` / `seasonPhaseId` scoping (and its indexes/FKs) from `WeeklyScheduleTemplate`, renames `kind` → `category`, and adds reference columns `SeasonPhase.weeklyTemplateId` and `SeasonPlan.restWeekTemplateId` / `testWeekTemplateId` (all `ON DELETE SET NULL`). It is idempotent and self-sufficient (works whether or not the phase-templates migration was applied).
+
 ---
 
 ## Troubleshooting
