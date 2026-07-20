@@ -21,6 +21,8 @@ import {
 type SimplePlannerWeekTableProps = {
   weeks: SimpleWeek[];
   phases: SimplePhase[];
+  testWeekFlags: boolean[];
+  onTestWeekFlagsChange: (flags: boolean[]) => void;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
   onWeeksChange: (weeks: SimpleWeek[]) => void;
@@ -71,6 +73,8 @@ function weekIndexFromPointer(clientY: number): number | null {
 export function SimplePlannerWeekTable({
   weeks,
   phases,
+  testWeekFlags,
+  onTestWeekFlagsChange,
   selectedPhaseId,
   onSelectPhase,
   onWeeksChange,
@@ -123,6 +127,15 @@ export function SimplePlannerWeekTable({
       );
     },
     [onWeeksChange, weeks]
+  );
+
+  const toggleTestWeek = useCallback(
+    (weekIndex: number, checked: boolean) => {
+      const next = Array.from({ length: weeks.length }, (_, i) => testWeekFlags[i] ?? false);
+      next[weekIndex] = checked;
+      onTestWeekFlagsChange(next);
+    },
+    [onTestWeekFlagsChange, testWeekFlags, weeks.length]
   );
 
   const addPhaseAtWeek = useCallback(
@@ -219,6 +232,7 @@ export function SimplePlannerWeekTable({
             <th className="w-28 px-2 py-2" />
             <th className="px-3 py-2">Wk</th>
             <th className="px-3 py-2">Dates</th>
+            <th className="px-3 py-2">Test</th>
             <th className="px-3 py-2">Rest</th>
             <th className="px-3 py-2 text-right">Total h</th>
           </tr>
@@ -243,6 +257,8 @@ export function SimplePlannerWeekTable({
                   highlighted={highlightedWeekIndex === week.weekIndex}
                   onToggle={() => toggleExpanded(week.weekIndex)}
                   onUpdateWeek={(patch) => updateWeek(week.weekIndex, patch)}
+                  isTestWeek={testWeekFlags[week.weekIndex] ?? false}
+                  onToggleTestWeek={(checked) => toggleTestWeek(week.weekIndex, checked)}
                 />
               );
             }
@@ -265,6 +281,8 @@ export function SimplePlannerWeekTable({
                 onToggleExpanded={toggleExpanded}
                 onUpdateWeek={updateWeek}
                 onDragStart={(edge, clientY) => phase.id && startDrag(phase.id, edge, clientY)}
+                testWeekFlags={testWeekFlags}
+                onToggleTestWeek={toggleTestWeek}
               />
             );
           })}
@@ -433,6 +451,8 @@ function WeekRowGroup({
   highlighted,
   onToggle,
   onUpdateWeek,
+  isTestWeek,
+  onToggleTestWeek,
 }: {
   week: SimpleWeek;
   gutter: React.ReactNode;
@@ -440,6 +460,8 @@ function WeekRowGroup({
   highlighted: boolean;
   onToggle: () => void;
   onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
+  isTestWeek: boolean;
+  onToggleTestWeek: (checked: boolean) => void;
 }) {
   const rowSpan = expanded ? 1 + DISCIPLINES.length : 1;
 
@@ -460,6 +482,8 @@ function WeekRowGroup({
           expanded={expanded}
           onToggle={onToggle}
           onUpdateWeek={onUpdateWeek}
+          isTestWeek={isTestWeek}
+          onToggleTestWeek={onToggleTestWeek}
         />
       </tr>
       {expanded &&
@@ -485,6 +509,8 @@ function PhaseBandRows({
   onToggleExpanded,
   onUpdateWeek,
   onDragStart,
+  testWeekFlags,
+  onToggleTestWeek,
 }: {
   phase: SimplePhase;
   weeks: SimpleWeek[];
@@ -496,6 +522,8 @@ function PhaseBandRows({
   onToggleExpanded: (weekIndex: number) => void;
   onUpdateWeek: (weekIndex: number, patch: Partial<SimpleWeek>) => void;
   onDragStart: (edge: "top" | "bottom", clientY: number) => void;
+  testWeekFlags: boolean[];
+  onToggleTestWeek: (weekIndex: number, checked: boolean) => void;
 }) {
   return (
     <>
@@ -530,6 +558,8 @@ function PhaseBandRows({
                 expanded={weekExpanded}
                 onToggle={() => onToggleExpanded(week.weekIndex)}
                 onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
+                isTestWeek={testWeekFlags[week.weekIndex] ?? false}
+                onToggleTestWeek={(checked) => onToggleTestWeek(week.weekIndex, checked)}
               />
             </tr>
             {weekExpanded &&
@@ -554,11 +584,15 @@ function WeekCells({
   expanded,
   onToggle,
   onUpdateWeek,
+  isTestWeek,
+  onToggleTestWeek,
 }: {
   week: SimpleWeek;
   expanded: boolean;
   onToggle: () => void;
   onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
+  isTestWeek: boolean;
+  onToggleTestWeek: (checked: boolean) => void;
 }) {
   return (
     <>
@@ -573,6 +607,14 @@ function WeekCells({
       </td>
       <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">
         {formatWeekDateRange(week.weekStartDate)}
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="checkbox"
+          checked={isTestWeek}
+          onChange={(event) => onToggleTestWeek(event.target.checked)}
+          aria-label={`Test week ${week.weekIndex + 1}`}
+        />
       </td>
       <td className="px-3 py-2">
         <input
@@ -619,7 +661,7 @@ function DisciplineExpandedCells({
 
   return (
     <>
-      <td colSpan={3} className="px-3 py-2 pl-16 text-sm text-zinc-600 dark:text-zinc-400">
+      <td colSpan={4} className="px-3 py-2 pl-16 text-sm text-zinc-600 dark:text-zinc-400">
         <span className="font-medium text-zinc-700 dark:text-zinc-300">{discipline.label}</span>
         <span className="mx-2">·</span>
         <span>{hours}h</span>
