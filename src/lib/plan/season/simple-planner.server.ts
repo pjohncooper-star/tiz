@@ -107,6 +107,7 @@ export type SimplePhaseWrite = {
   runIntenseDaysPerWeek: number;
   goal?: string | null;
   zoneSplits?: PhaseZoneSplits | null;
+  weeklyTemplateId?: string | null;
   planningMode?: PlanningMode | null;
   longRideStartMin?: number | null;
   longRideEndMin?: number | null;
@@ -171,6 +172,8 @@ export type UpdateSimpleSeasonInput = {
   removedGoalEvents?: RemovedGoalEventInput[];
   longRideWeekFlags?: boolean[] | null;
   longRunWeekFlags?: boolean[] | null;
+  restWeekTemplateId?: string | null;
+  testWeekTemplateId?: string | null;
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -196,6 +199,7 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         swimSessionsPerWeek: Math.max(0, Math.round(phase.swimSessionsPerWeek)),
         bikeSessionsPerWeek: Math.max(0, Math.round(phase.bikeSessionsPerWeek)),
         runSessionsPerWeek: Math.max(0, Math.round(phase.runSessionsPerWeek)),
+        weeklyTemplateId: write.weeklyTemplateId ?? null,
         planningMode: write.planningMode ?? null,
         longRideStartMin: write.longRideStartMin ?? null,
         longRideEndMin: write.longRideEndMin ?? null,
@@ -1001,6 +1005,12 @@ export async function updateSimpleSeasonPlan(
         ...(input.defaultPlanningMode != null
           ? { defaultPlanningMode: input.defaultPlanningMode }
           : {}),
+        ...(input.restWeekTemplateId !== undefined
+          ? { restWeekTemplateId: input.restWeekTemplateId }
+          : {}),
+        ...(input.testWeekTemplateId !== undefined
+          ? { testWeekTemplateId: input.testWeekTemplateId }
+          : {}),
         longRideWeekFlags: resolvedLongRideWeekFlags,
         longRunWeekFlags: resolvedLongRunWeekFlags,
       },
@@ -1026,6 +1036,7 @@ export async function updateSimpleSeasonPlan(
             swimSessionsPerWeek: phase.swimSessionsPerWeek,
             bikeSessionsPerWeek: phase.bikeSessionsPerWeek,
             runSessionsPerWeek: phase.runSessionsPerWeek,
+            weeklyTemplateId: phase.weeklyTemplateId ?? null,
             planningMode: phase.planningMode,
             longRideStartMin: phase.longRideStartMin,
             longRideEndMin: phase.longRideEndMin,
@@ -1143,6 +1154,7 @@ export function serializeSimpleSeasonPlan(
         runIntenseDaysPerWeek: notes.runIntenseDaysPerWeek,
         goal: notes.goal,
         zoneSplits: notes.zoneSplits,
+        weeklyTemplateId: phase.weeklyTemplateId ?? null,
         planningMode: phase.planningMode,
         longRideStartMin: phase.longRideStartMin,
         longRideEndMin: phase.longRideEndMin,
@@ -1188,6 +1200,8 @@ export function serializeSimpleSeasonPlan(
     deLoadVolumePercent: plan.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     rampDefaults: defaults,
     phaseKindZoneDefaults,
+    restWeekTemplateId: plan.restWeekTemplateId ?? null,
+    testWeekTemplateId: plan.testWeekTemplateId ?? null,
     longRideWeekFlags,
     longRunWeekFlags,
     longAnchors: {

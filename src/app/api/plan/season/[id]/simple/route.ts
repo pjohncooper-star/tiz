@@ -89,6 +89,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       removedGoalEvents: data.removedGoalEvents,
       longRideWeekFlags: data.longRideWeekFlags,
       longRunWeekFlags: data.longRunWeekFlags,
+      restWeekTemplateId: data.restWeekTemplateId,
+      testWeekTemplateId: data.testWeekTemplateId,
     });
 
     if (!plan) {

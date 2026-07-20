@@ -342,6 +342,7 @@ export const simplePhaseSchema = z
     runIntenseDaysPerWeek: z.number().int().min(0).max(7),
     goal: z.string().nullable().optional(),
     zoneSplits: phaseZoneSplitsSchema.nullable().optional(),
+    weeklyTemplateId: z.string().nullable().optional(),
     planningMode: planningModeSchema.nullable().optional(),
     longRideStartMin: z.number().int().nonnegative().nullable().optional(),
     longRideEndMin: z.number().int().nonnegative().nullable().optional(),
@@ -411,5 +412,7 @@ export const updateSimpleSeasonSchema = z
     removedGoalEvents: z.array(removedGoalEventSchema).optional(),
     longRideWeekFlags: z.array(z.boolean()).optional(),
     longRunWeekFlags: z.array(z.boolean()).optional(),
+    restWeekTemplateId: z.string().nullable().optional(),
+    testWeekTemplateId: z.string().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });
