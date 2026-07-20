@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   eachDayOfInterval,
   endOfWeek,
@@ -126,6 +127,44 @@ export function CalendarWeekRow({
   const current =
     isCurrentWeek ?? isSameWeek(new Date(), start, WEEK_OPTS);
 
+  const [clearing, setClearing] = useState(false);
+  const deletableSessions = sessions.filter((session) => session.source !== "RACE");
+  const hasDeletableSessions = deletableSessions.length > 0;
+
+  async function clearPlannedSessions() {
+    if (!hasDeletableSessions || clearing) return;
+
+    const count = deletableSessions.length;
+    const noun = count === 1 ? "session" : "sessions";
+    const raceCount = sessions.length - count;
+    const raceNote =
+      raceCount > 0
+        ? ` ${raceCount} race ${raceCount === 1 ? "day" : "days"} will be kept.`
+        : "";
+    if (
+      !confirm(
+        `Delete ${count} planned ${noun} for the week of ${format(start, "MMM d, yyyy")}?${raceNote}`
+      )
+    ) {
+      return;
+    }
+
+    setClearing(true);
+    try {
+      const res = await fetch(
+        `/api/plan/calendar/week?weekStart=${encodeURIComponent(weekStart)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        alert("Could not delete sessions");
+        return;
+      }
+      onSessionCreated();
+    } finally {
+      setClearing(false);
+    }
+  }
+
   const dayGrid = (
     <div className="min-w-0 flex-1">
       <div className={WEEK_DAY_HEADER_ROW_CLASS}>
@@ -186,22 +225,35 @@ export function CalendarWeekRow({
       data-week-start={weekStart}
       id={current ? "calendar-current-week" : undefined}
     >
-      <h2 className="sticky top-[4.5rem] z-10 mb-2 border-b border-zinc-200 bg-white/95 py-2 text-sm font-semibold backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-        Week of {format(start, "MMM d, yyyy")}
-        {current && (
-          <span className="ml-2 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900 dark:text-sky-200">
-            This week
-          </span>
-        )}
-        {isPoolWeek ? (
-          <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
-            Pool week
-          </span>
-        ) : null}
-        {isFocusedWeek && !current && !isPoolWeek ? (
-          <span className="ml-2 rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-            Pool focus
-          </span>
+      <h2 className="sticky top-[4.5rem] z-10 mb-2 flex items-center justify-between gap-2 border-b border-zinc-200 bg-white/95 py-2 text-sm font-semibold backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+        <div className="min-w-0">
+          Week of {format(start, "MMM d, yyyy")}
+          {current && (
+            <span className="ml-2 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900 dark:text-sky-200">
+              This week
+            </span>
+          )}
+          {isPoolWeek ? (
+            <span className="ml-2 rounded bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">
+              Pool week
+            </span>
+          ) : null}
+          {isFocusedWeek && !current && !isPoolWeek ? (
+            <span className="ml-2 rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              Pool focus
+            </span>
+          ) : null}
+        </div>
+        {hasDeletableSessions ? (
+          <button
+            type="button"
+            disabled={clearing}
+            className="shrink-0 rounded px-1.5 text-base leading-none text-zinc-400 hover:bg-red-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+            onClick={() => void clearPlannedSessions()}
+            aria-label={`Delete all planned sessions for the week of ${format(start, "MMMM d, yyyy")}`}
+          >
+            ×
+          </button>
         ) : null}
       </h2>
 
