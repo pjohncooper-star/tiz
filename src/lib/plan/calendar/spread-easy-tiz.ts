@@ -19,6 +19,12 @@ import {
   type PoolCardDraftMetrics,
   type PoolDisciplineFilter,
 } from "@/lib/plan/calendar/pool-session-card";
+import {
+  fillableGeneratedSessionsForFilter,
+  generatedPoolCardId,
+  isFillableGeneratedSession,
+  poolSlotKindForSession,
+} from "@/lib/plan/calendar/generated-pool-cards";
 import type { PoolDiscipline, UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
 import {
   flattenForPlanning,
@@ -158,6 +164,8 @@ function scheduledZoneMinutes(
   for (const session of sessions) {
     if (session.discipline !== discipline) continue;
     if (shouldExcludeLongSessionFromMainBudget(weekTarget, session)) continue;
+    // Placeholder target zones on unbuilt generated sessions are not real TiZ yet.
+    if (isFillableGeneratedSession(session)) continue;
     done += session.zoneMinutes[key] ?? 0;
   }
   return done;
@@ -175,6 +183,20 @@ function draftZoneMinutes(
     out[zone] = zoneMinutesFromRollup(rollup, zone);
   }
   return out;
+}
+
+function addDraftZoneMinutes(
+  draft: PoolCardDraft,
+  discipline: TargetDiscipline,
+  paceContext: PaceThresholdContext | null | undefined,
+  z1Done: number,
+  z2Done: number
+): { z1: number; z2: number } {
+  const zones = draftZoneMinutes(draft, discipline, paceContext);
+  return {
+    z1: z1Done + (zones[1] ?? 0),
+    z2: z2Done + (zones[2] ?? 0),
+  };
 }
 
 function remainingEasyZoneMinutes(
@@ -196,9 +218,29 @@ function remainingEasyZoneMinutes(
     const draft = drafts[chip.id];
     if (!draft) continue;
     if (shouldExcludeLongFromMainBudget(weekTarget, chip)) continue;
-    const zones = draftZoneMinutes(draft, discipline, paceContext);
-    z1Done += zones[1] ?? 0;
-    z2Done += zones[2] ?? 0;
+    ({ z1: z1Done, z2: z2Done } = addDraftZoneMinutes(
+      draft,
+      discipline,
+      paceContext,
+      z1Done,
+      z2Done
+    ));
+  }
+
+  for (const session of sessions) {
+    if (session.discipline !== discipline) continue;
+    if (!isFillableGeneratedSession(session)) continue;
+    const slotKind = poolSlotKindForSession(session);
+    if (!ENDURANCE_SLOT_KINDS.has(slotKind)) continue;
+    const draft = drafts[generatedPoolCardId(session.id)];
+    if (!draft) continue;
+    ({ z1: z1Done, z2: z2Done } = addDraftZoneMinutes(
+      draft,
+      discipline,
+      paceContext,
+      z1Done,
+      z2Done
+    ));
   }
 
   return {
@@ -299,16 +341,30 @@ function longMinutesForChip(
   return 0;
 }
 
+function longMinutesForSession(
+  session: CalendarPlannedSession,
+  weekTarget: CalendarWeekTarget
+): number {
+  if (session.estimatedDurationMinutes != null && session.estimatedDurationMinutes > 0) {
+    return session.estimatedDurationMinutes;
+  }
+  if (session.totalMinutes > 0) return session.totalMinutes;
+  if (session.discipline === "BIKE") return weekTarget.longRideMinutes ?? 0;
+  if (session.discipline === "RUN") return weekTarget.longRunMinutes ?? 0;
+  return 0;
+}
+
 export type LongPoolDraftInput = {
   weekTarget: CalendarWeekTarget;
   drafts: PoolCardDraftMap;
   chips: UnscheduledChip[];
+  sessions?: CalendarPlannedSession[];
   paceContext?: PaceThresholdContext | null;
 };
 
 /** Seed long ride/run pool cards with warm Z1 / main Z2 / cool Z1 drafts + derived metrics. */
 export function computeLongPoolDrafts(input: LongPoolDraftInput): PoolCardDraftMap {
-  const { weekTarget, drafts, chips, paceContext } = input;
+  const { weekTarget, drafts, chips, sessions = [], paceContext } = input;
   const generated: PoolCardDraftMap = {};
 
   for (const discipline of ["BIKE", "RUN"] as const) {
@@ -332,6 +388,28 @@ export function computeLongPoolDrafts(input: LongPoolDraftInput): PoolCardDraftM
       );
       if (draft) generated[chip.id] = draft;
     }
+
+    const longSessions = sessions.filter((session) => {
+      if (session.discipline !== discipline) return false;
+      if (!isFillableGeneratedSession(session)) return false;
+      if (poolSlotKindForSession(session) !== "LONG") return false;
+      const cardId = generatedPoolCardId(session.id);
+      return !drafts[cardId] && !generated[cardId];
+    });
+
+    for (const session of longSessions) {
+      const cardId = generatedPoolCardId(session.id);
+      const totalMinutes = longMinutesForSession(session, weekTarget);
+      if (!(totalMinutes > 0)) continue;
+      const nodes = buildLongDraftNodes(discipline, totalMinutes);
+      if (nodes.length === 0) continue;
+      const draft = draftFromNodes(
+        nodes,
+        discipline,
+        metricsForNodes(discipline, nodes, paceContext)
+      );
+      if (draft) generated[cardId] = draft;
+    }
   }
 
   return generated;
@@ -348,15 +426,26 @@ export type EasyTizSpreadInput = {
 
 export function canAutoFillEasyTiz(input: {
   chips: UnscheduledChip[];
+  sessions?: CalendarPlannedSession[];
   drafts: PoolCardDraftMap;
   disciplineFilter: PoolDisciplineFilter;
 }): boolean {
-  return input.chips.some(
+  const hasChipTarget = input.chips.some(
     (chip) =>
       disciplineMatchesFilter(chip.discipline, input.disciplineFilter) &&
       (ENDURANCE_SLOT_KINDS.has(chip.slotKind) || chip.slotKind === "LONG") &&
       !input.drafts[chip.id]
   );
+  if (hasChipTarget) return true;
+
+  return fillableGeneratedSessionsForFilter(
+    input.sessions ?? [],
+    input.disciplineFilter
+  ).some((session) => {
+    const slotKind = poolSlotKindForSession(session);
+    if (!ENDURANCE_SLOT_KINDS.has(slotKind) && slotKind !== "LONG") return false;
+    return !input.drafts[generatedPoolCardId(session.id)];
+  });
 }
 
 export function computeEasyTizSpread(input: EasyTizSpreadInput): PoolCardDraftMap {
@@ -374,7 +463,24 @@ export function computeEasyTizSpread(input: EasyTizSpreadInput): PoolCardDraftMa
         !generated[chip.id]
     );
 
-    if (enduranceCards.length > 0) {
+    const generatedEnduranceSessions = sessions.filter((session) => {
+      if (session.discipline !== discipline) return false;
+      if (!isFillableGeneratedSession(session)) return false;
+      const slotKind = poolSlotKindForSession(session);
+      if (!ENDURANCE_SLOT_KINDS.has(slotKind)) return false;
+      const cardId = generatedPoolCardId(session.id);
+      return !drafts[cardId] && !generated[cardId];
+    });
+
+    const enduranceTargets = [
+      ...enduranceCards.map((chip) => ({ kind: "chip" as const, chip })),
+      ...generatedEnduranceSessions.map((session) => ({
+        kind: "session" as const,
+        session,
+      })),
+    ];
+
+    if (enduranceTargets.length > 0) {
       const remaining = remainingEasyZoneMinutes(
         discipline,
         weekTarget,
@@ -383,10 +489,10 @@ export function computeEasyTizSpread(input: EasyTizSpreadInput): PoolCardDraftMa
         chips,
         paceContext
       );
-      const z1Shares = splitMinutes(remaining.z1, enduranceCards.length);
-      const z2Shares = splitMinutes(remaining.z2, enduranceCards.length);
+      const z1Shares = splitMinutes(remaining.z1, enduranceTargets.length);
+      const z2Shares = splitMinutes(remaining.z2, enduranceTargets.length);
 
-      enduranceCards.forEach((chip, index) => {
+      enduranceTargets.forEach((target, index) => {
         const nodes = buildEnduranceDraftNodes(
           discipline,
           z1Shares[index] ?? 0,
@@ -398,7 +504,12 @@ export function computeEasyTizSpread(input: EasyTizSpreadInput): PoolCardDraftMa
           discipline,
           metricsForNodes(discipline, nodes, paceContext)
         );
-        if (draft) generated[chip.id] = draft;
+        if (!draft) return;
+        if (target.kind === "chip") {
+          generated[target.chip.id] = draft;
+        } else {
+          generated[generatedPoolCardId(target.session.id)] = draft;
+        }
       });
     }
 
@@ -408,6 +519,7 @@ export function computeEasyTizSpread(input: EasyTizSpreadInput): PoolCardDraftMa
       weekTarget,
       drafts: { ...drafts, ...generated },
       chips: chips.filter((c) => c.discipline === discipline),
+      sessions: sessions.filter((session) => session.discipline === discipline),
       paceContext,
     });
     Object.assign(generated, longGenerated);

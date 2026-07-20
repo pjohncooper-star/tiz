@@ -457,10 +457,11 @@ export function WorkoutPool({
     () =>
       canAutoFillEasyTiz({
         chips,
+        sessions,
         drafts,
         disciplineFilter,
       }),
-    [chips, drafts, disciplineFilter]
+    [chips, sessions, drafts, disciplineFilter]
   );
 
   const cards = useMemo(

@@ -27,6 +27,7 @@ const EMPTY_TREE: WorkoutTreeDocument = {
 
 export function usePoolWorkoutComposer(options: {
   onApplied?: () => void;
+  onWorkoutApplied?: (sessionId: string) => void;
   active: boolean;
 }) {
   const [discipline, setDiscipline] = useState<EnduranceDiscipline>("RUN");
@@ -142,6 +143,7 @@ export function usePoolWorkoutComposer(options: {
         alert(typeof data.error === "string" ? data.error : "Could not apply workout");
         return false;
       }
+      options.onWorkoutApplied?.(sessionId);
       options.onApplied?.();
       return true;
     },

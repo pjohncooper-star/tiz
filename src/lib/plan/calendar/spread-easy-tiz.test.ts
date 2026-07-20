@@ -377,12 +377,13 @@ describe("spread-easy-tiz", () => {
   it("canAutoFillEasyTiz hides when all fillable cards already have drafts", () => {
     const chips = [chip("run-end-0", "RUN", "ENDURANCE")];
     assert.equal(
-      canAutoFillEasyTiz({ chips, drafts: {}, disciplineFilter: "ALL" }),
+      canAutoFillEasyTiz({ chips, sessions: [], drafts: {}, disciplineFilter: "ALL" }),
       true
     );
     assert.equal(
       canAutoFillEasyTiz({
         chips,
+        sessions: [],
         drafts: {
           "run-end-0": {
             nodes: buildEnduranceDraftNodes("RUN", 10, 20),
@@ -393,6 +394,56 @@ describe("spread-easy-tiz", () => {
         disciplineFilter: "ALL",
       }),
       false
+    );
+  });
+
+  it("distributes remaining Z1/Z2 to generated sessions without structured workouts", () => {
+    const weekTarget = baseWeekTarget({
+      zoneMinutes: {
+        "RUN-1": 30,
+        "RUN-2": 60,
+      },
+    });
+    const generatedSession = session(
+      "RUN",
+      { [zoneKey("RUN", 2)]: 45 },
+      {
+        id: "generated-run-1",
+        source: "TEMPLATE",
+        sessionRole: "MODERATE",
+        totalMinutes: 45,
+        plannedMinutes: 45,
+      }
+    );
+    const generated = computeEasyTizSpread({
+      weekTarget,
+      sessions: [generatedSession],
+      drafts: {},
+      chips: [],
+      disciplineFilter: "ALL",
+    });
+
+    const draft = generated["generated:generated-run-1"];
+    assert.ok(draft);
+    const rollup = rollupTreeToZoneMinutes(treeFromDraft(draft));
+    assert.equal(rollup["1"], 30);
+    assert.equal(rollup["2"], 60);
+  });
+
+  it("canAutoFillEasyTiz includes fillable generated sessions when pool chips are exhausted", () => {
+    const generatedSession = session("RUN", {}, {
+      id: "generated-run-1",
+      source: "TEMPLATE",
+      sessionRole: "MODERATE",
+    });
+    assert.equal(
+      canAutoFillEasyTiz({
+        chips: [],
+        sessions: [generatedSession],
+        drafts: {},
+        disciplineFilter: "ALL",
+      }),
+      true
     );
   });
 });
