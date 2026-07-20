@@ -168,7 +168,7 @@ function lastNonRestWeekInPhase(
   return nonRest[nonRest.length - 1] ?? null;
 }
 
-function resolveEntryMeters(
+export function resolveEntryMeters(
   discipline: SimpleDiscipline,
   phase: PhaseVolumeSpan,
   phaseIndex: number,
