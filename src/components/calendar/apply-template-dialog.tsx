@@ -4,8 +4,17 @@ import { useEffect, useState } from "react";
 import { format, parseISO, startOfWeek } from "date-fns";
 import { Button, Input, Label } from "@/components/ui";
 import type { ApplyTemplateMode } from "@/components/calendar/types";
+import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
+import type { WeeklyTemplateKind } from "@prisma/client";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
+
+type TemplateOption = {
+  id: string;
+  name: string;
+  category: WeeklyTemplateKind;
+  itemCount: number;
+};
 
 type ApplyTemplateDialogProps = {
   defaultWeekStart: string;
@@ -27,6 +36,9 @@ export function ApplyTemplateDialog({
   const [mode, setMode] = useState<ApplyTemplateMode>(
     hasExistingSessions ? "clear_template_days" : "merge"
   );
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [templateId, setTemplateId] = useState<string>("");
+  const [templatesLoaded, setTemplatesLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +49,27 @@ export function ApplyTemplateDialog({
       setMode(hasExistingSessions ? "clear_template_days" : "merge");
     }
   }, [open, defaultWeekStart, hasExistingSessions]);
+
+  useEffect(() => {
+    if (!open) return;
+    void (async () => {
+      const res = await fetch("/api/plan/calendar/templates");
+      if (res.ok) {
+        const data = await res.json();
+        const list = (data.templates ?? []).map(
+          (t: { id: string; name: string; category: WeeklyTemplateKind; items: unknown[] }) => ({
+            id: t.id,
+            name: t.name,
+            category: t.category,
+            itemCount: t.items.length,
+          })
+        ) as TemplateOption[];
+        setTemplates(list);
+        setTemplateId((current) => current || list[0]?.id || "");
+      }
+      setTemplatesLoaded(true);
+    })();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -54,12 +87,16 @@ export function ApplyTemplateDialog({
   if (!open) return null;
 
   async function handleApply() {
+    if (!templateId) {
+      setError("Select a template to apply");
+      return;
+    }
     setSaving(true);
     setError(null);
     const res = await fetch("/api/plan/calendar/template/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ weekStart, mode }),
+      body: JSON.stringify({ templateId, weekStart, mode }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -89,6 +126,27 @@ export function ApplyTemplateDialog({
         </p>
 
         <div className="mt-4 space-y-3">
+          <div>
+            <Label>Template</Label>
+            {templatesLoaded && templates.length === 0 ? (
+              <p className="mt-1 text-sm text-zinc-500">
+                No templates yet. Create one in the template library first.
+              </p>
+            ) : (
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+              >
+                {!templateId ? <option value="">Select a template…</option> : null}
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({templateCategoryLabel(t.category)}, {t.itemCount})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           <div>
             <Label>Week starting (Monday)</Label>
             <Input
@@ -153,7 +211,7 @@ export function ApplyTemplateDialog({
           <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="button" onClick={handleApply} disabled={saving}>
+          <Button type="button" onClick={handleApply} disabled={saving || !templateId}>
             {saving ? "Applying…" : "Apply template"}
           </Button>
         </div>

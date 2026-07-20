@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
 import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
@@ -23,10 +22,11 @@ import {
 } from "@/components/calendar/week-day-layout";
 import type { WeeklyTemplate, WeeklyTemplateItem } from "@/components/calendar/types";
 import { SESSION_ROLE_LABELS, SESSION_ROLES } from "@/lib/plan/session-role";
+import type { WeeklyTemplateKind } from "@prisma/client";
 import {
-  templateScopeToQuery,
-  type TemplateScopeInput,
-} from "@/lib/plan/calendar/template-scope";
+  TEMPLATE_CATEGORIES,
+  TEMPLATE_CATEGORY_LABELS,
+} from "@/lib/plan/calendar/template-category";
 
 const WEEKDAYS: WeeklyTemplateItem["weekday"][] = [
   "MON",
@@ -276,32 +276,22 @@ function TemplateDayColumn({
   );
 }
 
-const DEFAULT_SCOPE: TemplateScopeInput = { kind: "DEFAULT" };
+type LibraryTemplate = WeeklyTemplate & { category?: WeeklyTemplateKind };
 
 type WeeklyTemplateEditorProps = {
-  /** Which template to edit. Defaults to the athlete-global DEFAULT template. */
-  scope?: TemplateScopeInput;
-  /** Called after a successful save. When omitted, navigates to /calendar. */
-  onSaved?: () => void;
-  /** Show the Cancel link back to the calendar (default true). */
-  showCancel?: boolean;
-  /** Initial template name for a brand-new (empty) template. */
-  defaultName?: string;
+  /** Id of the library template to edit. */
+  templateId: string;
+  /** Called after a successful save with the updated name/category. */
+  onSaved?: (summary: { id: string; name: string; category: WeeklyTemplateKind }) => void;
 };
 
-function templateGetUrl(scope: TemplateScopeInput): string {
-  const query = new URLSearchParams(templateScopeToQuery(scope)).toString();
-  return `/api/plan/calendar/template?${query}`;
-}
-
 export function WeeklyTemplateEditor({
-  scope = DEFAULT_SCOPE,
+  templateId,
   onSaved,
-  showCancel = true,
-  defaultName = "Weekly template",
-}: WeeklyTemplateEditorProps = {}) {
+}: WeeklyTemplateEditorProps) {
   const router = useRouter();
-  const [name, setName] = useState(defaultName);
+  const [name, setName] = useState("Weekly template");
+  const [category, setCategory] = useState<WeeklyTemplateKind>("DEFAULT");
   const [items, setItems] = useState<TemplateItemDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -313,16 +303,17 @@ export function WeeklyTemplateEditor({
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch(templateGetUrl(scope));
+      const res = await fetch(`/api/plan/calendar/templates/${templateId}`);
       if (res.ok) {
         const data = await res.json();
-        const template = data.template as WeeklyTemplate;
+        const template = data.template as LibraryTemplate;
         setName(template.name);
+        setCategory(template.category ?? "DEFAULT");
         setItems(template.items.length > 0 ? draftsFromTemplate(template) : []);
       }
       setLoading(false);
     })();
-  }, [scope]);
+  }, [templateId]);
 
   const itemsByWeekday = useMemo(() => {
     const map = new Map<WeeklyTemplateItem["weekday"], TemplateItemDraft[]>();
@@ -378,10 +369,10 @@ export function WeeklyTemplateEditor({
 
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/plan/calendar/template", {
+    const res = await fetch(`/api/plan/calendar/templates/${templateId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, items: serialized, scope }),
+      body: JSON.stringify({ name, category, items: serialized }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -390,12 +381,7 @@ export function WeeklyTemplateEditor({
       return;
     }
     setSavedAt(Date.now());
-    if (onSaved) {
-      onSaved();
-      router.refresh();
-      return;
-    }
-    router.push("/calendar");
+    onSaved?.({ id: templateId, name, category });
     router.refresh();
   }
 
@@ -405,9 +391,25 @@ export function WeeklyTemplateEditor({
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
-      <div>
-        <Label>Template name</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <Label>Template name</Label>
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div>
+          <Label>Category</Label>
+          <select
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as WeeklyTemplateKind)}
+          >
+            {TEMPLATE_CATEGORIES.map((value) => (
+              <option key={value} value={value}>
+                {TEMPLATE_CATEGORY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
@@ -445,13 +447,6 @@ export function WeeklyTemplateEditor({
         <Button type="submit" disabled={saving}>
           {saving ? "Saving…" : "Save template"}
         </Button>
-        {showCancel ? (
-          <Link href="/calendar">
-            <Button type="button" variant="secondary">
-              Cancel
-            </Button>
-          </Link>
-        ) : null}
         {savedAt && !saving ? (
           <span className="text-xs text-emerald-600 dark:text-emerald-400">Saved</span>
         ) : null}
