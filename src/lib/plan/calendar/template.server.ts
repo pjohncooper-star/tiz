@@ -8,7 +8,6 @@ import type {
 } from "@prisma/client";
 import { normalizeWeekStart, parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { db } from "@/lib/db";
-import type { TemplateScopeInput } from "@/lib/plan/calendar/template-scope";
 import { weekdayToDate } from "@/lib/plan/calendar/weekday-to-date";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { inferSessionRole } from "@/lib/plan/session-role";
@@ -27,197 +26,46 @@ export type WeeklyTemplateItemInput = {
   sortOrder?: number;
 };
 
+export type WeeklyTemplateItemDto = {
+  id: string;
+  weekday: Weekday;
+  discipline: Discipline;
+  title: string;
+  durationMinutes: number | null;
+  distanceMeters: number | null;
+  poolSize: PoolSize | null;
+  sessionRole: SessionRole;
+  sortOrder: number;
+};
+
 export type WeeklyTemplateDto = {
   id: string;
   name: string;
-  kind: WeeklyTemplateKind;
-  seasonPlanId: string | null;
-  seasonPhaseId: string | null;
-  items: Array<{
-    id: string;
-    weekday: Weekday;
-    discipline: Discipline;
-    title: string;
-    durationMinutes: number | null;
-    distanceMeters: number | null;
-    poolSize: PoolSize | null;
-    sessionRole: SessionRole;
-    sortOrder: number;
-  }>;
+  category: WeeklyTemplateKind;
+  items: WeeklyTemplateItemDto[];
 };
 
-/**
- * Identifies which template to read or create. `DEFAULT` is the athlete-global
- * template (the /calendar/template quick-apply); `PHASE` is bound to a season
- * phase; `REST` / `TEST` are one per season plan.
- */
-export type TemplateScope =
-  | { kind: "DEFAULT"; athleteId: string }
-  | {
-      kind: "PHASE";
-      athleteId: string;
-      seasonPlanId: string;
-      seasonPhaseId: string;
-    }
-  | { kind: "REST"; athleteId: string; seasonPlanId: string }
-  | { kind: "TEST"; athleteId: string; seasonPlanId: string };
+/** Lightweight template descriptor for pickers / lists (no items). */
+export type WeeklyTemplateSummary = {
+  id: string;
+  name: string;
+  category: WeeklyTemplateKind;
+  itemCount: number;
+};
 
 const TEMPLATE_ITEM_INCLUDE = {
   items: { orderBy: [{ weekday: "asc" }, { sortOrder: "asc" }] },
 } satisfies Prisma.WeeklyScheduleTemplateInclude;
 
-const DEFAULT_TEMPLATE_NAME: Record<WeeklyTemplateKind, string> = {
-  DEFAULT: "Weekly template",
-  PHASE: "Phase template",
-  REST: "Rest week template",
-  TEST: "Test week template",
-};
+type TemplateWithItems = Prisma.WeeklyScheduleTemplateGetPayload<{
+  include: typeof TEMPLATE_ITEM_INCLUDE;
+}>;
 
-function scopeCreateData(scope: TemplateScope) {
-  switch (scope.kind) {
-    case "DEFAULT":
-      return { athleteId: scope.athleteId, kind: "DEFAULT" as const };
-    case "PHASE":
-      return {
-        athleteId: scope.athleteId,
-        kind: "PHASE" as const,
-        seasonPlanId: scope.seasonPlanId,
-        seasonPhaseId: scope.seasonPhaseId,
-      };
-    case "REST":
-      return {
-        athleteId: scope.athleteId,
-        kind: "REST" as const,
-        seasonPlanId: scope.seasonPlanId,
-      };
-    case "TEST":
-      return {
-        athleteId: scope.athleteId,
-        kind: "TEST" as const,
-        seasonPlanId: scope.seasonPlanId,
-      };
-  }
-}
-
-async function findScopedTemplate(scope: TemplateScope) {
-  if (scope.kind === "PHASE") {
-    return db.weeklyScheduleTemplate.findFirst({
-      where: { seasonPhaseId: scope.seasonPhaseId, kind: "PHASE" },
-      include: TEMPLATE_ITEM_INCLUDE,
-    });
-  }
-  if (scope.kind === "DEFAULT") {
-    return db.weeklyScheduleTemplate.findFirst({
-      where: { athleteId: scope.athleteId, kind: "DEFAULT" },
-      include: TEMPLATE_ITEM_INCLUDE,
-    });
-  }
-  return db.weeklyScheduleTemplate.findFirst({
-    where: { seasonPlanId: scope.seasonPlanId, kind: scope.kind },
-    include: TEMPLATE_ITEM_INCLUDE,
-  });
-}
-
-/** Read or lazily create the template for a scope. */
-export async function getOrCreateScopedTemplate(
-  scope: TemplateScope
-): Promise<WeeklyTemplateDto> {
-  let template = await findScopedTemplate(scope);
-  if (!template) {
-    template = await db.weeklyScheduleTemplate.create({
-      data: { ...scopeCreateData(scope), name: DEFAULT_TEMPLATE_NAME[scope.kind] },
-      include: TEMPLATE_ITEM_INCLUDE,
-    });
-  }
-  return serializeTemplate(template);
-}
-
-/** Read the template for a scope without creating it. */
-export async function getScopedTemplate(
-  scope: TemplateScope
-): Promise<WeeklyTemplateDto | null> {
-  const template = await findScopedTemplate(scope);
-  return template ? serializeTemplate(template) : null;
-}
-
-/** All plan-scoped templates (PHASE / REST / TEST) for a season plan. */
-export async function getPlanWeeklyTemplates(
-  seasonPlanId: string
-): Promise<WeeklyTemplateDto[]> {
-  const templates = await db.weeklyScheduleTemplate.findMany({
-    where: { seasonPlanId },
-    include: TEMPLATE_ITEM_INCLUDE,
-  });
-  return templates.map(serializeTemplate);
-}
-
-export async function getOrCreateWeeklyTemplate(
-  athleteId: string
-): Promise<WeeklyTemplateDto> {
-  return getOrCreateScopedTemplate({ kind: "DEFAULT", athleteId });
-}
-
-/**
- * Turn a wire scope into a fully-resolved, authorized {@link TemplateScope}.
- * Verifies the referenced phase / plan belongs to the athlete and derives the
- * plan id for phase scopes. Throws when the target is missing or not owned.
- */
-export async function resolveTemplateScope(
-  athleteId: string,
-  input: TemplateScopeInput
-): Promise<TemplateScope> {
-  switch (input.kind) {
-    case "DEFAULT":
-      return { kind: "DEFAULT", athleteId };
-    case "PHASE": {
-      const phase = await db.seasonPhase.findFirst({
-        where: { id: input.seasonPhaseId, seasonPlan: { athleteId } },
-        select: { id: true, seasonPlanId: true },
-      });
-      if (!phase) throw new Error("Season phase not found");
-      return {
-        kind: "PHASE",
-        athleteId,
-        seasonPlanId: phase.seasonPlanId,
-        seasonPhaseId: phase.id,
-      };
-    }
-    case "REST":
-    case "TEST": {
-      const plan = await db.seasonPlan.findFirst({
-        where: { id: input.seasonPlanId, athleteId },
-        select: { id: true },
-      });
-      if (!plan) throw new Error("Season plan not found");
-      return { kind: input.kind, athleteId, seasonPlanId: plan.id };
-    }
-  }
-}
-
-function serializeTemplate(template: {
-  id: string;
-  name: string;
-  kind: WeeklyTemplateKind;
-  seasonPlanId: string | null;
-  seasonPhaseId: string | null;
-  items: Array<{
-    id: string;
-    weekday: Weekday;
-    discipline: Discipline;
-    title: string;
-    durationMinutes: number | null;
-    distanceMeters: number | null;
-    poolSize: PoolSize | null;
-    sessionRole: SessionRole;
-    sortOrder: number;
-  }>;
-}): WeeklyTemplateDto {
+function serializeTemplate(template: TemplateWithItems): WeeklyTemplateDto {
   return {
     id: template.id,
     name: template.name,
-    kind: template.kind,
-    seasonPlanId: template.seasonPlanId,
-    seasonPhaseId: template.seasonPhaseId,
+    category: template.category,
     items: template.items.map((item) => ({
       id: item.id,
       weekday: item.weekday,
@@ -232,50 +80,141 @@ function serializeTemplate(template: {
   };
 }
 
-export async function replaceScopedTemplate(
-  scope: TemplateScope,
-  name: string,
-  items: WeeklyTemplateItemInput[]
+function templateItemCreateData(items: WeeklyTemplateItemInput[]) {
+  return items.map((item, index) => ({
+    weekday: item.weekday,
+    discipline: item.discipline,
+    title: item.title.trim(),
+    durationMinutes: item.durationMinutes ?? null,
+    distanceMeters: item.distanceMeters ?? null,
+    poolSize: item.discipline === "SWIM" ? (item.poolSize ?? null) : null,
+    sessionRole:
+      item.sessionRole ??
+      inferSessionRole({
+        title: item.title.trim(),
+        discipline: item.discipline,
+        durationMinutes: item.durationMinutes ?? null,
+      }),
+    sortOrder: item.sortOrder ?? index,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Library CRUD
+// ---------------------------------------------------------------------------
+
+/** All templates in the athlete's reusable library. */
+export async function listWeeklyTemplates(
+  athleteId: string
+): Promise<WeeklyTemplateDto[]> {
+  const templates = await db.weeklyScheduleTemplate.findMany({
+    where: { athleteId },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+    include: TEMPLATE_ITEM_INCLUDE,
+  });
+  return templates.map(serializeTemplate);
+}
+
+/** Summaries (no items) for pickers — e.g. phase / rest / test assignment. */
+export async function listWeeklyTemplateSummaries(
+  athleteId: string
+): Promise<WeeklyTemplateSummary[]> {
+  const templates = await db.weeklyScheduleTemplate.findMany({
+    where: { athleteId },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      _count: { select: { items: true } },
+    },
+  });
+  return templates.map((t) => ({
+    id: t.id,
+    name: t.name,
+    category: t.category,
+    itemCount: t._count.items,
+  }));
+}
+
+export async function getWeeklyTemplate(
+  athleteId: string,
+  id: string
+): Promise<WeeklyTemplateDto | null> {
+  const template = await db.weeklyScheduleTemplate.findFirst({
+    where: { id, athleteId },
+    include: TEMPLATE_ITEM_INCLUDE,
+  });
+  return template ? serializeTemplate(template) : null;
+}
+
+export async function createWeeklyTemplate(
+  athleteId: string,
+  input: { name: string; category?: WeeklyTemplateKind; items?: WeeklyTemplateItemInput[] }
 ): Promise<WeeklyTemplateDto> {
-  const template = await getOrCreateScopedTemplate(scope);
+  const template = await db.weeklyScheduleTemplate.create({
+    data: {
+      athleteId,
+      name: input.name.trim() || "Weekly template",
+      category: input.category ?? "DEFAULT",
+      items: input.items?.length
+        ? { create: templateItemCreateData(input.items) }
+        : undefined,
+    },
+    include: TEMPLATE_ITEM_INCLUDE,
+  });
+  return serializeTemplate(template);
+}
+
+/** Replace a template's name / category / items. Scoped to the owner. */
+export async function updateWeeklyTemplate(
+  athleteId: string,
+  id: string,
+  input: { name?: string; category?: WeeklyTemplateKind; items: WeeklyTemplateItemInput[] }
+): Promise<WeeklyTemplateDto> {
+  const existing = await db.weeklyScheduleTemplate.findFirst({
+    where: { id, athleteId },
+    select: { id: true },
+  });
+  if (!existing) throw new Error("Template not found");
 
   await db.$transaction(async (tx) => {
     await tx.weeklyScheduleTemplate.update({
-      where: { id: template.id },
-      data: { name },
+      where: { id },
+      data: {
+        ...(input.name != null ? { name: input.name.trim() || "Weekly template" } : {}),
+        ...(input.category != null ? { category: input.category } : {}),
+      },
     });
-    await tx.weeklyScheduleTemplateItem.deleteMany({ where: { templateId: template.id } });
-    if (items.length > 0) {
+    await tx.weeklyScheduleTemplateItem.deleteMany({ where: { templateId: id } });
+    if (input.items.length > 0) {
       await tx.weeklyScheduleTemplateItem.createMany({
-        data: items.map((item, index) => ({
-          templateId: template.id,
-          weekday: item.weekday,
-          discipline: item.discipline,
-          title: item.title.trim(),
-          durationMinutes: item.durationMinutes ?? null,
-          distanceMeters: item.distanceMeters ?? null,
-          poolSize: item.discipline === "SWIM" ? (item.poolSize ?? null) : null,
-          sessionRole: item.sessionRole ?? inferSessionRole({
-            title: item.title.trim(),
-            discipline: item.discipline,
-            durationMinutes: item.durationMinutes ?? null,
-          }),
-          sortOrder: item.sortOrder ?? index,
+        data: templateItemCreateData(input.items).map((item) => ({
+          ...item,
+          templateId: id,
         })),
       });
     }
   });
 
-  return getScopedTemplate(scope) as Promise<WeeklyTemplateDto>;
+  const updated = await getWeeklyTemplate(athleteId, id);
+  if (!updated) throw new Error("Template not found");
+  return updated;
 }
 
-export async function replaceWeeklyTemplate(
+export async function deleteWeeklyTemplate(
   athleteId: string,
-  name: string,
-  items: WeeklyTemplateItemInput[]
-): Promise<WeeklyTemplateDto> {
-  return replaceScopedTemplate({ kind: "DEFAULT", athleteId }, name, items);
+  id: string
+): Promise<void> {
+  const result = await db.weeklyScheduleTemplate.deleteMany({
+    where: { id, athleteId },
+  });
+  if (result.count === 0) throw new Error("Template not found");
 }
+
+// ---------------------------------------------------------------------------
+// Apply a template to a calendar week
+// ---------------------------------------------------------------------------
 
 export async function weekHasPlannedSessions(
   athleteId: string,
@@ -295,12 +234,16 @@ export async function weekHasPlannedSessions(
 
 export async function applyWeeklyTemplate(
   athleteId: string,
+  templateId: string,
   weekStart: string,
   mode: ApplyTemplateMode
 ): Promise<{ created: number }> {
-  const template = await getOrCreateWeeklyTemplate(athleteId);
+  const template = await getWeeklyTemplate(athleteId, templateId);
+  if (!template) {
+    throw new Error("Template not found");
+  }
   if (template.items.length === 0) {
-    throw new Error("Weekly template has no sessions");
+    throw new Error("Template has no sessions");
   }
 
   const mondayKey = normalizeWeekStart(weekStart);

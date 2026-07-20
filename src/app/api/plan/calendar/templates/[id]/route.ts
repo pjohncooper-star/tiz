@@ -2,14 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import {
-  getOrCreateScopedTemplate,
-  replaceScopedTemplate,
-  resolveTemplateScope,
+  deleteWeeklyTemplate,
+  getWeeklyTemplate,
+  updateWeeklyTemplate,
 } from "@/lib/plan/calendar/template.server";
-import {
-  templateScopeFromParams,
-  templateScopeSchema,
-} from "@/lib/plan/calendar/template-scope";
 
 const templateItemSchema = z.object({
   weekday: z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]),
@@ -24,40 +20,28 @@ const templateItemSchema = z.object({
 
 const putSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
+  category: z.enum(["DEFAULT", "PHASE", "REST", "TEST"]).optional(),
   items: z.array(templateItemSchema),
-  scope: templateScopeSchema.optional(),
 });
 
-export async function GET(request: Request) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function GET(_request: Request, context: RouteContext) {
   const session = await auth();
   const athleteId = session?.user?.athleteId;
   if (!athleteId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const url = new URL(request.url);
-  let scopeInput;
-  try {
-    scopeInput = templateScopeFromParams({
-      kind: url.searchParams.get("kind"),
-      seasonPlanId: url.searchParams.get("seasonPlanId"),
-      seasonPhaseId: url.searchParams.get("seasonPhaseId"),
-    });
-  } catch {
-    return NextResponse.json({ error: "Invalid template scope" }, { status: 400 });
+  const { id } = await context.params;
+  const template = await getWeeklyTemplate(athleteId, id);
+  if (!template) {
+    return NextResponse.json({ error: "Template not found" }, { status: 404 });
   }
-
-  try {
-    const scope = await resolveTemplateScope(athleteId, scopeInput);
-    const template = await getOrCreateScopedTemplate(scope);
-    return NextResponse.json({ template });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Not found";
-    return NextResponse.json({ error: message }, { status: 404 });
-  }
+  return NextResponse.json({ template });
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: Request, context: RouteContext) {
   const session = await auth();
   const athleteId = session?.user?.athleteId;
   if (!athleteId) {
@@ -76,19 +60,29 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const { id } = await context.params;
   try {
-    const scope = await resolveTemplateScope(
-      athleteId,
-      parsed.data.scope ?? { kind: "DEFAULT" }
-    );
-    const template = await replaceScopedTemplate(
-      scope,
-      parsed.data.name ?? "Weekly template",
-      parsed.data.items
-    );
+    const template = await updateWeeklyTemplate(athleteId, id, parsed.data);
     return NextResponse.json({ template });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Save failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message }, { status: 404 });
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  const session = await auth();
+  const athleteId = session?.user?.athleteId;
+  if (!athleteId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await context.params;
+  try {
+    await deleteWeeklyTemplate(athleteId, id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Delete failed";
+    return NextResponse.json({ error: message }, { status: 404 });
   }
 }

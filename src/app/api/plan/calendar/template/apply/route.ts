@@ -8,6 +8,7 @@ import {
 } from "@/lib/plan/calendar/template.server";
 
 const applySchema = z.object({
+  templateId: z.string().min(1),
   weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   mode: z.enum(["clear_week", "clear_template_days", "merge"]),
 });
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     const weekStart = normalizeWeekStart(parsed.data.weekStart);
     const result = await applyWeeklyTemplate(
       athleteId,
+      parsed.data.templateId,
       weekStart,
       parsed.data.mode
     );
