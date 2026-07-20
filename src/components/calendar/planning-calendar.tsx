@@ -405,9 +405,19 @@ export function PlanningCalendar({
 
       const generatedSessionId = parseGeneratedPoolCardId(cardId);
       if (generatedSessionId) {
-        const session = poolWeekSessions.find((row) => row.id === generatedSessionId);
+        const session = data.sessions.find((row) => row.id === generatedSessionId);
         if (!session || !isFillableGeneratedSession(session)) return;
         if (!isEndurancePoolDiscipline(session.discipline as PoolDiscipline)) return;
+
+        const sessionWeekStart = format(
+          startOfWeek(parseISO(`${session.scheduledDate}T12:00:00`), WEEK_OPTS),
+          "yyyy-MM-dd"
+        );
+        if (sessionWeekStart !== poolWeekStart) {
+          setPoolWeekStart(sessionWeekStart);
+          void ensurePoolWeekLoaded(sessionWeekStart);
+          pendingPoolScrollRef.current = sessionWeekStart;
+        }
 
         saveCurrentDraft();
         setSelectedPoolCardId(cardId);
@@ -427,8 +437,10 @@ export function PlanningCalendar({
       setBuilderExpanded(true);
     },
     [
+      data.sessions,
       poolChips,
-      poolWeekSessions,
+      poolWeekStart,
+      ensurePoolWeekLoaded,
       selectedPoolCardId,
       builderExpanded,
       poolComposer,
@@ -439,9 +451,10 @@ export function PlanningCalendar({
   const handleArmBuildFromSession = useCallback(
     (session: CalendarPlannedSession) => {
       if (!isFillableGeneratedSession(session)) return;
+      if (!poolOpen) setPoolOpen(true);
       handleSelectPoolCard(generatedPoolCardId(session.id));
     },
-    [handleSelectPoolCard]
+    [handleSelectPoolCard, poolOpen]
   );
 
   const handleBuilderDone = useCallback(() => {

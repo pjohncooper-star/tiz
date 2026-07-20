@@ -12,10 +12,10 @@ import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serializ
 import { computeUnscheduledChips } from "@/lib/plan/calendar/unscheduled-chips";
 import {
   isEndurancePoolDiscipline,
-  mergeChipsWithDrafts,
   type PoolCardDraftMap,
   type PoolDisciplineFilter,
 } from "@/lib/plan/calendar/pool-session-card";
+import { resolveSelectedPoolCard } from "@/lib/plan/calendar/generated-pool-cards";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
@@ -54,9 +54,13 @@ function usePoolWizardSelection(props: WorkoutPoolWizardProps) {
   }, [props.poolWeekStart, props.weekTarget, props.sessions]);
 
   const selectedCard = useMemo(() => {
-    if (!props.selectedCardId) return null;
-    return mergeChipsWithDrafts(chips, props.drafts).find((c) => c.id === props.selectedCardId) ?? null;
-  }, [chips, props.drafts, props.selectedCardId]);
+    return resolveSelectedPoolCard(
+      props.selectedCardId,
+      chips,
+      props.drafts,
+      props.sessions
+    );
+  }, [chips, props.drafts, props.selectedCardId, props.sessions]);
 
   const showBuilder =
     selectedCard != null &&
