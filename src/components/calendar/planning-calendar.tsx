@@ -55,10 +55,14 @@ import {
   type PoolDisciplineFilter,
 } from "@/lib/plan/calendar/pool-session-card";
 import {
+  applyTargetSessionId,
   fillableGeneratedSessionIds,
   generatedPoolCardId,
   isFillableGeneratedSession,
   parseGeneratedPoolCardId,
+  parseStagingPoolCardId,
+  stagingPoolCardId,
+  type StagingPoolDiscipline,
 } from "@/lib/plan/calendar/generated-pool-cards";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import type { SessionRole, Discipline } from "@prisma/client";
@@ -301,10 +305,14 @@ export function PlanningCalendar({
     );
   }, [poolWeekSessions]);
 
-  const poolDraftCardIds = useMemo(
-    () => [...poolChips.map((chip) => chip.id), ...poolGeneratedCardIds],
-    [poolChips, poolGeneratedCardIds]
-  );
+  const poolDraftCardIds = useMemo(() => {
+    const ids = [...poolChips.map((chip) => chip.id), ...poolGeneratedCardIds];
+    const stagingDiscipline = selectedPoolCardId
+      ? parseStagingPoolCardId(selectedPoolCardId)
+      : null;
+    if (stagingDiscipline) ids.push(stagingPoolCardId(stagingDiscipline));
+    return ids;
+  }, [poolChips, poolGeneratedCardIds, selectedPoolCardId]);
 
   const clearGeneratedPoolSelection = useCallback(
     (sessionId: string) => {
@@ -419,9 +427,27 @@ export function PlanningCalendar({
           pendingPoolScrollRef.current = sessionWeekStart;
         }
 
+        const stagingDiscipline = parseStagingPoolCardId(selectedPoolCardId ?? "");
+        const keepComposerTree =
+          stagingDiscipline != null &&
+          stagingDiscipline === session.discipline &&
+          poolComposer.workoutTree.nodes.length > 0;
+
         saveCurrentDraft();
         setSelectedPoolCardId(cardId);
         poolComposer.setDiscipline(session.discipline as "SWIM" | "BIKE" | "RUN");
+        if (!keepComposerTree) {
+          poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
+        }
+        setBuilderExpanded(true);
+        return;
+      }
+
+      const stagingDiscipline = parseStagingPoolCardId(cardId);
+      if (stagingDiscipline) {
+        saveCurrentDraft();
+        setSelectedPoolCardId(cardId);
+        poolComposer.setDiscipline(stagingDiscipline);
         poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
         setBuilderExpanded(true);
         return;
@@ -447,6 +473,36 @@ export function PlanningCalendar({
       poolDrafts,
     ]
   );
+
+  const handleApplyToBuildTarget = useCallback(async () => {
+    const sessionId = applyTargetSessionId(selectedPoolCardId);
+    if (!sessionId) {
+      alert("Select a generated session on the calendar to apply this workout.");
+      return;
+    }
+
+    const session = data.sessions.find((row) => row.id === sessionId);
+    if (!session) {
+      alert("Session not found");
+      return;
+    }
+    if (session.discipline !== poolComposer.discipline) {
+      alert(
+        `Workout is ${poolComposer.discipline}; that session is ${session.discipline}.`
+      );
+      return;
+    }
+    if (session.stepCount > 0) {
+      alert("Remove the existing workout before applying a new one.");
+      return;
+    }
+    if (poolComposer.workoutTree.nodes.length === 0) {
+      alert("Build a workout before applying.");
+      return;
+    }
+
+    await poolComposer.applyToSession(sessionId);
+  }, [data.sessions, poolComposer, selectedPoolCardId]);
 
   const handleArmBuildFromSession = useCallback(
     (session: CalendarPlannedSession) => {
@@ -1222,22 +1278,30 @@ export function PlanningCalendar({
       alert("Strength sessions are not supported in the Build graph");
       return;
     }
+    if (!isEndurancePoolDiscipline(session.discipline as PoolDiscipline)) return;
     if (!poolOpen) setPoolOpen(true);
-    const card = poolChips.find(
-      (c) =>
-        c.discipline === session.discipline && isEndurancePoolDiscipline(c.discipline)
-    );
-    if (!card) {
-      alert("No open pool card for this discipline this week.");
-      return;
+
+    if (
+      selectedPoolCardId &&
+      builderExpanded &&
+      selectedPoolCardId !== stagingPoolCardId(session.discipline as StagingPoolDiscipline)
+    ) {
+      const draft = draftFromNodes(poolComposer.workoutTree.nodes, poolComposer.discipline);
+      setPoolDrafts((prev) => {
+        const next = { ...prev };
+        if (draft) next[selectedPoolCardId] = draft;
+        else delete next[selectedPoolCardId];
+        return next;
+      });
     }
+
     const sourceLabel = `${session.title} · ${format(
       parseISO(`${session.scheduledDate}T12:00:00`),
       "EEE MMM d"
     )}`;
     const ok = await poolComposer.loadFromSession(session.id, sourceLabel);
     if (ok) {
-      setSelectedPoolCardId(card.id);
+      setSelectedPoolCardId(stagingPoolCardId(session.discipline as StagingPoolDiscipline));
       setBuilderExpanded(true);
     }
   }
@@ -1275,6 +1339,7 @@ export function PlanningCalendar({
     composer: poolComposer,
     disciplineSettings,
     onAutoFillEasyTiz: handleAutoFillEasyTiz,
+    onApplyToSession: () => void handleApplyToBuildTarget(),
   };
 
   const calendarWeeksContent = (

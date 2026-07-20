@@ -10,6 +10,26 @@ import {
 import type { PoolDiscipline, UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
 
 export const GENERATED_POOL_CARD_PREFIX = "generated:";
+export const STAGING_POOL_CARD_PREFIX = "staging:";
+
+const STAGING_DISCIPLINES = ["SWIM", "BIKE", "RUN"] as const;
+export type StagingPoolDiscipline = (typeof STAGING_DISCIPLINES)[number];
+
+export function stagingPoolCardId(discipline: StagingPoolDiscipline): string {
+  return `${STAGING_POOL_CARD_PREFIX}${discipline}`;
+}
+
+export function parseStagingPoolCardId(cardId: string): StagingPoolDiscipline | null {
+  if (!cardId.startsWith(STAGING_POOL_CARD_PREFIX)) return null;
+  const discipline = cardId.slice(STAGING_POOL_CARD_PREFIX.length);
+  return STAGING_DISCIPLINES.includes(discipline as StagingPoolDiscipline)
+    ? (discipline as StagingPoolDiscipline)
+    : null;
+}
+
+export function isStagingPoolCardId(cardId: string): boolean {
+  return parseStagingPoolCardId(cardId) != null;
+}
 
 export function generatedPoolCardId(sessionId: string): string {
   return `${GENERATED_POOL_CARD_PREFIX}${sessionId}`;
@@ -99,6 +119,16 @@ export function resolveSelectedPoolCard(
   const chipCard = mergeChipsWithDrafts(chips, drafts).find((card) => card.id === selectedCardId);
   if (chipCard) return chipCard;
 
+  const stagingDiscipline = parseStagingPoolCardId(selectedCardId);
+  if (stagingDiscipline) {
+    return {
+      id: selectedCardId,
+      discipline: stagingDiscipline,
+      slotKind: "ENDURANCE",
+      label: "Copied workout",
+    };
+  }
+
   const sessionId = parseGeneratedPoolCardId(selectedCardId);
   if (!sessionId) return null;
 
@@ -106,4 +136,9 @@ export function resolveSelectedPoolCard(
   if (!session || !isFillableGeneratedSession(session)) return null;
 
   return generatedSessionToPoolCard(session, drafts[selectedCardId]);
+}
+
+export function applyTargetSessionId(selectedCardId: string | null): string | null {
+  if (!selectedCardId) return null;
+  return parseGeneratedPoolCardId(selectedCardId);
 }

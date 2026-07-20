@@ -15,7 +15,7 @@ import {
   type PoolCardDraftMap,
   type PoolDisciplineFilter,
 } from "@/lib/plan/calendar/pool-session-card";
-import { resolveSelectedPoolCard } from "@/lib/plan/calendar/generated-pool-cards";
+import { resolveSelectedPoolCard, applyTargetSessionId } from "@/lib/plan/calendar/generated-pool-cards";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
@@ -39,6 +39,7 @@ export type WorkoutPoolWizardProps = {
   composer: PoolWorkoutComposer;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onAutoFillEasyTiz?: () => void;
+  onApplyToSession?: () => void;
 };
 
 function weekLabel(weekStart: string): string {
@@ -63,9 +64,9 @@ function usePoolWizardSelection(props: WorkoutPoolWizardProps) {
   }, [chips, props.drafts, props.selectedCardId, props.sessions]);
 
   const showBuilder =
-    selectedCard != null &&
-    isEndurancePoolDiscipline(selectedCard.discipline) &&
-    props.builderExpanded;
+    selectedCard != null && isEndurancePoolDiscipline(selectedCard.discipline);
+
+  const applyTargetId = applyTargetSessionId(props.selectedCardId);
 
   useEffect(() => {
     if (
@@ -79,7 +80,7 @@ function usePoolWizardSelection(props: WorkoutPoolWizardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCard?.id, selectedCard?.discipline]);
 
-  return { selectedCard, showBuilder };
+  return { selectedCard, showBuilder, applyTargetId };
 }
 
 function PoolWeekNav({
@@ -184,7 +185,7 @@ export function WorkoutPoolWizardSideColumn(props: WorkoutPoolWizardProps) {
 /** Week TiZ and workout editor band (calendar column width in xl wizard mode). */
 export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
   const { weekTarget, composer, disciplineSettings } = props;
-  const { selectedCard, showBuilder } = usePoolWizardSelection(props);
+  const { selectedCard, showBuilder, applyTargetId } = usePoolWizardSelection(props);
 
   if (!weekTarget) return null;
 
@@ -210,13 +211,15 @@ export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
           <WorkoutGraphPanel
             composer={composer}
             disciplineSettings={disciplineSettings}
-            expanded
+            expanded={props.builderExpanded}
             onExpandedChange={(expanded) => {
               if (!expanded) props.onBuilderDone();
               else props.onBuilderExpandedChange(true);
             }}
             lockDiscipline
             cardLabel={selectedCard.label}
+            applyTargetSessionId={applyTargetId}
+            onApplyToSession={props.onApplyToSession}
           />
         </div>
       ) : null}
