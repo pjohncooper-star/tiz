@@ -47,6 +47,13 @@ import {
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { LongWeekScheduleGrid } from "@/components/simple-planner/long-week-schedule-grid";
 import type { SimpleWeek } from "@/components/simple-planner/simple-planner-types";
+import {
+  formatChainedVolumeStartDisplay,
+  resolveChainedPhaseVolumeStart,
+  resolveStoredStartAfterEdit,
+  stripChainedVolumeStartSuffix,
+  type ResolvedChainedStart,
+} from "@/lib/plan/season/phase-volume-display";
 
 export type WeeklyTemplateOption = {
   id: string;
@@ -471,6 +478,8 @@ function PhaseDetailEditor({
 
       <PhaseVolumeEditor
         phase={phase}
+        phases={phases}
+        weeks={weeks}
         effectiveMode={effectiveMode}
         showLongSettings={showLongSettings}
         rampDefaults={rampDefaults}
@@ -569,6 +578,8 @@ function PhaseDetailEditor({
 
 function PhaseVolumeEditor({
   phase,
+  phases,
+  weeks,
   effectiveMode,
   showLongSettings,
   rampDefaults,
@@ -576,6 +587,8 @@ function PhaseVolumeEditor({
   onChange,
 }: {
   phase: SimplePhase;
+  phases: SimplePhase[];
+  weeks: SimpleWeek[];
   effectiveMode: PlanningMode;
   showLongSettings: boolean;
   rampDefaults: SimpleRampDefaults;
@@ -605,6 +618,13 @@ function PhaseVolumeEditor({
           label="Total hours"
           startHours={phase.volumeStartHours}
           endHours={phase.volumeEndHours}
+          chainedStart={resolveChainedPhaseVolumeStart({
+            phase,
+            phases,
+            weeks,
+            rampDefaults,
+            effectiveMode,
+          })}
           onStartChange={(value) => onChange({ ...phase, volumeStartHours: value })}
           onEndChange={(value) => onChange({ ...phase, volumeEndHours: value })}
         />
@@ -614,6 +634,14 @@ function PhaseVolumeEditor({
             discipline !== "bike" && disciplinePlanningMode(discipline, rampDefaults) === "DISTANCE";
           const paceDiscipline = discipline === "swim" ? "SWIM" : "RUN";
           const def = rampDefaults[discipline];
+          const chainedStart = resolveChainedPhaseVolumeStart({
+            phase,
+            phases,
+            weeks,
+            rampDefaults,
+            effectiveMode,
+            discipline,
+          });
 
           if (distanceMode) {
             return (
@@ -627,6 +655,7 @@ function PhaseVolumeEditor({
                   discipline === "swim" ? phase.swimStartHours : phase.runStartHours
                 }
                 endHours={discipline === "swim" ? phase.swimEndHours : phase.runEndHours}
+                chainedStart={chainedStart}
                 onStartChange={(hours) => {
                   if (discipline === "swim") onChange({ ...phase, swimStartHours: hours });
                   else onChange({ ...phase, runStartHours: hours });
@@ -657,6 +686,7 @@ function PhaseVolumeEditor({
                     ? phase.bikeEndHours
                     : phase.runEndHours
               }
+              chainedStart={chainedStart}
               onStartChange={(value) => {
                 if (discipline === "swim") onChange({ ...phase, swimStartHours: value });
                 else if (discipline === "bike") onChange({ ...phase, bikeStartHours: value });
@@ -675,6 +705,47 @@ function PhaseVolumeEditor({
   );
 }
 
+function ChainedVolumeStartInput({
+  label,
+  displayValue,
+  chainedStart,
+  placeholder,
+  inputMode = "decimal",
+  onCommitStored,
+  parseNumeric,
+}: {
+  label: string;
+  displayValue: string;
+  chainedStart: ResolvedChainedStart | null;
+  placeholder?: string;
+  inputMode?: "decimal" | "numeric";
+  onCommitStored: (value: number | null) => void;
+  parseNumeric: (raw: string) => number | null;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <TextEditorInput
+        inputMode={inputMode}
+        className="mt-1"
+        value={displayValue}
+        placeholder={placeholder}
+        allowEmpty
+        onCommit={(raw) => {
+          const cleaned = stripChainedVolumeStartSuffix(raw);
+          if (!cleaned) {
+            onCommitStored(null);
+            return;
+          }
+          const parsed = parseNumeric(cleaned);
+          if (parsed == null) return;
+          onCommitStored(resolveStoredStartAfterEdit(parsed, chainedStart));
+        }}
+      />
+    </div>
+  );
+}
+
 function VolumeDistanceRow({
   label,
   paceDiscipline,
@@ -682,6 +753,7 @@ function VolumeDistanceRow({
   disciplineSettings,
   startHours,
   endHours,
+  chainedStart,
   onStartChange,
   onEndChange,
 }: {
@@ -691,6 +763,7 @@ function VolumeDistanceRow({
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   startHours?: number | null;
   endHours?: number | null;
+  chainedStart: ResolvedChainedStart | null;
   onStartChange: (hours: number | null) => void;
   onEndChange: (hours: number | null) => void;
 }) {
@@ -706,6 +779,17 @@ function VolumeDistanceRow({
     );
     return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
   }
+
+  function formatMeters(meters: number): string {
+    return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
+  }
+
+  const startDisplay =
+    startHours != null
+      ? displayFromHours(startHours)
+      : chainedStart?.kind === "meters"
+        ? formatChainedVolumeStartDisplay(null, chainedStart, formatMeters)
+        : "";
 
   function commitDistance(input: string, kind: "start" | "end") {
     if (!input.trim()) {
@@ -724,17 +808,25 @@ function VolumeDistanceRow({
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <p className="text-sm font-medium">{label}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>{startLabel}</Label>
-          <TextEditorInput
-            inputMode="decimal"
-            className="mt-1"
-            value={displayFromHours(startHours)}
-            placeholder="Chain from prior phase"
-            allowEmpty
-            onCommit={(raw) => commitDistance(raw, "start")}
-          />
-        </div>
+        <ChainedVolumeStartInput
+          label={startLabel}
+          displayValue={startDisplay}
+          chainedStart={chainedStart}
+          placeholder="Chain from prior phase"
+          onCommitStored={(parsedMeters) => {
+            const storedMeters = resolveStoredStartAfterEdit(parsedMeters, chainedStart);
+            if (storedMeters == null) {
+              onStartChange(null);
+              return;
+            }
+            onStartChange(
+              exactHoursFromDisciplineDistance(paceDiscipline, storedMeters, def)
+            );
+          }}
+          parseNumeric={(raw) =>
+            distanceDisplayToMeters(raw, paceDiscipline, disciplineSettings)
+          }
+        />
         <div>
           <Label>{endLabel}</Label>
           <TextEditorInput
@@ -755,31 +847,38 @@ function VolumeHoursRow({
   label,
   startHours,
   endHours,
+  chainedStart,
   onStartChange,
   onEndChange,
 }: {
   label: string;
   startHours?: number | null;
   endHours?: number | null;
+  chainedStart: ResolvedChainedStart | null;
   onStartChange: (value: number | null) => void;
   onEndChange: (value: number | null) => void;
 }) {
+  const startDisplay = formatChainedVolumeStartDisplay(
+    startHours,
+    chainedStart?.kind === "hours" ? chainedStart : null,
+    (value) => String(value)
+  );
+
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <p className="text-sm font-medium">{label}</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>Start (h)</Label>
-          <NumberEditorInput
-            min={0}
-            nullable
-            integer={false}
-            className="mt-1"
-            placeholder="Chain from prior phase"
-            value={startHours ?? null}
-            onCommit={onStartChange}
-          />
-        </div>
+        <ChainedVolumeStartInput
+          label="Start (h)"
+          displayValue={startDisplay}
+          chainedStart={chainedStart?.kind === "hours" ? chainedStart : null}
+          placeholder="Chain from prior phase"
+          onCommitStored={onStartChange}
+          parseNumeric={(raw) => {
+            const value = Number(raw);
+            return Number.isFinite(value) && value >= 0 ? value : null;
+          }}
+        />
         <div>
           <Label>End (h)</Label>
           <NumberEditorInput
