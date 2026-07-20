@@ -112,6 +112,7 @@ export type SimpleSeason = {
   primaryGoalEvent: SimpleGoalEvent | null;
   longRideWeekFlags?: boolean[];
   longRunWeekFlags?: boolean[];
+  testWeekFlags?: boolean[];
   restWeekTemplateId?: string | null;
   testWeekTemplateId?: string | null;
 };
