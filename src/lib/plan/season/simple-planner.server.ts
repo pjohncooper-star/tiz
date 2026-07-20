@@ -71,6 +71,7 @@ import {
   parseLongWeekFlags,
   resolveLongWeekFlagsForSeason,
 } from "./long-session-schedule";
+import { resolveTestWeekFlagsForSeason } from "@/lib/plan/calendar/week-template-resolution";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
@@ -172,6 +173,7 @@ export type UpdateSimpleSeasonInput = {
   removedGoalEvents?: RemovedGoalEventInput[];
   longRideWeekFlags?: boolean[] | null;
   longRunWeekFlags?: boolean[] | null;
+  testWeekFlags?: boolean[] | null;
   restWeekTemplateId?: string | null;
   testWeekTemplateId?: string | null;
 };
@@ -892,6 +894,10 @@ export async function updateSimpleSeasonPlan(
       parseLongWeekFlags(existing.longRunWeekFlags) ??
       null,
   });
+  const resolvedTestWeekFlags = resolveTestWeekFlagsForSeason({
+    totalWeeks: bounds.totalWeeks,
+    stored: input.testWeekFlags ?? existing.testWeekFlags ?? null,
+  });
 
   const phaseDbRowsForBlocks =
     phaseDbRows ??
@@ -1013,6 +1019,7 @@ export async function updateSimpleSeasonPlan(
           : {}),
         longRideWeekFlags: resolvedLongRideWeekFlags,
         longRunWeekFlags: resolvedLongRunWeekFlags,
+        testWeekFlags: resolvedTestWeekFlags,
       },
     });
 
@@ -1188,6 +1195,10 @@ export function serializeSimpleSeasonPlan(
     totalWeeks: plan.totalWeeks,
     stored: parseLongWeekFlags(plan.longRunWeekFlags),
   });
+  const testWeekFlags = resolveTestWeekFlagsForSeason({
+    totalWeeks: plan.totalWeeks,
+    stored: plan.testWeekFlags,
+  });
 
   return {
     id: plan.id,
@@ -1204,6 +1215,7 @@ export function serializeSimpleSeasonPlan(
     testWeekTemplateId: plan.testWeekTemplateId ?? null,
     longRideWeekFlags,
     longRunWeekFlags,
+    testWeekFlags,
     longAnchors: {
       rideStart: plan.longRideStartMin,
       ridePeak: plan.longRidePeakMin,

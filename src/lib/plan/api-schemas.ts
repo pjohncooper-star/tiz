@@ -412,6 +412,7 @@ export const updateSimpleSeasonSchema = z
     removedGoalEvents: z.array(removedGoalEventSchema).optional(),
     longRideWeekFlags: z.array(z.boolean()).optional(),
     longRunWeekFlags: z.array(z.boolean()).optional(),
+    testWeekFlags: z.array(z.boolean()).optional(),
     restWeekTemplateId: z.string().nullable().optional(),
     testWeekTemplateId: z.string().nullable().optional(),
   })
