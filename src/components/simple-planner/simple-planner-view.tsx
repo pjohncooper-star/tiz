@@ -152,7 +152,6 @@ function revertSection(
         weeks: baseline.weeks,
         longRideWeekFlags: baseline.longRideWeekFlags,
         longRunWeekFlags: baseline.longRunWeekFlags,
-        testWeekFlags: baseline.testWeekFlags,
         restWeekTemplateId: baseline.restWeekTemplateId,
         testWeekTemplateId: baseline.testWeekTemplateId,
       };
@@ -167,6 +166,7 @@ function revertSection(
         ...draft,
         weeks: baseline.weeks,
         phases: baseline.phases,
+        testWeekFlags: baseline.testWeekFlags,
       };
     default:
       return draft;
@@ -454,7 +454,6 @@ export function SimplePlannerView({
           phases: season.phases,
           restWeekTemplateId: season.restWeekTemplateId ?? null,
           testWeekTemplateId: season.testWeekTemplateId ?? null,
-          testWeekFlags: season.testWeekFlags,
           recalculate: true,
           ...extra,
         };
@@ -468,6 +467,7 @@ export function SimplePlannerView({
         return {
           phases: season.phases,
           weeks: serializeWeeksForSave(season.weeks),
+          testWeekFlags: season.testWeekFlags,
           ...extra,
         };
       default:
@@ -849,12 +849,6 @@ export function SimplePlannerView({
             setSeason({ ...season, testWeekTemplateId })
           }
         />
-        <TestWeekScheduleGrid
-          totalWeeks={season.totalWeeks}
-          testWeekFlags={season.testWeekFlags ?? []}
-          restWeekByIndex={season.weeks.map((week) => week.isRestWeek)}
-          onChange={(testWeekFlags) => setSeason({ ...season, testWeekFlags })}
-        />
         <SimplePlannerPhasesPane
           phases={season.phases}
           phaseKindZoneDefaults={season.phaseKindZoneDefaults}
@@ -931,6 +925,8 @@ export function SimplePlannerView({
         <SimplePlannerWeekTable
           weeks={season.weeks}
           phases={season.phases}
+          testWeekFlags={season.testWeekFlags ?? []}
+          onTestWeekFlagsChange={(testWeekFlags) => setSeason({ ...season, testWeekFlags })}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={setSelectedPhaseId}
           highlightedWeekIndex={selectedWeekIndex}
@@ -995,62 +991,6 @@ function SeasonWeekTemplatePicker({
             ))}
           </select>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function TestWeekScheduleGrid({
-  totalWeeks,
-  testWeekFlags,
-  restWeekByIndex,
-  onChange,
-}: {
-  totalWeeks: number;
-  testWeekFlags: boolean[];
-  restWeekByIndex: boolean[];
-  onChange: (flags: boolean[]) => void;
-}) {
-  function toggle(weekIndex: number, checked: boolean) {
-    const next = Array.from({ length: totalWeeks }, (_, i) => testWeekFlags[i] ?? false);
-    next[weekIndex] = checked;
-    onChange(next);
-  }
-
-  if (totalWeeks <= 0) return null;
-
-  return (
-    <div className="mb-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <p className="text-sm font-semibold">Test weeks</p>
-      <p className="mt-1 text-xs text-zinc-500">
-        Mark weeks that use the test-week template. Test weeks sit outside the TiZ system
-        when sessions are generated.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {Array.from({ length: totalWeeks }, (_, weekIndex) => {
-          const checked = testWeekFlags[weekIndex] ?? false;
-          const isRest = restWeekByIndex[weekIndex] ?? false;
-          return (
-            <label
-              key={weekIndex}
-              className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs ${
-                checked
-                  ? "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
-                  : "border-zinc-200 dark:border-zinc-800"
-              }`}
-              title={isRest ? "Also a rest/de-load week" : undefined}
-            >
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 rounded border-zinc-300"
-                checked={checked}
-                onChange={(event) => toggle(weekIndex, event.target.checked)}
-              />
-              Wk {weekIndex + 1}
-              {isRest ? <span className="text-zinc-400">·R</span> : null}
-            </label>
-          );
-        })}
       </div>
     </div>
   );
