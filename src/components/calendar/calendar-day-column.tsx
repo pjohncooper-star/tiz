@@ -18,6 +18,7 @@ import type { WeekActivityGroup } from "@/components/dashboard-week-view";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
+import { generatedPoolCardId, isFillableGeneratedSession } from "@/lib/plan/calendar/generated-pool-cards";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
 type CalendarDayColumnProps = {
@@ -35,6 +36,8 @@ type CalendarDayColumnProps = {
   onSelectDay: () => void;
   onClearSelection: () => void;
   onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  onArmBuildFromSession?: (session: CalendarPlannedSession) => void;
+  armedPoolCardId?: string | null;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
 
@@ -53,6 +56,8 @@ export function CalendarDayColumn({
   onSelectDay,
   onClearSelection,
   onLoadIntoBuilder,
+  onArmBuildFromSession,
+  armedPoolCardId = null,
   onUnassignWorkout,
 }: CalendarDayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
@@ -176,6 +181,12 @@ export function CalendarDayColumn({
                 onDeleted={onSessionCreated}
                 onUpdated={onSessionCreated}
                 onLoadIntoBuilder={onLoadIntoBuilder}
+                onArmBuild={
+                  onArmBuildFromSession && isFillableGeneratedSession(item.session)
+                    ? () => onArmBuildFromSession(item.session)
+                    : undefined
+                }
+                armedForBuild={armedPoolCardId === generatedPoolCardId(item.session.id)}
                 onUnassignWorkout={onUnassignWorkout}
               />
             )

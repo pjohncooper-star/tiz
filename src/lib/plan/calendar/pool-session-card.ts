@@ -112,7 +112,14 @@ export function pruneDraftsToChips(
   drafts: PoolCardDraftMap,
   chips: UnscheduledChip[]
 ): PoolCardDraftMap {
-  const ids = new Set(chips.map((c) => c.id));
+  return pruneDraftsToPoolTargets(drafts, chips.map((c) => c.id));
+}
+
+export function pruneDraftsToPoolTargets(
+  drafts: PoolCardDraftMap,
+  validCardIds: Iterable<string>
+): PoolCardDraftMap {
+  const ids = new Set(validCardIds);
   let changed = false;
   const next: PoolCardDraftMap = {};
   for (const [id, draft] of Object.entries(drafts)) {

@@ -28,7 +28,7 @@ import type { CalendarRangeData } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { totalZoneMinutes } from "@/lib/workout/steps";
-import type { UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
+import type { UnscheduledChip, PoolDiscipline } from "@/lib/plan/calendar/unscheduled-chips";
 import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
 import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
 import {
@@ -48,12 +48,18 @@ import {
 import {
   draftFromNodes,
   isEndurancePoolDiscipline,
-  pruneDraftsToChips,
+  pruneDraftsToPoolTargets,
   treeFromDraft,
   type PoolCardDraft,
   type PoolCardDraftMap,
   type PoolDisciplineFilter,
 } from "@/lib/plan/calendar/pool-session-card";
+import {
+  fillableGeneratedSessionIds,
+  generatedPoolCardId,
+  isFillableGeneratedSession,
+  parseGeneratedPoolCardId,
+} from "@/lib/plan/calendar/generated-pool-cards";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import type { SessionRole, Discipline } from "@prisma/client";
 import {
@@ -180,10 +186,12 @@ export function PlanningCalendar({
 
   const useWizardPool = poolOpen && isXl;
   const composerActive = useWizardPool && selectedPoolCardId != null && builderExpanded;
+  const generatedWorkoutAppliedRef = useRef<(sessionId: string) => void>(() => {});
 
   const poolComposer = usePoolWorkoutComposer({
     active: composerActive || useWizardPool,
     onApplied: () => void handleRefresh(),
+    onWorkoutApplied: (sessionId) => generatedWorkoutAppliedRef.current(sessionId),
   });
 
   const setFocusedWeek = useCallback((weekStart: string, options?: { lockMs?: number }) => {
@@ -287,15 +295,48 @@ export function PlanningCalendar({
     return computeUnscheduledChips(poolWeekStart, poolWeekTarget, poolWeekSessions);
   }, [poolWeekStart, poolWeekTarget, poolWeekSessions]);
 
+  const poolGeneratedCardIds = useMemo(() => {
+    return [...fillableGeneratedSessionIds(poolWeekSessions)].map((sessionId) =>
+      generatedPoolCardId(sessionId)
+    );
+  }, [poolWeekSessions]);
+
+  const poolDraftCardIds = useMemo(
+    () => [...poolChips.map((chip) => chip.id), ...poolGeneratedCardIds],
+    [poolChips, poolGeneratedCardIds]
+  );
+
+  const clearGeneratedPoolSelection = useCallback(
+    (sessionId: string) => {
+      const cardId = generatedPoolCardId(sessionId);
+      setPoolDrafts((prev) => {
+        if (!(cardId in prev)) return prev;
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      });
+      setSelectedPoolCardId((prev) => {
+        if (prev !== cardId) return prev;
+        setBuilderExpanded(false);
+        poolComposer.clear();
+        return null;
+      });
+    },
+    [poolComposer]
+  );
+
+  generatedWorkoutAppliedRef.current = clearGeneratedPoolSelection;
+
   useEffect(() => {
     setPoolDrafts((prev) => {
-      const pruned = pruneDraftsToChips(prev, poolChips);
+      const pruned = pruneDraftsToPoolTargets(prev, poolDraftCardIds);
       if (!poolWeekTarget) return pruned;
 
       const longDrafts = computeLongPoolDrafts({
         weekTarget: poolWeekTarget,
         drafts: pruned,
         chips: poolChips,
+        sessions: poolWeekSessions,
         paceContext,
       });
 
@@ -313,9 +354,9 @@ export function PlanningCalendar({
     });
     setSelectedPoolCardId((prev) => {
       if (!prev) return prev;
-      return poolChips.some((c) => c.id === prev) ? prev : null;
+      return poolDraftCardIds.includes(prev) ? prev : null;
     });
-  }, [poolChips, poolWeekTarget, paceContext]);
+  }, [poolChips, poolDraftCardIds, poolWeekSessions, poolWeekTarget, paceContext]);
 
   const handleAutoFillEasyTizForWeek = useCallback(
     (weekStart: string) => {
@@ -348,10 +389,8 @@ export function PlanningCalendar({
 
   const handleSelectPoolCard = useCallback(
     (cardId: string) => {
-      const chip = poolChips.find((c) => c.id === cardId);
-      if (!chip || !isEndurancePoolDiscipline(chip.discipline)) return;
-
-      if (selectedPoolCardId && builderExpanded && selectedPoolCardId !== cardId) {
+      const saveCurrentDraft = () => {
+        if (!selectedPoolCardId || !builderExpanded || selectedPoolCardId === cardId) return;
         const draft = draftFromNodes(
           poolComposer.workoutTree.nodes,
           poolComposer.discipline
@@ -362,8 +401,26 @@ export function PlanningCalendar({
           else delete next[selectedPoolCardId];
           return next;
         });
+      };
+
+      const generatedSessionId = parseGeneratedPoolCardId(cardId);
+      if (generatedSessionId) {
+        const session = poolWeekSessions.find((row) => row.id === generatedSessionId);
+        if (!session || !isFillableGeneratedSession(session)) return;
+        if (!isEndurancePoolDiscipline(session.discipline as PoolDiscipline)) return;
+
+        saveCurrentDraft();
+        setSelectedPoolCardId(cardId);
+        poolComposer.setDiscipline(session.discipline as "SWIM" | "BIKE" | "RUN");
+        poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
+        setBuilderExpanded(true);
+        return;
       }
 
+      const chip = poolChips.find((c) => c.id === cardId);
+      if (!chip || !isEndurancePoolDiscipline(chip.discipline)) return;
+
+      saveCurrentDraft();
       setSelectedPoolCardId(cardId);
       poolComposer.setDiscipline(chip.discipline);
       poolComposer.setWorkoutTree(treeFromDraft(poolDrafts[cardId]));
@@ -371,11 +428,20 @@ export function PlanningCalendar({
     },
     [
       poolChips,
+      poolWeekSessions,
       selectedPoolCardId,
       builderExpanded,
       poolComposer,
       poolDrafts,
     ]
+  );
+
+  const handleArmBuildFromSession = useCallback(
+    (session: CalendarPlannedSession) => {
+      if (!isFillableGeneratedSession(session)) return;
+      handleSelectPoolCard(generatedPoolCardId(session.id));
+    },
+    [handleSelectPoolCard]
   );
 
   const handleBuilderDone = useCallback(() => {
@@ -1253,6 +1319,9 @@ export function PlanningCalendar({
             onSelectPoolCard={handleSelectPoolCard}
             onLoadIntoBuilder={
               useWizardPool ? (session) => void handleLoadIntoBuilder(session) : undefined
+            }
+            onArmBuildFromSession={
+              useWizardPool ? (session) => handleArmBuildFromSession(session) : undefined
             }
             onUnassignWorkout={
               useWizardPool ? (session) => void handleUnassignWorkout(session) : undefined

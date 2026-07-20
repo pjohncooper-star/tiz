@@ -35,6 +35,9 @@ type CalendarSessionCardProps = {
   showWorkoutDropTarget?: boolean;
   /** When set, structured sessions show Load (into Build graph). */
   onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  /** When set, generated sessions without a workout can arm the Build graph. */
+  onArmBuild?: () => void;
+  armedForBuild?: boolean;
   /** When set, structured sessions show Unassign. */
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
@@ -59,6 +62,8 @@ export function CalendarSessionCard({
   showLinkDropTarget = false,
   showWorkoutDropTarget = false,
   onLoadIntoBuilder,
+  onArmBuild,
+  armedForBuild = false,
   onUnassignWorkout,
 }: CalendarSessionCardProps) {
   const { attributes, listeners, setNodeRef: setDragRef, transform } = useDraggable({
@@ -97,7 +102,11 @@ export function CalendarSessionCard({
   const cardClassName =
     session.source === "RACE"
       ? `${sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget)} border-amber-400/80 bg-amber-50/50 dark:border-amber-600/50 dark:bg-amber-950/20`
-      : `${sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget)} ${sessionRoleAccentClass(session.displaySessionRole)}`;
+      : `${sessionCardClassName(session, workoutShadingSettings, workoutShadingTarget)} ${sessionRoleAccentClass(session.displaySessionRole)} ${
+          armedForBuild
+            ? "ring-2 ring-sky-400/70 dark:ring-sky-500/70"
+            : ""
+        }`;
 
   const linked = session.linkedActivity;
   const canAcceptLink = showLinkDropTarget && !linked;
@@ -266,6 +275,26 @@ export function CalendarSessionCard({
                   Unassign
                 </button>
               ) : null}
+            </div>
+          ) : null}
+          {!hasStructured && onArmBuild ? (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              <button
+                type="button"
+                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                  armedForBuild
+                    ? "bg-sky-600 text-white dark:bg-sky-500"
+                    : "bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-900/60"
+                }`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onArmBuild();
+                }}
+              >
+                {armedForBuild ? "Building" : "Build"}
+              </button>
             </div>
           ) : null}
         </div>
