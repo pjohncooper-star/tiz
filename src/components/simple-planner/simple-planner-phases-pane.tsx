@@ -12,8 +12,9 @@ import {
   phaseKindLabel,
   seedPhaseZoneSplits,
 } from "@/lib/plan/season/phase-zone-defaults";
-import type { PhaseKind, PlanningMode } from "@prisma/client";
+import type { PhaseKind, PlanningMode, WeeklyTemplateKind } from "@prisma/client";
 import type { LongOffWeekPolicy } from "@prisma/client";
+import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
@@ -47,12 +48,19 @@ import {
 import { LongWeekScheduleGrid } from "@/components/simple-planner/long-week-schedule-grid";
 import type { SimpleWeek } from "@/components/simple-planner/simple-planner-types";
 
+export type WeeklyTemplateOption = {
+  id: string;
+  name: string;
+  category: WeeklyTemplateKind;
+};
+
 type SimplePlannerPhasesPaneProps = {
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
   weeks: SimpleWeek[];
+  templates: WeeklyTemplateOption[];
   defaultPlanningMode: PlanningMode;
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
@@ -71,6 +79,7 @@ export function SimplePlannerPhasesPane({
   zoneFocusCatalog,
   totalWeeks,
   weeks,
+  templates,
   defaultPlanningMode,
   rampDefaults,
   disciplineSettings,
@@ -178,6 +187,7 @@ export function SimplePlannerPhasesPane({
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={totalWeeks}
           weeks={weeks}
+          templates={templates}
           defaultPlanningMode={defaultPlanningMode}
           rampDefaults={rampDefaults}
           disciplineSettings={disciplineSettings}
@@ -200,6 +210,7 @@ function PhaseDetailEditor({
   zoneFocusCatalog,
   totalWeeks,
   weeks,
+  templates,
   defaultPlanningMode,
   rampDefaults,
   disciplineSettings,
@@ -216,6 +227,7 @@ function PhaseDetailEditor({
   zoneFocusCatalog: ZoneFocusCatalog;
   totalWeeks: number;
   weeks: SimpleWeek[];
+  templates: WeeklyTemplateOption[];
   defaultPlanningMode: PlanningMode;
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
@@ -306,6 +318,30 @@ function PhaseDetailEditor({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <Label>Weekly template</Label>
+          <select
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            value={phase.weeklyTemplateId ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...phase,
+                weeklyTemplateId: event.target.value ? event.target.value : null,
+              })
+            }
+          >
+            <option value="">None — use slot budget only</option>
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name} ({templateCategoryLabel(template.category)})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">
+            Reusable weekday layout for this phase&apos;s normal weeks. Manage templates in the
+            template library.
+          </p>
         </div>
       </div>
 

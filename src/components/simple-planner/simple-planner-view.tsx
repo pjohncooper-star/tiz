@@ -6,7 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
-import { SimplePlannerPhasesPane } from "@/components/simple-planner/simple-planner-phases-pane";
+import {
+  SimplePlannerPhasesPane,
+  type WeeklyTemplateOption,
+} from "@/components/simple-planner/simple-planner-phases-pane";
+import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
 import {
@@ -142,6 +146,8 @@ function revertSection(
         weeks: baseline.weeks,
         longRideWeekFlags: baseline.longRideWeekFlags,
         longRunWeekFlags: baseline.longRunWeekFlags,
+        restWeekTemplateId: baseline.restWeekTemplateId,
+        testWeekTemplateId: baseline.testWeekTemplateId,
       };
     case "ramps":
       return {
@@ -271,6 +277,7 @@ export function SimplePlannerView({
   const [zoneFocusCatalog, setZoneFocusCatalog] = useState<ZoneFocusCatalog>(() =>
     parseZoneFocusCatalog(null)
   );
+  const [templates, setTemplates] = useState<WeeklyTemplateOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingSection, setSavingSection] = useState<PlannerSectionId | null>(null);
@@ -320,6 +327,23 @@ export function SimplePlannerView({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/plan/calendar/templates");
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        templates?: { id: string; name: string; category: WeeklyTemplateOption["category"] }[];
+      };
+      setTemplates(
+        (data.templates ?? []).map((t) => ({
+          id: t.id,
+          name: t.name,
+          category: t.category,
+        }))
+      );
+    })();
+  }, []);
 
   const racesByPriority = useMemo(() => {
     if (!season) {
@@ -421,6 +445,8 @@ export function SimplePlannerView({
       case "phases":
         return {
           phases: season.phases,
+          restWeekTemplateId: season.restWeekTemplateId ?? null,
+          testWeekTemplateId: season.testWeekTemplateId ?? null,
           recalculate: true,
           ...extra,
         };
@@ -527,6 +553,8 @@ export function SimplePlannerView({
       weeks: serializeWeeksForSave(season.weeks),
       longRideWeekFlags: season.longRideWeekFlags,
       longRunWeekFlags: season.longRunWeekFlags,
+      restWeekTemplateId: season.restWeekTemplateId ?? null,
+      testWeekTemplateId: season.testWeekTemplateId ?? null,
       goalEvent: buildPrimaryGoalEventPayload(aRace, season.endDate),
       bGoalEvents: bRaces
         .filter((race) => race.name && race.date)
@@ -801,12 +829,24 @@ export function SimplePlannerView({
         onToggle={() => toggleSection("phases")}
         actions={sectionActions("phases", "Save & recalculate")}
       >
+        <SeasonWeekTemplatePicker
+          templates={templates}
+          restWeekTemplateId={season.restWeekTemplateId ?? null}
+          testWeekTemplateId={season.testWeekTemplateId ?? null}
+          onRestChange={(restWeekTemplateId) =>
+            setSeason({ ...season, restWeekTemplateId })
+          }
+          onTestChange={(testWeekTemplateId) =>
+            setSeason({ ...season, testWeekTemplateId })
+          }
+        />
         <SimplePlannerPhasesPane
           phases={season.phases}
           phaseKindZoneDefaults={season.phaseKindZoneDefaults}
           zoneFocusCatalog={zoneFocusCatalog}
           totalWeeks={season.totalWeeks}
           weeks={season.weeks}
+          templates={templates}
           defaultPlanningMode={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
           rampDefaults={season.rampDefaults}
           disciplineSettings={disciplineSettings}
@@ -882,6 +922,64 @@ export function SimplePlannerView({
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
         />
       </CollapsibleSection>
+    </div>
+  );
+}
+
+function SeasonWeekTemplatePicker({
+  templates,
+  restWeekTemplateId,
+  testWeekTemplateId,
+  onRestChange,
+  onTestChange,
+}: {
+  templates: WeeklyTemplateOption[];
+  restWeekTemplateId: string | null;
+  testWeekTemplateId: string | null;
+  onRestChange: (id: string | null) => void;
+  onTestChange: (id: string | null) => void;
+}) {
+  const selectClass =
+    "mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900";
+  return (
+    <div className="mb-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <p className="text-sm font-semibold">Season week templates</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Reusable layouts applied to this season&apos;s rest/de-load weeks and scheduled test
+        weeks. Manage them in the template library.
+      </p>
+      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Rest week template</Label>
+          <select
+            className={selectClass}
+            value={restWeekTemplateId ?? ""}
+            onChange={(event) => onRestChange(event.target.value || null)}
+          >
+            <option value="">None — use phase template</option>
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name} ({templateCategoryLabel(template.category)})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Test week template</Label>
+          <select
+            className={selectClass}
+            value={testWeekTemplateId ?? ""}
+            onChange={(event) => onTestChange(event.target.value || null)}
+          >
+            <option value="">None</option>
+            {templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name} ({templateCategoryLabel(template.category)})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
     </div>
   );
 }

@@ -55,6 +55,7 @@ export type SimplePhase = {
   runIntenseDaysPerWeek: number;
   goal: string | null;
   zoneSplits: PhaseZoneSplits | null;
+  weeklyTemplateId?: string | null;
   planningMode?: PlanningMode | null;
   longRideStartMin?: number | null;
   longRideEndMin?: number | null;
@@ -111,6 +112,8 @@ export type SimpleSeason = {
   primaryGoalEvent: SimpleGoalEvent | null;
   longRideWeekFlags?: boolean[];
   longRunWeekFlags?: boolean[];
+  restWeekTemplateId?: string | null;
+  testWeekTemplateId?: string | null;
 };
 
 export type { PoolSlotKind, WeekSlotBudgets };
