@@ -1,7 +1,13 @@
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { PoolSlotKind } from "@/lib/plan/season/simple-week-compute";
-import { isEndurancePoolDiscipline, type PoolDisciplineFilter } from "@/lib/plan/calendar/pool-session-card";
-import type { PoolDiscipline } from "@/lib/plan/calendar/unscheduled-chips";
+import {
+  isEndurancePoolDiscipline,
+  mergeChipsWithDrafts,
+  type PoolCardDraftMap,
+  type PoolDisciplineFilter,
+  type PoolSessionCard,
+} from "@/lib/plan/calendar/pool-session-card";
+import type { PoolDiscipline, UnscheduledChip } from "@/lib/plan/calendar/unscheduled-chips";
 
 export const GENERATED_POOL_CARD_PREFIX = "generated:";
 
@@ -58,4 +64,46 @@ export function fillableGeneratedSessionsForFilter(
   return listFillableGeneratedSessions(sessions).filter((session) =>
     disciplineMatchesFilter(session.discipline as PoolDiscipline, filter)
   );
+}
+
+export function generatedSessionToPoolCard(
+  session: CalendarPlannedSession,
+  draft?: PoolCardDraftMap[string]
+): PoolSessionCard {
+  const cardId = generatedPoolCardId(session.id);
+  const targetDurationMinutes =
+    session.estimatedDurationMinutes != null && session.estimatedDurationMinutes > 0
+      ? session.estimatedDurationMinutes
+      : session.totalMinutes > 0
+        ? session.totalMinutes
+        : undefined;
+
+  return {
+    id: cardId,
+    discipline: session.discipline as PoolDiscipline,
+    label: session.title,
+    slotKind: poolSlotKindForSession(session),
+    ...(targetDurationMinutes != null ? { targetDurationMinutes } : {}),
+    ...(draft ? { draft } : {}),
+  };
+}
+
+export function resolveSelectedPoolCard(
+  selectedCardId: string | null,
+  chips: UnscheduledChip[],
+  drafts: PoolCardDraftMap,
+  sessions: CalendarPlannedSession[]
+): PoolSessionCard | null {
+  if (!selectedCardId) return null;
+
+  const chipCard = mergeChipsWithDrafts(chips, drafts).find((card) => card.id === selectedCardId);
+  if (chipCard) return chipCard;
+
+  const sessionId = parseGeneratedPoolCardId(selectedCardId);
+  if (!sessionId) return null;
+
+  const session = sessions.find((row) => row.id === sessionId);
+  if (!session || !isFillableGeneratedSession(session)) return null;
+
+  return generatedSessionToPoolCard(session, drafts[selectedCardId]);
 }
