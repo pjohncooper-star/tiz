@@ -7,6 +7,7 @@ import {
   normalizeRoleSignals,
   parseRoleSignals,
   preferenceSnapshot,
+  resolvePrimarySignalForSession,
   resolveSignalForRole,
   roleSignalsEqual,
   signalTypeToTargetSignal,
@@ -100,6 +101,17 @@ describe("signal-preference", () => {
       primarySignal: "PACE",
       fallbackSignal: "HEART_RATE",
     });
+  });
+
+  it("resolvePrimarySignalForSession follows role overrides", () => {
+    const snapshot = preferenceSnapshot("RUN", "PACE", {
+      EASY: "HEART_RATE",
+      INTENSITY: "PACE",
+    });
+    assert.equal(resolvePrimarySignalForSession("RUN", snapshot, "EASY"), "HEART_RATE");
+    assert.equal(resolvePrimarySignalForSession("RUN", snapshot, "MODERATE"), "PACE");
+    assert.equal(resolvePrimarySignalForSession("RUN", snapshot, "INTENSITY"), "PACE");
+    assert.equal(resolvePrimarySignalForSession("RUN", snapshot, null), "PACE");
   });
 
   it("roleSignalsEqual and formatRoleSignalSummary", () => {

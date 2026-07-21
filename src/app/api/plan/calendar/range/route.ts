@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import { endDateKey, parseDateKey } from "@/lib/dates";
-import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
+import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
@@ -79,9 +79,7 @@ export async function GET(request: Request) {
     disciplineSettings.map((s) => [s.discipline, s.displayUnit])
   ) as Partial<Record<string, DisplayUnit>>;
 
-  const primarySignals = Object.fromEntries(
-    disciplineSettings.map((s) => [s.discipline, s.primarySignal])
-  );
+  const signalPrefs = signalPrefsFromDisciplineSettings(disciplineSettings);
 
   const defaultPoolSizes = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.poolSize])
@@ -99,7 +97,7 @@ export async function GET(request: Request) {
       plannedSessions,
       displayUnits,
       defaultPoolSizes,
-      primarySignals,
+      signalPrefs,
       paceContext
     ),
     activities: weekActivities,

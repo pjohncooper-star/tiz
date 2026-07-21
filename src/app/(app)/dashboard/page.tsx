@@ -18,7 +18,7 @@ import {
 } from "@/lib/dashboard/date-range";
 import { endDateKey, formatDateKey, parseDateKey } from "@/lib/dates";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
-import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
+import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import { sessionCompletionRollup } from "@/lib/plan/session-completion";
@@ -99,9 +99,7 @@ export default async function DashboardPage() {
   const displayUnits = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.displayUnit])
   );
-  const primarySignals = Object.fromEntries(
-    disciplineSettings.map((s) => [s.discipline, s.primarySignal])
-  );
+  const signalPrefs = signalPrefsFromDisciplineSettings(disciplineSettings);
   const defaultPoolSizes = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.poolSize])
   );
@@ -119,7 +117,7 @@ export default async function DashboardPage() {
     plannedRows,
     displayUnits,
     defaultPoolSizes,
-    primarySignals,
+    signalPrefs,
     paceContext
   );
   const activities = serializeCalendarActivities(activityRows);

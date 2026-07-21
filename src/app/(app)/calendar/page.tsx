@@ -9,7 +9,7 @@ import { PlanningCalendar } from "@/components/calendar/planning-calendar";
 import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
-import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
+import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
@@ -202,9 +202,7 @@ export default async function CalendarPage({
     disciplineSettings.map((s) => [s.discipline, s.displayUnit])
   );
 
-  const primarySignals = Object.fromEntries(
-    disciplineSettings.map((s) => [s.discipline, s.primarySignal])
-  );
+  const signalPrefs = signalPrefsFromDisciplineSettings(disciplineSettings);
 
   const defaultPoolSizes = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.poolSize])
@@ -229,7 +227,7 @@ export default async function CalendarPage({
       plannedSessions,
       displayUnits,
       defaultPoolSizes,
-      primarySignals,
+      signalPrefs,
       paceContext
     ),
     activities: weekActivities,
