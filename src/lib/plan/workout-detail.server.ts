@@ -25,9 +25,10 @@ import type { NormalizedStreams, WorkoutExecutionLap } from "@/lib/zones/compute
 import { parseStoredStreams } from "@/lib/zones/process-activity";
 import { parseSelfEvalConfig, type SelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { parseSwimLapIntervals, type SwimLapInterval } from "@/lib/zones/swim-laps";
-import { getSignalPreferenceAtDate } from "@/lib/zones/signal-preference";
+import { getSignalPreferenceAtDate, parseRoleSignals, resolvePrimarySignalForSession } from "@/lib/zones/signal-preference";
 import { getThresholdProfileAtDate, parseZoneBoundaries } from "@/lib/zones/thresholds";
 import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
+import { DEFAULT_DISCIPLINE_SIGNALS } from "@/lib/zones/defaults";
 
 const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
 
@@ -189,10 +190,22 @@ export async function loadWorkoutDetail(
     plannedSession.discipline,
     plannedSession.scheduledDate
   );
-  const primarySignal =
-    preference?.primarySignal ??
-    settingsRow?.primarySignal ??
-    (plannedSession.discipline === "BIKE" ? "POWER" : "PACE");
+  const snapshot = preference ?? {
+    primarySignal:
+      settingsRow?.primarySignal ??
+      DEFAULT_DISCIPLINE_SIGNALS[plannedSession.discipline].primary,
+    fallbackSignal:
+      settingsRow?.fallbackSignal ??
+      DEFAULT_DISCIPLINE_SIGNALS[plannedSession.discipline].fallback,
+    roleSignals: parseRoleSignals(
+      settingsRow && "roleSignals" in settingsRow ? settingsRow.roleSignals : null
+    ),
+  };
+  const primarySignal = resolvePrimarySignalForSession(
+    plannedSession.discipline,
+    snapshot,
+    plannedSession.sessionRole
+  );
 
   let thresholdPaceSeconds: number | null = null;
   let thresholdZoneBoundaries: number[] | undefined;
@@ -205,7 +218,9 @@ export async function loadWorkoutDetail(
       plannedSession.scheduledDate
     );
     thresholdPaceSeconds = paceProfile?.thresholdValue ?? null;
-    if (primarySignal === "PACE" && paceProfile) {
+    // Pace boundaries stay pace-based for distance↔duration derivation even when
+    // the prescription primary metric is heart rate.
+    if (paceProfile) {
       thresholdZoneBoundaries = parseZoneBoundaries(paceProfile.zoneBoundaries);
     }
   }

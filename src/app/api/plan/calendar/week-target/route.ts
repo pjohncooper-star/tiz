@@ -3,7 +3,7 @@ import { endOfWeek, format, startOfWeek } from "date-fns";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { parseDateKey, WEEK_OPTS } from "@/lib/dates";
-import { serializePlannedSessions } from "@/lib/plan/calendar/serialize";
+import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { summarizeWeekPlannedSessions } from "@/lib/plan/calendar/week-summary";
 import { getCalendarWeekTargets } from "@/lib/plan/calendar/week-targets.server";
 import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
@@ -69,16 +69,14 @@ export async function GET(request: Request) {
   const defaultPoolSizes = Object.fromEntries(
     disciplineSettings.map((s) => [s.discipline, s.poolSize])
   ) as Partial<Record<PlanDiscipline, PoolSize | null>>;
-  const primarySignals = Object.fromEntries(
-    disciplineSettings.map((s) => [s.discipline, s.primarySignal])
-  );
+  const signalPrefs = signalPrefsFromDisciplineSettings(disciplineSettings);
 
   const paceContext = await loadPaceThresholdContext(athleteId);
   const serialized = serializePlannedSessions(
     plannedSessions,
     displayUnits,
     defaultPoolSizes,
-    primarySignals,
+    signalPrefs,
     paceContext
   );
   const summary = summarizeWeekPlannedSessions(serialized);

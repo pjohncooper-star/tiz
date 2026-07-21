@@ -136,6 +136,15 @@ export function resolveSignalForRole(
   };
 }
 
+/** Convenience for prescription UI: effective primary SignalType for a session. */
+export function resolvePrimarySignalForSession(
+  discipline: Discipline,
+  snapshot: SignalPreferenceSnapshot,
+  sessionRole: SessionRole | null | undefined
+): SignalType {
+  return resolveSignalForRole(discipline, snapshot, sessionRole).primarySignal;
+}
+
 export function signalTypeToTargetView(
   signal: SignalType
 ): "zone" | "pace_power" | "heart_rate" {
