@@ -73,6 +73,10 @@ export type WorkoutDetailViewModel = {
   thresholdPaceSeconds: number | null;
   thresholdZoneBoundaries: number[] | undefined;
   primarySignal: SignalType | null;
+  /** Effective primary ignoring per-session override (for Default label). */
+  inheritedPrimarySignal: SignalType | null;
+  sessionRole: import("@prisma/client").SessionRole;
+  tizSignalOverride: SignalType | null;
   sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE";
   workoutSource: {
     folder: { id: string; name: string; folderKind: string } | null;
@@ -201,10 +205,22 @@ export async function loadWorkoutDetail(
       settingsRow && "roleSignals" in settingsRow ? settingsRow.roleSignals : null
     ),
   };
+  const sessionOverride =
+    "tizSignalOverride" in plannedSession
+      ? ((plannedSession as { tizSignalOverride?: SignalType | null }).tizSignalOverride ??
+        null)
+      : null;
+  const inheritedPrimarySignal = resolvePrimarySignalForSession(
+    plannedSession.discipline,
+    snapshot,
+    plannedSession.sessionRole,
+    null
+  );
   const primarySignal = resolvePrimarySignalForSession(
     plannedSession.discipline,
     snapshot,
-    plannedSession.sessionRole
+    plannedSession.sessionRole,
+    sessionOverride
   );
 
   let thresholdPaceSeconds: number | null = null;
@@ -337,6 +353,9 @@ export async function loadWorkoutDetail(
     thresholdPaceSeconds,
     thresholdZoneBoundaries,
     primarySignal,
+    inheritedPrimarySignal,
+    sessionRole: plannedSession.sessionRole,
+    tizSignalOverride: sessionOverride,
     sessionSource: plannedSession.source,
     workoutSource: plannedSession.workoutSource,
     selfEvalConfig,

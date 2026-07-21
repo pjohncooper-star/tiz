@@ -136,13 +136,42 @@ export function resolveSignalForRole(
   };
 }
 
+export type ResolveSessionSignalInput = {
+  sessionRole?: SessionRole | null;
+  /** Per-session override; beats role override when set and valid for discipline. */
+  tizSignalOverride?: SignalType | null;
+};
+
+/**
+ * Resolution order: session override → role override → discipline primary.
+ * Fallback is always the paired alternate signal for the resolved primary.
+ */
+export function resolveSignalForSession(
+  discipline: Discipline,
+  snapshot: SignalPreferenceSnapshot,
+  input: ResolveSessionSignalInput = {}
+): Pick<SignalPreferenceSnapshot, "primarySignal" | "fallbackSignal"> {
+  const override = input.tizSignalOverride ?? null;
+  if (override != null && allowedPrimarySignals(discipline).includes(override)) {
+    return {
+      primarySignal: override,
+      fallbackSignal: deriveFallbackSignal(discipline, override),
+    };
+  }
+  return resolveSignalForRole(discipline, snapshot, input.sessionRole);
+}
+
 /** Convenience for prescription UI: effective primary SignalType for a session. */
 export function resolvePrimarySignalForSession(
   discipline: Discipline,
   snapshot: SignalPreferenceSnapshot,
-  sessionRole: SessionRole | null | undefined
+  sessionRole: SessionRole | null | undefined,
+  tizSignalOverride?: SignalType | null
 ): SignalType {
-  return resolveSignalForRole(discipline, snapshot, sessionRole).primarySignal;
+  return resolveSignalForSession(discipline, snapshot, {
+    sessionRole,
+    tizSignalOverride,
+  }).primarySignal;
 }
 
 export function signalTypeToTargetView(

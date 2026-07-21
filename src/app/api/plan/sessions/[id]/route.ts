@@ -14,10 +14,12 @@ import {
   planSessionMetricsSchema,
   sessionRoleSchema,
   stepsPayloadSchema,
+  tizSignalOverrideSchema,
 } from "@/lib/plan/api-schemas";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { markFolderWorkoutCompleted } from "@/lib/workout/workout-folder-library";
+import { allowedPrimarySignals } from "@/lib/zones/signal-preference";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -29,6 +31,7 @@ const updateSchema = z
     notes: z.string().trim().max(2000).nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).nullable().optional(),
     sessionRole: sessionRoleSchema.optional(),
+    tizSignalOverride: tizSignalOverrideSchema.optional(),
     steps: stepsPayloadSchema.optional(),
   })
   .merge(planSessionMetricsSchema)
@@ -90,6 +93,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     notes,
     targetZones,
     sessionRole,
+    tizSignalOverride,
     steps,
     distanceMeters,
     targetSpeedMps,
@@ -106,6 +110,15 @@ export async function PATCH(request: Request, context: RouteContext) {
     steps !== undefined ? serializeWorkoutTree(parseWorkoutTree(steps)) : undefined;
   const nextDiscipline = (discipline ?? existing.discipline) as Discipline;
 
+  if (tizSignalOverride !== undefined && tizSignalOverride !== null) {
+    if (!allowedPrimarySignals(nextDiscipline).includes(tizSignalOverride)) {
+      return NextResponse.json(
+        { error: `Invalid TiZ metric ${tizSignalOverride} for ${nextDiscipline}` },
+        { status: 400 }
+      );
+    }
+  }
+
   if (completedZones !== undefined && completedZones !== null) {
     const zoneError = validateCompletedZoneAllocation(
       completedZones as Partial<Record<number, number>>,
@@ -118,7 +131,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
   }
 
-  const updated = await db.$transaction(async (tx) => {
+  let updated;
+  try {
+    updated = await db.$transaction(async (tx) => {
     if (treeDoc !== undefined) {
       if (treeDoc.nodes.length > 0) {
         if (existing.structuredWorkout) {
@@ -179,6 +194,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),
         ...(sessionRole !== undefined ? { sessionRole } : {}),
+        ...(tizSignalOverride !== undefined ? { tizSignalOverride } : {}),
         zoneAllocationMissing,
         ...(distanceMeters !== undefined
           ? { distanceMeters: nullableMetric(distanceMeters) ?? null }
@@ -258,12 +274,31 @@ export async function PATCH(request: Request, context: RouteContext) {
     await markFolderWorkoutCompleted(tx, id);
     return updated;
   });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /tizSignalOverride|column .* does not exist/i.test(error.message)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Per-session TiZ metric override is not available yet. Run prisma/migrations/manual_planned_session_tiz_signal_override.sql, then run npx prisma generate and restart.",
+        },
+        { status: 500 }
+      );
+    }
+    throw error;
+  }
 
-  if (
-    sessionRole !== undefined &&
-    sessionRole !== existing.sessionRole &&
-    updated.linkedActivityId
-  ) {
+  const existingOverride =
+    "tizSignalOverride" in existing
+      ? ((existing as { tizSignalOverride?: string | null }).tizSignalOverride ?? null)
+      : null;
+  const signalOrRoleChanged =
+    (sessionRole !== undefined && sessionRole !== existing.sessionRole) ||
+    (tizSignalOverride !== undefined && tizSignalOverride !== existingOverride);
+
+  if (signalOrRoleChanged && updated.linkedActivityId) {
     await inngest.send({
       name: "activity/zones.compute",
       data: { activityId: updated.linkedActivityId },

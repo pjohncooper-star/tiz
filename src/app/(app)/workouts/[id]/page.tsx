@@ -56,6 +56,9 @@ export default async function WorkoutDetailPage({
         thresholdPaceSeconds={viewModel.thresholdPaceSeconds}
         thresholdZoneBoundaries={viewModel.thresholdZoneBoundaries}
         primarySignal={viewModel.primarySignal}
+        inheritedPrimarySignal={viewModel.inheritedPrimarySignal}
+        sessionRole={viewModel.sessionRole}
+        tizSignalOverride={viewModel.tizSignalOverride}
         sessionSource={viewModel.sessionSource}
         returnHref={viewModel.returnHref}
       >

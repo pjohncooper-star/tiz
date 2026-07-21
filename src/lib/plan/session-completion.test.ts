@@ -125,6 +125,8 @@ function calendarSession(
     workoutProfile: overrides.workoutProfile ?? null,
     sessionRole: overrides.sessionRole ?? "MODERATE",
     displaySessionRole: overrides.displaySessionRole ?? "MODERATE",
+    tizSignalOverride: null,
+    poolSlotKind: overrides.poolSlotKind ?? null,
   };
 }
 

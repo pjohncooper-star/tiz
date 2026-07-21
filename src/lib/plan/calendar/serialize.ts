@@ -82,6 +82,7 @@ export type CalendarPlannedSession = {
   workoutProfile: CalendarWorkoutProfile | null;
   sessionRole: SessionRole;
   displaySessionRole: SessionRole;
+  tizSignalOverride: SignalType | null;
   poolSlotKind: PoolSlotKind | null;
 };
 
@@ -136,7 +137,8 @@ function buildSessionWorkoutProfile(
   discipline: Discipline,
   displayUnit: DisplayUnit,
   signalPrefs: Partial<Record<Discipline, SignalPreferenceSnapshot>>,
-  sessionRole: SessionRole
+  sessionRole: SessionRole,
+  tizSignalOverride: SignalType | null = null
 ): CalendarWorkoutProfile | null {
   if (!structuredSteps) return null;
   const tree = parseWorkoutTree(structuredSteps);
@@ -144,7 +146,12 @@ function buildSessionWorkoutProfile(
 
   const snapshot = signalPrefs[discipline];
   const primarySignal = snapshot
-    ? resolvePrimarySignalForSession(discipline, snapshot, sessionRole)
+    ? resolvePrimarySignalForSession(
+        discipline,
+        snapshot,
+        sessionRole,
+        tizSignalOverride
+      )
     : defaultPrimarySignalForDiscipline(discipline);
   const profile = buildWorkoutProfile(tree.nodes, {
     primarySignal,
@@ -274,6 +281,10 @@ export function serializePlannedSessions(
       s.discipline === "SWIM"
         ? swimDisplayUnit(poolSize)
         : (displayUnits[s.discipline] ?? "METRIC");
+    const sessionOverride =
+      "tizSignalOverride" in s
+        ? ((s as { tizSignalOverride?: SignalType | null }).tizSignalOverride ?? null)
+        : null;
     const workoutProfile =
       s.discipline === "STRENGTH"
         ? null
@@ -282,7 +293,8 @@ export function serializePlannedSessions(
             s.discipline,
             unit,
             normalizedPrefs,
-            s.sessionRole
+            s.sessionRole,
+            sessionOverride
           );
     const displaySessionRole = resolveDisplaySessionRole({
       sessionRole: s.sessionRole,
@@ -318,6 +330,7 @@ export function serializePlannedSessions(
       workoutProfile,
       sessionRole: s.sessionRole,
       displaySessionRole,
+      tizSignalOverride: sessionOverride,
       poolSlotKind: s.poolSlotKind ?? null,
     };
   });

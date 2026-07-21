@@ -122,6 +122,10 @@ export const planDisciplineSchema = z.enum(DISCIPLINES);
 
 export const sessionRoleSchema = z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]);
 
+export const tizSignalOverrideSchema = z
+  .enum(["POWER", "HEART_RATE", "PACE"])
+  .nullable();
+
 export const poolSlotKindSchema = z.enum([
   "ENDURANCE",
   "INTENSITY",

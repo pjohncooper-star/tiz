@@ -29,12 +29,18 @@ import type { PlannedMetricsTriadValues } from "@/lib/plan/planned-metrics-triad
 import { sessionBudgetRollup } from "@/lib/plan/rollup";
 import { buildSessionTargetZones, hasTargetZones } from "@/lib/plan/session-target-zones";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
-import type { Discipline } from "@prisma/client";
+import type { Discipline, SessionRole, SignalType } from "@prisma/client";
 import {
   defaultSessionTitle,
   titleMatchesSportDefault,
   type PlanDiscipline,
 } from "@/lib/plan/session";
+import {
+  SESSION_ROLE_LABELS,
+  SESSION_ROLES,
+} from "@/lib/plan/session-role";
+import { allowedPrimarySignals } from "@/lib/zones/signal-preference";
+import { signalLabel } from "@/lib/zones/display";
 import {
   type DisciplineUnitSettings,
   poolSizeForSwimStep,
@@ -68,7 +74,10 @@ type PlannedSessionEditorProps = {
   workoutTree?: WorkoutTreeDocument;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
-  primarySignal?: import("@prisma/client").SignalType | null;
+  primarySignal?: SignalType | null;
+  inheritedPrimarySignal?: SignalType | null;
+  sessionRole?: SessionRole;
+  tizSignalOverride?: SignalType | null;
   sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE";
   returnHref: string;
   children?: ReactNode;
@@ -96,6 +105,9 @@ export function PlannedSessionEditor({
   thresholdPaceSeconds = null,
   thresholdZoneBoundaries,
   primarySignal = null,
+  inheritedPrimarySignal = null,
+  sessionRole: initialSessionRole = "MODERATE",
+  tizSignalOverride: initialTizSignalOverride = null,
   sessionSource = "FLEXIBLE",
   returnHref,
   children,
@@ -117,6 +129,10 @@ export function PlannedSessionEditor({
   const sessionPoolSize = discipline === "SWIM" ? poolSize : null;
   const [title, setTitle] = useState(initialTitle);
   const [notes, setNotes] = useState(initialNotes);
+  const [sessionRole, setSessionRole] = useState<SessionRole>(initialSessionRole);
+  const [tizSignalOverride, setTizSignalOverride] = useState<SignalType | null>(
+    initialTizSignalOverride
+  );
   const [distanceMeters, setDistanceMeters] = useState<number | null>(initialDistanceMeters);
   const [targetSpeedMps, setTargetSpeedMps] = useState<number | null>(initialTargetSpeedMps);
   const [targetPaceSeconds, setTargetPaceSeconds] = useState<number | null>(
@@ -313,6 +329,8 @@ export function PlannedSessionEditor({
       discipline,
       title: title.trim(),
       notes: notes.trim() || null,
+      sessionRole,
+      tizSignalOverride: discipline === "STRENGTH" ? null : tizSignalOverride,
       distanceMeters: plannedTriad.distanceMeters,
       targetSpeedMps: discipline === "BIKE" ? plannedTriad.targetSpeedMps : null,
       targetPaceSeconds: discipline === "BIKE" ? null : plannedTriad.targetPaceSeconds,
@@ -597,6 +615,54 @@ export function PlannedSessionEditor({
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
+          {discipline !== "STRENGTH" ? (
+            <>
+              <div>
+                <Label>Session role</Label>
+                <Select
+                  value={sessionRole}
+                  onChange={(e) => setSessionRole(e.target.value as SessionRole)}
+                >
+                  {SESSION_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {SESSION_ROLE_LABELS[role]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {allowedPrimarySignals(discipline).length > 1 ? (
+                <div>
+                  <Label>TiZ metric</Label>
+                  <Select
+                    value={tizSignalOverride ?? "DEFAULT"}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setTizSignalOverride(
+                        v === "DEFAULT" ? null : (v as SignalType)
+                      );
+                    }}
+                  >
+                    <option value="DEFAULT">
+                      Default
+                      {inheritedPrimarySignal
+                        ? ` (${signalLabel(inheritedPrimarySignal)})`
+                        : primarySignal
+                          ? ` (${signalLabel(primarySignal)})`
+                          : ""}
+                    </option>
+                    {allowedPrimarySignals(discipline).map((signal) => (
+                      <option key={signal} value={signal}>
+                        {signalLabel(signal)}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Optional. Overrides role and discipline defaults for this session only.
+                  </p>
+                </div>
+              ) : null}
+            </>
+          ) : null}
           {discipline === "SWIM" ? (
             <div className="sm:col-span-2">
               <Label>Pool size</Label>

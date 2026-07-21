@@ -21,12 +21,53 @@ describe("session-role", () => {
     );
     assert.equal(inferSessionRole({ title: "Long run", discipline: "RUN" }), "LONG");
     assert.equal(inferSessionRole({ title: "Easy spin", discipline: "BIKE" }), "EASY");
+    assert.equal(inferSessionRole({ title: "Morning race", discipline: "RUN" }), "INTENSITY");
+    assert.equal(inferSessionRole({ title: "Shakeout jog", discipline: "RUN" }), "EASY");
   });
 
   it("infers long from duration", () => {
     assert.equal(
       inferSessionRole({ title: "Bike", discipline: "BIKE", durationMinutes: 120 }),
       "LONG"
+    );
+  });
+
+  it("infers easy/intensity from stream intensity vs threshold", () => {
+    assert.equal(
+      inferSessionRole({
+        title: "Afternoon run",
+        discipline: "RUN",
+        durationMinutes: 40,
+        primarySignal: "HEART_RATE",
+        thresholdValue: 170,
+        streams: { meta: { avgHeartRate: 130 } },
+      }),
+      "EASY"
+    );
+    assert.equal(
+      inferSessionRole({
+        title: "Afternoon run",
+        discipline: "RUN",
+        durationMinutes: 40,
+        primarySignal: "HEART_RATE",
+        thresholdValue: 170,
+        streams: { meta: { avgHeartRate: 165 } },
+      }),
+      "INTENSITY"
+    );
+  });
+
+  it("infers from workout RPE meta", () => {
+    assert.equal(
+      inferSessionRole({
+        title: "Run",
+        discipline: "RUN",
+        durationMinutes: 40,
+        primarySignal: "PACE",
+        thresholdValue: 300,
+        streams: { meta: { workoutRpe: 25 } },
+      }),
+      "EASY"
     );
   });
 

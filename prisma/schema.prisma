@@ -700,6 +700,11 @@ model PlannedSession {
   completedTargetPaceSeconds Float?
   completedZones           Json?
   sessionRole              SessionRole          @default(MODERATE)
+  /**
+   * Optional per-session TiZ metric override. Null = inherit role override →
+   * discipline primary. Validated against allowed signals for the discipline.
+   */
+  tizSignalOverride        SignalType?
   poolSlotKind             PoolSlotKind?
 
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)

@@ -8,7 +8,7 @@ import {
 import { normalizeStreamsForZones } from "@/lib/zones/normalize-streams";
 import {
   parseRoleSignals,
-  resolveSignalForRole,
+  resolveSignalForSession,
   resolveSignalSettingsForDate,
 } from "@/lib/zones/signal-preference";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
@@ -65,42 +65,106 @@ function ecoClearUpdate() {
   };
 }
 
-async function resolveSessionRoleForActivity(activity: {
-  id: string;
-  athleteId: string;
-  name: string;
+type LinkedSessionContext = {
+  sessionRole: SessionRole;
+  tizSignalOverride: SignalType | null;
+  title: string;
   discipline: import("@prisma/client").Discipline;
-  durationSeconds: number;
-}): Promise<SessionRole> {
-  const linked = await db.plannedSession.findFirst({
-    where: { linkedActivityId: activity.id, athleteId: activity.athleteId },
-    select: {
-      sessionRole: true,
-      title: true,
-      discipline: true,
-      estimatedDurationMinutes: true,
-      targetZones: true,
-    },
-  });
+  estimatedDurationMinutes: number | null;
+  targetZones: unknown;
+};
+
+async function loadLinkedSessionContext(
+  activityId: string,
+  athleteId: string
+): Promise<LinkedSessionContext | null> {
+  try {
+    return await db.plannedSession.findFirst({
+      where: { linkedActivityId: activityId, athleteId },
+      select: {
+        sessionRole: true,
+        tizSignalOverride: true,
+        title: true,
+        discipline: true,
+        estimatedDurationMinutes: true,
+        targetZones: true,
+      },
+    });
+  } catch (error) {
+    // Pre-migration: column may not exist yet.
+    if (
+      error instanceof Error &&
+      /tizSignalOverride|column .* does not exist/i.test(error.message)
+    ) {
+      const row = await db.plannedSession.findFirst({
+        where: { linkedActivityId: activityId, athleteId },
+        select: {
+          sessionRole: true,
+          title: true,
+          discipline: true,
+          estimatedDurationMinutes: true,
+          targetZones: true,
+        },
+      });
+      return row
+        ? {
+            ...row,
+            tizSignalOverride: null,
+          }
+        : null;
+    }
+    throw error;
+  }
+}
+
+async function resolveSessionContextForActivity(
+  activity: {
+    id: string;
+    athleteId: string;
+    name: string;
+    discipline: import("@prisma/client").Discipline;
+    durationSeconds: number;
+  },
+  streams: NormalizedStreams,
+  primarySignal: SignalType,
+  activityDate: Date
+): Promise<{ sessionRole: SessionRole; tizSignalOverride: SignalType | null }> {
+  const linked = await loadLinkedSessionContext(activity.id, activity.athleteId);
 
   if (linked) {
-    return resolveDisplaySessionRole({
-      sessionRole: linked.sessionRole,
-      title: linked.title,
-      discipline: linked.discipline,
-      durationMinutes: linked.estimatedDurationMinutes,
-      zoneMinutes:
-        linked.targetZones && typeof linked.targetZones === "object"
-          ? (linked.targetZones as Record<string, number>)
-          : undefined,
-    });
+    return {
+      sessionRole: resolveDisplaySessionRole({
+        sessionRole: linked.sessionRole,
+        title: linked.title,
+        discipline: linked.discipline,
+        durationMinutes: linked.estimatedDurationMinutes,
+        zoneMinutes:
+          linked.targetZones && typeof linked.targetZones === "object"
+            ? (linked.targetZones as Record<string, number>)
+            : undefined,
+      }),
+      tizSignalOverride: linked.tizSignalOverride,
+    };
   }
 
-  return inferSessionRole({
-    title: activity.name,
-    discipline: activity.discipline,
-    durationMinutes: Math.round(activity.durationSeconds / 60),
-  });
+  const threshold = await getThresholdProfileAtDate(
+    activity.athleteId,
+    activity.discipline,
+    primarySignal,
+    activityDate
+  );
+
+  return {
+    sessionRole: inferSessionRole({
+      title: activity.name,
+      discipline: activity.discipline,
+      durationMinutes: Math.round(activity.durationSeconds / 60),
+      streams,
+      primarySignal,
+      thresholdValue: threshold?.thresholdValue ?? null,
+    }),
+    tizSignalOverride: null,
+  };
 }
 
 export async function computeActivityZones(activityId: string) {
@@ -145,11 +209,16 @@ export async function computeActivityZones(activityId: string) {
       : null
   );
 
-  const sessionRole = await resolveSessionRoleForActivity(activity);
-  const signalSettings = resolveSignalForRole(
+  const sessionContext = await resolveSessionContextForActivity(
+    activity,
+    streams,
+    preference.primarySignal,
+    activity.startTime
+  );
+  const signalSettings = resolveSignalForSession(
     activity.discipline,
     preference,
-    sessionRole
+    sessionContext
   );
 
   const resolved = resolveCanonicalSignal(signalSettings, streams);

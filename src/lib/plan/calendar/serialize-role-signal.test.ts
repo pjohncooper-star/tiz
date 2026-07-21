@@ -42,6 +42,7 @@ function sessionRow(
     completedTargetPaceSeconds: null,
     completedZones: null,
     sessionRole: "EASY" as const,
+    tizSignalOverride: null,
     poolSlotKind: null,
     structuredWorkout: {
       steps: serializeWorkoutTree({ version: WORKOUT_TREE_VERSION, nodes }),
@@ -95,14 +96,18 @@ describe("serializePlannedSessions role-aware profile", () => {
     assert.ok(intensity.workoutProfile!.yMax < 0);
   });
 
-  it("accepts legacy flat primarySignal map", () => {
+  it("session override beats role override on profile axis", () => {
+    const prefs = {
+      RUN: preferenceSnapshot("RUN", "PACE", { EASY: "HEART_RATE" }),
+    };
     const [session] = serializePlannedSessions(
-      [sessionRow({ sessionRole: "EASY" })],
+      [sessionRow({ sessionRole: "EASY", tizSignalOverride: "PACE" })],
       { RUN: "METRIC" },
       {},
-      { RUN: "PACE" }
+      prefs
     );
-    assert.ok(session.workoutProfile, "expected workout profile");
+    assert.ok(session.workoutProfile);
     assert.ok(session.workoutProfile!.yMax < 0);
+    assert.equal(session.tizSignalOverride, "PACE");
   });
 });
