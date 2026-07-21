@@ -69,6 +69,8 @@ type CalendarWeekRowProps = {
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
   onAutoFillEasyTiz?: () => void;
   paceContext?: PaceThresholdContext | null;
+  /** Scroll margin so week tops clear sticky page chrome (+ Week TiZ when present). */
+  scrollMarginTopPx?: number;
 };
 
 export function CalendarWeekRow({
@@ -103,6 +105,7 @@ export function CalendarWeekRow({
   onUnassignWorkout,
   onAutoFillEasyTiz,
   paceContext = null,
+  scrollMarginTopPx = 72,
 }: CalendarWeekRowProps) {
   const start = startOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS);
   const end = endOfWeek(start, WEEK_OPTS);
@@ -222,7 +225,8 @@ export function CalendarWeekRow({
   return (
     <section
       ref={scrollAnchorRef}
-      className={`scroll-mt-[4.5rem] rounded-lg transition-shadow ${
+      style={{ scrollMarginTop: scrollMarginTopPx }}
+      className={`rounded-lg transition-shadow ${
         isPoolWeek
           ? "ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-white dark:ring-emerald-600/70 dark:ring-offset-zinc-950"
           : isFocusedWeek
@@ -232,8 +236,10 @@ export function CalendarWeekRow({
       data-week-start={weekStart}
       id={current ? "calendar-current-week" : undefined}
     >
-      <h2 className="sticky top-[4.5rem] z-10 mb-2 flex items-center justify-between gap-2 border-b border-zinc-200 bg-white/95 py-2 text-sm font-semibold backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-        <div className="min-w-0">
+      <h2
+        style={{ top: scrollMarginTopPx }}
+        className="sticky z-10 mb-2 flex items-center justify-between gap-2 border-b border-zinc-200 bg-white/95 py-2 text-sm font-semibold backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+      >        <div className="min-w-0">
           Week of {format(start, "MMM d, yyyy")}
           {current && (
             <span className="ml-2 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900 dark:text-sky-200">
