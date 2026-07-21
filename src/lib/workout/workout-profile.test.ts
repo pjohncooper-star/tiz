@@ -5,6 +5,7 @@ import {
   buildWorkoutProfile,
   defaultPrimarySignalForDiscipline,
 } from "@/lib/workout/workout-profile";
+import type { WorkoutNode } from "@/lib/workout/workout-tree";
 
 describe("buildWorkoutProfile bike power zones", () => {
   it("orders long bike Z1 watts below Z2 watts", () => {
@@ -30,5 +31,36 @@ describe("buildWorkoutProfile bike power zones", () => {
     for (const watts of z1Watts) {
       assert.ok(watts < z2Watts, `Z1 ${watts}W should be below Z2 ${z2Watts}W`);
     }
+  });
+
+  it("infers POWER axis from watt targets even when requested HEART_RATE", () => {
+    const nodes: WorkoutNode[] = [
+      {
+        kind: "repeat",
+        repeatCount: 4,
+        children: [
+          {
+            kind: "step",
+            intensity: "interval",
+            duration: { type: "time", value: 300 },
+            target: { signal: "power", mode: "value", value: 250 },
+          },
+          {
+            kind: "step",
+            intensity: "recovery",
+            duration: { type: "time", value: 180 },
+            target: { signal: "power", mode: "value", value: 150 },
+          },
+        ],
+      },
+    ];
+    const profile = buildWorkoutProfile(nodes, {
+      primarySignal: "HEART_RATE",
+      lengthView: "duration",
+      discipline: "BIKE",
+    });
+    assert.ok(profile.segments.some((s) => s.yHigh === 250));
+    assert.ok(profile.segments.some((s) => s.yHigh === 150));
+    assert.equal(profile.yLabel, "Power (W)");
   });
 });

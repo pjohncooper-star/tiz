@@ -165,7 +165,8 @@ export default async function SettingsPage() {
                 <span className="font-medium">{s.discipline}</span>
                 <span className="text-zinc-500">
                   {" "}
-                  — primary TiZ metric: {signalLabel(s.primarySignal)}
+                  — default TiZ (no structured workout):{" "}
+                  {signalLabel(s.primarySignal)}
                   {s.fallbackSignal ? ` (fallback: ${signalLabel(s.fallbackSignal)})` : ""}
                   {roleSummary ? ` · by role: ${roleSummary}` : ""}
                 </span>

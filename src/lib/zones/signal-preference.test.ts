@@ -134,6 +134,41 @@ describe("signal-preference", () => {
     );
   });
 
+  it("prescription beats role; session override beats prescription", () => {
+    const snapshot = preferenceSnapshot("BIKE", "HEART_RATE", {
+      INTENSITY: "HEART_RATE",
+    });
+    assert.equal(
+      resolvePrimarySignalForSession("BIKE", snapshot, "INTENSITY", null, "POWER"),
+      "POWER"
+    );
+    assert.deepEqual(
+      resolveSignalForSession("BIKE", snapshot, {
+        sessionRole: "INTENSITY",
+        prescriptionSignal: "POWER",
+      }),
+      { primarySignal: "POWER", fallbackSignal: "HEART_RATE" }
+    );
+    assert.equal(
+      resolvePrimarySignalForSession(
+        "BIKE",
+        snapshot,
+        "INTENSITY",
+        "HEART_RATE",
+        "POWER"
+      ),
+      "HEART_RATE"
+    );
+  });
+
+  it("ignores prescription signals invalid for discipline", () => {
+    const snapshot = preferenceSnapshot("RUN", "PACE", { EASY: "HEART_RATE" });
+    assert.equal(
+      resolvePrimarySignalForSession("RUN", snapshot, "EASY", null, "POWER"),
+      "HEART_RATE"
+    );
+  });
+
   it("roleSignalsEqual and formatRoleSignalSummary", () => {
     assert.equal(
       roleSignalsEqual({ EASY: "HEART_RATE" }, { EASY: "HEART_RATE" }),

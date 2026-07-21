@@ -18,6 +18,7 @@ import {
 } from "@/lib/workout/metrics";
 import { parseWorkoutSteps, type ZoneMinutes } from "@/lib/workout/steps";
 import { parseWorkoutTree } from "@/lib/workout/workout-tree";
+import { inferSignalFromWorkoutNodes } from "@/lib/workout/infer-prescription-signal";
 import {
   buildWorkoutProfile,
   defaultPrimarySignalForDiscipline,
@@ -25,7 +26,6 @@ import {
 import { resolveDisplaySessionRole } from "@/lib/plan/session-role";
 import {
   parseRoleSignals,
-  resolvePrimarySignalForSession,
   type SignalPreferenceSnapshot,
 } from "@/lib/zones/signal-preference";
 
@@ -135,24 +135,17 @@ function serializeLinkedActivity(
 function buildSessionWorkoutProfile(
   structuredSteps: unknown | null | undefined,
   discipline: Discipline,
-  displayUnit: DisplayUnit,
-  signalPrefs: Partial<Record<Discipline, SignalPreferenceSnapshot>>,
-  sessionRole: SessionRole,
-  tizSignalOverride: SignalType | null = null
+  displayUnit: DisplayUnit
 ): CalendarWorkoutProfile | null {
   if (!structuredSteps) return null;
   const tree = parseWorkoutTree(structuredSteps);
   if (tree.nodes.length === 0) return null;
 
-  const snapshot = signalPrefs[discipline];
-  const primarySignal = snapshot
-    ? resolvePrimarySignalForSession(
-        discipline,
-        snapshot,
-        sessionRole,
-        tizSignalOverride
-      )
-    : defaultPrimarySignalForDiscipline(discipline);
+  // Profile shape follows how the workout was prescribed (same as TiZ scoring),
+  // not athlete TiZ prefs — avoids collapsing watt intervals onto an HR axis.
+  const primarySignal =
+    inferSignalFromWorkoutNodes(tree.nodes, discipline) ??
+    defaultPrimarySignalForDiscipline(discipline);
   const profile = buildWorkoutProfile(tree.nodes, {
     primarySignal,
     lengthView: "duration",
@@ -195,59 +188,22 @@ export function signalPrefsFromDisciplineSettings(
   return prefs;
 }
 
-function isSignalType(value: unknown): value is SignalType {
-  return value === "POWER" || value === "HEART_RATE" || value === "PACE";
-}
-
-function normalizeSignalPrefs(
-  signalPrefs:
-    | Partial<Record<Discipline, SignalPreferenceSnapshot>>
-    | Partial<Record<Discipline, SignalType>>
-): Partial<Record<Discipline, SignalPreferenceSnapshot>> {
-  const result: Partial<Record<Discipline, SignalPreferenceSnapshot>> = {};
-  for (const [discipline, value] of Object.entries(signalPrefs) as Array<
-    [Discipline, SignalPreferenceSnapshot | SignalType | undefined]
-  >) {
-    if (value == null) continue;
-    if (isSignalType(value)) {
-      result[discipline] = {
-        primarySignal: value,
-        fallbackSignal: null,
-        roleSignals: {},
-      };
-      continue;
-    }
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "primarySignal" in value &&
-      isSignalType(value.primarySignal)
-    ) {
-      result[discipline] = {
-        primarySignal: value.primarySignal,
-        fallbackSignal: value.fallbackSignal ?? null,
-        roleSignals: parseRoleSignals(value.roleSignals),
-      };
-    }
-  }
-  return result;
-}
-
 export function serializePlannedSessions(
   sessions: SessionRow[],
   displayUnits: Partial<Record<Discipline, DisplayUnit>>,
   defaultPoolSizes: Partial<Record<PlanDiscipline, PoolSizeSetting | null>> = {},
   /**
    * Per-discipline TiZ signal prefs (primary + optional role overrides).
-   * Also accepts a legacy flat `Partial<Record<Discipline, SignalType>>` map of
-   * primary signals only — role overrides are then treated as empty.
+   * Accepted for call-site compatibility; calendar workout profiles follow
+   * structured prescription targets (see buildSessionWorkoutProfile).
+   * Also accepts a legacy flat `Partial<Record<Discipline, SignalType>>` map.
    */
   signalPrefs:
     | Partial<Record<Discipline, SignalPreferenceSnapshot>>
     | Partial<Record<Discipline, SignalType>> = {},
   paceContext: PaceThresholdContext | null = null
 ): CalendarPlannedSession[] {
-  const normalizedPrefs = normalizeSignalPrefs(signalPrefs);
+  void signalPrefs;
   return sessions.map((s) => {
     const steps = s.structuredWorkout ? parseWorkoutSteps(s.structuredWorkout.steps) : [];
     const structuredRaw = s.structuredWorkout?.steps;
@@ -288,14 +244,7 @@ export function serializePlannedSessions(
     const workoutProfile =
       s.discipline === "STRENGTH"
         ? null
-        : buildSessionWorkoutProfile(
-            structuredRaw,
-            s.discipline,
-            unit,
-            normalizedPrefs,
-            s.sessionRole,
-            sessionOverride
-          );
+        : buildSessionWorkoutProfile(structuredRaw, s.discipline, unit);
     const displaySessionRole = resolveDisplaySessionRole({
       sessionRole: s.sessionRole,
       title: s.title,

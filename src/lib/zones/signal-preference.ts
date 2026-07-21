@@ -138,13 +138,18 @@ export function resolveSignalForRole(
 
 export type ResolveSessionSignalInput = {
   sessionRole?: SessionRole | null;
-  /** Per-session override; beats role override when set and valid for discipline. */
+  /** Per-session override; beats prescription and role when set and valid. */
   tizSignalOverride?: SignalType | null;
+  /**
+   * Inferred from structured workout step targets (power/HR/pace).
+   * Used when override is unset; beats role override and discipline primary.
+   */
+  prescriptionSignal?: SignalType | null;
 };
 
 /**
- * Resolution order: session override → role override → discipline primary.
- * Fallback is always the paired alternate signal for the resolved primary.
+ * Resolution order: session override → workout prescription → role override →
+ * discipline primary. Fallback is always the paired alternate for the resolved primary.
  */
 export function resolveSignalForSession(
   discipline: Discipline,
@@ -158,6 +163,18 @@ export function resolveSignalForSession(
       fallbackSignal: deriveFallbackSignal(discipline, override),
     };
   }
+
+  const prescription = input.prescriptionSignal ?? null;
+  if (
+    prescription != null &&
+    allowedPrimarySignals(discipline).includes(prescription)
+  ) {
+    return {
+      primarySignal: prescription,
+      fallbackSignal: deriveFallbackSignal(discipline, prescription),
+    };
+  }
+
   return resolveSignalForRole(discipline, snapshot, input.sessionRole);
 }
 
@@ -166,11 +183,13 @@ export function resolvePrimarySignalForSession(
   discipline: Discipline,
   snapshot: SignalPreferenceSnapshot,
   sessionRole: SessionRole | null | undefined,
-  tizSignalOverride?: SignalType | null
+  tizSignalOverride?: SignalType | null,
+  prescriptionSignal?: SignalType | null
 ): SignalType {
   return resolveSignalForSession(discipline, snapshot, {
     sessionRole,
     tizSignalOverride,
+    prescriptionSignal,
   }).primarySignal;
 }
 

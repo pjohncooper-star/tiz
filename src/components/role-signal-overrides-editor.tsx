@@ -46,9 +46,9 @@ export function RoleSignalOverridesEditor({
         TiZ metric by session role
       </p>
       <p className="mt-1 text-xs text-zinc-500">
-        Optional. Unset roles use the discipline primary ({signalLabel(primarySignal)}).
-        Useful when easy sessions should use heart rate and intensity should use{" "}
-        {discipline === "BIKE" ? "power" : "pace"}.
+        Applies when a session has no structured workout (or as stream fallback).
+        Structured workouts score TiZ from their step targets (watts, HR, or pace).
+        Unset roles use the discipline primary ({signalLabel(primarySignal)}).
       </p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {ROLE_ORDER.filter((r) => SESSION_ROLES.includes(r)).map((role) => {

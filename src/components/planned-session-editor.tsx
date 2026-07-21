@@ -76,6 +76,8 @@ type PlannedSessionEditorProps = {
   thresholdZoneBoundaries?: number[];
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
+  /** Present when structured workout targets imply a TiZ signal. */
+  prescriptionSignal?: SignalType | null;
   sessionRole?: SessionRole;
   tizSignalOverride?: SignalType | null;
   sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE";
@@ -106,6 +108,7 @@ export function PlannedSessionEditor({
   thresholdZoneBoundaries,
   primarySignal = null,
   inheritedPrimarySignal = null,
+  prescriptionSignal = null,
   sessionRole: initialSessionRole = "MODERATE",
   tizSignalOverride: initialTizSignalOverride = null,
   sessionSource = "FLEXIBLE",
@@ -643,12 +646,15 @@ export function PlannedSessionEditor({
                     }}
                   >
                     <option value="DEFAULT">
-                      Default
-                      {inheritedPrimarySignal
-                        ? ` (${signalLabel(inheritedPrimarySignal)})`
-                        : primarySignal
-                          ? ` (${signalLabel(primarySignal)})`
-                          : ""}
+                      {prescriptionSignal
+                        ? `From workout (${signalLabel(prescriptionSignal)})`
+                        : `Default${
+                            inheritedPrimarySignal
+                              ? ` (${signalLabel(inheritedPrimarySignal)})`
+                              : primarySignal
+                                ? ` (${signalLabel(primarySignal)})`
+                                : ""
+                          }`}
                     </option>
                     {allowedPrimarySignals(discipline).map((signal) => (
                       <option key={signal} value={signal}>
@@ -657,7 +663,9 @@ export function PlannedSessionEditor({
                     ))}
                   </Select>
                   <p className="mt-1 text-xs text-zinc-500">
-                    Optional. Overrides role and discipline defaults for this session only.
+                    {prescriptionSignal
+                      ? "Structured workouts score TiZ from how they were built. Override only if needed."
+                      : "Optional. Overrides role and discipline defaults for this session only."}
                   </p>
                 </div>
               ) : null}
