@@ -135,8 +135,44 @@ function hrZoneFromStep(step: LeafStep): number {
       return Math.round((t.low + t.high) / 2);
     }
     if (t.zone != null) return Math.max(1, Math.min(5, t.zone));
+    if (t.mode === "value" && t.value != null && t.value >= 1 && t.value <= 5) {
+      return Math.round(t.value);
+    }
   }
-  return Math.max(1, Math.min(5, targetZoneFromTarget(t)));
+  if (t.mode === "zone" && t.zone != null) {
+    return Math.max(1, Math.min(5, t.zone));
+  }
+  if (t.mode === "range" && isZoneRange(t) && t.signal !== "power" && t.signal !== "pace" && t.signal !== "speed") {
+    return Math.max(1, Math.min(5, Math.round((t.low! + t.high!) / 2)));
+  }
+  // Absolute power/pace values are not HR zones — avoid clamping watts into Z5.
+  return 2;
+}
+
+/** True when the step is prescribed on power/pace, not HR zones. */
+function stepUsesNativeNonHrTarget(step: LeafStep): boolean {
+  const signal = step.target.signal;
+  return signal === "power" || signal === "pace" || signal === "speed";
+}
+
+function planningZoneFromTarget(target: StepTarget): number {
+  // Absolute watt/pace values are not zone indices — targetZoneFromTarget would
+  // clamp 250W to 7. Only trust zone-like targets here.
+  if (target.mode === "zone" && target.zone != null) return target.zone;
+  if (isZoneRange(target)) {
+    return Math.round((target.low! + target.high!) / 2);
+  }
+  if (target.signal === "heart_rate") {
+    if (target.zone != null) return Math.max(1, Math.min(5, target.zone));
+    if (target.mode === "value" && target.value != null && target.value >= 1 && target.value <= 5) {
+      return Math.round(target.value);
+    }
+  }
+  return targetZoneFromTarget(
+    target.mode === "value" && target.value != null && target.value > 7
+      ? { signal: target.signal, mode: "zone", zone: 2 }
+      : target
+  );
 }
 
 function resolveLeafY(
@@ -147,10 +183,19 @@ function resolveLeafY(
 ): { low: number; high: number; fill: string } {
   const t = step.target;
   const baseFill = INTENSITY_FILL[step.intensity] ?? INTENSITY_FILL.active;
-  const zone = targetZoneFromTarget(t);
+  const zone = planningZoneFromTarget(t);
   const zoneFill = ZONE_FILL[zone] ?? baseFill;
 
-  if (primarySignal === "HEART_RATE") {
+  // When TiZ primary is HR but the step is power/pace-valued, render on the
+  // native axis so interval structure stays visible (don't treat watts as zones).
+  const effectiveSignal: SignalType =
+    primarySignal === "HEART_RATE" && stepUsesNativeNonHrTarget(step)
+      ? t.signal === "power"
+        ? "POWER"
+        : "PACE"
+      : primarySignal;
+
+  if (effectiveSignal === "HEART_RATE") {
     if (t.mode === "range" && t.low != null && t.high != null && t.signal === "heart_rate") {
       const low = Math.max(1, Math.min(5, Math.round(t.low)));
       const high = Math.max(1, Math.min(5, Math.round(t.high)));
@@ -164,7 +209,7 @@ function resolveLeafY(
     return { low: hrZone, high: hrZone, fill: HR_ZONE_FILL[hrZone] ?? baseFill };
   }
 
-  if (primarySignal === "POWER" && discipline === "BIKE") {
+  if (effectiveSignal === "POWER" && discipline === "BIKE") {
     const ftp =
       thresholds.thresholdFtpWatts && thresholds.thresholdFtpWatts > 0
         ? thresholds.thresholdFtpWatts
@@ -183,7 +228,7 @@ function resolveLeafY(
     return { low: watts, high: watts, fill: zoneFill };
   }
 
-  if (primarySignal === "PACE" && (discipline === "RUN" || discipline === "SWIM")) {
+  if (effectiveSignal === "PACE" && (discipline === "RUN" || discipline === "SWIM")) {
     if (t.mode === "range" && t.low != null && t.high != null && !isZoneRange(t)) {
       const fast = Math.min(t.low, t.high);
       const slow = Math.max(t.low, t.high);
@@ -200,7 +245,7 @@ function resolveLeafY(
     return { low: y, high: y, fill: zoneFill };
   }
 
-  if (primarySignal === "POWER") {
+  if (effectiveSignal === "POWER") {
     const watts = t.mode === "value" && t.value != null ? t.value : zone * 30 + 140;
     return { low: watts, high: watts, fill: zoneFill };
   }
@@ -215,20 +260,30 @@ function resolveRampY(
   discipline: Discipline,
   thresholds: WorkoutProfileThresholds
 ): { low: number; high: number } {
-  if (primarySignal === "HEART_RATE") {
+  const effectiveSignal: SignalType =
+    primarySignal === "HEART_RATE" &&
+    (step.target.signal === "power" ||
+      step.target.signal === "pace" ||
+      step.target.signal === "speed")
+      ? step.target.signal === "power"
+        ? "POWER"
+        : "PACE"
+      : primarySignal;
+
+  if (effectiveSignal === "HEART_RATE") {
     const lowZ = step.target.lowZone ?? Math.round(step.target.low);
     const highZ = step.target.highZone ?? Math.round(step.target.high);
     return { low: Math.min(lowZ, highZ), high: Math.max(lowZ, highZ) };
   }
 
-  if (primarySignal === "POWER" && discipline === "BIKE") {
+  if (effectiveSignal === "POWER" && discipline === "BIKE") {
     return {
       low: Math.min(step.target.low, step.target.high),
       high: Math.max(step.target.low, step.target.high),
     };
   }
 
-  if (primarySignal === "PACE" && (discipline === "RUN" || discipline === "SWIM")) {
+  if (effectiveSignal === "PACE" && (discipline === "RUN" || discipline === "SWIM")) {
     const fast = Math.min(step.target.low, step.target.high);
     const slow = Math.max(step.target.low, step.target.high);
     return {
@@ -407,6 +462,51 @@ export function defaultPrimarySignalForDiscipline(discipline: Discipline): Signa
   return "HEART_RATE";
 }
 
+/** Prefer prescribed target axis when TiZ primary is HR but steps are power/pace. */
+function profileSignalForNodes(
+  nodes: WorkoutNode[],
+  primarySignal: SignalType,
+  discipline: Discipline
+): SignalType {
+  if (primarySignal !== "HEART_RATE") return primarySignal;
+
+  let sawPower = false;
+  let sawPace = false;
+  let sawHr = false;
+
+  function walk(list: WorkoutNode[]): void {
+    for (const node of list) {
+      if (node.kind === "repeat") {
+        walk(node.children);
+        continue;
+      }
+      if (node.kind === "swim_interval") {
+        const signal = node.target.signal;
+        if (signal === "power") sawPower = true;
+        else if (signal === "pace" || signal === "speed") sawPace = true;
+        else if (signal === "heart_rate") sawHr = true;
+        continue;
+      }
+      if (node.kind === "ramp") {
+        if (node.target.signal === "power") sawPower = true;
+        else if (node.target.signal === "pace" || node.target.signal === "speed") sawPace = true;
+        else if (node.target.signal === "heart_rate") sawHr = true;
+        continue;
+      }
+      if (node.target.signal === "power") sawPower = true;
+      else if (node.target.signal === "pace" || node.target.signal === "speed") sawPace = true;
+      else if (node.target.signal === "heart_rate") sawHr = true;
+    }
+  }
+  walk(nodes);
+
+  if (sawHr && !sawPower && !sawPace) return "HEART_RATE";
+  if (sawPower && (discipline === "BIKE" || !sawPace)) return "POWER";
+  if (sawPace && (discipline === "RUN" || discipline === "SWIM")) return "PACE";
+  if (sawPower) return "POWER";
+  return primarySignal;
+}
+
 export function buildWorkoutProfile(
   nodes: WorkoutNode[],
   options: {
@@ -418,12 +518,13 @@ export function buildWorkoutProfile(
   }
 ): WorkoutProfileChart {
   const {
-    primarySignal,
+    primarySignal: requestedSignal,
     lengthView,
     discipline,
     displayUnit = "METRIC",
     thresholds = {},
   } = options;
+  const primarySignal = profileSignalForNodes(nodes, requestedSignal, discipline);
 
   const segments: WorkoutProfileSegment[] = [];
   let x = 0;
