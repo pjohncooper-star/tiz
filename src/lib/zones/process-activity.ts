@@ -6,10 +6,18 @@ import {
   resolveCanonicalSignal,
 } from "@/lib/zones/compute";
 import { normalizeStreamsForZones } from "@/lib/zones/normalize-streams";
-import { resolveSignalSettingsForDate } from "@/lib/zones/signal-preference";
+import {
+  parseRoleSignals,
+  resolveSignalForRole,
+  resolveSignalSettingsForDate,
+} from "@/lib/zones/signal-preference";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
 import { computeSessionEcos, ecoTransitionBump } from "@/lib/eco/compute";
-import { Prisma, type ActivityLegType, type SignalType } from "@prisma/client";
+import {
+  inferSessionRole,
+  resolveDisplaySessionRole,
+} from "@/lib/plan/session-role";
+import { Prisma, type ActivityLegType, type SessionRole, type SignalType } from "@prisma/client";
 
 export function parseStoredStreams(raw: unknown): NormalizedStreams {
   if (!raw || typeof raw !== "object") return {};
@@ -57,6 +65,44 @@ function ecoClearUpdate() {
   };
 }
 
+async function resolveSessionRoleForActivity(activity: {
+  id: string;
+  athleteId: string;
+  name: string;
+  discipline: import("@prisma/client").Discipline;
+  durationSeconds: number;
+}): Promise<SessionRole> {
+  const linked = await db.plannedSession.findFirst({
+    where: { linkedActivityId: activity.id, athleteId: activity.athleteId },
+    select: {
+      sessionRole: true,
+      title: true,
+      discipline: true,
+      estimatedDurationMinutes: true,
+      targetZones: true,
+    },
+  });
+
+  if (linked) {
+    return resolveDisplaySessionRole({
+      sessionRole: linked.sessionRole,
+      title: linked.title,
+      discipline: linked.discipline,
+      durationMinutes: linked.estimatedDurationMinutes,
+      zoneMinutes:
+        linked.targetZones && typeof linked.targetZones === "object"
+          ? (linked.targetZones as Record<string, number>)
+          : undefined,
+    });
+  }
+
+  return inferSessionRole({
+    title: activity.name,
+    discipline: activity.discipline,
+    durationMinutes: Math.round(activity.durationSeconds / 60),
+  });
+}
+
 export async function computeActivityZones(activityId: string) {
   const activity = await db.syncedActivity.findUnique({
     where: { id: activityId },
@@ -84,7 +130,7 @@ export async function computeActivityZones(activityId: string) {
     activity.durationSeconds
   );
 
-  const signalSettings = await resolveSignalSettingsForDate(
+  const preference = await resolveSignalSettingsForDate(
     activity.athleteId,
     activity.discipline,
     activity.startTime,
@@ -92,8 +138,18 @@ export async function computeActivityZones(activityId: string) {
       ? {
           primarySignal: settings.primarySignal,
           fallbackSignal: settings.fallbackSignal,
+          roleSignals: parseRoleSignals(
+            "roleSignals" in settings ? settings.roleSignals : null
+          ),
         }
       : null
+  );
+
+  const sessionRole = await resolveSessionRoleForActivity(activity);
+  const signalSettings = resolveSignalForRole(
+    activity.discipline,
+    preference,
+    sessionRole
   );
 
   const resolved = resolveCanonicalSignal(signalSettings, streams);

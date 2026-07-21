@@ -6,9 +6,12 @@ import { setOnboardingStep } from "@/lib/onboarding";
 import { isValidWorkoutShadingMode, type WorkoutShadingMode } from "@/lib/plan/workout-shading";
 import {
   getPreferenceDateRange,
+  parseRoleSignals,
   syncCurrentPreferenceToSettings,
   upsertSignalPreference,
   validatePrimarySignal,
+  validateRoleSignals,
+  type RoleSignalOverrides,
 } from "@/lib/zones/signal-preference";
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
@@ -44,10 +47,17 @@ const thresholdSchema = z.object({
   isEstimated: z.boolean(),
 });
 
+const roleSignalValue = z.enum(["POWER", "HEART_RATE", "PACE"]);
+const roleSignalsSchema = z
+  .record(z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]), roleSignalValue)
+  .optional();
+
 const signalPreferenceSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
   primarySignal: z.enum(["POWER", "HEART_RATE", "PACE"]),
   effectiveDate: z.string(),
+  /** Sparse role overrides. Omit to keep existing; pass {} to clear. */
+  roleSignals: roleSignalsSchema,
 });
 
 export async function GET() {
@@ -401,23 +411,38 @@ export async function PUT(req: Request) {
     try {
       const data = signalPreferenceSchema.parse(body.data);
       validatePrimarySignal(data.discipline, data.primarySignal);
+      let roleSignals: RoleSignalOverrides | undefined;
+      if (data.roleSignals !== undefined) {
+        roleSignals = parseRoleSignals(data.roleSignals);
+        validateRoleSignals(data.discipline, roleSignals);
+      }
       const effectiveDate = new Date(data.effectiveDate);
       const row = await upsertSignalPreference(
         athleteId,
         data.discipline,
         data.primarySignal,
-        effectiveDate
+        effectiveDate,
+        roleSignals
       );
       const { from, to } = await getPreferenceDateRange(row);
       await recomputeAfterPreferenceChange(athleteId, data.discipline, from, to);
-      return NextResponse.json({ ok: true, id: row.id });
+      return NextResponse.json({
+        ok: true,
+        id: row.id,
+        roleSignals: parseRoleSignals(
+          "roleSignals" in row ? row.roleSignals : null
+        ),
+      });
     } catch (error) {
       const message =
         error instanceof z.ZodError
           ? "Invalid signal preference"
-          : error instanceof Error
-            ? error.message
-            : "Could not save signal preference";
+          : error instanceof Error &&
+              /roleSignals|column/.test(error.message)
+            ? "Role metric overrides are not available yet. Run prisma/migrations/manual_signal_preference_role_signals.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save signal preference";
       return NextResponse.json({ error: message }, { status: 400 });
     }
   }

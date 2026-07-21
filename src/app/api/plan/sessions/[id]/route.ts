@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { parseDateKey, formatDateKey } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { inngest } from "@/inngest/client";
 import { parseWorkoutTree, serializeWorkoutTree } from "@/lib/workout/steps";
 import {
   nullableMetric,
@@ -257,6 +258,17 @@ export async function PATCH(request: Request, context: RouteContext) {
     await markFolderWorkoutCompleted(tx, id);
     return updated;
   });
+
+  if (
+    sessionRole !== undefined &&
+    sessionRole !== existing.sessionRole &&
+    updated.linkedActivityId
+  ) {
+    await inngest.send({
+      name: "activity/zones.compute",
+      data: { activityId: updated.linkedActivityId },
+    });
+  }
 
   return NextResponse.json({ session: updated });
 }

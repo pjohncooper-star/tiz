@@ -318,6 +318,11 @@ model AthleteDisciplineSettings {
   discipline     Discipline
   primarySignal  SignalType
   fallbackSignal SignalType?
+  /**
+   * Optional TiZ metric overrides by session role. Sparse map of SessionRole → SignalType.
+   * Unset roles inherit primarySignal. Empty/null = no overrides.
+   */
+  roleSignals        Json?
   displayUnit        DisplayUnit         @default(METRIC)
   poolSize           PoolSize?
   pastWorkoutShading PastWorkoutShading  @default(OFF)
@@ -352,6 +357,11 @@ model SignalPreference {
   discipline     Discipline
   primarySignal  SignalType
   fallbackSignal SignalType?
+  /**
+   * Optional TiZ metric overrides by session role. Sparse map of SessionRole → SignalType.
+   * Unset roles inherit primarySignal. Empty/null = no overrides.
+   */
+  roleSignals    Json?
   effectiveDate  DateTime   @db.Date
   createdAt      DateTime   @default(now())
 
