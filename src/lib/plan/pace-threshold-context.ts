@@ -7,13 +7,16 @@ import type { FlattenPlanningOptions } from "@/lib/workout/workout-tree";
 export type DisciplinePaceContext = {
   thresholdPaceSeconds: number | null;
   zoneBoundaries: number[];
+  /** Bike FTP for absolute watt → zone mapping (BIKE only). */
+  thresholdFtpWatts?: number | null;
+  powerZoneBoundaries?: number[];
 };
 
 export type PaceThresholdContext = Partial<
   Record<"RUN" | "SWIM" | "BIKE", DisciplinePaceContext>
 >;
 
-/** Latest PACE threshold + boundaries for RUN/SWIM/BIKE (distance / TiZ estimates). */
+/** Latest PACE thresholds (+ BIKE POWER FTP) for distance / TiZ estimates. */
 export async function loadPaceThresholdContext(
   athleteId: string,
   asOf: Date = new Date()
@@ -21,8 +24,10 @@ export async function loadPaceThresholdContext(
   const profiles = await db.thresholdProfile.findMany({
     where: {
       athleteId,
-      signalType: "PACE",
-      discipline: { in: ["RUN", "SWIM", "BIKE"] },
+      OR: [
+        { signalType: "PACE", discipline: { in: ["RUN", "SWIM", "BIKE"] } },
+        { signalType: "POWER", discipline: "BIKE" },
+      ],
       effectiveDate: { lte: asOf },
     },
     orderBy: { effectiveDate: "desc" },
@@ -30,26 +35,57 @@ export async function loadPaceThresholdContext(
 
   const out: PaceThresholdContext = {};
   for (const discipline of ["RUN", "SWIM", "BIKE"] as const) {
-    const profile = profiles.find((p) => p.discipline === discipline);
+    const profile = profiles.find(
+      (p) => p.discipline === discipline && p.signalType === "PACE"
+    );
     if (!profile) {
       out[discipline] = {
         thresholdPaceSeconds: null,
         zoneBoundaries: zoneBoundariesFor(discipline, "PACE"),
       };
-      continue;
+    } else {
+      let boundaries: number[];
+      try {
+        boundaries = parseZoneBoundaries(profile.zoneBoundaries);
+      } catch {
+        boundaries = zoneBoundariesFor(discipline, "PACE");
+      }
+      out[discipline] = {
+        thresholdPaceSeconds:
+          profile.thresholdValue > 0 ? profile.thresholdValue : null,
+        zoneBoundaries: boundaries,
+      };
     }
-    let boundaries: number[];
+  }
+
+  const powerProfile = profiles.find(
+    (p) => p.discipline === "BIKE" && p.signalType === "POWER"
+  );
+  const bike = out.BIKE ?? {
+    thresholdPaceSeconds: null,
+    zoneBoundaries: zoneBoundariesFor("BIKE", "PACE"),
+  };
+  if (powerProfile) {
+    let powerBoundaries: number[];
     try {
-      boundaries = parseZoneBoundaries(profile.zoneBoundaries);
+      powerBoundaries = parseZoneBoundaries(powerProfile.zoneBoundaries);
     } catch {
-      boundaries = zoneBoundariesFor(discipline, "PACE");
+      powerBoundaries = zoneBoundariesFor("BIKE", "POWER");
     }
-    out[discipline] = {
-      thresholdPaceSeconds:
-        profile.thresholdValue > 0 ? profile.thresholdValue : null,
-      zoneBoundaries: boundaries,
+    out.BIKE = {
+      ...bike,
+      thresholdFtpWatts:
+        powerProfile.thresholdValue > 0 ? powerProfile.thresholdValue : null,
+      powerZoneBoundaries: powerBoundaries,
+    };
+  } else {
+    out.BIKE = {
+      ...bike,
+      thresholdFtpWatts: null,
+      powerZoneBoundaries: zoneBoundariesFor("BIKE", "POWER"),
     };
   }
+
   return out;
 }
 
@@ -66,8 +102,12 @@ export function flattenOptionsForDiscipline(
     };
   }
   if (discipline === "BIKE") {
+    const ctx = paceContext?.BIKE;
     return {
-      zoneBoundaries: paceContext?.BIKE?.zoneBoundaries ?? zoneBoundariesFor("BIKE", "PACE"),
+      zoneBoundaries: ctx?.zoneBoundaries ?? zoneBoundariesFor("BIKE", "PACE"),
+      thresholdFtpWatts: ctx?.thresholdFtpWatts ?? null,
+      powerZoneBoundaries:
+        ctx?.powerZoneBoundaries ?? zoneBoundariesFor("BIKE", "POWER"),
     };
   }
   return {};

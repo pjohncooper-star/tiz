@@ -10,6 +10,7 @@ import type {
   StepTarget,
   SwimIntervalSet,
 } from "@/lib/workout/workout-tree";
+import { targetZoneFromTarget } from "@/lib/workout/workout-tree";
 
 const METERS_PER_100M = 100;
 const YARDS_PER_METER = 1 / 0.9144;
@@ -45,30 +46,11 @@ function parseTarget(raw: unknown): StepTarget {
   };
 }
 
-function targetZoneFromTargetLocal(target: StepTarget): number {
-  if (target.mode === "zone" && target.zone) return target.zone;
-  if (target.mode === "range" && target.low != null && target.high != null) {
-    return Math.round((target.low + target.high) / 2);
-  }
-  if (target.value != null) return Math.max(1, Math.min(7, Math.round(target.value)));
-  return 2;
-}
-
-function formatClockDuration(seconds: number): string {
-  if (seconds <= 0) return "—";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.round(seconds % 60);
-  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-  if (m > 0) return `${m}:${s.toString().padStart(2, "0")}`;
-  return `${s}s`;
-}
-
 function swimLeafToFlat(
   step: LeafStep,
   options: DistanceDurationOptions = {}
 ): FlatPlanningStep {
-  const targetZone = targetZoneFromTargetLocal(step.target);
+  const targetZone = targetZoneFromTarget(step.target, options);
   if (step.duration.type === "distance") {
     const flat: FlatPlanningStep = {
       type: step.intensity === "recovery" || step.intensity === "rest" ? "rest" : "steady",
@@ -137,6 +119,16 @@ export function parseSwimIntervalSet(raw: Record<string, unknown>): SwimInterval
   return set;
 }
 
+function formatClockDuration(seconds: number): string {
+  if (seconds <= 0) return "—";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.round(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  if (m > 0) return `${m}:${s.toString().padStart(2, "0")}`;
+  return `${s}s`;
+}
+
 export function resolveSwimIntervalPaceSeconds(
   set: SwimIntervalSet,
   thresholdPaceSeconds?: number | null
@@ -148,7 +140,7 @@ export function resolveSwimIntervalPaceSeconds(
     thresholdPaceSeconds != null && thresholdPaceSeconds > 0
       ? thresholdPaceSeconds
       : FALLBACK_SWIM_PACE_SECONDS;
-  const zone = targetZoneFromTargetLocal(set.target);
+  const zone = targetZoneFromTarget(set.target);
   if (zone >= 1) {
     const pace = paceSecondsAtZoneMidpoint(
       zone,

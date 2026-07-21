@@ -14,6 +14,10 @@ export type DistanceDurationOptions = {
   discipline?: "RUN" | "SWIM" | null;
   thresholdPaceSeconds?: number | null;
   zoneBoundaries?: number[];
+  /** Bike FTP for mapping absolute watt targets → zones. */
+  thresholdFtpWatts?: number | null;
+  /** Power % boundaries (defaults to BIKE POWER defaults when omitted). */
+  powerZoneBoundaries?: number[];
 };
 
 export function effectiveThresholdPaceSeconds(
