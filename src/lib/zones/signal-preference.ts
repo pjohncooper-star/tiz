@@ -172,19 +172,50 @@ function roleSignalsJson(
   return roleSignals as Prisma.InputJsonValue;
 }
 
+const SIGNAL_PREFERENCE_CORE_SELECT = {
+  id: true,
+  athleteId: true,
+  discipline: true,
+  primarySignal: true,
+  fallbackSignal: true,
+  effectiveDate: true,
+  createdAt: true,
+} as const;
+
+async function findSignalPreferenceAtDate(
+  athleteId: string,
+  discipline: Discipline,
+  activityDate: Date
+) {
+  try {
+    return await db.signalPreference.findFirst({
+      where: {
+        athleteId,
+        discipline,
+        effectiveDate: { lte: activityDate },
+      },
+      orderBy: { effectiveDate: "desc" },
+    });
+  } catch (error) {
+    if (!isMissingRoleSignalsColumn(error)) throw error;
+    return db.signalPreference.findFirst({
+      where: {
+        athleteId,
+        discipline,
+        effectiveDate: { lte: activityDate },
+      },
+      orderBy: { effectiveDate: "desc" },
+      select: SIGNAL_PREFERENCE_CORE_SELECT,
+    });
+  }
+}
+
 export async function getSignalPreferenceAtDate(
   athleteId: string,
   discipline: Discipline,
   activityDate: Date
 ): Promise<SignalPreferenceSnapshot | null> {
-  const row = await db.signalPreference.findFirst({
-    where: {
-      athleteId,
-      discipline,
-      effectiveDate: { lte: activityDate },
-    },
-    orderBy: { effectiveDate: "desc" },
-  });
+  const row = await findSignalPreferenceAtDate(athleteId, discipline, activityDate);
   if (!row) return null;
   return snapshotFromRow(row);
 }
@@ -207,23 +238,94 @@ export async function getPreferenceDateRange(
   };
 }
 
+function isMissingRoleSignalsColumn(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /roleSignals|column .* does not exist|Unknown arg `roleSignals`/i.test(error.message)
+  );
+}
+
+export async function listSignalPreferences(athleteId: string) {
+  try {
+    return await db.signalPreference.findMany({
+      where: { athleteId },
+      orderBy: { effectiveDate: "desc" },
+    });
+  } catch (error) {
+    if (!isMissingRoleSignalsColumn(error)) throw error;
+    return db.signalPreference.findMany({
+      where: { athleteId },
+      orderBy: { effectiveDate: "desc" },
+      select: SIGNAL_PREFERENCE_CORE_SELECT,
+    });
+  }
+}
+
+const DISCIPLINE_SETTINGS_CORE_SELECT = {
+  id: true,
+  athleteId: true,
+  discipline: true,
+  primarySignal: true,
+  fallbackSignal: true,
+  displayUnit: true,
+  poolSize: true,
+  pastWorkoutShading: true,
+} as const;
+
+export async function listDisciplineSettings(athleteId: string) {
+  try {
+    return await db.athleteDisciplineSettings.findMany({ where: { athleteId } });
+  } catch (error) {
+    if (!isMissingRoleSignalsColumn(error)) throw error;
+    return db.athleteDisciplineSettings.findMany({
+      where: { athleteId },
+      select: DISCIPLINE_SETTINGS_CORE_SELECT,
+    });
+  }
+}
+
 export async function syncCurrentPreferenceToSettings(
   athleteId: string,
   discipline: Discipline
 ): Promise<void> {
-  const latest = await db.signalPreference.findFirst({
-    where: { athleteId, discipline },
-    orderBy: { effectiveDate: "desc" },
-  });
+  let latest: {
+    primarySignal: SignalType;
+    fallbackSignal: SignalType | null;
+    roleSignals?: unknown;
+  } | null;
+  try {
+    latest = await db.signalPreference.findFirst({
+      where: { athleteId, discipline },
+      orderBy: { effectiveDate: "desc" },
+    });
+  } catch (error) {
+    if (!isMissingRoleSignalsColumn(error)) throw error;
+    latest = await db.signalPreference.findFirst({
+      where: { athleteId, discipline },
+      orderBy: { effectiveDate: "desc" },
+      select: SIGNAL_PREFERENCE_CORE_SELECT,
+    });
+  }
   if (!latest) return;
-  await db.athleteDisciplineSettings.update({
-    where: { athleteId_discipline: { athleteId, discipline } },
-    data: {
-      primarySignal: latest.primarySignal,
-      fallbackSignal: latest.fallbackSignal,
-      roleSignals: roleSignalsJson(parseRoleSignals(roleSignalsField(latest))),
-    },
-  });
+  const base = {
+    primarySignal: latest.primarySignal,
+    fallbackSignal: latest.fallbackSignal,
+  };
+  try {
+    await db.athleteDisciplineSettings.update({
+      where: { athleteId_discipline: { athleteId, discipline } },
+      data: {
+        ...base,
+        roleSignals: roleSignalsJson(parseRoleSignals(roleSignalsField(latest))),
+      },
+    });
+  } catch (error) {
+    if (!isMissingRoleSignalsColumn(error)) throw error;
+    await db.athleteDisciplineSettings.update({
+      where: { athleteId_discipline: { athleteId, discipline } },
+      data: base,
+    });
+  }
 }
 
 export type UpsertSignalPreferenceInput = {
@@ -244,15 +346,34 @@ export async function upsertSignalPreference(
   effectiveDate: Date,
   roleSignals?: RoleSignalOverrides
 ): Promise<SignalPreference> {
-  const existing = await db.signalPreference.findUnique({
-    where: {
-      athleteId_discipline_effectiveDate: {
-        athleteId,
-        discipline,
-        effectiveDate,
+  let existing: {
+    primarySignal: SignalType;
+    fallbackSignal: SignalType | null;
+    roleSignals?: unknown;
+  } | null;
+  try {
+    existing = await db.signalPreference.findUnique({
+      where: {
+        athleteId_discipline_effectiveDate: {
+          athleteId,
+          discipline,
+          effectiveDate,
+        },
       },
-    },
-  });
+    });
+  } catch (error) {
+    if (!isMissingRoleSignalsColumn(error)) throw error;
+    existing = await db.signalPreference.findUnique({
+      where: {
+        athleteId_discipline_effectiveDate: {
+          athleteId,
+          discipline,
+          effectiveDate,
+        },
+      },
+      select: SIGNAL_PREFERENCE_CORE_SELECT,
+    });
+  }
 
   let resolvedRoles: RoleSignalOverrides;
   if (roleSignals !== undefined) {
@@ -260,40 +381,79 @@ export async function upsertSignalPreference(
   } else if (existing) {
     resolvedRoles = parseRoleSignals(roleSignalsField(existing));
   } else {
-    const previous = await db.signalPreference.findFirst({
-      where: {
-        athleteId,
-        discipline,
-        effectiveDate: { lt: effectiveDate },
-      },
-      orderBy: { effectiveDate: "desc" },
-    });
+    let previous: {
+      primarySignal: SignalType;
+      fallbackSignal: SignalType | null;
+      roleSignals?: unknown;
+    } | null;
+    try {
+      previous = await db.signalPreference.findFirst({
+        where: {
+          athleteId,
+          discipline,
+          effectiveDate: { lt: effectiveDate },
+        },
+        orderBy: { effectiveDate: "desc" },
+      });
+    } catch (error) {
+      if (!isMissingRoleSignalsColumn(error)) throw error;
+      previous = await db.signalPreference.findFirst({
+        where: {
+          athleteId,
+          discipline,
+          effectiveDate: { lt: effectiveDate },
+        },
+        orderBy: { effectiveDate: "desc" },
+        select: SIGNAL_PREFERENCE_CORE_SELECT,
+      });
+    }
     resolvedRoles = previous ? parseRoleSignals(roleSignalsField(previous)) : {};
   }
 
   const snapshot = preferenceSnapshot(discipline, primarySignal, resolvedRoles);
-  const row = await db.signalPreference.upsert({
-    where: {
-      athleteId_discipline_effectiveDate: {
-        athleteId,
-        discipline,
-        effectiveDate,
-      },
-    },
-    create: {
+  const where = {
+    athleteId_discipline_effectiveDate: {
       athleteId,
       discipline,
-      primarySignal: snapshot.primarySignal,
-      fallbackSignal: snapshot.fallbackSignal,
-      roleSignals: roleSignalsJson(snapshot.roleSignals),
       effectiveDate,
     },
-    update: {
-      primarySignal: snapshot.primarySignal,
-      fallbackSignal: snapshot.fallbackSignal,
-      roleSignals: roleSignalsJson(snapshot.roleSignals),
-    },
-  });
+  };
+  const baseCreate = {
+    athleteId,
+    discipline,
+    primarySignal: snapshot.primarySignal,
+    fallbackSignal: snapshot.fallbackSignal,
+    effectiveDate,
+  };
+  const baseUpdate = {
+    primarySignal: snapshot.primarySignal,
+    fallbackSignal: snapshot.fallbackSignal,
+  };
+  const roleJson = roleSignalsJson(snapshot.roleSignals);
+  // Explicit roleUpdates always write roleSignals. Primary-only updates on an
+  // existing row omit the column (works pre-migration). New dated rows still
+  // try to copy prior overrides when available.
+  const writeRolesOnCreate =
+    roleSignals !== undefined || Object.keys(snapshot.roleSignals).length > 0;
+  const writeRolesOnUpdate = roleSignals !== undefined;
+
+  async function upsertWithOptionalRoles(includeRoles: boolean) {
+    return db.signalPreference.upsert({
+      where,
+      create: includeRoles ? { ...baseCreate, roleSignals: roleJson } : baseCreate,
+      update: writeRolesOnUpdate
+        ? { ...baseUpdate, roleSignals: roleJson }
+        : baseUpdate,
+    });
+  }
+
+  let row: SignalPreference;
+  try {
+    row = await upsertWithOptionalRoles(writeRolesOnCreate);
+  } catch (error) {
+    if (!writeRolesOnCreate || !isMissingRoleSignalsColumn(error)) throw error;
+    row = await upsertWithOptionalRoles(false);
+  }
   await syncCurrentPreferenceToSettings(athleteId, discipline);
   return row;
 }
