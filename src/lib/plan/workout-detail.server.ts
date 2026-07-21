@@ -20,6 +20,7 @@ import {
   type DisciplineUnitSettings,
 } from "@/lib/units/discipline-settings";
 import { parseWorkoutTree } from "@/lib/workout/steps";
+import { inferSignalFromWorkoutNodes } from "@/lib/workout/infer-prescription-signal";
 import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
 import type { NormalizedStreams, WorkoutExecutionLap } from "@/lib/zones/compute";
 import { parseStoredStreams } from "@/lib/zones/process-activity";
@@ -75,6 +76,8 @@ export type WorkoutDetailViewModel = {
   primarySignal: SignalType | null;
   /** Effective primary ignoring per-session override (for Default label). */
   inheritedPrimarySignal: SignalType | null;
+  /** From structured workout targets when present; drives Default / From workout label. */
+  prescriptionSignal: SignalType | null;
   sessionRole: import("@prisma/client").SessionRole;
   tizSignalOverride: SignalType | null;
   sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE";
@@ -210,17 +213,27 @@ export async function loadWorkoutDetail(
       ? ((plannedSession as { tizSignalOverride?: SignalType | null }).tizSignalOverride ??
         null)
       : null;
+
+  const workoutTree = plannedSession.structuredWorkout
+    ? parseWorkoutTree(plannedSession.structuredWorkout.steps)
+    : undefined;
+  const prescriptionSignal = workoutTree
+    ? inferSignalFromWorkoutNodes(workoutTree.nodes, plannedSession.discipline)
+    : null;
+
   const inheritedPrimarySignal = resolvePrimarySignalForSession(
     plannedSession.discipline,
     snapshot,
     plannedSession.sessionRole,
-    null
+    null,
+    prescriptionSignal
   );
   const primarySignal = resolvePrimarySignalForSession(
     plannedSession.discipline,
     snapshot,
     plannedSession.sessionRole,
-    sessionOverride
+    sessionOverride,
+    prescriptionSignal
   );
 
   let thresholdPaceSeconds: number | null = null;
@@ -240,10 +253,6 @@ export async function loadWorkoutDetail(
       thresholdZoneBoundaries = parseZoneBoundaries(paceProfile.zoneBoundaries);
     }
   }
-
-  const workoutTree = plannedSession.structuredWorkout
-    ? parseWorkoutTree(plannedSession.structuredWorkout.steps)
-    : undefined;
 
   const linkedActivity = plannedSession.linkedActivityId
     ? await db.syncedActivity.findFirst({
@@ -354,6 +363,7 @@ export async function loadWorkoutDetail(
     thresholdZoneBoundaries,
     primarySignal,
     inheritedPrimarySignal,
+    prescriptionSignal,
     sessionRole: plannedSession.sessionRole,
     tizSignalOverride: sessionOverride,
     sessionSource: plannedSession.source,

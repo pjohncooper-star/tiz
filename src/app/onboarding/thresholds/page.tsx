@@ -370,8 +370,9 @@ export default function ThresholdsStep() {
           {onboardingComplete ? "Current thresholds" : "Step 2 — Current thresholds"}
         </h1>
         <p className="text-sm text-zinc-500">
-          Set your best-guess thresholds for today. Choose which metric is primary for
-          time-in-zone reporting on bike and run, and optionally override by session role.
+          Set your best-guess thresholds for today. Structured workouts score TiZ from how
+          they were built (watts, HR, or pace). The primary metric and optional role
+          overrides apply when a session has no structured workout, and as stream fallback.
           Customize zone boundaries per sport and signal when needed.
         </p>
       </div>

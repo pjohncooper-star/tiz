@@ -10,6 +10,7 @@ import type {
 } from "@/lib/workout/workout-tree";
 import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
 import { targetZoneFromTarget } from "@/lib/workout/workout-tree";
+import { inferSignalFromWorkoutNodes } from "@/lib/workout/infer-prescription-signal";
 
 export type ProfileLengthView = "duration" | "distance";
 
@@ -418,12 +419,14 @@ export function buildWorkoutProfile(
   }
 ): WorkoutProfileChart {
   const {
-    primarySignal,
+    primarySignal: requestedSignal,
     lengthView,
     discipline,
     displayUnit = "METRIC",
     thresholds = {},
   } = options;
+  const primarySignal =
+    inferSignalFromWorkoutNodes(nodes, discipline) ?? requestedSignal;
 
   const segments: WorkoutProfileSegment[] = [];
   let x = 0;

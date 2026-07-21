@@ -57,6 +57,7 @@ export default async function WorkoutDetailPage({
         thresholdZoneBoundaries={viewModel.thresholdZoneBoundaries}
         primarySignal={viewModel.primarySignal}
         inheritedPrimarySignal={viewModel.inheritedPrimarySignal}
+        prescriptionSignal={viewModel.prescriptionSignal}
         sessionRole={viewModel.sessionRole}
         tizSignalOverride={viewModel.tizSignalOverride}
         sessionSource={viewModel.sessionSource}

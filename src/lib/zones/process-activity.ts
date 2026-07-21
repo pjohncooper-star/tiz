@@ -17,6 +17,8 @@ import {
   inferSessionRole,
   resolveDisplaySessionRole,
 } from "@/lib/plan/session-role";
+import { inferSignalFromWorkoutNodes } from "@/lib/workout/infer-prescription-signal";
+import { parseWorkoutTree } from "@/lib/workout/workout-tree";
 import { Prisma, type ActivityLegType, type SessionRole, type SignalType } from "@prisma/client";
 
 export function parseStoredStreams(raw: unknown): NormalizedStreams {
@@ -72,6 +74,7 @@ type LinkedSessionContext = {
   discipline: import("@prisma/client").Discipline;
   estimatedDurationMinutes: number | null;
   targetZones: unknown;
+  structuredSteps: unknown | null;
 };
 
 async function loadLinkedSessionContext(
@@ -88,8 +91,21 @@ async function loadLinkedSessionContext(
         discipline: true,
         estimatedDurationMinutes: true,
         targetZones: true,
+        structuredWorkout: { select: { steps: true } },
       },
-    });
+    }).then((row) =>
+      row
+        ? {
+            sessionRole: row.sessionRole,
+            tizSignalOverride: row.tizSignalOverride,
+            title: row.title,
+            discipline: row.discipline,
+            estimatedDurationMinutes: row.estimatedDurationMinutes,
+            targetZones: row.targetZones,
+            structuredSteps: row.structuredWorkout?.steps ?? null,
+          }
+        : null
+    );
   } catch (error) {
     // Pre-migration: column may not exist yet.
     if (
@@ -104,12 +120,18 @@ async function loadLinkedSessionContext(
           discipline: true,
           estimatedDurationMinutes: true,
           targetZones: true,
+          structuredWorkout: { select: { steps: true } },
         },
       });
       return row
         ? {
-            ...row,
+            sessionRole: row.sessionRole,
             tizSignalOverride: null,
+            title: row.title,
+            discipline: row.discipline,
+            estimatedDurationMinutes: row.estimatedDurationMinutes,
+            targetZones: row.targetZones,
+            structuredSteps: row.structuredWorkout?.steps ?? null,
           }
         : null;
     }
@@ -128,10 +150,22 @@ async function resolveSessionContextForActivity(
   streams: NormalizedStreams,
   primarySignal: SignalType,
   activityDate: Date
-): Promise<{ sessionRole: SessionRole; tizSignalOverride: SignalType | null }> {
+): Promise<{
+  sessionRole: SessionRole;
+  tizSignalOverride: SignalType | null;
+  prescriptionSignal: SignalType | null;
+}> {
   const linked = await loadLinkedSessionContext(activity.id, activity.athleteId);
 
   if (linked) {
+    let prescriptionSignal: SignalType | null = null;
+    if (linked.structuredSteps) {
+      const tree = parseWorkoutTree(linked.structuredSteps);
+      prescriptionSignal = inferSignalFromWorkoutNodes(
+        tree.nodes,
+        linked.discipline
+      );
+    }
     return {
       sessionRole: resolveDisplaySessionRole({
         sessionRole: linked.sessionRole,
@@ -144,6 +178,7 @@ async function resolveSessionContextForActivity(
             : undefined,
       }),
       tizSignalOverride: linked.tizSignalOverride,
+      prescriptionSignal,
     };
   }
 
@@ -164,6 +199,7 @@ async function resolveSessionContextForActivity(
       thresholdValue: threshold?.thresholdValue ?? null,
     }),
     tizSignalOverride: null,
+    prescriptionSignal: null,
   };
 }
 

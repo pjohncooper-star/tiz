@@ -6,7 +6,11 @@ import {
 } from "@/lib/plan/calendar/serialize";
 import { buildEnduranceDraftNodes } from "@/lib/plan/calendar/spread-easy-tiz";
 import { preferenceSnapshot } from "@/lib/zones/signal-preference";
-import { serializeWorkoutTree, WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
+import {
+  serializeWorkoutTree,
+  WORKOUT_TREE_VERSION,
+  type WorkoutNode,
+} from "@/lib/workout/workout-tree";
 import type { PlannedSession } from "@prisma/client";
 
 function sessionRow(
@@ -51,7 +55,36 @@ function sessionRow(
   };
 }
 
-describe("serializePlannedSessions role-aware profile", () => {
+function bikePowerIntervalNodes(): WorkoutNode[] {
+  return [
+    {
+      kind: "repeat",
+      repeatCount: 4,
+      children: [
+        {
+          kind: "step",
+          intensity: "interval",
+          duration: { type: "time", value: 300 },
+          target: { signal: "power", mode: "value", value: 250 },
+        },
+        {
+          kind: "step",
+          intensity: "recovery",
+          duration: { type: "time", value: 180 },
+          target: { signal: "power", mode: "value", value: 150 },
+        },
+      ],
+    },
+    {
+      kind: "step",
+      intensity: "active",
+      duration: { type: "time", value: 720 },
+      target: { signal: "power", mode: "value", value: 150 },
+    },
+  ];
+}
+
+describe("serializePlannedSessions prescription-driven profile", () => {
   it("signalPrefsFromDisciplineSettings parses roleSignals", () => {
     const prefs = signalPrefsFromDisciplineSettings([
       {
@@ -65,7 +98,7 @@ describe("serializePlannedSessions role-aware profile", () => {
     assert.equal(prefs.RUN?.roleSignals.EASY, "HEART_RATE");
   });
 
-  it("easy session with HR override uses HR-scale profile (zone 1–5)", () => {
+  it("structured run profiles follow pace prescription, not TiZ HR role override", () => {
     const prefs = {
       RUN: preferenceSnapshot("RUN", "PACE", { EASY: "HEART_RATE" }),
     };
@@ -76,27 +109,11 @@ describe("serializePlannedSessions role-aware profile", () => {
       prefs
     );
     assert.ok(easy.workoutProfile, "expected workout profile");
-    // HR profile Y-axis is zone numbers ~1–5
-    assert.ok(easy.workoutProfile!.yMax <= 5.5);
-    assert.ok(easy.workoutProfile!.yMin >= 0.5);
-  });
-
-  it("intensity session keeps pace-scale profile when override is only for easy", () => {
-    const prefs = {
-      RUN: preferenceSnapshot("RUN", "PACE", { EASY: "HEART_RATE" }),
-    };
-    const [intensity] = serializePlannedSessions(
-      [sessionRow({ sessionRole: "INTENSITY", title: "Intervals" })],
-      { RUN: "METRIC" },
-      {},
-      prefs
-    );
-    assert.ok(intensity.workoutProfile, "expected workout profile");
     // Pace inverted Y is negative seconds-based scale, not HR zones 1–5
-    assert.ok(intensity.workoutProfile!.yMax < 0);
+    assert.ok(easy.workoutProfile!.yMax < 0);
   });
 
-  it("session override beats role override on profile axis", () => {
+  it("session TiZ override is still serialized even though profile follows prescription", () => {
     const prefs = {
       RUN: preferenceSnapshot("RUN", "PACE", { EASY: "HEART_RATE" }),
     };
@@ -109,5 +126,42 @@ describe("serializePlannedSessions role-aware profile", () => {
     assert.ok(session.workoutProfile);
     assert.ok(session.workoutProfile!.yMax < 0);
     assert.equal(session.tizSignalOverride, "PACE");
+  });
+
+  it("bike power intervals stay structured when athlete TiZ primary is HEART_RATE", () => {
+    const nodes = bikePowerIntervalNodes();
+    const prefs = {
+      BIKE: preferenceSnapshot("BIKE", "HEART_RATE"),
+    };
+    const [bike] = serializePlannedSessions(
+      [
+        sessionRow({
+          id: "bike1",
+          discipline: "BIKE",
+          title: "Bike intervals",
+          sessionRole: "INTENSITY",
+          structuredWorkout: {
+            steps: serializeWorkoutTree({ version: WORKOUT_TREE_VERSION, nodes }),
+          },
+        }),
+      ],
+      { BIKE: "METRIC" },
+      {},
+      prefs
+    );
+    assert.ok(bike.workoutProfile);
+    const heights = new Set(bike.workoutProfile!.segments.map((s) => s.yHigh));
+    assert.ok(
+      heights.size >= 2,
+      `expected distinct power heights, got ${[...heights].join(",")}`
+    );
+    assert.ok(
+      bike.workoutProfile!.segments.some((s) => s.yHigh === 250),
+      "expected 250W interval peaks"
+    );
+    assert.ok(
+      bike.workoutProfile!.segments.some((s) => s.yHigh === 150),
+      "expected 150W recovery/steady"
+    );
   });
 });
