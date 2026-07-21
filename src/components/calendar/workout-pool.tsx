@@ -257,6 +257,7 @@ function DisciplineFilterBar({
           type="button"
           className="rounded-md border border-sky-300 bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100 dark:hover:bg-sky-950/70"
           onClick={onAutoFillEasyTiz}
+          title="Fill remaining Z1/Z2 onto easy/long Build sessions and apply workouts to the calendar"
         >
           Auto-fill easy TiZ
         </button>

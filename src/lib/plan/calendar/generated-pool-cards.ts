@@ -45,6 +45,19 @@ export function isGeneratedPoolCardId(cardId: string): boolean {
   return parseGeneratedPoolCardId(cardId) != null;
 }
 
+/** Pool draft keys that target a fillable generated PlannedSession. */
+export function generatedSessionDraftEntries<T>(
+  drafts: Record<string, T>
+): Array<{ cardId: string; sessionId: string; draft: T }> {
+  const out: Array<{ cardId: string; sessionId: string; draft: T }> = [];
+  for (const [cardId, draft] of Object.entries(drafts)) {
+    const sessionId = parseGeneratedPoolCardId(cardId);
+    if (!sessionId) continue;
+    out.push({ cardId, sessionId, draft });
+  }
+  return out;
+}
+
 export function poolSlotKindForSession(session: CalendarPlannedSession): PoolSlotKind {
   if (session.poolSlotKind) return session.poolSlotKind;
   if (session.sessionRole === "INTENSITY") return "INTENSITY";
