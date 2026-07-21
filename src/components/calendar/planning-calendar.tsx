@@ -85,11 +85,14 @@ import type { PlanDiscipline } from "@/lib/plan/session";
 import { Button } from "@/components/ui";
 import { computeEasyTizSpread, computeLongPoolDrafts } from "@/lib/plan/calendar/spread-easy-tiz";
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
+import {
+  calendarStickyOffsetPx,
+  pickFirstFullyVisibleWeek,
+  scrollElementBelowSticky,
+} from "@/lib/plan/calendar/week-scroll-focus";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const MAX_PAST_WEEKS_WITHOUT_ACTIVITIES = 52;
-/** Sticky toolbar + week header offset used for focused-week detection. */
-const FOCUS_TOP_OFFSET_PX = 72;
 
 /** Persist an autofill draft onto a fillable generated PlannedSession. */
 async function persistGeneratedSessionDraft(
@@ -182,6 +185,7 @@ export function PlanningCalendar({
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
   const [isXl, setIsXl] = useState(false);
+  const [editorBandHeightPx, setEditorBandHeightPx] = useState(0);
   // Pool week for the wizard; changing it scrolls the calendar to match.
   const [poolWeekStart, setPoolWeekStart] = useState(
     () => initialScrollWeekStart ?? currentWeekStart
@@ -215,6 +219,12 @@ export function PlanningCalendar({
   });
 
   const useWizardPool = poolOpen && isXl;
+  const stickyOffsetPx = calendarStickyOffsetPx({
+    editorBandHeightPx,
+    includeEditorBand: useWizardPool,
+  });
+  const stickyOffsetPxRef = useRef(stickyOffsetPx);
+  stickyOffsetPxRef.current = stickyOffsetPx;
   const composerActive = useWizardPool && selectedPoolCardId != null && builderExpanded;
   const generatedWorkoutAppliedRef = useRef<(sessionId: string) => void>(() => {});
 
@@ -249,6 +259,25 @@ export function PlanningCalendar({
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!useWizardPool) {
+      setEditorBandHeightPx(0);
+      return;
+    }
+    const el = editorBandRef.current;
+    if (!el) {
+      setEditorBandHeightPx(0);
+      return;
+    }
+    const measure = () => {
+      setEditorBandHeightPx(el.getBoundingClientRect().height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [useWizardPool, selectedPoolCardId, builderExpanded, poolWeekStart]);
 
   const poolDropWeekStart = useWizardPool ? poolWeekStart : null;
 
@@ -628,9 +657,9 @@ export function PlanningCalendar({
     async (weekStart: string) => {
       setFocusedWeek(weekStart, { lockMs: 1200 });
       const scroll = () => {
-        document
-          .querySelector(`[data-week-start="${weekStart}"]`)
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+        const el = document.querySelector(`[data-week-start="${weekStart}"]`);
+        if (!(el instanceof HTMLElement)) return;
+        scrollElementBelowSticky(el, stickyOffsetPxRef.current, "smooth");
       };
 
       if (sortedWeeks.includes(weekStart)) {
@@ -759,12 +788,15 @@ export function PlanningCalendar({
 
     const scrollToTarget = () => {
       const byWeek = document.querySelector(`[data-week-start="${targetWeek}"]`);
-      if (byWeek) {
-        byWeek.scrollIntoView({ block: "start" });
+      if (byWeek instanceof HTMLElement) {
+        scrollElementBelowSticky(byWeek, stickyOffsetPxRef.current, "auto");
         return;
       }
       if (targetWeek === currentWeekStart) {
-        document.getElementById("calendar-current-week")?.scrollIntoView({ block: "start" });
+        const current = document.getElementById("calendar-current-week");
+        if (current instanceof HTMLElement) {
+          scrollElementBelowSticky(current, stickyOffsetPxRef.current, "auto");
+        }
       }
     };
 
@@ -886,23 +918,14 @@ export function PlanningCalendar({
     const updateFocusedWeekFromScroll = () => {
       if (Date.now() < focusLockUntilRef.current) return;
 
-      let bestWeek: string | null = null;
-      let bestDistance = Number.POSITIVE_INFINITY;
-
+      const weekTops: { weekStart: string; top: number }[] = [];
       for (const weekStart of sortedWeeks) {
         const el = document.querySelector(`[data-week-start="${weekStart}"]`);
         if (!(el instanceof HTMLElement)) continue;
-        const top = el.getBoundingClientRect().top;
-        const distance = Math.abs(top - FOCUS_TOP_OFFSET_PX);
-        // Prefer the week whose top is at or above the sticky offset (already scrolled past),
-        // falling back to nearest overall.
-        const score = top <= FOCUS_TOP_OFFSET_PX + 8 ? distance : distance + 10_000;
-        if (score < bestDistance) {
-          bestDistance = score;
-          bestWeek = weekStart;
-        }
+        weekTops.push({ weekStart, top: el.getBoundingClientRect().top });
       }
 
+      const bestWeek = pickFirstFullyVisibleWeek(weekTops, stickyOffsetPxRef.current);
       if (bestWeek) {
         setFocusedWeek(bestWeek);
       }
@@ -915,7 +938,7 @@ export function PlanningCalendar({
       window.removeEventListener("scroll", updateFocusedWeekFromScroll);
       window.removeEventListener("resize", updateFocusedWeekFromScroll);
     };
-  }, [setFocusedWeek, sortedWeeks]);
+  }, [setFocusedWeek, sortedWeeks, stickyOffsetPx]);
 
   async function openApplyDialog() {
     setApplyWeekStart(currentWeekStart);
@@ -1464,6 +1487,7 @@ export function PlanningCalendar({
             }
             onAutoFillEasyTiz={() => void handleAutoFillEasyTizForWeek(weekStart)}
             paceContext={paceContext}
+            scrollMarginTopPx={stickyOffsetPx}
           />
         ))}
       </div>
