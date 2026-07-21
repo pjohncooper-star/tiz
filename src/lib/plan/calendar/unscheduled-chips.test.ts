@@ -60,6 +60,7 @@ function session(
     workoutProfile: null,
     sessionRole: "MODERATE",
     displaySessionRole: "MODERATE",
+    tizSignalOverride: null,
     poolSlotKind: null,
   };
 }
@@ -69,7 +70,8 @@ function sessionWithSlot(
   sessionRole: CalendarPlannedSession["sessionRole"],
   poolSlotKind: CalendarPlannedSession["poolSlotKind"]
 ): CalendarPlannedSession {
-  return { ...session(discipline), sessionRole, displaySessionRole: sessionRole, poolSlotKind };
+  return { ...session(discipline), sessionRole, displaySessionRole: sessionRole,
+    tizSignalOverride: null, poolSlotKind };
 }
 
 const EMPTY_SLOT_BUDGETS = {

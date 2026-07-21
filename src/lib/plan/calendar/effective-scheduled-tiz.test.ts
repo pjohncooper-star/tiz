@@ -104,6 +104,7 @@ function session(
     workoutProfile: null,
     sessionRole: "EASY",
     displaySessionRole: "EASY",
+    tizSignalOverride: null,
     poolSlotKind: "ENDURANCE",
     ...overrides,
   };

@@ -38,6 +38,7 @@ function generatedSession(
     workoutProfile: null,
     sessionRole: "MODERATE",
     displaySessionRole: "MODERATE",
+    tizSignalOverride: null,
     poolSlotKind: "ENDURANCE",
     ...overrides,
   };

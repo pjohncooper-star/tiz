@@ -42,6 +42,8 @@ function baseSession(
     workoutProfile: null,
     sessionRole: "MODERATE",
     displaySessionRole: "MODERATE",
+    tizSignalOverride: null,
+    poolSlotKind: null,
     ...overrides,
   };
 }

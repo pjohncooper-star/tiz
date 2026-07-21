@@ -9,6 +9,7 @@ import {
   preferenceSnapshot,
   resolvePrimarySignalForSession,
   resolveSignalForRole,
+  resolveSignalForSession,
   roleSignalsEqual,
   signalTypeToTargetSignal,
   signalTypeToTargetView,
@@ -112,6 +113,25 @@ describe("signal-preference", () => {
     assert.equal(resolvePrimarySignalForSession("RUN", snapshot, "MODERATE"), "PACE");
     assert.equal(resolvePrimarySignalForSession("RUN", snapshot, "INTENSITY"), "PACE");
     assert.equal(resolvePrimarySignalForSession("RUN", snapshot, null), "PACE");
+  });
+
+  it("session override beats role override", () => {
+    const snapshot = preferenceSnapshot("RUN", "PACE", { EASY: "HEART_RATE" });
+    assert.equal(
+      resolvePrimarySignalForSession("RUN", snapshot, "EASY", "PACE"),
+      "PACE"
+    );
+    assert.deepEqual(
+      resolveSignalForSession("RUN", snapshot, {
+        sessionRole: "EASY",
+        tizSignalOverride: "PACE",
+      }),
+      { primarySignal: "PACE", fallbackSignal: "HEART_RATE" }
+    );
+    assert.equal(
+      resolvePrimarySignalForSession("RUN", snapshot, "EASY", null),
+      "HEART_RATE"
+    );
   });
 
   it("roleSignalsEqual and formatRoleSignalSummary", () => {
