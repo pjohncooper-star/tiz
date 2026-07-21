@@ -13,6 +13,10 @@ import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-default
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
 import { signalLabel } from "@/lib/zones/display";
+import {
+  formatRoleSignalSummary,
+  parseRoleSignals,
+} from "@/lib/zones/signal-preference";
 
 export const dynamic = "force-dynamic";
 
@@ -145,16 +149,29 @@ export default async function SettingsPage() {
         <ul className="space-y-2 text-sm">
           {settings
             .filter((s) => s.discipline === "BIKE" || s.discipline === "RUN" || s.discipline === "SWIM")
-            .map((s) => (
+            .map((s) => {
+              const roleSummary =
+                s.discipline === "BIKE" || s.discipline === "RUN"
+                  ? formatRoleSignalSummary(
+                      s.primarySignal,
+                      parseRoleSignals(
+                        "roleSignals" in s ? s.roleSignals : null
+                      ),
+                      signalLabel
+                    )
+                  : null;
+              return (
               <li key={s.discipline}>
                 <span className="font-medium">{s.discipline}</span>
                 <span className="text-zinc-500">
                   {" "}
                   — primary TiZ metric: {signalLabel(s.primarySignal)}
                   {s.fallbackSignal ? ` (fallback: ${signalLabel(s.fallbackSignal)})` : ""}
+                  {roleSummary ? ` · by role: ${roleSummary}` : ""}
                 </span>
               </li>
-            ))}
+              );
+            })}
         </ul>
         <div className="mt-3 flex flex-wrap gap-3 text-sm">
           <Link href="/onboarding/thresholds" className="text-sky-600 hover:underline">

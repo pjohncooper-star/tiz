@@ -103,14 +103,14 @@ export async function upsertSyncedActivity(
     });
 
     await upsertFitSelfEvalSurvey(athleteId, existing.id, input.selfEval);
+    if (options?.linkPlannedSession) {
+      await tryAutoLinkActivityToPlannedSession(athleteId, existing.id);
+    }
     if (shouldRecomputeZones && !options?.deferZoneCompute) {
       await inngest.send({
         name: "activity/zones.compute",
         data: { activityId: existing.id },
       });
-    }
-    if (options?.linkPlannedSession) {
-      await tryAutoLinkActivityToPlannedSession(athleteId, existing.id);
     }
     return updated;
   }
@@ -139,14 +139,14 @@ export async function upsertSyncedActivity(
 
   await upsertFitSelfEvalSurvey(athleteId, activity.id, input.selfEval);
 
+  if (options?.linkPlannedSession) {
+    await tryAutoLinkActivityToPlannedSession(athleteId, activity.id);
+  }
   if (!options?.deferZoneCompute) {
     await inngest.send({
       name: "activity/zones.compute",
       data: { activityId: activity.id },
     });
-  }
-  if (options?.linkPlannedSession) {
-    await tryAutoLinkActivityToPlannedSession(athleteId, activity.id);
   }
   return activity;
 }

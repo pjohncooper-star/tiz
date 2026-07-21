@@ -2,8 +2,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import type { SignalType } from "@prisma/client";
+import type { Discipline, SignalType } from "@prisma/client";
 import { OnboardingBack } from "@/components/onboarding-nav";
+import { RoleSignalOverridesEditor } from "@/components/role-signal-overrides-editor";
 import { Button, Card, Input, Label, SegmentedControl, Select } from "@/components/ui";
 import {
   parseThresholdPaceInput,
@@ -11,6 +12,12 @@ import {
   thresholdPaceToInput,
 } from "@/lib/units/pace";
 import { signalLabel } from "@/lib/zones/display";
+import {
+  formatRoleSignalSummary,
+  normalizeRoleSignals,
+  parseRoleSignals,
+  type RoleSignalOverrides,
+} from "@/lib/zones/signal-preference";
 
 type ThresholdRow = {
   id: string;
@@ -25,6 +32,7 @@ type SignalPreferenceRow = {
   id: string;
   discipline: string;
   primarySignal: string;
+  roleSignals?: unknown;
   effectiveDate: string;
 };
 
@@ -38,6 +46,7 @@ type PrimaryDraftRow = {
   id: string;
   effectiveDate: string;
   primarySignal: string;
+  roleSignals: RoleSignalOverrides;
 };
 
 type DisplayUnit = "METRIC" | "IMPERIAL";
@@ -69,6 +78,7 @@ function emptyPrimaryDraftRow(discipline: string): PrimaryDraftRow {
     id: crypto.randomUUID(),
     effectiveDate: "",
     primarySignal: PRIMARY_OPTIONS[discipline]?.[0]?.value ?? "PACE",
+    roleSignals: {},
   };
 }
 
@@ -211,6 +221,10 @@ export default function ThresholdHistoryStep() {
               discipline: primaryDiscipline,
               primarySignal: row.primarySignal,
               effectiveDate: row.effectiveDate,
+              roleSignals: normalizeRoleSignals(
+                row.primarySignal as SignalType,
+                row.roleSignals
+              ),
             },
           }),
         })
@@ -266,8 +280,8 @@ export default function ThresholdHistoryStep() {
         <h1 className="text-2xl font-semibold">Step 3 — Historical thresholds</h1>
         <p className="text-sm text-zinc-500">
           Add threshold and primary-metric changes with effective dates before importing
-          workouts. Zone calculations use the values and primary metric in effect on each
-          activity date.
+          workouts. Zone calculations use the values, primary metric, and any session-role
+          metric overrides in effect on each activity date.
         </p>
       </div>
 
@@ -276,7 +290,13 @@ export default function ThresholdHistoryStep() {
           <p className="text-sm text-zinc-500">No primary metric history yet.</p>
         ) : (
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {preferenceRows.map((row) => (
+            {preferenceRows.map((row) => {
+              const roleSummary = formatRoleSignalSummary(
+                row.primarySignal as SignalType,
+                parseRoleSignals(row.roleSignals),
+                signalLabel
+              );
+              return (
               <li
                 key={row.id}
                 className="flex items-center justify-between gap-3 py-2 text-sm"
@@ -288,6 +308,7 @@ export default function ThresholdHistoryStep() {
                   <span className="text-zinc-500">
                     {" "}
                     · {row.discipline} primary: {signalLabel(row.primarySignal as SignalType)}
+                    {roleSummary ? ` · ${roleSummary}` : ""}
                   </span>
                 </div>
                 <button
@@ -298,7 +319,8 @@ export default function ThresholdHistoryStep() {
                   Remove
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </Card>
@@ -326,39 +348,55 @@ export default function ThresholdHistoryStep() {
               <span className="w-8" />
             </div>
             {primaryDraftRows.map((row) => (
-              <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                <Input
-                  type="date"
-                  value={row.effectiveDate}
-                  onChange={(e) =>
-                    updatePrimaryDraftRow(row.id, { effectiveDate: e.target.value })
+              <div key={row.id} className="space-y-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <Input
+                    type="date"
+                    value={row.effectiveDate}
+                    onChange={(e) =>
+                      updatePrimaryDraftRow(row.id, { effectiveDate: e.target.value })
+                    }
+                  />
+                  <Select
+                    value={row.primarySignal}
+                    onChange={(e) =>
+                      updatePrimaryDraftRow(row.id, {
+                        primarySignal: e.target.value,
+                        roleSignals: normalizeRoleSignals(
+                          e.target.value as SignalType,
+                          row.roleSignals
+                        ),
+                      })
+                    }
+                  >
+                    {(PRIMARY_OPTIONS[primaryDiscipline] ?? []).map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPrimaryDraftRows((prev) =>
+                        prev.length === 1 ? prev : prev.filter((r) => r.id !== row.id)
+                      )
+                    }
+                    disabled={primaryDraftRows.length === 1}
+                    className="px-2 text-sm text-zinc-400 hover:text-red-600 disabled:opacity-30"
+                    aria-label="Remove row"
+                  >
+                    ×
+                  </button>
+                </div>
+                <RoleSignalOverridesEditor
+                  discipline={primaryDiscipline as Discipline}
+                  primarySignal={row.primarySignal as SignalType}
+                  roleSignals={row.roleSignals}
+                  onChange={(roleSignals) =>
+                    updatePrimaryDraftRow(row.id, { roleSignals })
                   }
                 />
-                <Select
-                  value={row.primarySignal}
-                  onChange={(e) =>
-                    updatePrimaryDraftRow(row.id, { primarySignal: e.target.value })
-                  }
-                >
-                  {(PRIMARY_OPTIONS[primaryDiscipline] ?? []).map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPrimaryDraftRows((prev) =>
-                      prev.length === 1 ? prev : prev.filter((r) => r.id !== row.id)
-                    )
-                  }
-                  disabled={primaryDraftRows.length === 1}
-                  className="px-2 text-sm text-zinc-400 hover:text-red-600 disabled:opacity-30"
-                  aria-label="Remove row"
-                >
-                  ×
-                </button>
               </div>
             ))}
           </div>

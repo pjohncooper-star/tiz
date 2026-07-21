@@ -1,10 +1,21 @@
-import type { Discipline, SignalType, SignalPreference } from "@prisma/client";
+import type {
+  Discipline,
+  SignalType,
+  SignalPreference,
+  SessionRole,
+} from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
+import { SESSION_ROLES } from "@/lib/plan/session-role";
 import { DEFAULT_DISCIPLINE_SIGNALS } from "@/lib/zones/defaults";
+
+/** Sparse role → signal map. Unset roles inherit the discipline primary. */
+export type RoleSignalOverrides = Partial<Record<SessionRole, SignalType>>;
 
 export type SignalPreferenceSnapshot = {
   primarySignal: SignalType;
   fallbackSignal: SignalType | null;
+  roleSignals: RoleSignalOverrides;
 };
 
 const BIKE_PRIMARY: SignalType[] = ["POWER", "HEART_RATE"];
@@ -40,14 +51,88 @@ export function validatePrimarySignal(
   }
 }
 
+export function parseRoleSignals(raw: unknown): RoleSignalOverrides {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const allowedRoles = new Set<string>(SESSION_ROLES);
+  const result: RoleSignalOverrides = {};
+  for (const [role, signal] of Object.entries(raw as Record<string, unknown>)) {
+    if (!allowedRoles.has(role)) continue;
+    if (signal !== "POWER" && signal !== "HEART_RATE" && signal !== "PACE") continue;
+    result[role as SessionRole] = signal;
+  }
+  return result;
+}
+
+export function validateRoleSignals(
+  discipline: Discipline,
+  roleSignals: RoleSignalOverrides
+): void {
+  const allowed = new Set(allowedPrimarySignals(discipline));
+  for (const [role, signal] of Object.entries(roleSignals)) {
+    if (!SESSION_ROLES.includes(role as SessionRole)) {
+      throw new Error(`Invalid session role ${role}`);
+    }
+    if (!signal || !allowed.has(signal)) {
+      throw new Error(`Invalid role signal ${signal} for ${discipline} ${role}`);
+    }
+  }
+}
+
+/** Drop overrides that equal the discipline primary (sparse storage). */
+export function normalizeRoleSignals(
+  primarySignal: SignalType,
+  roleSignals: RoleSignalOverrides
+): RoleSignalOverrides {
+  const result: RoleSignalOverrides = {};
+  for (const role of SESSION_ROLES) {
+    const signal = roleSignals[role];
+    if (signal != null && signal !== primarySignal) {
+      result[role] = signal;
+    }
+  }
+  return result;
+}
+
+export function roleSignalsEqual(
+  a: RoleSignalOverrides,
+  b: RoleSignalOverrides
+): boolean {
+  for (const role of SESSION_ROLES) {
+    if ((a[role] ?? null) !== (b[role] ?? null)) return false;
+  }
+  return true;
+}
+
 export function preferenceSnapshot(
   discipline: Discipline,
-  primarySignal: SignalType
+  primarySignal: SignalType,
+  roleSignals: RoleSignalOverrides = {}
 ): SignalPreferenceSnapshot {
   validatePrimarySignal(discipline, primarySignal);
+  const normalized = normalizeRoleSignals(primarySignal, roleSignals);
+  validateRoleSignals(discipline, normalized);
   return {
     primarySignal,
     fallbackSignal: deriveFallbackSignal(discipline, primarySignal),
+    roleSignals: normalized,
+  };
+}
+
+/**
+ * Resolve the effective primary/fallback for a session role.
+ * Unset roles inherit the discipline primary; fallback is always the other signal.
+ */
+export function resolveSignalForRole(
+  discipline: Discipline,
+  snapshot: SignalPreferenceSnapshot,
+  sessionRole: SessionRole | null | undefined
+): Pick<SignalPreferenceSnapshot, "primarySignal" | "fallbackSignal"> {
+  const override =
+    sessionRole != null ? snapshot.roleSignals[sessionRole] : undefined;
+  const primary = override ?? snapshot.primarySignal;
+  return {
+    primarySignal: primary,
+    fallbackSignal: deriveFallbackSignal(discipline, primary),
   };
 }
 
@@ -64,6 +149,29 @@ export function signalTypeToTargetSignal(signal: SignalType): "power" | "pace" |
   return "pace";
 }
 
+function snapshotFromRow(row: {
+  primarySignal: SignalType;
+  fallbackSignal: SignalType | null;
+  roleSignals?: unknown;
+}): SignalPreferenceSnapshot {
+  return {
+    primarySignal: row.primarySignal,
+    fallbackSignal: row.fallbackSignal,
+    roleSignals: parseRoleSignals(roleSignalsField(row)),
+  };
+}
+
+function roleSignalsField(row: { roleSignals?: unknown }): unknown {
+  return "roleSignals" in row ? row.roleSignals : null;
+}
+
+function roleSignalsJson(
+  roleSignals: RoleSignalOverrides
+): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  if (Object.keys(roleSignals).length === 0) return Prisma.JsonNull;
+  return roleSignals as Prisma.InputJsonValue;
+}
+
 export async function getSignalPreferenceAtDate(
   athleteId: string,
   discipline: Discipline,
@@ -78,10 +186,7 @@ export async function getSignalPreferenceAtDate(
     orderBy: { effectiveDate: "desc" },
   });
   if (!row) return null;
-  return {
-    primarySignal: row.primarySignal,
-    fallbackSignal: row.fallbackSignal,
-  };
+  return snapshotFromRow(row);
 }
 
 export async function getPreferenceDateRange(
@@ -116,17 +221,57 @@ export async function syncCurrentPreferenceToSettings(
     data: {
       primarySignal: latest.primarySignal,
       fallbackSignal: latest.fallbackSignal,
+      roleSignals: roleSignalsJson(parseRoleSignals(roleSignalsField(latest))),
     },
   });
 }
+
+export type UpsertSignalPreferenceInput = {
+  primarySignal: SignalType;
+  effectiveDate: Date;
+  /**
+   * Role overrides to store. `undefined` keeps existing overrides for that
+   * effective date (or copies from the previous preference on create).
+   * Pass `{}` to clear all overrides.
+   */
+  roleSignals?: RoleSignalOverrides;
+};
 
 export async function upsertSignalPreference(
   athleteId: string,
   discipline: Discipline,
   primarySignal: SignalType,
-  effectiveDate: Date
+  effectiveDate: Date,
+  roleSignals?: RoleSignalOverrides
 ): Promise<SignalPreference> {
-  const { fallbackSignal } = preferenceSnapshot(discipline, primarySignal);
+  const existing = await db.signalPreference.findUnique({
+    where: {
+      athleteId_discipline_effectiveDate: {
+        athleteId,
+        discipline,
+        effectiveDate,
+      },
+    },
+  });
+
+  let resolvedRoles: RoleSignalOverrides;
+  if (roleSignals !== undefined) {
+    resolvedRoles = roleSignals;
+  } else if (existing) {
+    resolvedRoles = parseRoleSignals(roleSignalsField(existing));
+  } else {
+    const previous = await db.signalPreference.findFirst({
+      where: {
+        athleteId,
+        discipline,
+        effectiveDate: { lt: effectiveDate },
+      },
+      orderBy: { effectiveDate: "desc" },
+    });
+    resolvedRoles = previous ? parseRoleSignals(roleSignalsField(previous)) : {};
+  }
+
+  const snapshot = preferenceSnapshot(discipline, primarySignal, resolvedRoles);
   const row = await db.signalPreference.upsert({
     where: {
       athleteId_discipline_effectiveDate: {
@@ -138,13 +283,15 @@ export async function upsertSignalPreference(
     create: {
       athleteId,
       discipline,
-      primarySignal,
-      fallbackSignal,
+      primarySignal: snapshot.primarySignal,
+      fallbackSignal: snapshot.fallbackSignal,
+      roleSignals: roleSignalsJson(snapshot.roleSignals),
       effectiveDate,
     },
     update: {
-      primarySignal,
-      fallbackSignal,
+      primarySignal: snapshot.primarySignal,
+      fallbackSignal: snapshot.fallbackSignal,
+      roleSignals: roleSignalsJson(snapshot.roleSignals),
     },
   });
   await syncCurrentPreferenceToSettings(athleteId, discipline);
@@ -163,11 +310,37 @@ export async function resolveSignalSettingsForDate(
     return {
       primarySignal: staticSettings.primarySignal,
       fallbackSignal: staticSettings.fallbackSignal,
+      roleSignals: staticSettings.roleSignals ?? {},
     };
   }
   const defaults = DEFAULT_DISCIPLINE_SIGNALS[discipline];
   return {
     primarySignal: defaults.primary,
     fallbackSignal: defaults.fallback,
+    roleSignals: {},
   };
+}
+
+/** Human-readable summary of role overrides for settings UI. */
+export function formatRoleSignalSummary(
+  primarySignal: SignalType,
+  roleSignals: RoleSignalOverrides,
+  signalLabelFn: (s: SignalType) => string
+): string | null {
+  const parts: string[] = [];
+  for (const role of SESSION_ROLES) {
+    const signal = roleSignals[role];
+    if (signal != null && signal !== primarySignal) {
+      const label =
+        role === "EASY"
+          ? "Easy"
+          : role === "MODERATE"
+            ? "Moderate"
+            : role === "INTENSITY"
+              ? "Intensity"
+              : "Long";
+      parts.push(`${label} ${signalLabelFn(signal)}`);
+    }
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }

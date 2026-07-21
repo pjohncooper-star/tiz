@@ -6,6 +6,7 @@ import { isSessionPlanningEnabled } from "@/lib/features";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { markFolderWorkoutCompleted } from "@/lib/workout/workout-folder-library";
+import { inngest } from "@/inngest/client";
 export class SessionLinkError extends Error {
   constructor(
     message: string,
@@ -82,6 +83,12 @@ export async function linkActivityToPlannedSession(
     await markFolderWorkoutCompleted(tx, sessionId);
   });
 
+  // Role-aware TiZ may differ once the planned session role is known.
+  await inngest.send({
+    name: "activity/zones.compute",
+    data: { activityId },
+  });
+
   return { sessionId, activityId };
 }
 
@@ -97,12 +104,18 @@ export async function unlinkPlannedSessionActivity(athleteId: string, sessionId:
     return { sessionId, activityId: null };
   }
 
+  const activityId = session.linkedActivityId;
   await db.plannedSession.update({
     where: { id: sessionId },
     data: { linkedActivityId: null },
   });
 
-  return { sessionId, activityId: session.linkedActivityId };
+  await inngest.send({
+    name: "activity/zones.compute",
+    data: { activityId },
+  });
+
+  return { sessionId, activityId };
 }
 
 export async function findPlannedSessionForActivity(athleteId: string, activityId: string) {

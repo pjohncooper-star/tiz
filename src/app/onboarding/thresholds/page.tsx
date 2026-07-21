@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Discipline, SignalType } from "@prisma/client";
 import { OnboardingBack } from "@/components/onboarding-nav";
+import { RoleSignalOverridesEditor } from "@/components/role-signal-overrides-editor";
 import { ZoneBoundariesEditor } from "@/components/zone-boundaries-editor";
 import { Button, Card, Input, Label, SegmentedControl } from "@/components/ui";
 import {
@@ -12,6 +13,11 @@ import {
   thresholdPaceToInput,
 } from "@/lib/units/pace";
 import { DEFAULT_ZONE_COUNT, zoneBoundariesFor } from "@/lib/zones/boundaries";
+import {
+  normalizeRoleSignals,
+  parseRoleSignals,
+  type RoleSignalOverrides,
+} from "@/lib/zones/signal-preference";
 
 type Threshold = {
   discipline: Discipline;
@@ -67,15 +73,24 @@ function parseBoundaries(raw: unknown, discipline: Discipline, signalType: Signa
   return zoneBoundariesFor(discipline, signalType);
 }
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function ThresholdsStep() {
   const router = useRouter();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [thresholds, setThresholds] = useState<Threshold[]>([]);
   const [displayUnits, setDisplayUnits] = useState<Record<string, DisplayUnit>>({});
   const [primarySignals, setPrimarySignals] = useState<Record<string, PrimarySignal>>({});
+  const [roleSignalsByDiscipline, setRoleSignalsByDiscipline] = useState<
+    Record<string, RoleSignalOverrides>
+  >({});
+  const [roleEffectiveDates, setRoleEffectiveDates] = useState<Record<string, string>>({});
   const [paceInputs, setPaceInputs] = useState<Record<string, string>>({});
   const [paceErrors, setPaceErrors] = useState<Record<string, string>>({});
   const [expandedZones, setExpandedZones] = useState<Record<string, boolean>>({});
+  const [savingRoles, setSavingRoles] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetch("/api/settings")
@@ -84,9 +99,21 @@ export default function ThresholdsStep() {
         setOnboardingComplete(d.onboardingStep === "COMPLETE");
         const units: Record<string, DisplayUnit> = {};
         const primary: Record<string, PrimarySignal> = {};
+        const roles: Record<string, RoleSignalOverrides> = {};
         for (const s of d.settings ?? []) {
           units[s.discipline] = s.displayUnit;
           primary[s.discipline] = s.primarySignal;
+          roles[s.discipline] = parseRoleSignals(s.roleSignals);
+        }
+
+        const latestPref: Record<string, { effectiveDate: string; roleSignals: unknown }> = {};
+        for (const p of d.signalPreferences ?? []) {
+          if (!latestPref[p.discipline]) {
+            latestPref[p.discipline] = p;
+          }
+        }
+        for (const [discipline, pref] of Object.entries(latestPref)) {
+          roles[discipline] = parseRoleSignals(pref.roleSignals);
         }
 
         const latest: Record<string, Threshold> = {};
@@ -122,6 +149,11 @@ export default function ThresholdsStep() {
 
         setDisplayUnits(units);
         setPrimarySignals(primary);
+        setRoleSignalsByDiscipline(roles);
+        setRoleEffectiveDates({
+          BIKE: todayKey(),
+          RUN: todayKey(),
+        });
         setPaceInputs(inputs);
         setThresholds(list);
       });
@@ -144,7 +176,7 @@ export default function ThresholdsStep() {
           thresholdValue: value,
           zoneCount: t.zoneCount,
           zoneBoundaries: boundaries,
-          effectiveDate: new Date().toISOString().slice(0, 10),
+          effectiveDate: todayKey(),
           isEstimated: true,
         },
       }),
@@ -162,9 +194,14 @@ export default function ThresholdsStep() {
     );
   }
 
-  async function savePrimarySignal(discipline: string, primarySignal: PrimarySignal) {
-    setPrimarySignals((prev) => ({ ...prev, [discipline]: primarySignal }));
-    await fetch("/api/settings", {
+  async function saveSignalPreference(
+    discipline: string,
+    primarySignal: PrimarySignal,
+    roleSignals: RoleSignalOverrides,
+    effectiveDate: string
+  ) {
+    const normalized = normalizeRoleSignals(primarySignal, roleSignals);
+    const res = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -172,10 +209,35 @@ export default function ThresholdsStep() {
         data: {
           discipline,
           primarySignal,
-          effectiveDate: new Date().toISOString().slice(0, 10),
+          effectiveDate,
+          roleSignals: normalized,
         },
       }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? "Failed to save signal preference");
+    }
+    setPrimarySignals((prev) => ({ ...prev, [discipline]: primarySignal }));
+    setRoleSignalsByDiscipline((prev) => ({ ...prev, [discipline]: normalized }));
+  }
+
+  async function savePrimarySignal(discipline: string, primarySignal: PrimarySignal) {
+    const roles = roleSignalsByDiscipline[discipline] ?? {};
+    await saveSignalPreference(discipline, primarySignal, roles, todayKey());
+  }
+
+  async function saveRoleSignals(discipline: "BIKE" | "RUN") {
+    const primary =
+      primarySignals[discipline] ?? (discipline === "BIKE" ? "POWER" : "PACE");
+    const roles = roleSignalsByDiscipline[discipline] ?? {};
+    const effectiveDate = roleEffectiveDates[discipline] || todayKey();
+    setSavingRoles((prev) => ({ ...prev, [discipline]: true }));
+    try {
+      await saveSignalPreference(discipline, primary, roles, effectiveDate);
+    } finally {
+      setSavingRoles((prev) => ({ ...prev, [discipline]: false }));
+    }
   }
 
   async function setDisplayUnit(discipline: string, displayUnit: DisplayUnit) {
@@ -228,7 +290,12 @@ export default function ThresholdsStep() {
     for (const discipline of ["BIKE", "RUN"] as const) {
       const primary = primarySignals[discipline];
       if (primary) {
-        await savePrimarySignal(discipline, primary);
+        await saveSignalPreference(
+          discipline,
+          primary,
+          roleSignalsByDiscipline[discipline] ?? {},
+          roleEffectiveDates[discipline] || todayKey()
+        );
       }
     }
     if (onboardingComplete) {
@@ -270,42 +337,80 @@ export default function ThresholdsStep() {
         </h1>
         <p className="text-sm text-zinc-500">
           Set your best-guess thresholds for today. Choose which metric is primary for
-          time-in-zone reporting on bike and run. Customize zone boundaries per sport and
-          signal when needed.
+          time-in-zone reporting on bike and run, and optionally override by session role.
+          Customize zone boundaries per sport and signal when needed.
         </p>
       </div>
       <Card>
         <div className="space-y-6">
-          {thresholdsByDiscipline.map(({ discipline, rows }) => (
-            <div key={discipline} className="space-y-4">
-              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                {discipline}
-              </h2>
-              {rows.map((t) => {
-                const key = `${t.discipline}-${t.signalType}`;
-                const rowPrimary = primarySignalForRow(t);
-                const disciplinePrimary =
-                  primarySignals[t.discipline] ??
-                  (t.discipline === "BIKE" ? "POWER" : t.discipline === "RUN" ? "PACE" : null);
-                const isPrimary =
-                  rowPrimary != null && disciplinePrimary === rowPrimary;
-                const zonesOpen = expandedZones[key] ?? false;
-                return (
-                  <div key={key} className="space-y-1">
-                    <Label>{label(t)}</Label>
-                    {t.signalType === "PACE" ? (
-                      <>
+          {thresholdsByDiscipline.map(({ discipline, rows }) => {
+            const disciplinePrimary =
+              primarySignals[discipline] ??
+              (discipline === "BIKE" ? "POWER" : discipline === "RUN" ? "PACE" : "PACE");
+            return (
+              <div key={discipline} className="space-y-4">
+                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                  {discipline}
+                </h2>
+                {rows.map((t) => {
+                  const key = `${t.discipline}-${t.signalType}`;
+                  const rowPrimary = primarySignalForRow(t);
+                  const isPrimary =
+                    rowPrimary != null && disciplinePrimary === rowPrimary;
+                  const zonesOpen = expandedZones[key] ?? false;
+                  return (
+                    <div key={key} className="space-y-1">
+                      <Label>{label(t)}</Label>
+                      {t.signalType === "PACE" ? (
+                        <>
+                          <div className="flex flex-wrap items-end gap-2">
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="5:30"
+                              className="min-w-[8rem] flex-1"
+                              value={paceInputs[key] ?? ""}
+                              onChange={(e) =>
+                                setPaceInputs((prev) => ({ ...prev, [key]: e.target.value }))
+                              }
+                              onBlur={() => void savePace(t)}
+                            />
+                            {rowPrimary && (
+                              <PrimaryRadio
+                                discipline={t.discipline}
+                                checked={isPrimary}
+                                onSelect={() => void savePrimarySignal(t.discipline, rowPrimary)}
+                              />
+                            )}
+                            {(t.discipline === "RUN" || t.discipline === "SWIM") && (
+                              <SegmentedControl
+                                value={displayUnits[t.discipline] ?? "METRIC"}
+                                onChange={(unit) => void setDisplayUnit(t.discipline, unit)}
+                                options={
+                                  t.discipline === "RUN"
+                                    ? [
+                                        { value: "METRIC", label: "min/km" },
+                                        { value: "IMPERIAL", label: "min/mi" },
+                                      ]
+                                    : [
+                                        { value: "METRIC", label: "min/100m" },
+                                        { value: "IMPERIAL", label: "min/100yd" },
+                                      ]
+                                }
+                              />
+                            )}
+                          </div>
+                          {paceErrors[key] && (
+                            <p className="mt-1 text-sm text-red-600">{paceErrors[key]}</p>
+                          )}
+                        </>
+                      ) : (
                         <div className="flex flex-wrap items-end gap-2">
                           <Input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="5:30"
+                            type="number"
                             className="min-w-[8rem] flex-1"
-                            value={paceInputs[key] ?? ""}
-                            onChange={(e) =>
-                              setPaceInputs((prev) => ({ ...prev, [key]: e.target.value }))
-                            }
-                            onBlur={() => void savePace(t)}
+                            defaultValue={t.thresholdValue}
+                            onBlur={(e) => void saveThreshold(t, Number(e.target.value))}
                           />
                           {rowPrimary && (
                             <PrimaryRadio
@@ -314,73 +419,75 @@ export default function ThresholdsStep() {
                               onSelect={() => void savePrimarySignal(t.discipline, rowPrimary)}
                             />
                           )}
-                          {(t.discipline === "RUN" || t.discipline === "SWIM") && (
-                            <SegmentedControl
-                              value={displayUnits[t.discipline] ?? "METRIC"}
-                              onChange={(unit) => void setDisplayUnit(t.discipline, unit)}
-                              options={
-                                t.discipline === "RUN"
-                                  ? [
-                                      { value: "METRIC", label: "min/km" },
-                                      { value: "IMPERIAL", label: "min/mi" },
-                                    ]
-                                  : [
-                                      { value: "METRIC", label: "min/100m" },
-                                      { value: "IMPERIAL", label: "min/100yd" },
-                                    ]
-                              }
-                            />
-                          )}
                         </div>
-                        {paceErrors[key] && (
-                          <p className="mt-1 text-sm text-red-600">{paceErrors[key]}</p>
-                        )}
-                      </>
-                    ) : (
-                      <div className="flex flex-wrap items-end gap-2">
-                        <Input
-                          type="number"
-                          className="min-w-[8rem] flex-1"
-                          defaultValue={t.thresholdValue}
-                          onBlur={(e) => void saveThreshold(t, Number(e.target.value))}
+                      )}
+                      <button
+                        type="button"
+                        className="text-xs text-sky-600 hover:underline"
+                        onClick={() =>
+                          setExpandedZones((prev) => ({ ...prev, [key]: !zonesOpen }))
+                        }
+                      >
+                        {zonesOpen ? "Hide zone boundaries" : "Edit zone boundaries"}
+                      </button>
+                      {zonesOpen && (
+                        <ZoneBoundariesEditor
+                          key={`${key}-${t.zoneBoundaries.join(",")}`}
+                          discipline={t.discipline}
+                          signalType={t.signalType}
+                          thresholdValue={t.thresholdValue}
+                          zoneBoundaries={t.zoneBoundaries}
+                          zoneCount={t.zoneCount}
+                          displayUnit={displayUnits[t.discipline] ?? "METRIC"}
+                          onSave={async (boundaries) => {
+                            await saveThreshold(t, t.thresholdValue, boundaries);
+                          }}
                         />
-                        {rowPrimary && (
-                          <PrimaryRadio
-                            discipline={t.discipline}
-                            checked={isPrimary}
-                            onSelect={() => void savePrimarySignal(t.discipline, rowPrimary)}
-                          />
-                        )}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      className="text-xs text-sky-600 hover:underline"
-                      onClick={() =>
-                        setExpandedZones((prev) => ({ ...prev, [key]: !zonesOpen }))
+                      )}
+                    </div>
+                  );
+                })}
+                {(discipline === "BIKE" || discipline === "RUN") && (
+                  <div className="space-y-2">
+                    <RoleSignalOverridesEditor
+                      discipline={discipline}
+                      primarySignal={disciplinePrimary as SignalType}
+                      roleSignals={roleSignalsByDiscipline[discipline] ?? {}}
+                      onChange={(next) =>
+                        setRoleSignalsByDiscipline((prev) => ({
+                          ...prev,
+                          [discipline]: next,
+                        }))
                       }
-                    >
-                      {zonesOpen ? "Hide zone boundaries" : "Edit zone boundaries"}
-                    </button>
-                    {zonesOpen && (
-                      <ZoneBoundariesEditor
-                        key={`${key}-${t.zoneBoundaries.join(",")}`}
-                        discipline={t.discipline}
-                        signalType={t.signalType}
-                        thresholdValue={t.thresholdValue}
-                        zoneBoundaries={t.zoneBoundaries}
-                        zoneCount={t.zoneCount}
-                        displayUnit={displayUnits[t.discipline] ?? "METRIC"}
-                        onSave={async (boundaries) => {
-                          await saveThreshold(t, t.thresholdValue, boundaries);
-                        }}
-                      />
-                    )}
+                    />
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div>
+                        <Label>Effective from</Label>
+                        <Input
+                          type="date"
+                          value={roleEffectiveDates[discipline] ?? todayKey()}
+                          onChange={(e) =>
+                            setRoleEffectiveDates((prev) => ({
+                              ...prev,
+                              [discipline]: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={savingRoles[discipline]}
+                        onClick={() => void saveRoleSignals(discipline)}
+                      >
+                        {savingRoles[discipline] ? "Saving…" : "Save role metrics"}
+                      </Button>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </div>
         <Button className="mt-4" onClick={() => void complete()}>
           {onboardingComplete ? "Save and return to settings" : "Continue to historical thresholds"}

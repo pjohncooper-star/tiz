@@ -3,10 +3,16 @@ import { describe, it } from "node:test";
 import {
   allowedPrimarySignals,
   deriveFallbackSignal,
+  formatRoleSignalSummary,
+  normalizeRoleSignals,
+  parseRoleSignals,
   preferenceSnapshot,
+  resolveSignalForRole,
+  roleSignalsEqual,
   signalTypeToTargetSignal,
   signalTypeToTargetView,
   validatePrimarySignal,
+  validateRoleSignals,
 } from "./signal-preference";
 
 describe("signal-preference", () => {
@@ -35,6 +41,7 @@ describe("signal-preference", () => {
     assert.deepEqual(preferenceSnapshot("BIKE", "HEART_RATE"), {
       primarySignal: "HEART_RATE",
       fallbackSignal: "POWER",
+      roleSignals: {},
     });
   });
 
@@ -43,5 +50,73 @@ describe("signal-preference", () => {
     assert.equal(signalTypeToTargetView("POWER"), "pace_power");
     assert.equal(signalTypeToTargetSignal("PACE"), "pace");
     assert.equal(signalTypeToTargetSignal("POWER"), "power");
+  });
+
+  it("parseRoleSignals keeps valid sparse map", () => {
+    assert.deepEqual(
+      parseRoleSignals({ EASY: "HEART_RATE", INTENSITY: "PACE", BOGUS: "PACE" }),
+      { EASY: "HEART_RATE", INTENSITY: "PACE" }
+    );
+    assert.deepEqual(parseRoleSignals(null), {});
+    assert.deepEqual(parseRoleSignals("nope"), {});
+  });
+
+  it("normalizeRoleSignals drops overrides equal to primary", () => {
+    assert.deepEqual(
+      normalizeRoleSignals("PACE", {
+        EASY: "HEART_RATE",
+        INTENSITY: "PACE",
+        LONG: "HEART_RATE",
+      }),
+      { EASY: "HEART_RATE", LONG: "HEART_RATE" }
+    );
+  });
+
+  it("validateRoleSignals rejects invalid signals for discipline", () => {
+    assert.throws(() => validateRoleSignals("RUN", { EASY: "POWER" }));
+    assert.doesNotThrow(() =>
+      validateRoleSignals("RUN", { EASY: "HEART_RATE", INTENSITY: "PACE" })
+    );
+  });
+
+  it("resolveSignalForRole inherits primary unless overridden", () => {
+    const snapshot = preferenceSnapshot("RUN", "PACE", {
+      EASY: "HEART_RATE",
+      INTENSITY: "PACE",
+    });
+    assert.deepEqual(resolveSignalForRole("RUN", snapshot, "EASY"), {
+      primarySignal: "HEART_RATE",
+      fallbackSignal: "PACE",
+    });
+    assert.deepEqual(resolveSignalForRole("RUN", snapshot, "MODERATE"), {
+      primarySignal: "PACE",
+      fallbackSignal: "HEART_RATE",
+    });
+    assert.deepEqual(resolveSignalForRole("RUN", snapshot, "INTENSITY"), {
+      primarySignal: "PACE",
+      fallbackSignal: "HEART_RATE",
+    });
+    assert.deepEqual(resolveSignalForRole("RUN", snapshot, null), {
+      primarySignal: "PACE",
+      fallbackSignal: "HEART_RATE",
+    });
+  });
+
+  it("roleSignalsEqual and formatRoleSignalSummary", () => {
+    assert.equal(
+      roleSignalsEqual({ EASY: "HEART_RATE" }, { EASY: "HEART_RATE" }),
+      true
+    );
+    assert.equal(
+      roleSignalsEqual({ EASY: "HEART_RATE" }, { EASY: "PACE" }),
+      false
+    );
+    assert.equal(
+      formatRoleSignalSummary("PACE", { EASY: "HEART_RATE", INTENSITY: "PACE" }, (s) =>
+        s === "HEART_RATE" ? "Heart rate" : "Pace"
+      ),
+      "Easy Heart rate"
+    );
+    assert.equal(formatRoleSignalSummary("PACE", {}, (s) => s), null);
   });
 });
