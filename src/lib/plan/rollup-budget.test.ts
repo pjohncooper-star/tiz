@@ -58,6 +58,48 @@ describe("workoutZoneRollup", () => {
     const workout = workoutZoneRollup("BIKE", tempoWorkout);
     assert.equal(workout.zones["BIKE-4"], 30);
   });
+
+  it("maps absolute watt intervals into Z1–Z5 via FTP", () => {
+    const wattIntervals = {
+      version: 2,
+      nodes: [
+        {
+          kind: "repeat",
+          repeatCount: 4,
+          children: [
+            {
+              kind: "step",
+              intensity: "interval",
+              duration: { type: "time", value: 300 },
+              target: { signal: "power", mode: "value", value: 250 },
+            },
+            {
+              kind: "step",
+              intensity: "recovery",
+              duration: { type: "time", value: 180 },
+              target: { signal: "power", mode: "value", value: 150 },
+            },
+          ],
+        },
+      ],
+    };
+    const rollup = sessionPlannedZoneRollup("BIKE", {
+      structuredSteps: wattIntervals,
+      flattenOptions: {
+        thresholdFtpWatts: 250,
+        powerZoneBoundaries: [55, 75, 90, 105],
+      },
+    });
+    // 4×5m @ 250W → Z4. Recovery intensity is typed as rest and excluded from TiZ.
+    assert.equal(rollup.zones["BIKE-4"], 20);
+    assert.equal(rollup.zones["BIKE-7"], undefined);
+    assert.ok(
+      (rollup.zones["BIKE-3"] ?? 0) +
+        (rollup.zones["BIKE-4"] ?? 0) +
+        (rollup.zones["BIKE-5"] ?? 0) >
+        0
+    );
+  });
 });
 
 describe("rollupSessions", () => {

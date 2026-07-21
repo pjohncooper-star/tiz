@@ -9,6 +9,7 @@ import {
   swimIntervalToFlatSteps,
 } from "@/lib/workout/swim-interval-set";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
+import { zoneFromPowerWatts } from "@/lib/zones/assign-zone";
 
 export type FlattenPlanningOptions = DistanceDurationOptions;
 
@@ -337,12 +338,53 @@ export function serializeWorkoutTree(doc: WorkoutTreeDocument): WorkoutTreeDocum
   return { version: WORKOUT_TREE_VERSION, nodes: doc.nodes };
 }
 
-export function targetZoneFromTarget(target: StepTarget): number {
-  if (target.mode === "zone" && target.zone) return target.zone;
+function isZoneIndexRange(low: number, high: number): boolean {
+  return (
+    Number.isInteger(low) &&
+    Number.isInteger(high) &&
+    low >= 1 &&
+    low <= 7 &&
+    high >= 1 &&
+    high <= 7
+  );
+}
+
+export type TargetZoneOptions = Pick<
+  FlattenPlanningOptions,
+  "thresholdFtpWatts" | "powerZoneBoundaries"
+>;
+
+/**
+ * Resolve a planning zone index from a step target.
+ * Absolute power watts are mapped via FTP — never treated as zone numbers.
+ */
+export function targetZoneFromTarget(
+  target: StepTarget,
+  options: TargetZoneOptions = {}
+): number {
+  if (target.mode === "zone" && target.zone) {
+    return Math.max(1, Math.min(7, target.zone));
+  }
+
+  if (target.signal === "power") {
+    if (target.mode === "value" && target.value != null) {
+      return zoneFromPowerWatts(target.value, options);
+    }
+    if (target.mode === "range" && target.low != null && target.high != null) {
+      if (isZoneIndexRange(target.low, target.high)) {
+        return Math.round((target.low + target.high) / 2);
+      }
+      return zoneFromPowerWatts((target.low + target.high) / 2, options);
+    }
+  }
+
   if (target.mode === "range" && target.low != null && target.high != null) {
     return Math.round((target.low + target.high) / 2);
   }
-  if (target.value != null) return Math.max(1, Math.min(7, Math.round(target.value)));
+  // Zone-like numeric values only (do not clamp watts/pace seconds into 1–7).
+  if (target.value != null && target.value >= 1 && target.value <= 7) {
+    return Math.round(target.value);
+  }
   return 2;
 }
 
@@ -406,7 +448,7 @@ export function leafToFlatPlanningStep(
   options: FlattenPlanningOptions = {}
 ): FlatPlanningStep | null {
   const type = INTENSITY_TO_LEGACY[step.intensity];
-  const targetZone = targetZoneFromTarget(step.target);
+  const targetZone = targetZoneFromTarget(step.target, options);
   const extras = leafPlanningExtras(step);
   if (step.duration.type === "distance") {
     const flat: FlatPlanningStep = {
@@ -443,11 +485,21 @@ export function leafToFlatPlanningStep(
   };
 }
 
-function rampToFlatPlanningSteps(step: RampStep): FlatPlanningStep[] {
-  const zone =
-    step.target.lowZone != null && step.target.highZone != null
-      ? rampMidpointZone(step.target.lowZone, step.target.highZone)
-      : rampMidpointZone(step.target.low, step.target.high);
+function rampToFlatPlanningSteps(
+  step: RampStep,
+  options: FlattenPlanningOptions = {}
+): FlatPlanningStep[] {
+  let zone: number;
+  if (step.target.lowZone != null && step.target.highZone != null) {
+    zone = rampMidpointZone(step.target.lowZone, step.target.highZone);
+  } else if (
+    step.target.signal === "power" &&
+    !isZoneIndexRange(step.target.low, step.target.high)
+  ) {
+    zone = zoneFromPowerWatts((step.target.low + step.target.high) / 2, options);
+  } else {
+    zone = rampMidpointZone(step.target.low, step.target.high);
+  }
   const durationSeconds = rampDurationSeconds(step);
   const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));
   return [
@@ -470,7 +522,7 @@ export function flattenNodeForPlanning(
     const flat = leafToFlatPlanningStep(node, options);
     return flat ? [flat] : [];
   }
-  if (node.kind === "ramp") return rampToFlatPlanningSteps(node);
+  if (node.kind === "ramp") return rampToFlatPlanningSteps(node, options);
   if (node.kind === "swim_interval") {
     return swimIntervalToFlatSteps(node, options);
   }
