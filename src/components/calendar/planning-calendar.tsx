@@ -58,6 +58,7 @@ import {
   applyTargetSessionId,
   fillableGeneratedSessionIds,
   generatedPoolCardId,
+  generatedSessionDraftEntries,
   isFillableGeneratedSession,
   parseGeneratedPoolCardId,
   parseStagingPoolCardId,
@@ -89,6 +90,31 @@ const WEEK_OPTS = { weekStartsOn: 1 as const };
 const MAX_PAST_WEEKS_WITHOUT_ACTIVITIES = 52;
 /** Sticky toolbar + week header offset used for focused-week detection. */
 const FOCUS_TOP_OFFSET_PX = 72;
+
+/** Persist an autofill draft onto a fillable generated PlannedSession. */
+async function persistGeneratedSessionDraft(
+  sessionId: string,
+  draft: PoolCardDraft
+): Promise<boolean> {
+  const body: Record<string, unknown> = {
+    steps: { version: WORKOUT_TREE_VERSION, nodes: draft.nodes },
+  };
+  if (draft.distanceMeters != null && draft.distanceMeters > 0) {
+    body.distanceMeters = draft.distanceMeters;
+  }
+  if (draft.targetPaceSeconds != null && draft.targetPaceSeconds > 0) {
+    body.targetPaceSeconds = draft.targetPaceSeconds;
+  }
+  if (draft.targetSpeedMps != null && draft.targetSpeedMps > 0) {
+    body.targetSpeedMps = draft.targetSpeedMps;
+  }
+  const res = await fetch(`/api/plan/sessions/${sessionId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.ok;
+}
 
 type PlanningCalendarProps = {
   initialData: CalendarRangeData;
@@ -367,7 +393,7 @@ export function PlanningCalendar({
   }, [poolChips, poolDraftCardIds, poolWeekSessions, poolWeekTarget, paceContext]);
 
   const handleAutoFillEasyTizForWeek = useCallback(
-    (weekStart: string) => {
+    async (weekStart: string) => {
       const weekTarget = targetsByWeek.get(weekStart);
       if (!weekTarget) return;
       const weekSessions = sessionsForWeek(weekStart);
@@ -380,19 +406,50 @@ export function PlanningCalendar({
         disciplineFilter: poolDisciplineFilter,
         paceContext,
       });
+
+      const merged: PoolCardDraftMap = { ...poolDrafts };
+      for (const [id, draft] of Object.entries(generated)) {
+        if (!(id in merged)) merged[id] = draft;
+      }
+
+      // Persist every generated-session draft onto the calendar card (including
+      // long drafts seeded earlier). Pool chips stay as in-memory drafts.
+      const appliedCardIds: string[] = [];
+      for (const { cardId, sessionId, draft } of generatedSessionDraftEntries(merged)) {
+        const session = weekSessions.find((row) => row.id === sessionId);
+        if (!session || !isFillableGeneratedSession(session)) continue;
+        const ok = await persistGeneratedSessionDraft(sessionId, draft);
+        if (ok) {
+          appliedCardIds.push(cardId);
+          clearGeneratedPoolSelection(sessionId);
+        }
+      }
+
       setPoolDrafts((prev) => {
         const next = { ...prev };
         for (const [id, draft] of Object.entries(generated)) {
           if (!(id in next)) next[id] = draft;
         }
+        for (const id of appliedCardIds) {
+          delete next[id];
+        }
         return next;
       });
+
+      if (appliedCardIds.length > 0) await handleRefresh();
     },
-    [targetsByWeek, sessionsForWeek, poolDrafts, poolDisciplineFilter, paceContext]
+    [
+      targetsByWeek,
+      sessionsForWeek,
+      poolDrafts,
+      poolDisciplineFilter,
+      paceContext,
+      clearGeneratedPoolSelection,
+    ]
   );
 
   const handleAutoFillEasyTiz = useCallback(() => {
-    handleAutoFillEasyTizForWeek(poolWeekStart);
+    void handleAutoFillEasyTizForWeek(poolWeekStart);
   }, [handleAutoFillEasyTizForWeek, poolWeekStart]);
 
   const handleSelectPoolCard = useCallback(
@@ -1405,7 +1462,7 @@ export function PlanningCalendar({
             onUnassignWorkout={
               useWizardPool ? (session) => void handleUnassignWorkout(session) : undefined
             }
-            onAutoFillEasyTiz={() => handleAutoFillEasyTizForWeek(weekStart)}
+            onAutoFillEasyTiz={() => void handleAutoFillEasyTizForWeek(weekStart)}
             paceContext={paceContext}
           />
         ))}
