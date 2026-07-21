@@ -6,6 +6,8 @@ import { setOnboardingStep } from "@/lib/onboarding";
 import { isValidWorkoutShadingMode, type WorkoutShadingMode } from "@/lib/plan/workout-shading";
 import {
   getPreferenceDateRange,
+  listDisciplineSettings,
+  listSignalPreferences,
   parseRoleSignals,
   syncCurrentPreferenceToSettings,
   upsertSignalPreference,
@@ -66,15 +68,12 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const [settings, thresholds, signalPreferences, athlete] = await Promise.all([
-    db.athleteDisciplineSettings.findMany({ where: { athleteId: session.user.athleteId } }),
+    listDisciplineSettings(session.user.athleteId),
     db.thresholdProfile.findMany({
       where: { athleteId: session.user.athleteId },
       orderBy: { effectiveDate: "desc" },
     }),
-    db.signalPreference.findMany({
-      where: { athleteId: session.user.athleteId },
-      orderBy: { effectiveDate: "desc" },
-    }),
+    listSignalPreferences(session.user.athleteId),
     db.athlete.findUnique({ where: { id: session.user.athleteId } }),
   ]);
   return NextResponse.json({
@@ -425,7 +424,13 @@ export async function PUT(req: Request) {
         roleSignals
       );
       const { from, to } = await getPreferenceDateRange(row);
-      await recomputeAfterPreferenceChange(athleteId, data.discipline, from, to);
+      try {
+        await recomputeAfterPreferenceChange(athleteId, data.discipline, from, to);
+      } catch (recomputeError) {
+        // Preference is already saved — don't fail the UI save if the recompute
+        // queue is unavailable.
+        console.error("recompute after signal preference failed:", recomputeError);
+      }
       return NextResponse.json({
         ok: true,
         id: row.id,

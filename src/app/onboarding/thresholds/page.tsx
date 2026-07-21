@@ -91,6 +91,7 @@ export default function ThresholdsStep() {
   const [paceErrors, setPaceErrors] = useState<Record<string, string>>({});
   const [expandedZones, setExpandedZones] = useState<Record<string, boolean>>({});
   const [savingRoles, setSavingRoles] = useState<Record<string, boolean>>({});
+  const [preferenceError, setPreferenceError] = useState("");
 
   useEffect(() => {
     fetch("/api/settings")
@@ -197,10 +198,13 @@ export default function ThresholdsStep() {
   async function saveSignalPreference(
     discipline: string,
     primarySignal: PrimarySignal,
-    roleSignals: RoleSignalOverrides,
-    effectiveDate: string
+    effectiveDate: string,
+    roleSignals?: RoleSignalOverrides
   ) {
-    const normalized = normalizeRoleSignals(primarySignal, roleSignals);
+    const includeRoles = roleSignals !== undefined;
+    const normalized = includeRoles
+      ? normalizeRoleSignals(primarySignal, roleSignals)
+      : undefined;
     const res = await fetch("/api/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -210,7 +214,7 @@ export default function ThresholdsStep() {
           discipline,
           primarySignal,
           effectiveDate,
-          roleSignals: normalized,
+          ...(includeRoles ? { roleSignals: normalized } : {}),
         },
       }),
     });
@@ -219,12 +223,37 @@ export default function ThresholdsStep() {
       throw new Error(body.error ?? "Failed to save signal preference");
     }
     setPrimarySignals((prev) => ({ ...prev, [discipline]: primarySignal }));
-    setRoleSignalsByDiscipline((prev) => ({ ...prev, [discipline]: normalized }));
+    if (normalized !== undefined) {
+      setRoleSignalsByDiscipline((prev) => ({ ...prev, [discipline]: normalized }));
+    } else {
+      // Primary changed — drop local overrides that now match the new primary.
+      setRoleSignalsByDiscipline((prev) => ({
+        ...prev,
+        [discipline]: normalizeRoleSignals(
+          primarySignal,
+          prev[discipline] ?? {}
+        ),
+      }));
+    }
+    setPreferenceError("");
   }
 
   async function savePrimarySignal(discipline: string, primarySignal: PrimarySignal) {
-    const roles = roleSignalsByDiscipline[discipline] ?? {};
-    await saveSignalPreference(discipline, primarySignal, roles, todayKey());
+    const previous = primarySignals[discipline];
+    // Optimistic UI so the radio responds immediately.
+    setPrimarySignals((prev) => ({ ...prev, [discipline]: primarySignal }));
+    setPreferenceError("");
+    try {
+      // Omit roleSignals so primary-only saves do not require the roleSignals column.
+      await saveSignalPreference(discipline, primarySignal, todayKey());
+    } catch (error) {
+      if (previous) {
+        setPrimarySignals((prev) => ({ ...prev, [discipline]: previous }));
+      }
+      setPreferenceError(
+        error instanceof Error ? error.message : "Failed to save primary metric"
+      );
+    }
   }
 
   async function saveRoleSignals(discipline: "BIKE" | "RUN") {
@@ -233,8 +262,13 @@ export default function ThresholdsStep() {
     const roles = roleSignalsByDiscipline[discipline] ?? {};
     const effectiveDate = roleEffectiveDates[discipline] || todayKey();
     setSavingRoles((prev) => ({ ...prev, [discipline]: true }));
+    setPreferenceError("");
     try {
-      await saveSignalPreference(discipline, primary, roles, effectiveDate);
+      await saveSignalPreference(discipline, primary, effectiveDate, roles);
+    } catch (error) {
+      setPreferenceError(
+        error instanceof Error ? error.message : "Failed to save role metrics"
+      );
     } finally {
       setSavingRoles((prev) => ({ ...prev, [discipline]: false }));
     }
@@ -293,8 +327,8 @@ export default function ThresholdsStep() {
         await saveSignalPreference(
           discipline,
           primary,
-          roleSignalsByDiscipline[discipline] ?? {},
-          roleEffectiveDates[discipline] || todayKey()
+          roleEffectiveDates[discipline] || todayKey(),
+          roleSignalsByDiscipline[discipline] ?? {}
         );
       }
     }
@@ -489,6 +523,9 @@ export default function ThresholdsStep() {
             );
           })}
         </div>
+        {preferenceError && (
+          <p className="mt-3 text-sm text-red-600">{preferenceError}</p>
+        )}
         <Button className="mt-4" onClick={() => void complete()}>
           {onboardingComplete ? "Save and return to settings" : "Continue to historical thresholds"}
         </Button>
