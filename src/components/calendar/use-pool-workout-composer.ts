@@ -29,6 +29,11 @@ export function usePoolWorkoutComposer(options: {
   onApplied?: () => void;
   onWorkoutApplied?: (sessionId: string) => void;
   active: boolean;
+  /**
+   * When set, assembled-workout drops onto this session may overwrite an existing
+   * structured workout (in-place edit / save changes).
+   */
+  allowOverwriteSessionId?: string | null;
 }) {
   const [discipline, setDiscipline] = useState<EnduranceDiscipline>("RUN");
   const [folderTree, setFolderTree] = useState<FolderTreeNode[]>([]);
@@ -214,8 +219,9 @@ export function usePoolWorkoutComposer(options: {
         const hasStructured =
           over.data.current?.hasStructuredWorkout === true ||
           (overSession?.stepCount != null && overSession.stepCount > 0);
-        if (hasStructured) {
-          alert("Remove the existing workout before applying a new one.");
+        const allowOverwrite = options.allowOverwriteSessionId === sessionId;
+        if (hasStructured && !allowOverwrite) {
+          alert("Remove the existing workout before applying a new one, or Edit that session.");
           return true;
         }
         await applyToSession(sessionId);
@@ -224,7 +230,14 @@ export function usePoolWorkoutComposer(options: {
 
       return false;
     },
-    [options.active, mergedNodes, discipline, applyToSession, appendTemplate]
+    [
+      options.active,
+      options.allowOverwriteSessionId,
+      mergedNodes,
+      discipline,
+      applyToSession,
+      appendTemplate,
+    ]
   );
 
   return {

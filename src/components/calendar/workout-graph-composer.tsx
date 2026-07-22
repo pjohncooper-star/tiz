@@ -228,27 +228,32 @@ type WorkoutGraphPanelProps = {
   cardLabel?: string;
   /** Set when the graph applies to a generated calendar session. */
   applyTargetSessionId?: string | null;
+  /** Bound session already has steps — primary action is Save changes. */
+  applyTargetHasExistingWorkout?: boolean;
   onApplyToSession?: () => void;
 };
 
 function BuildActionBar({
   composer,
   applyTargetSessionId,
+  applyTargetHasExistingWorkout,
   onApplyToSession,
   onEdit,
 }: {
   composer: PoolWorkoutComposer;
   applyTargetSessionId?: string | null;
+  applyTargetHasExistingWorkout?: boolean;
   onApplyToSession?: () => void;
   onEdit?: () => void;
 }) {
   const canApply = Boolean(applyTargetSessionId && composer.hasWorkout && onApplyToSession);
+  const saveLabel = applyTargetHasExistingWorkout ? "Save changes" : "Save to session";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {canApply ? (
         <Button type="button" className="px-3 py-1 text-xs" onClick={onApplyToSession}>
-          Apply to session
+          {saveLabel}
         </Button>
       ) : null}
       <AssembledWorkoutHandle disabled={!composer.hasWorkout} />
@@ -275,12 +280,14 @@ function CollapsedBuildBar({
   onEdit,
   cardLabel,
   applyTargetSessionId,
+  applyTargetHasExistingWorkout,
   onApplyToSession,
 }: {
   composer: PoolWorkoutComposer;
   onEdit: () => void;
   cardLabel?: string;
   applyTargetSessionId?: string | null;
+  applyTargetHasExistingWorkout?: boolean;
   onApplyToSession?: () => void;
 }) {
   return (
@@ -301,13 +308,14 @@ function CollapsedBuildBar({
         <BuildActionBar
           composer={composer}
           applyTargetSessionId={applyTargetSessionId}
+          applyTargetHasExistingWorkout={applyTargetHasExistingWorkout}
           onApplyToSession={onApplyToSession}
           onEdit={onEdit}
         />
       </div>
       {!applyTargetSessionId && composer.hasWorkout ? (
         <p className="text-[10px] text-zinc-400">
-          Select a generated session on the calendar, then Apply or drag onto that session card.
+          Select a calendar session with Build, then Save or drag onto that session card.
         </p>
       ) : null}
     </div>
@@ -323,6 +331,7 @@ export function WorkoutGraphPanel({
   lockDiscipline = false,
   cardLabel,
   applyTargetSessionId = null,
+  applyTargetHasExistingWorkout = false,
   onApplyToSession,
 }: WorkoutGraphPanelProps) {
   const [bodyTab, setBodyTab] = useState<BuildBodyTab>("steps");
@@ -340,6 +349,7 @@ export function WorkoutGraphPanel({
         onEdit={() => onExpandedChange(true)}
         cardLabel={cardLabel}
         applyTargetSessionId={applyTargetSessionId}
+        applyTargetHasExistingWorkout={applyTargetHasExistingWorkout}
         onApplyToSession={onApplyToSession}
       />
     );
@@ -408,6 +418,7 @@ export function WorkoutGraphPanel({
             <BuildActionBar
               composer={composer}
               applyTargetSessionId={applyTargetSessionId}
+              applyTargetHasExistingWorkout={applyTargetHasExistingWorkout}
               onApplyToSession={onApplyToSession}
             />
           </div>
@@ -440,8 +451,12 @@ export function WorkoutGraphPanel({
         <p className="mt-2 text-[10px] text-zinc-400">
           {applyTargetSessionId
             ? bodyTab === "steps"
-              ? "Add and edit steps, then Apply to session or drag onto the armed calendar card."
-              : "Append library segments, then Apply to session or drag onto the armed calendar card."
+              ? applyTargetHasExistingWorkout
+                ? "Edit steps, then Save changes or drag onto this session card."
+                : "Add and edit steps, then Save to session or drag onto the armed calendar card."
+              : applyTargetHasExistingWorkout
+                ? "Append library segments, then Save changes or drag onto this session card."
+                : "Append library segments, then Save to session or drag onto the armed calendar card."
             : bodyTab === "steps"
               ? "Add and edit steps below the graph. For pool chips, Done then drag the chip to a day. For generated sessions, select one on the calendar then Apply."
               : "Append library segments. Select a generated session on the calendar to Apply, or drag a pool chip to a day."}

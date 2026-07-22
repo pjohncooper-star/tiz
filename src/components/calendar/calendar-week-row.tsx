@@ -64,7 +64,8 @@ type CalendarWeekRowProps = {
   onPoolDisciplineFilterChange: (filter: PoolDisciplineFilter) => void;
   selectedPoolCardId: string | null;
   onSelectPoolCard: (cardId: string) => void;
-  onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  onEditWorkout?: (session: CalendarPlannedSession) => void;
+  onDuplicateWorkout?: (session: CalendarPlannedSession) => void;
   onArmBuildFromSession?: (session: CalendarPlannedSession) => void;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
   onAutoFillEasyTiz?: () => void;
@@ -100,7 +101,8 @@ export function CalendarWeekRow({
   onPoolDisciplineFilterChange,
   selectedPoolCardId,
   onSelectPoolCard,
-  onLoadIntoBuilder,
+  onEditWorkout,
+  onDuplicateWorkout,
   onArmBuildFromSession,
   onUnassignWorkout,
   onAutoFillEasyTiz,
@@ -211,7 +213,8 @@ export function CalendarWeekRow({
               acceptsPoolDrop={acceptsPoolDrop}
               onSelectDay={() => onSelectDay(dateKey)}
               onClearSelection={onClearSelection}
-              onLoadIntoBuilder={onLoadIntoBuilder}
+              onEditWorkout={onEditWorkout}
+              onDuplicateWorkout={onDuplicateWorkout}
               onArmBuildFromSession={onArmBuildFromSession}
               armedPoolCardId={selectedPoolCardId}
               onUnassignWorkout={onUnassignWorkout}

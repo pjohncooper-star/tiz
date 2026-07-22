@@ -4,6 +4,8 @@ import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import {
   applyTargetSessionId,
   generatedPoolCardId,
+  isComposableCalendarSession,
+  isEditableCalendarSession,
   resolveSelectedPoolCard,
   stagingPoolCardId,
 } from "./generated-pool-cards";
@@ -56,11 +58,33 @@ describe("generated-pool-cards", () => {
     assert.equal(card!.label, "Easy run");
   });
 
-  it("resolveSelectedPoolCard returns staging card for copied workouts", () => {
+  it("resolveSelectedPoolCard returns staging card for duplicated workouts", () => {
     const card = resolveSelectedPoolCard(stagingPoolCardId("RUN"), [], {}, []);
     assert.ok(card);
-    assert.equal(card!.label, "Copied workout");
+    assert.equal(card!.label, "Duplicated workout");
     assert.equal(card!.discipline, "RUN");
+  });
+
+  it("resolveSelectedPoolCard returns a card for editable filled sessions", () => {
+    const session = generatedSession({ stepCount: 4, source: "FLEXIBLE" });
+    const cardId = generatedPoolCardId(session.id);
+    const card = resolveSelectedPoolCard(cardId, [], {}, [session]);
+    assert.ok(card);
+    assert.equal(card!.id, cardId);
+    assert.equal(card!.label, "Easy run");
+  });
+
+  it("isEditableCalendarSession requires structured steps", () => {
+    assert.equal(isEditableCalendarSession(generatedSession({ stepCount: 0 })), false);
+    assert.equal(isEditableCalendarSession(generatedSession({ stepCount: 3 })), true);
+    assert.equal(
+      isEditableCalendarSession(generatedSession({ stepCount: 3, source: "RACE" })),
+      false
+    );
+    assert.equal(
+      isComposableCalendarSession(generatedSession({ stepCount: 3, source: "FLEXIBLE" })),
+      true
+    );
   });
 
   it("applyTargetSessionId is set only for generated session targets", () => {

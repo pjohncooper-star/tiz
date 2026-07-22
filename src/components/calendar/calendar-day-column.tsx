@@ -35,7 +35,8 @@ type CalendarDayColumnProps = {
   acceptsPoolDrop?: boolean;
   onSelectDay: () => void;
   onClearSelection: () => void;
-  onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  onEditWorkout?: (session: CalendarPlannedSession) => void;
+  onDuplicateWorkout?: (session: CalendarPlannedSession) => void;
   onArmBuildFromSession?: (session: CalendarPlannedSession) => void;
   armedPoolCardId?: string | null;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
@@ -55,7 +56,8 @@ export function CalendarDayColumn({
   acceptsPoolDrop = true,
   onSelectDay,
   onClearSelection,
-  onLoadIntoBuilder,
+  onEditWorkout,
+  onDuplicateWorkout,
   onArmBuildFromSession,
   armedPoolCardId = null,
   onUnassignWorkout,
@@ -180,13 +182,19 @@ export function CalendarDayColumn({
                 showWorkoutDropTarget={showSessionWorkoutDrop}
                 onDeleted={onSessionCreated}
                 onUpdated={onSessionCreated}
-                onLoadIntoBuilder={onLoadIntoBuilder}
+                onEditWorkout={onEditWorkout}
+                onDuplicateWorkout={onDuplicateWorkout}
                 onArmBuild={
                   onArmBuildFromSession && isFillableGeneratedSession(item.session)
                     ? () => onArmBuildFromSession(item.session)
                     : undefined
                 }
                 armedForBuild={armedPoolCardId === generatedPoolCardId(item.session.id)}
+                editingInPlace={
+                  Boolean(armedPoolCardId) &&
+                  armedPoolCardId === generatedPoolCardId(item.session.id) &&
+                  item.session.stepCount > 0
+                }
                 onUnassignWorkout={onUnassignWorkout}
               />
             )
