@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Input, Label } from "@/components/ui";
 import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { ZoneSplitEditor } from "@/components/simple-planner/zone-split-editor";
@@ -62,6 +63,7 @@ export type WeeklyTemplateOption = {
 };
 
 type SimplePlannerPhasesPaneProps = {
+  seasonId: string;
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
@@ -81,6 +83,7 @@ type SimplePlannerPhasesPaneProps = {
 };
 
 export function SimplePlannerPhasesPane({
+  seasonId,
   phases,
   phaseKindZoneDefaults,
   zoneFocusCatalog,
@@ -187,24 +190,40 @@ export function SimplePlannerPhasesPane({
       </div>
 
       {selected && (
-        <PhaseDetailEditor
-          phase={selected}
-          phases={phases}
-          phaseKindZoneDefaults={phaseKindZoneDefaults}
-          zoneFocusCatalog={zoneFocusCatalog}
-          totalWeeks={totalWeeks}
-          weeks={weeks}
-          templates={templates}
-          defaultPlanningMode={defaultPlanningMode}
-          rampDefaults={rampDefaults}
-          disciplineSettings={disciplineSettings}
-          longRideWeekFlags={longRideWeekFlags}
-          longRunWeekFlags={longRunWeekFlags}
-          onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
-          onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
-          onChange={updatePhase}
-          onDelete={() => deletePhase(selected)}
-        />
+        <div id="phase-workspace-editor">
+          <PhaseDetailEditor
+            phase={selected}
+            phases={phases}
+            phaseKindZoneDefaults={phaseKindZoneDefaults}
+            zoneFocusCatalog={zoneFocusCatalog}
+            totalWeeks={totalWeeks}
+            weeks={weeks}
+            templates={templates}
+            defaultPlanningMode={defaultPlanningMode}
+            rampDefaults={rampDefaults}
+            disciplineSettings={disciplineSettings}
+            longRideWeekFlags={longRideWeekFlags}
+            longRunWeekFlags={longRunWeekFlags}
+            onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
+            onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
+            onChange={updatePhase}
+            onDelete={() => deletePhase(selected)}
+          />
+          {selected.id ? (
+            <MaterializePhasePanel
+              seasonId={seasonId}
+              phaseId={selected.id}
+              phaseName={selected.name}
+              canGenerate={
+                isAssignedPhase(selected) && Boolean(selected.weeklyTemplateId)
+              }
+            />
+          ) : (
+            <p className="mt-3 text-xs text-zinc-500">
+              Save the Phases section to persist this phase before generating sessions.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );
@@ -248,7 +267,7 @@ function PhaseDetailEditor({
   const assigned = isAssignedPhase(phase);
   const weekLabel = assigned
     ? formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)
-    : "Not assigned — click + on a week in the table";
+    : "Not assigned — use + in Week review or set the week range below";
   const effectiveMode = phase.planningMode ?? defaultPlanningMode;
   const showLongSettings = planningModeIncludesLongs(effectiveMode);
   const restWeekByIndex = weeks.map((week) => week.isRestWeek);
@@ -974,6 +993,94 @@ function LongDisciplineEditor({
             />
           </div>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MaterializePhasePanel({
+  seasonId,
+  phaseId,
+  phaseName,
+  canGenerate,
+}: {
+  seasonId: string;
+  phaseId: string;
+  phaseName: string;
+  canGenerate: boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [onlyEmptyWeeks, setOnlyEmptyWeeks] = useState(true);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleMaterialize() {
+    setBusy(true);
+    setMessage(null);
+    setError(null);
+    const res = await fetch(`/api/plan/season/${seasonId}/materialize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phaseId, onlyEmptyWeeks }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(typeof body.error === "string" ? body.error : "Could not generate sessions.");
+      return;
+    }
+    const data = (await res.json()) as {
+      weeksMaterialized: number;
+      sessionsCreated: number;
+      weeksSkipped: number;
+    };
+    setMessage(
+      `Created ${data.sessionsCreated} session${data.sessionsCreated === 1 ? "" : "s"} across ` +
+        `${data.weeksMaterialized} week${data.weeksMaterialized === 1 ? "" : "s"} in ${phaseName}` +
+        (data.weeksSkipped > 0 ? ` (skipped ${data.weeksSkipped} with existing sessions)` : "") +
+        "."
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <p className="text-sm font-semibold">Generate sessions for this phase</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Fill calendar weeks in {phaseName} from the assigned phase template (and season
+        rest/test templates on flagged weeks). Save the Phases section first so assignments
+        are stored.
+      </p>
+      {!canGenerate ? (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          Assign this phase to weeks and choose a weekly template before generating.
+        </p>
+      ) : null}
+      <label className="mt-3 flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={onlyEmptyWeeks}
+          onChange={(event) => setOnlyEmptyWeeks(event.target.checked)}
+          disabled={!canGenerate}
+        />
+        Only fill weeks with no existing sessions
+      </label>
+      <p className="mt-1 text-xs text-zinc-500">
+        {onlyEmptyWeeks
+          ? "Weeks that already have any sessions are left untouched."
+          : "Previously templated sessions in this phase are replaced; manually added sessions are kept."}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button
+          type="button"
+          onClick={() => void handleMaterialize()}
+          disabled={busy || !canGenerate}
+        >
+          {busy ? "Generating…" : "Generate sessions"}
+        </Button>
+        {message ? (
+          <span className="text-xs text-emerald-600 dark:text-emerald-400">{message}</span>
+        ) : null}
+        {error ? <span className="text-xs text-red-600">{error}</span> : null}
       </div>
     </div>
   );

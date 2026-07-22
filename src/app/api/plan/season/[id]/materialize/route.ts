@@ -4,11 +4,10 @@ import { auth } from "@/lib/auth";
 import { isSimpleSeasonPlannerEnabled } from "@/lib/features";
 import { materializeSeasonTemplates } from "@/lib/plan/season/materialize-season.server";
 
-const bodySchema = z
-  .object({
-    onlyEmptyWeeks: z.boolean().optional(),
-  })
-  .optional();
+const bodySchema = z.object({
+  phaseId: z.string().min(1),
+  onlyEmptyWeeks: z.boolean().optional(),
+});
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -39,7 +38,8 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const result = await materializeSeasonTemplates(athleteId, id, {
-      onlyEmptyWeeks: parsed.data?.onlyEmptyWeeks ?? false,
+      phaseId: parsed.data.phaseId,
+      onlyEmptyWeeks: parsed.data.onlyEmptyWeeks ?? false,
     });
     return NextResponse.json(result);
   } catch (err) {

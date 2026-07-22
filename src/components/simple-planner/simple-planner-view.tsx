@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
@@ -96,19 +96,15 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
 type PlannerSectionId =
   | "season"
   | "races"
-  | "timeline"
-  | "phaseKinds"
   | "phases"
-  | "ramps"
+  | "seasonDefaults"
   | "weeklyVolume";
 
 const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   season: true,
-  races: false,
-  timeline: true,
-  phaseKinds: false,
-  phases: false,
-  ramps: false,
+  races: true,
+  phases: true,
+  seasonDefaults: false,
   weeklyVolume: true,
 };
 
@@ -139,10 +135,11 @@ function revertSection(
         primaryGoalEvent: baseline.primaryGoalEvent,
         goalEvents: baseline.goalEvents,
       };
-    case "phaseKinds":
+    case "seasonDefaults":
       return {
         ...draft,
         phaseKindZoneDefaults: baseline.phaseKindZoneDefaults,
+        rampDefaults: baseline.rampDefaults,
         weeks: baseline.weeks,
       };
     case "phases":
@@ -155,18 +152,13 @@ function revertSection(
         restWeekTemplateId: baseline.restWeekTemplateId,
         testWeekTemplateId: baseline.testWeekTemplateId,
       };
-    case "ramps":
-      return {
-        ...draft,
-        rampDefaults: baseline.rampDefaults,
-        weeks: baseline.weeks,
-      };
     case "weeklyVolume":
       return {
         ...draft,
         weeks: baseline.weeks,
         phases: baseline.phases,
         testWeekFlags: baseline.testWeekFlags,
+        deLoadVolumePercent: baseline.deLoadVolumePercent,
       };
     default:
       return draft;
@@ -292,12 +284,24 @@ export function SimplePlannerView({
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
   const [selectedPhaseId, setSelectedPhaseId] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState(DEFAULT_SECTION_EXPANDED);
+  const phaseWorkspaceRef = useRef<HTMLDivElement>(null);
 
   const toggleSection = useCallback((sectionId: PlannerSectionId) => {
     setExpandedSections((current) => ({
       ...current,
       [sectionId]: !current[sectionId],
     }));
+  }, []);
+
+  const handleSelectPhase = useCallback((phaseId: string | null) => {
+    setSelectedPhaseId(phaseId);
+    if (!phaseId) return;
+    setExpandedSections((current) =>
+      current.phases ? current : { ...current, phases: true }
+    );
+    requestAnimationFrame(() => {
+      phaseWorkspaceRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
   }, []);
 
   const [createMode, setCreateMode] = useState(false);
@@ -443,9 +447,10 @@ export function SimplePlannerView({
             })),
           ...extra,
         };
-      case "phaseKinds":
+      case "seasonDefaults":
         return {
           phaseKindZoneDefaults: season.phaseKindZoneDefaults,
+          rampDefaults: season.rampDefaults,
           recalculate: true,
           ...extra,
         };
@@ -457,17 +462,12 @@ export function SimplePlannerView({
           recalculate: true,
           ...extra,
         };
-      case "ramps":
-        return {
-          rampDefaults: season.rampDefaults,
-          recalculate: true,
-          ...extra,
-        };
       case "weeklyVolume":
         return {
           phases: season.phases,
           weeks: serializeWeeksForSave(season.weeks),
           testWeekFlags: season.testWeekFlags,
+          deLoadVolumePercent: season.deLoadVolumePercent,
           ...extra,
         };
       default:
@@ -796,103 +796,106 @@ export function SimplePlannerView({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Timeline"
-        expanded={expandedSections.timeline}
-        onToggle={() => toggleSection("timeline")}
-      >
-        <SimplePlannerTimeline
-          seasonStart={season.startDate}
-          weeks={season.weeks}
-          phases={season.phases}
-          goalEvents={season.goalEvents}
-          primaryGoalEvent={season.primaryGoalEvent}
-          selectedWeekIndex={selectedWeekIndex}
-          onSelectWeek={handleSelectWeek}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        title="Phase kind zone defaults"
-        expanded={expandedSections.phaseKinds}
-        onToggle={() => toggleSection("phaseKinds")}
-        actions={sectionActions("phaseKinds", "Save & recalculate zones")}
-      >
-        <PhaseKindZoneDefaultsEditor
-          value={season.phaseKindZoneDefaults}
-          onChange={(phaseKindZoneDefaults) =>
-            setSeason({ ...season, phaseKindZoneDefaults })
-          }
-          catalog={zoneFocusCatalog}
-          showPresetPercents
-        />
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
-          <Link href="/settings" className="text-sky-600 hover:underline">
-            Manage focus library and athlete defaults in Settings →
-          </Link>
-        </p>
-      </CollapsibleSection>
-
-      <CollapsibleSection
         title="Phases"
         expanded={expandedSections.phases}
         onToggle={() => toggleSection("phases")}
         actions={sectionActions("phases", "Save & recalculate")}
       >
-        <SeasonWeekTemplatePicker
-          templates={templates}
-          restWeekTemplateId={season.restWeekTemplateId ?? null}
-          testWeekTemplateId={season.testWeekTemplateId ?? null}
-          onRestChange={(restWeekTemplateId) =>
-            setSeason({ ...season, restWeekTemplateId })
-          }
-          onTestChange={(testWeekTemplateId) =>
-            setSeason({ ...season, testWeekTemplateId })
-          }
-        />
-        <SimplePlannerPhasesPane
-          phases={season.phases}
-          phaseKindZoneDefaults={season.phaseKindZoneDefaults}
-          zoneFocusCatalog={zoneFocusCatalog}
-          totalWeeks={season.totalWeeks}
-          weeks={season.weeks}
-          templates={templates}
-          defaultPlanningMode={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
-          rampDefaults={season.rampDefaults}
-          disciplineSettings={disciplineSettings}
-          longRideWeekFlags={season.longRideWeekFlags ?? []}
-          longRunWeekFlags={season.longRunWeekFlags ?? []}
-          selectedPhaseId={selectedPhaseId}
-          onSelectPhase={setSelectedPhaseId}
-          onPhasesChange={(phases) => setSeason({ ...season, phases })}
-          onLongRideWeekFlagsChange={(longRideWeekFlags) =>
-            setSeason({ ...season, longRideWeekFlags })
-          }
-          onLongRunWeekFlagsChange={(longRunWeekFlags) =>
-            setSeason({ ...season, longRunWeekFlags })
-          }
-        />
-        <MaterializeTemplatesPanel seasonId={season.id} />
+        <div ref={phaseWorkspaceRef} className="space-y-4">
+          <SimplePlannerTimeline
+            seasonStart={season.startDate}
+            weeks={season.weeks}
+            phases={season.phases}
+            goalEvents={season.goalEvents}
+            primaryGoalEvent={season.primaryGoalEvent}
+            selectedWeekIndex={selectedWeekIndex}
+            onSelectWeek={handleSelectWeek}
+          />
+          <SeasonWeekTemplatePicker
+            templates={templates}
+            restWeekTemplateId={season.restWeekTemplateId ?? null}
+            testWeekTemplateId={season.testWeekTemplateId ?? null}
+            onRestChange={(restWeekTemplateId) =>
+              setSeason({ ...season, restWeekTemplateId })
+            }
+            onTestChange={(testWeekTemplateId) =>
+              setSeason({ ...season, testWeekTemplateId })
+            }
+          />
+          <SimplePlannerPhasesPane
+            seasonId={season.id}
+            phases={season.phases}
+            phaseKindZoneDefaults={season.phaseKindZoneDefaults}
+            zoneFocusCatalog={zoneFocusCatalog}
+            totalWeeks={season.totalWeeks}
+            weeks={season.weeks}
+            templates={templates}
+            defaultPlanningMode={season.defaultPlanningMode ?? "BY_DISCIPLINE"}
+            rampDefaults={season.rampDefaults}
+            disciplineSettings={disciplineSettings}
+            longRideWeekFlags={season.longRideWeekFlags ?? []}
+            longRunWeekFlags={season.longRunWeekFlags ?? []}
+            selectedPhaseId={selectedPhaseId}
+            onSelectPhase={handleSelectPhase}
+            onPhasesChange={(phases) => setSeason({ ...season, phases })}
+            onLongRideWeekFlagsChange={(longRideWeekFlags) =>
+              setSeason({ ...season, longRideWeekFlags })
+            }
+            onLongRunWeekFlagsChange={(longRunWeekFlags) =>
+              setSeason({ ...season, longRunWeekFlags })
+            }
+          />
+        </div>
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Ramp defaults"
-        expanded={expandedSections.ramps}
-        onToggle={() => toggleSection("ramps")}
-        actions={sectionActions("ramps", "Save & recalculate volumes")}
+        title="Season defaults"
+        expanded={expandedSections.seasonDefaults}
+        onToggle={() => toggleSection("seasonDefaults")}
+        actions={sectionActions("seasonDefaults", "Save & recalculate")}
       >
-        <RampDefaultsEditor
-          value={season.rampDefaults}
-          disciplineSettings={disciplineSettings}
-          onChange={(rampDefaults) => setSeason({ ...season, rampDefaults })}
-        />
+        <div className="space-y-6">
+          <div>
+            <p className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+              Phase kind zone defaults
+            </p>
+            <PhaseKindZoneDefaultsEditor
+              value={season.phaseKindZoneDefaults}
+              onChange={(phaseKindZoneDefaults) =>
+                setSeason({ ...season, phaseKindZoneDefaults })
+              }
+              catalog={zoneFocusCatalog}
+              showPresetPercents
+            />
+            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+              <Link href="/settings" className="text-sky-600 hover:underline">
+                Manage focus library and athlete defaults in Settings →
+              </Link>
+            </p>
+          </div>
+          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <p className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+              Ramp defaults
+            </p>
+            <RampDefaultsEditor
+              value={season.rampDefaults}
+              disciplineSettings={disciplineSettings}
+              onChange={(rampDefaults) => setSeason({ ...season, rampDefaults })}
+            />
+          </div>
+        </div>
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Weekly volume"
+        title="Week review"
         expanded={expandedSections.weeklyVolume}
         onToggle={() => toggleSection("weeklyVolume")}
         actions={sectionActions("weeklyVolume")}
       >
+        <p className="mb-3 text-xs text-zinc-500">
+          Inspect and tweak per-week volume here. Create and edit phases (name, targets, intensity)
+          in the Phases section above — use + in the gutter as a shortcut to place a phase.
+        </p>
         <div className="mb-4 flex flex-wrap items-end gap-4">
           <div>
             <Label>Rest week volume</Label>
@@ -928,7 +931,7 @@ export function SimplePlannerView({
           testWeekFlags={season.testWeekFlags ?? []}
           onTestWeekFlagsChange={(testWeekFlags) => setSeason({ ...season, testWeekFlags })}
           selectedPhaseId={selectedPhaseId}
-          onSelectPhase={setSelectedPhaseId}
+          onSelectPhase={handleSelectPhase}
           highlightedWeekIndex={selectedWeekIndex}
           onWeeksChange={(weeks) => setSeason({ ...season, weeks })}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
@@ -991,74 +994,6 @@ function SeasonWeekTemplatePicker({
             ))}
           </select>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function MaterializeTemplatesPanel({ seasonId }: { seasonId: string }) {
-  const [busy, setBusy] = useState(false);
-  const [onlyEmptyWeeks, setOnlyEmptyWeeks] = useState(true);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleMaterialize() {
-    setBusy(true);
-    setMessage(null);
-    setError(null);
-    const res = await fetch(`/api/plan/season/${seasonId}/materialize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ onlyEmptyWeeks }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(typeof body.error === "string" ? body.error : "Could not generate sessions.");
-      return;
-    }
-    const data = (await res.json()) as {
-      weeksMaterialized: number;
-      sessionsCreated: number;
-      weeksSkipped: number;
-    };
-    setMessage(
-      `Created ${data.sessionsCreated} session${data.sessionsCreated === 1 ? "" : "s"} across ` +
-        `${data.weeksMaterialized} week${data.weeksMaterialized === 1 ? "" : "s"}` +
-        (data.weeksSkipped > 0 ? ` (skipped ${data.weeksSkipped} with existing sessions)` : "") +
-        "."
-    );
-  }
-
-  return (
-    <div className="mt-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <p className="text-sm font-semibold">Generate calendar sessions</p>
-      <p className="mt-1 text-xs text-zinc-500">
-        Fill the calendar from the assigned templates: phase templates on normal weeks,
-        the rest-week template on de-load weeks, and the test-week template on scheduled
-        test weeks. Save this section first so assignments are stored.
-      </p>
-      <label className="mt-3 flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={onlyEmptyWeeks}
-          onChange={(event) => setOnlyEmptyWeeks(event.target.checked)}
-        />
-        Only fill weeks with no existing sessions
-      </label>
-      <p className="mt-1 text-xs text-zinc-500">
-        {onlyEmptyWeeks
-          ? "Weeks that already have any sessions are left untouched."
-          : "Previously templated sessions are replaced; manually added sessions are kept."}
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={() => void handleMaterialize()} disabled={busy}>
-          {busy ? "Generating…" : "Generate sessions"}
-        </Button>
-        {message ? (
-          <span className="text-xs text-emerald-600 dark:text-emerald-400">{message}</span>
-        ) : null}
-        {error ? <span className="text-xs text-red-600">{error}</span> : null}
       </div>
     </div>
   );
