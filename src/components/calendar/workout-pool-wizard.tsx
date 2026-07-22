@@ -41,6 +41,8 @@ export type WorkoutPoolWizardProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onAutoFillEasyTiz?: () => void;
   onApplyToSession?: () => void;
+  /** True when the bound calendar session already has a structured workout. */
+  applyTargetHasExistingWorkout?: boolean;
   paceContext?: PaceThresholdContext | null;
 };
 
@@ -236,6 +238,7 @@ export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
             lockDiscipline
             cardLabel={selectedCard.label}
             applyTargetSessionId={applyTargetId}
+            applyTargetHasExistingWorkout={props.applyTargetHasExistingWorkout}
             onApplyToSession={props.onApplyToSession}
           />
         </div>

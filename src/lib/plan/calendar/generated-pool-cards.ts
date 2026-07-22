@@ -72,6 +72,18 @@ export function isFillableGeneratedSession(session: CalendarPlannedSession): boo
   return isEndurancePoolDiscipline(session.discipline as PoolDiscipline);
 }
 
+/** Endurance non-race session that already has a structured workout — eligible for Edit. */
+export function isEditableCalendarSession(session: CalendarPlannedSession): boolean {
+  if (session.source === "RACE") return false;
+  if (session.stepCount <= 0) return false;
+  return isEndurancePoolDiscipline(session.discipline as PoolDiscipline);
+}
+
+/** Session can be bound as the Build/Edit graph target (empty fillable or filled editable). */
+export function isComposableCalendarSession(session: CalendarPlannedSession): boolean {
+  return isFillableGeneratedSession(session) || isEditableCalendarSession(session);
+}
+
 export function listFillableGeneratedSessions(
   sessions: CalendarPlannedSession[]
 ): CalendarPlannedSession[] {
@@ -138,7 +150,7 @@ export function resolveSelectedPoolCard(
       id: selectedCardId,
       discipline: stagingDiscipline,
       slotKind: "ENDURANCE",
-      label: "Copied workout",
+      label: "Duplicated workout",
     };
   }
 
@@ -146,7 +158,7 @@ export function resolveSelectedPoolCard(
   if (!sessionId) return null;
 
   const session = sessions.find((row) => row.id === sessionId);
-  if (!session || !isFillableGeneratedSession(session)) return null;
+  if (!session || !isComposableCalendarSession(session)) return null;
 
   return generatedSessionToPoolCard(session, drafts[selectedCardId]);
 }

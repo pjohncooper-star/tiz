@@ -33,11 +33,14 @@ type CalendarSessionCardProps = {
   onUpdated?: () => void;
   showLinkDropTarget?: boolean;
   showWorkoutDropTarget?: boolean;
-  /** When set, structured sessions show Load (into Build graph). */
-  onLoadIntoBuilder?: (session: CalendarPlannedSession) => void;
+  /** Duplicate this session's workout into the current Build target. */
+  onDuplicateWorkout?: (session: CalendarPlannedSession) => void;
+  /** Edit this session's workout in place. */
+  onEditWorkout?: (session: CalendarPlannedSession) => void;
   /** When set, generated sessions without a workout can arm the Build graph. */
   onArmBuild?: () => void;
   armedForBuild?: boolean;
+  editingInPlace?: boolean;
   /** When set, structured sessions show Unassign. */
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
 };
@@ -61,9 +64,11 @@ export function CalendarSessionCard({
   onUpdated,
   showLinkDropTarget = false,
   showWorkoutDropTarget = false,
-  onLoadIntoBuilder,
+  onDuplicateWorkout,
+  onEditWorkout,
   onArmBuild,
   armedForBuild = false,
+  editingInPlace = false,
   onUnassignWorkout,
 }: CalendarSessionCardProps) {
   const { attributes, listeners, setNodeRef: setDragRef, transform } = useDraggable({
@@ -248,20 +253,38 @@ export function CalendarSessionCard({
               <WorkoutProfileMiniChart profile={session.workoutProfile} />
             </div>
           ) : null}
-          {hasStructured && session.source !== "RACE" && (onLoadIntoBuilder || onUnassignWorkout) ? (
+          {hasStructured && session.source !== "RACE" && (onEditWorkout || onDuplicateWorkout || onUnassignWorkout) ? (
             <div className="mt-1.5 flex flex-wrap gap-1">
-              {onLoadIntoBuilder ? (
+              {onEditWorkout ? (
                 <button
                   type="button"
-                  className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 hover:bg-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-900/60"
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    editingInPlace
+                      ? "bg-sky-600 text-white dark:bg-sky-500"
+                      : "bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-900/60"
+                  }`}
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    onLoadIntoBuilder(session);
+                    onEditWorkout(session);
                   }}
                 >
-                  Load into Build
+                  {editingInPlace ? "Editing" : "Edit"}
+                </button>
+              ) : null}
+              {onDuplicateWorkout ? (
+                <button
+                  type="button"
+                  className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDuplicateWorkout(session);
+                  }}
+                >
+                  Duplicate
                 </button>
               ) : null}
               {onUnassignWorkout ? (
