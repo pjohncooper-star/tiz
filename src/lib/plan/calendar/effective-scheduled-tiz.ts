@@ -76,6 +76,23 @@ function mergeZoneMinutes(into: ZoneMinutes, add: ZoneMinutes): void {
   }
 }
 
+/** Fold SWIM/BIKE/RUN-6+ keys into -5 so Week TiZ (Z1–Z5) does not drop minutes. */
+function foldZoneMinutesForWeekTiz(zones: ZoneMinutes): ZoneMinutes {
+  const out: ZoneMinutes = {};
+  for (const [key, minutes] of Object.entries(zones)) {
+    if (!(minutes > 0)) continue;
+    const match = /^(SWIM|BIKE|RUN)-(\d+)$/.exec(key);
+    if (!match) {
+      out[key] = (out[key] ?? 0) + minutes;
+      continue;
+    }
+    const zone = Math.min(Number(match[2]), 5);
+    const folded = `${match[1]}-${zone}`;
+    out[folded] = (out[folded] ?? 0) + minutes;
+  }
+  return out;
+}
+
 function draftZoneMinutesByKey(
   draft: PoolCardDraft,
   discipline: Discipline,
@@ -84,10 +101,13 @@ function draftZoneMinutesByKey(
   const options = flattenOptionsForDiscipline(discipline, paceContext);
   const rollup = rollupTreeToZoneMinutes(treeFromDraft(draft), options);
   const out: ZoneMinutes = {};
-  for (let zone = 1; zone <= 5; zone++) {
+  // Fold Z6/Z7 into Z5 — Week TiZ only displays five zones.
+  for (let zone = 1; zone <= 7; zone++) {
     const minutes = rollup[String(zone)] ?? 0;
     if (minutes > 0) {
-      out[zoneKey(discipline, zone)] = minutes;
+      const displayZone = Math.min(zone, 5);
+      const key = zoneKey(discipline, displayZone);
+      out[key] = (out[key] ?? 0) + minutes;
     }
   }
   return out;
@@ -140,7 +160,7 @@ export function computeEffectiveScheduledTiz(
   for (const session of sessions) {
     if (isFillableGeneratedSession(session)) continue;
 
-    const zones = session.zoneMinutes;
+    const zones = foldZoneMinutesForWeekTiz(session.zoneMinutes);
     if (shouldExcludeLongSessionFromMainBudget(weekTarget, session)) {
       mergeZoneMinutes(rollup.long, zones);
     } else {

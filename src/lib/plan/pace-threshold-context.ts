@@ -2,6 +2,7 @@ import type { Discipline } from "@prisma/client";
 import { db } from "@/lib/db";
 import { parseZoneBoundaries } from "@/lib/zones/thresholds";
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
+import { DEFAULT_ZONE_COUNT } from "@/lib/zones/boundaries";
 import type { FlattenPlanningOptions } from "@/lib/workout/workout-tree";
 
 export type DisciplinePaceContext = {
@@ -99,6 +100,7 @@ export function flattenOptionsForDiscipline(
       discipline,
       thresholdPaceSeconds: ctx?.thresholdPaceSeconds ?? null,
       zoneBoundaries: ctx?.zoneBoundaries ?? zoneBoundariesFor(discipline, "PACE"),
+      zoneCount: DEFAULT_ZONE_COUNT,
     };
   }
   if (discipline === "BIKE") {
@@ -108,9 +110,11 @@ export function flattenOptionsForDiscipline(
       thresholdFtpWatts: ctx?.thresholdFtpWatts ?? null,
       powerZoneBoundaries:
         ctx?.powerZoneBoundaries ?? zoneBoundariesFor("BIKE", "POWER"),
+      // Week TiZ is always Z1–Z5 even if the athlete's POWER profile uses 7 zones.
+      zoneCount: DEFAULT_ZONE_COUNT,
     };
   }
-  return {};
+  return { zoneCount: DEFAULT_ZONE_COUNT };
 }
 
 /** BIKE PACE threshold is stored as sec/km; convert to m/s for distance derivation. */

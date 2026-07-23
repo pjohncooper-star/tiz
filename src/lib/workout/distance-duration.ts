@@ -18,6 +18,11 @@ export type DistanceDurationOptions = {
   thresholdFtpWatts?: number | null;
   /** Power % boundaries (defaults to BIKE POWER defaults when omitted). */
   powerZoneBoundaries?: number[];
+  /**
+   * Cap planning zones (Week TiZ is Z1–Z5). When set, absolute watts and
+   * explicit zone targets fold into this many zones.
+   */
+  zoneCount?: number;
 };
 
 export function effectiveThresholdPaceSeconds(
