@@ -1,196 +1,180 @@
-# Weekly template vs anchors — strategy (step 3)
+# Phase-aware weekly templates — strategy
 
-**Status:** **Option 2 confirmed** — season plan owns week layout per phase. Layout is **not** validated against step 2 days-per-discipline; gaps surface as **unscheduled workouts** on the calendar (V2).
+**Status:** **Confirmed direction (Option B).** Extend the existing `WeeklyScheduleTemplate` into a **plan-scoped, per-phase** template model that **auto-materializes** onto calendar weeks when defined. No new weekday-grid schema, no anchors.
 
-**Related:** [plan-wizard-screen-spec.md](./plan-wizard-screen-spec.md) step 3 · [plan-wizard-implementation-plan.md](./plan-wizard-implementation-plan.md) PR 4
+**Supersedes:** the earlier "season-owned weekday × discipline layout" plan (option 2) and all references to anchor workouts and the 5-step plan wizard. See [Why the earlier plan changed](#why-the-earlier-plan-changed).
 
----
-
-## Decision summary (confirmed)
-
-| Topic | Choice |
-|-------|--------|
-| Layout owner | **Season plan / `SeasonPhase`** — per-phase week grid (option 2) |
-| Athlete `WeeklyScheduleTemplate` | **Import preset only** when building season layout; not the runtime source of truth |
-| Step 2 session counts | **Weekly budget / target** — informs `SeasonWeek` recompute, **not** a constraint on step 3 layout |
-| Layout vs budget gap | **No wizard validation** — in **V2 calendar**, show **unscheduled workouts** for the week |
-| Wizard step 3 P0 | Anchors + scope toggle + link to calendar template editor |
+**Related:** [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md) (slot budgets + workout pool)
 
 ---
 
-## What exists today
+## Why the earlier plan changed
 
-Three layers that barely talk to each other:
+The previous version of this doc assumed a **5-step plan wizard**, **anchor workouts**, and a **season-owned weekday × discipline grid** (`SeasonPhaseLayoutItem`) materialized to the calendar. **None of that shipped:**
 
-| Layer | Model / code | Scope | Drives calendar? |
-|-------|----------------|-------|------------------|
-| **Season targets** | `SeasonWeek` via `recomputeSeasonWeeks` | Per season week | No — stored targets only (hours, session counts, zone minutes, long mins) |
-| **Anchor workouts** | `AnchorWorkout` · `materializeAnchorsForWeek` | Season or phase; effective date range | Yes — `PlannedSession` with `source: ANCHORED_INSTANCE` |
-| **Weekly template** | `WeeklyScheduleTemplate` · `applyWeeklyTemplate` | One per **athlete** (not per season) | Yes — on demand, per week — `source: TEMPLATE` |
+| Earlier plan | Production reality |
+|--------------|--------------------|
+| 5-step plan wizard (`SeasonSetupStep` … `VolumeRampDeloadStep`) | **Never shipped.** Prod is the single-page **Simple Planner** at `/plan` (`src/components/simple-planner/*`) |
+| Anchor workouts (`AnchorWorkout`, `materializeAnchorsForWeek`, `ANCHORED_INSTANCE`) | **Dropped** (`prisma/migrations/**/manual_drop_anchors.sql`). `PlannedSessionSource` is `FLEXIBLE | TEMPLATE | RACE` |
+| Season-owned weekday grid (`SeasonPhaseLayoutItem`) | **Never built.** No schema, no materializer |
+| Athlete template = "import preset" into phase layout | Athlete-global template, **calendar-only**, applied per week; **no** coupling to seasons |
+| `SeasonWeek.swimSessions` as budget source | Those columns are **written as 0**; budget comes from **`SeasonPhase.*SessionsPerWeek` + intense days → `SeasonWeek.slotBudgets`** |
+| `ZoneAllocationStep` (explicit zone minutes) | Only **phase zone-split percents** → `SeasonWeek.zoneMinutes` |
 
-**Step 2 (v2)** sets the **weekly session budget** per discipline per phase (`swimSessionsPerWeek`, etc.) — stored on `SeasonWeek` after recompute.  
-**Step 3 (v2)** defines **what is actually on the calendar grid** (anchors + phase layout slots) — independent of whether it matches the budget.  
-**Step 4 (v2)** sets *how much* load per week (hours, ramp, de-load).  
+The season → calendar bridge that **did** ship is **aggregate slot budgets**, not a materialized grid (see next section). This doc re-plans the "usual week" capability on top of that reality.
 
-When V2 materializes sessions from layout, the calendar compares **scheduled** sessions vs **budget** and surfaces the difference as unscheduled workouts (see below).
+The dead planning docs are retained but marked superseded: [plan-wizard-implementation-plan.md](./plan-wizard-implementation-plan.md), [plan-wizard-pain-points.md](./plan-wizard-pain-points.md), [plan-wizard-screen-spec.md](./plan-wizard-screen-spec.md).
 
 ---
 
-## What step 3 should drive (north star)
+## What exists today (production)
 
 ```mermaid
-flowchart TB
-  subgraph inputs [Wizard_inputs]
-    S2[Step_2_session_budget]
-    S3[Step_3_phase_layout]
-    S4[Step_4_weekly_load]
-  end
-  subgraph engine [V2_calendar_engine]
-    LAYOUT[Resolve_phase_layout]
-    MAT[Materialize_sessions]
-    GAP[Unscheduled_workout_pool]
-  end
-  subgraph output [Calendar_week_view]
-    PS[PlannedSession_rows]
-    POOL[Workout_pool_sidebar]
-  end
-  S3 --> LAYOUT
-  LAYOUT --> MAT
-  MAT --> PS
-  S2 --> GAP
-  PS --> GAP
-  GAP --> POOL
-  LIB[Workout_library] --> POOL
-  S4 --> MAT
+flowchart LR
+  SP["SeasonPhase\nswim/bike/run sessions + intense days + long flags + planningMode"]
+  BSB["buildSlotBudgets()"]
+  SW["SeasonWeek.slotBudgets\n(aggregate seats per week)"]
+  GCT["getCalendarWeekTargets()"]
+  POOL["computeUnscheduledChips()"]
+  PS["PlannedSession on calendar"]
+  WT["WeeklyScheduleTemplate\n(athlete-global, calendar-only)"]
+
+  SP --> BSB --> SW --> GCT --> POOL -->|drag chip| PS
+  WT -->|applyWeeklyTemplate per week| PS
 ```
 
-### 1. Week layout (primary job — season-owned)
+| Layer | Model / code | Scope | Drives calendar? |
+|-------|--------------|-------|------------------|
+| **Season targets** | `SeasonWeek` via Simple Planner (`simple-planner.server.ts`) | Per season week | Indirectly — stores `slotBudgets`, `zoneMinutes`, `longSessionZoneMinutes`, long minutes |
+| **Slot budgets** | `buildSlotBudgets` / `computeCalendarWeekPoolFields` (`simple-week-compute.ts`) | Per week, per discipline | Yes — typed **unscheduled chips** (`ENDURANCE / INTENSITY / LONG / SUBSTITUTE_ENDURANCE`) |
+| **Weekly template** | `WeeklyScheduleTemplate` · `applyWeeklyTemplate` (`template.server.ts`) | One per **athlete** | Yes — on demand, per week (`source: TEMPLATE`) |
+| **Races** | `GoalEvent` · `syncRaceToCalendar` | Per season | Yes — `source: RACE` |
 
-Each `SeasonPhase` has a **week layout**: weekday × discipline slots (plus anchors for named key sessions).
-
-- Defines *which* sessions exist on the grid when materialized
-- **Does not** need to match step 2 session counts — athlete may schedule 2 swims when budget is 3
-- Optional later: rest-day hints, brick pairing (not P0)
-
-**Anchors** = fixed, named, recurring rows (long run Saturday).  
-**Layout slots** = generic placeholders (“Bike endurance”, “Easy run”) on specific weekdays. Each slot may carry a **session role** — especially **`intensity`** (Zone 3+ day) — visible on the calendar when materialized. See [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md).
-
-Athlete global `WeeklyScheduleTemplate` → **“Import preset”** copies into a phase layout when starting step 3; edits live on the season thereafter.
-
-### 2. Calendar materialization (V2)
-
-On season finish or per-week refresh:
-
-1. Resolve **phase layout** for the week (from `SeasonPhase`)
-2. Materialize **anchors** first (`ANCHORED_INSTANCE`)
-3. Materialize **layout slots** → `PlannedSession` (new source or extend `TEMPLATE` linkage to season layout items)
-4. Attach duration / distance / zone targets from `SeasonWeek` + per-slot overrides
-
-### 3. Unscheduled workouts (V2 calendar — not wizard validation)
-
-Step 2 budgets and step 3 layout are **intentionally decoupled**. The calendar closes the loop:
-
-| Concept | Source |
-|---------|--------|
-| **Budget** | `SeasonWeek.swimSessions` / `bikeSessions` / `runSessions` (from step 2 + de-load scaling) |
-| **Scheduled** | Count of `PlannedSession` per discipline in that calendar week (anchors + layout + manual flexible) |
-| **Unscheduled** | `max(0, budget − scheduled)` per discipline |
-
-**Calendar UX (V2):** **One focused-week sidebar workout pool** — unscheduled discipline chips (budget − scheduled), suggested hard-zone workouts, plus structured workouts from the library. Drag onto the week grid to place. TiZ targets assigned on placement or in session editor. Details: [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md).
-
-- **No blocking** in wizard step 3 if layout has fewer slots than budget
-- **No mismatch badges** in wizard P1 preview against step 2 (removed from plan)
-- Optional soft info on calendar only; never “Finish plan” gate
-
-Same pattern can extend later to **volume** (budget hours vs sum of session durations) — also calendar-side, not layout validation.
-
-### 4. Phase-varying layout
-
-**Chosen approach:** layout JSON (or `SeasonPhaseLayoutItem` rows) on each `SeasonPhase`. Base and Race prep each have their own grid. Replaces athlete-global template as the materialization source for that season.
-
-| Rejected for long-term | Why |
-|------------------------|-----|
-| Option A — athlete template + phase overrides | Season not source of truth |
-| Option B — anchors-only | No formal grid; poor auto-fill |
-
-### 5. Relationship to workout library
-
-- **Anchor** → optional `workoutTemplateId` (structured workout)
-- **Template slot** → generic title today; future: default folder / workout type / zone prescription from step 2 focus + V2 zones
-
-Step 3 names *when* and *what kind*; workout builder names *how* (intervals, steps).
+**Key point:** slot budgets are **aggregate counts per week** ("1 intense bike this week"), never a weekday shape ("intense bike on Tuesday"). The athlete places each session by hand, or applies the athlete-global weekly template. That template is **phase-blind** — the same "usual week" for Base and Race prep.
 
 ---
 
-## Anchors vs weekly template — roles
+## The gap this plan closes
 
-| | Anchor workout | Weekly template item |
-|--|----------------|----------------------|
-| **Intent** | Non-negotiable key session | Default week skeleton |
-| **Recurrence** | Effective from/until; taper rules | Repeats every week when applied |
-| **Scope** | Season or phase | Athlete-global today |
-| **Calendar source** | `ANCHORED_INSTANCE` | `TEMPLATE` |
-| **Edit on calendar** | Detach → flexible | Overwritten on re-apply |
-| **Wizard step 3** | **P0 — full editor** | **P0 — link**; P1 preview |
-
-**Do not merge the editors in P0.** They serve different mental models: anchors are *commitments*; template is *the usual week*.
-
-**P1 merge path (if chosen):** “Import template into season layout” copies template rows into phase layout or generates anchor rows for marked key sessions — not two editors on one screen.
+| Gap | Detail |
+|-----|--------|
+| **No weekday shape from the plan** | Slot budgets never say which day; every week starts empty except a manual template apply |
+| **Weekly template is phase-blind** | One athlete-global template; can't vary the usual week by phase |
+| **Intensity-day placement is manual** | Intense chips carry a role, but which day is "hard day" isn't planned; pool intensity-recipe suggestions have nothing to anchor to |
+| **No recurring "standard week"** | No per-phase "this is my normal Base week" that auto-fills |
 
 ---
 
-## Wizard step 3 — phased delivery
+## Direction: Option B — phase-aware weekly templates
 
-| Phase | UX | Backend |
-|-------|-----|---------|
-| **P0 (v2 redesign)** | Scope toggle; `AnchorEditor`; link to calendar template; copy explaining anchors vs layout | No schema change |
-| **P1** | “Import from weekly template” → copies into draft phase layout (when schema exists) | `SeasonPhase` layout items |
-| **P2** | Phase layout editor in wizard (week grid per phase) | CRUD on season layout |
-| **P3** | Materialize layout → calendar sessions for season weeks | `materializeSeasonWeeks` orchestrator |
-| **V2 calendar** | **Workout pool** sidebar (unscheduled + library + week TiZ) | See [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md) |
+Do **not** build a new `SeasonPhaseLayoutItem` grid. Instead evolve the **existing** `WeeklyScheduleTemplate` (already a weekday × discipline grid with `sessionRole`, an apply engine, and slot counting) into a **plan-scoped, typed** model that **auto-materializes** when defined.
+
+| Rejected alternative | Why |
+|----------------------|-----|
+| **A — retire templates entirely** (slot budgets + manual placement only) | Leaves the weekday-shape and phase-variation gaps unsolved |
+| **C — full season-owned weekday grid** (`SeasonPhaseLayoutItem` + materializer) | Duplicates the weekly-template editor, re-introduces the pinned-vs-flexible tension the pool was built to avoid, highest cost |
+
+**Templates are layout-only.** They define *which sessions on which weekday* and their `sessionRole`. They never own volume or zone budget — the Simple Planner ramp/deload engine keeps owning `totalHours` / `zoneMinutes` / `slotBudgets`. (The one nuance is test weeks; see below.)
 
 ---
 
-## Unscheduled workouts — V2 calendar detail
+## Template taxonomy
 
-**Example:** Base phase budget = 3 swim, 4 bike, 3 run. Phase layout materializes 2 swims, 3 bikes, 3 runs for the week.
+Three template scopes, resolved per week by precedence:
+
+| Scope | Bound to | Applies to | Count |
+|-------|----------|------------|-------|
+| **Phase template** | a specific `SeasonPhase` | every normal week in that phase | 0–1 per phase |
+| **Rest / de-load template** | the season plan | de-load / rest weeks | 0–1 per season |
+| **Test week template** | the season plan, **scheduled** onto chosen week(s) | only the week(s) it is placed on | 0–1 definition, N placements |
+
+Per **phase** (not per phase kind): real weekly patterns don't map cleanly onto Base/Build/Race-prep, and two Base blocks may want different weeks.
+
+### Per-week resolution (precedence)
 
 ```
-Budget (SeasonWeek)     Scheduled (calendar)    Unscheduled pool
-───────────────────     ────────────────────    ─────────────────
-Swim  3                 Swim  2                 Swim  1
-Bike  4                 Bike  3                 Bike  1
-Run   3                 Run   3                 (none)
+scheduled test week   → test template   · TiZ OFF (except long in mode 4)
+de-load / rest week    → season rest template IF defined, else the phase template · layout-only, de-load engine scales the budget
+normal week            → phase template IF defined, else empty (slot-budget chips only)
 ```
 
-Calendar **sidebar** workout pool: **“1 swim, 1 bike unscheduled”** as draggable chips; library section below for structured workouts.
+---
 
-- Flexible sessions the user adds manually **reduce** the unscheduled count
-- Detaching an anchor or deleting a session **increases** it
-- De-load weeks: budget already scaled on `SeasonWeek`; same math
-- Strength / other disciplines: include when step 2 tracks them
+## Materialization rules
 
-**Out of scope:** Auto-inserting sessions to fill the pool without user action (could be a later “suggest placement” feature).
+- **Auto-materialize**, but **never mandatory.** A week only receives sessions if a template resolves for it. Undefined → the week stays empty and the athlete works from slot-budget chips (today's behavior).
+- **Empty-week-only.** Auto-apply fires only when the week has no planned sessions, so it never clobbers manual placement or a prior apply. Re-apply remains an explicit, manual action.
+- **Reconcile against `slotBudgets`.** After apply, leftover seats still surface as unscheduled chips — the existing loop. Template placement just pre-fills the weekday shape and intensity days.
+- Respects long-week / taper / rest suppression already handled by `computeCalendarWeekPoolFields`.
 
 ---
 
-## Distance / pace rollup (step 4 P1 — related)
+## Special weeks
 
-When volume is distance-based (km/mi per discipline), step 4 needs **reference pace/speed per discipline** to convert weekly distance targets → duration for:
+### Rest / de-load weeks — layout-only
 
-- `SeasonWeek.totalHours`
-- Optional calendar-side **volume gap** (scheduled duration vs budget hours) — same pattern as unscheduled session counts, V2+
+- The de-load engine still owns the budget: `deLoadVolumePercent` + `applyDeLoadIntensityShift` compute the reduced `totalHours` / `zoneMinutes` as they do today.
+- Resolution is either/or: if a **season rest template** is defined, rest weeks use it; otherwise they fall back to the **phase** template.
+- Either way the template only pre-places the (already reduced) week's session shape. Slot budgets, chips, and Week TiZ behave normally, just scaled down.
 
-Fields can live on season plan or athlete settings; anchors already support `distanceMeters`, `targetPaceSeconds`, `targetSpeedMps`.
+### Test weeks — outside the TiZ system
+
+Test weeks are a genuine special case: **TiZ planning does not apply.**
+
+- **No zone-minute budget / no TiZ targets** on test-week sessions. Skip `inheritTargetZonesFromRole`, skip the endurance/intensity slot budgets, and show the Week TiZ rollup as **N/A** for that week.
+- The template defines the week as **test + supporting sessions** (warm-up, primers, openers, recovery around the test) — no normal endurance/intensity distribution.
+- **Long workouts may still exist.** They are the one thing that persists from normal planning, and they **may still carry TiZ targets in planning mode 4 (`SEPARATE_LONG_TIZ`)** — drawn from the separate `longSessionZoneMinutes` budget. In modes 1–3 the surviving long is duration-only.
+- **Slot budgets on a test week:** suppress endurance/intensity seats; **keep the long seat** when long workouts still apply.
+- **Schedulable on the timeline:** the athlete drops a test week onto a week index (alongside race markers / de-load flags).
+- **Actual load still counts.** Completed test-week sessions still produce real training load (ECO / impulse); they are simply not *planned* via TiZ.
 
 ---
 
-## Review checklist
+## Relationship to the workout pool
 
-- [x] Layout owner: season plan per phase (option 2)
-- [x] No layout validation against step 2 budgets
-- [x] Gaps → unscheduled workouts on calendar (V2)
-- [x] P0 wizard: anchors + link-only for athlete template
-- [ ] Schema shape for `SeasonPhase` layout items
-- [x] Unscheduled UI: **left sidebar** workout pool
-- [x] `sessionRole` enum: easy | moderate | intensity | long — [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md)
+Templates pre-fill the week; the pool fills the remaining gap. Template **intensity slots** become the anchor points for the pool's intensity-recipe suggestions (see [calendar-workout-pool-v2.md](./calendar-workout-pool-v2.md), pool phases P3/P4). Reconciliation against `slotBudgets` is unchanged: manual sessions and template sessions both reduce the unscheduled chip counts.
+
+### TiZ seeding is being superseded
+
+When a session is placed or materialized it currently seeds provisional `targetZones` via `inheritTargetZonesFromRole` (`src/lib/plan/calendar/inherit-target-zones.ts`) — a fixed per-role zone split (`ROLE_ZONE_SHARE`). **This is a first-pass heuristic, not the target behavior**, and templated sessions should not entrench it:
+
+- **Intensity slots** — the fixed `INTENSITY` split (55% Z3 / 30% Z4 / 15% Z5, applied identically to every hard session) does **not** reflect how athletes train. It is superseded by **intensity recipes** (over/under, tempo, threshold, VO2) that claim the week's hard budget asymmetrically — pool phase **P3**.
+- **Easy / moderate / long** — per-session role shares (notably `MODERATE = 100% Z2`, so endurance sessions never inherit Z1) are superseded by **week distribute/balance** that pours remaining Z1/Z2 to reconcile the week `zoneMinutes` pie — pool phase **P4** (generalizing `computeEasyTizSpread`).
+- **Keep:** the `LONG` + mode 4 (`SEPARATE_LONG_TIZ`) path that already allocates from the real `longSessionZoneMinutes` budget.
+
+Net: on materialize, defer to **recipes** (intensity) and **week-distribute** (easy/long); demote `inheritTargetZonesFromRole` to a fallback when no recipe or budget is available. Whether TiZ re-seeds on role change / workout attach (today it does not) is resolved by that same distribute pass.
+
+---
+
+## Proposed work sequence
+
+| Step | Scope |
+|------|-------|
+| **S1 — Doc reconciliation** | This rewrite; mark the three wizard docs superseded; scrub anchor/grid language from calendar docs |
+| **S2 — Template schema** | Move `WeeklyScheduleTemplate` from athlete-global to **plan-scoped + typed**: `seasonPhaseId` (nullable) + `kind` (`PHASE \| REST \| TEST`); test-week placements as scheduled rows on the plan. Migration + **migrate the legacy athlete-global template** into a default/per-phase template |
+| **S3 — Editors in the planner** | Reuse `weekly-template-editor.tsx` to define phase / rest / test templates from the Simple Planner |
+| **S4 — Test-week scheduling** | Timeline control to place test weeks (next to race markers / de-load flags) |
+| **S5 — Resolver + auto-materialize** | Per-week precedence resolver; auto-apply on empty weeks; reconcile to slot budgets |
+| **S6 — Intensity-day handoff** | Template intensity slots feed the pool's intensity-recipe suggestions |
+
+---
+
+## Decisions (confirmed)
+
+| Item | Decision |
+|------|----------|
+| Approach | **Option B** — extend `WeeklyScheduleTemplate`; no new grid schema, no anchors |
+| Template scope | **Per phase** (not per phase kind) |
+| Special templates | **Rest** (season-level) + **Test** (season-level, schedulable) |
+| Materialization | **Auto**, **non-mandatory**, **empty-week-only**, reconciled to `slotBudgets` |
+| Template ownership of budget | **Layout-only** for normal + rest weeks; test weeks sit **outside** TiZ |
+| Rest-week resolution | Season rest template **if defined**, else the phase template |
+| Test-week long TiZ | Allowed **only in mode 4** (`SEPARATE_LONG_TIZ`) via `longSessionZoneMinutes`; duration-only otherwise |
+| Legacy athlete-global template | **Migrated** into the plan-scoped model |
+| Anchors | **Retired** — key sessions are `GoalEvent`/races or template intensity slots |
+| 5-step wizard | **Retired** — Simple Planner is the season editing surface |
+
+## Open items
+
+- [ ] Schema shape for `kind` + `seasonPhaseId` + test-week placement rows (S2)
+- [ ] Whether S6 recipe anchoring lands with S5 or after the pool P3/P4 work

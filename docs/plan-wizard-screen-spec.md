@@ -1,5 +1,7 @@
 # Plan wizard — screen spec (v2)
 
+> **⚠️ SUPERSEDED (July 2026).** Specs a **5-step wizard** and **anchor workouts** that were never built (wizard) or dropped (anchors). Production season planning is the single-page **Simple Planner**. Retained for history only. See [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md) for the current direction.
+
 User-directed flow after cycle structure: **goals & days → workouts/anchors → volume/ramp/de-load**. Zone allocation deferred to V2.
 
 **Wireframe:** [plan-wizard-wireframe.canvas.tsx](file:///C:/Users/pjohn/.cursor/projects/c-Users-pjohn-TiZ/canvases/plan-wizard-wireframe.canvas.tsx)
