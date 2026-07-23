@@ -8,10 +8,14 @@
  *   de-load / rest week → rest template if set, else phase template · volume-scaled
  *   normal week         → phase template if set, else nothing
  *
+ * When planning longs separately, LONG template seats are rewritten from
+ * {@link WeekMaterializationContext.bikeLongSeat} / `runLongSeat` (full long,
+ * extra intensity, substitute endurance, or omit).
+ *
  * No DB access here so it is fully unit-testable; the server layer feeds it
  * plain data and persists the returned session specs.
  */
-import type { Discipline, PoolSize, SessionRole, Weekday } from "@prisma/client";
+import type { Discipline, PoolSize, PoolSlotKind, SessionRole, Weekday } from "@prisma/client";
 import { weekdayToDate } from "./weekday-to-date";
 import {
   resolveWeekTemplateKind,
@@ -33,6 +37,13 @@ export type MaterializeTemplate = {
   items: MaterializeTemplateItem[];
 };
 
+/** How a reserved long seat is filled when longs are planned separately. */
+export type LongSeatAction =
+  | { kind: "full_long" }
+  | { kind: "extra_intensity" }
+  | { kind: "substitute_endurance"; durationMinutes: number }
+  | { kind: "omit" };
+
 /** A single week's resolution context. */
 export type WeekMaterializationContext = {
   weekIndex: number;
@@ -42,6 +53,10 @@ export type WeekMaterializationContext = {
   isTestWeek: boolean;
   /** Template assigned to the phase covering this week (or null). */
   phaseTemplateId: string | null;
+  /** Separate-longs BIKE LONG seat action (null = leave LONG items unchanged). */
+  bikeLongSeat?: LongSeatAction | null;
+  /** Separate-longs RUN LONG seat action (null = leave LONG items unchanged). */
+  runLongSeat?: LongSeatAction | null;
 };
 
 export type MaterializeOptions = {
@@ -61,6 +76,7 @@ export type MaterializedSession = {
   distanceMeters: number | null;
   poolSize: PoolSize | null;
   sessionRole: SessionRole;
+  poolSlotKind?: PoolSlotKind | null;
   /** When true the session sits outside the TiZ system (test weeks). */
   suppressTiz: boolean;
 };
@@ -96,6 +112,71 @@ function scaleDuration(minutes: number | null, scale: number): number | null {
   return Math.max(1, Math.round(minutes * scale));
 }
 
+function longSeatForDiscipline(
+  discipline: Discipline,
+  ctx: WeekMaterializationContext
+): LongSeatAction | null | undefined {
+  if (discipline === "BIKE") return ctx.bikeLongSeat;
+  if (discipline === "RUN") return ctx.runLongSeat;
+  return null;
+}
+
+function intensityTitle(title: string, discipline: Discipline): string {
+  if (/\blong\b/i.test(title)) {
+    return title.replace(/\blong\b/gi, "Intensity");
+  }
+  return discipline === "BIKE" ? "Intensity ride" : "Intensity run";
+}
+
+function enduranceSubstituteTitle(title: string, discipline: Discipline): string {
+  if (/\blong\b/i.test(title)) {
+    return title.replace(/\blong\b/gi, "Endurance");
+  }
+  return discipline === "BIKE" ? "Endurance ride" : "Endurance run";
+}
+
+/**
+ * Apply separate-longs seat policy to a template-derived session.
+ * Returns null when the long seat should be omitted for the week.
+ */
+export function applyLongSeatToSession(
+  session: MaterializedSession,
+  ctx: WeekMaterializationContext
+): MaterializedSession | null {
+  if (session.sessionRole !== "LONG") return session;
+  if (session.discipline !== "BIKE" && session.discipline !== "RUN") return session;
+
+  const seat = longSeatForDiscipline(session.discipline, ctx);
+  if (seat == null) return session;
+
+  switch (seat.kind) {
+    case "full_long":
+      return { ...session, poolSlotKind: "LONG" };
+    case "extra_intensity":
+      return {
+        ...session,
+        title: intensityTitle(session.title, session.discipline),
+        sessionRole: "INTENSITY",
+        poolSlotKind: "INTENSITY",
+      };
+    case "substitute_endurance": {
+      const durationMinutes =
+        seat.durationMinutes > 0
+          ? seat.durationMinutes
+          : session.durationMinutes;
+      return {
+        ...session,
+        title: enduranceSubstituteTitle(session.title, session.discipline),
+        durationMinutes,
+        sessionRole: "EASY",
+        poolSlotKind: "SUBSTITUTE_ENDURANCE",
+      };
+    }
+    case "omit":
+      return null;
+  }
+}
+
 /** Resolve and expand a single week into concrete session specs. */
 export function planWeekMaterialization(
   ctx: WeekMaterializationContext,
@@ -115,18 +196,23 @@ export function planWeekMaterialization(
     ? Math.max(0, Math.min(1, opts.deLoadVolumePercent / 100))
     : 1;
 
-  const sessions: MaterializedSession[] = (template?.items ?? []).map((item) => ({
-    scheduledDateKey: weekdayToDate(ctx.weekStartKey, item.weekday),
-    weekday: item.weekday,
-    discipline: item.discipline,
-    title: item.title,
-    // De-load scales duration (the main volume lever); distance is left as-is.
-    durationMinutes: scaleDuration(item.durationMinutes, scale),
-    distanceMeters: item.distanceMeters,
-    poolSize: item.discipline === "SWIM" ? item.poolSize : null,
-    sessionRole: item.sessionRole,
-    suppressTiz: resolution.suppressTiz,
-  }));
+  const sessions: MaterializedSession[] = [];
+  for (const item of template?.items ?? []) {
+    const base: MaterializedSession = {
+      scheduledDateKey: weekdayToDate(ctx.weekStartKey, item.weekday),
+      weekday: item.weekday,
+      discipline: item.discipline,
+      title: item.title,
+      // De-load scales duration (the main volume lever); distance is left as-is.
+      durationMinutes: scaleDuration(item.durationMinutes, scale),
+      distanceMeters: item.distanceMeters,
+      poolSize: item.discipline === "SWIM" ? item.poolSize : null,
+      sessionRole: item.sessionRole,
+      suppressTiz: resolution.suppressTiz,
+    };
+    const next = applyLongSeatToSession(base, ctx);
+    if (next) sessions.push(next);
+  }
 
   return {
     weekIndex: ctx.weekIndex,
