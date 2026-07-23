@@ -5,6 +5,7 @@ import {
 } from "@/lib/plan/pace-threshold-context";
 import {
   flattenForPlanning,
+  flatStepDurationSeconds,
   parseWorkoutTree,
   rollupFlatPlanningToZoneMinutes,
   type FlattenPlanningOptions,
@@ -102,15 +103,8 @@ export function workoutZoneRollup(
 
   const durationMinutes =
     flat.length > 0
-      ? flat.reduce(
-          (s, step) =>
-            s +
-            (step.durationMinutes > 0
-              ? step.durationMinutes
-              : step.openDuration && step.durationSeconds > 0
-                ? Math.max(1, Math.round(step.durationSeconds / 60))
-                : 0),
-          0
+      ? Math.round(
+          flat.reduce((sum, step) => sum + flatStepDurationSeconds(step), 0) / 60
         )
       : legacySteps.length > 0
         ? legacySteps.reduce((s, step) => s + step.durationMinutes, 0)

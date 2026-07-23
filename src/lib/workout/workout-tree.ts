@@ -567,13 +567,27 @@ export function flattenTreeToLegacySteps(raw: unknown): WorkoutStep[] {
   return flatPlanningToLegacySteps(flat);
 }
 
+/** Prefer exact seconds for TiZ; fall back to minute fields from legacy flats. */
+export function flatStepDurationSeconds(step: FlatPlanningStep): number {
+  if (step.durationSeconds > 0) return step.durationSeconds;
+  if (step.durationMinutes > 0) return step.durationMinutes * 60;
+  return 0;
+}
+
 export function rollupFlatPlanningToZoneMinutes(flat: FlatPlanningStep[]): ZoneMinutes {
-  const totals: ZoneMinutes = {};
+  const totalsSec: Record<string, number> = {};
   for (const step of flat) {
     if (step.type === "rest") continue;
-    if (step.durationMinutes <= 0 && !step.openDuration) continue;
+    const sec = flatStepDurationSeconds(step);
+    if (sec <= 0) continue;
     const key = String(step.targetZone);
-    totals[key] = (totals[key] ?? 0) + (step.durationMinutes > 0 ? step.durationMinutes : 0);
+    totalsSec[key] = (totalsSec[key] ?? 0) + sec;
+  }
+  const totals: ZoneMinutes = {};
+  for (const [key, sec] of Object.entries(totalsSec)) {
+    // Round after summing so 10×30s = 5m, not 10×1m.
+    const minutes = Math.round(sec / 60);
+    if (minutes > 0) totals[key] = minutes;
   }
   return totals;
 }

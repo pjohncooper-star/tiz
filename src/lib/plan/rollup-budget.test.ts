@@ -137,6 +137,40 @@ describe("workoutZoneRollup", () => {
     assert.equal(rollup.zones["BIKE-5"], 5);
     assert.equal(rollup.zones["BIKE-6"], undefined);
   });
+
+  it("scores 10×30s Z5 + 30s Z1 as 5m Z5 and 5m Z1 (not 10m each)", () => {
+    const microIntervals = {
+      version: 2,
+      nodes: [
+        {
+          kind: "repeat",
+          repeatCount: 10,
+          children: [
+            {
+              kind: "step",
+              intensity: "interval",
+              duration: { type: "time", value: 30 },
+              target: { signal: "power", mode: "zone", zone: 5 },
+            },
+            {
+              kind: "step",
+              intensity: "recovery",
+              duration: { type: "time", value: 30 },
+              target: { signal: "power", mode: "zone", zone: 1 },
+            },
+          ],
+        },
+      ],
+    };
+    const rollup = sessionPlannedZoneRollup("BIKE", {
+      structuredSteps: microIntervals,
+      flattenOptions: { zoneCount: 5 },
+    });
+    assert.equal(rollup.zones["BIKE-5"], 5);
+    assert.equal(rollup.zones["BIKE-1"], 5);
+    assert.equal(rollup.durationMinutes, 10);
+    assert.equal(rollup.totalMinutes, 10);
+  });
 });
 
 describe("rollupSessions", () => {
