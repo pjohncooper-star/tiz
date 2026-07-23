@@ -125,7 +125,7 @@ export function ZoneBoundariesEditor({
       </div>
       <p className="text-xs text-zinc-500">
         {signalType === "PACE"
-          ? "Edit cutoffs as % of threshold speed (higher = faster), then shown as pace. Z4 straddles threshold; Z5 starts above ~105%."
+          ? "Edit cutoffs as % of threshold speed (higher = faster), then shown as pace."
           : "Edit the upper cutoff of each zone as a percentage of threshold."}
       </p>
       <div className="space-y-2">

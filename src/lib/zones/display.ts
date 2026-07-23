@@ -172,7 +172,7 @@ export function zoneRangesForProfile(
   discipline: Discipline,
   displayUnit: "METRIC" | "IMPERIAL"
 ): Array<{ zone: number; label: string }> {
-  const boundaries = parseZoneBoundaries(profile.zoneBoundaries);
+  const boundaries = parseZoneBoundaries(profile.zoneBoundaries, discipline);
   return zonePctRanges(profile.signalType, boundaries, profile.zoneCount).map(
     (range) => ({
       zone: range.zone,

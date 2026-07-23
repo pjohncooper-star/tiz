@@ -308,7 +308,10 @@ export async function PUT(req: Request) {
       } else if (data.zoneBoundaries != null) {
         zoneBoundaries = data.zoneBoundaries;
       } else if (existing?.zoneBoundaries != null) {
-        zoneBoundaries = parseZoneBoundaries(existing.zoneBoundaries);
+        zoneBoundaries = parseZoneBoundaries(
+          existing.zoneBoundaries,
+          data.discipline
+        );
       } else {
         // Prefer copying the latest profile's custom zones when creating a new dated row.
         const latest = await db.thresholdProfile.findFirst({
@@ -320,7 +323,7 @@ export async function PUT(req: Request) {
           orderBy: { effectiveDate: "desc" },
         });
         zoneBoundaries = latest?.zoneBoundaries
-          ? parseZoneBoundaries(latest.zoneBoundaries)
+          ? parseZoneBoundaries(latest.zoneBoundaries, data.discipline)
           : zoneBoundariesFor(data.discipline, data.signalType);
       }
 

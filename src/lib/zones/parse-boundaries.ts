@@ -1,6 +1,10 @@
+import type { Discipline } from "@prisma/client";
 import { coalesceLegacyPaceBoundaries } from "@/lib/zones/boundaries";
 
-export function parseZoneBoundaries(zoneBoundaries: unknown): number[] {
+export function parseZoneBoundaries(
+  zoneBoundaries: unknown,
+  discipline?: Discipline
+): number[] {
   let boundaries: number[];
   if (Array.isArray(zoneBoundaries)) {
     boundaries = zoneBoundaries as number[];
@@ -13,6 +17,6 @@ export function parseZoneBoundaries(zoneBoundaries: unknown): number[] {
   } else {
     throw new Error("Invalid zone boundaries");
   }
-  // Soft-upgrade known inverted legacy pace defaults (Z4/Z5 at 100% speed).
-  return coalesceLegacyPaceBoundaries(boundaries);
+  // Soft-upgrade known inverted / interim pace defaults.
+  return coalesceLegacyPaceBoundaries(boundaries, discipline);
 }

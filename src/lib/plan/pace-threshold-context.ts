@@ -47,7 +47,7 @@ export async function loadPaceThresholdContext(
     } else {
       let boundaries: number[];
       try {
-        boundaries = parseZoneBoundaries(profile.zoneBoundaries);
+        boundaries = parseZoneBoundaries(profile.zoneBoundaries, discipline);
       } catch {
         boundaries = zoneBoundariesFor(discipline, "PACE");
       }

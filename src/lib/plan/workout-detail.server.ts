@@ -250,7 +250,10 @@ export async function loadWorkoutDetail(
     // Pace boundaries stay pace-based for distance↔duration derivation even when
     // the prescription primary metric is heart rate.
     if (paceProfile) {
-      thresholdZoneBoundaries = parseZoneBoundaries(paceProfile.zoneBoundaries);
+      thresholdZoneBoundaries = parseZoneBoundaries(
+        paceProfile.zoneBoundaries,
+        plannedSession.discipline
+      );
     }
   }
 
