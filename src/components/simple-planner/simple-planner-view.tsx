@@ -459,6 +459,8 @@ export function SimplePlannerView({
           phases: season.phases,
           restWeekTemplateId: season.restWeekTemplateId ?? null,
           testWeekTemplateId: season.testWeekTemplateId ?? null,
+          longRideWeekFlags: season.longRideWeekFlags,
+          longRunWeekFlags: season.longRunWeekFlags,
           recalculate: true,
           ...extra,
         };
