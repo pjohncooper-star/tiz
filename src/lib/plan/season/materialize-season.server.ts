@@ -14,6 +14,8 @@ import { isTestWeekAtIndex } from "@/lib/plan/calendar/week-template-resolution"
 export type MaterializeSeasonOptions = {
   /** When true, skip weeks that already have any planned sessions. */
   onlyEmptyWeeks?: boolean;
+  /** Required: only materialize weeks covered by this phase. */
+  phaseId: string;
 };
 
 export type MaterializeSeasonResult = {
@@ -22,13 +24,21 @@ export type MaterializeSeasonResult = {
   weeksSkipped: number;
 };
 
+type PhaseSpanRow = {
+  id: string;
+  sortOrder: number;
+  startWeekIndex: number;
+  weekCount: number;
+  weeklyTemplateId: string | null;
+};
+
 /**
  * Derive concrete phase week spans (mirrors the serializer's cursor logic:
  * phases without a stored start chain after the previous phase).
  */
-function phaseSpans(
-  phases: { sortOrder: number; startWeekIndex: number; weekCount: number; weeklyTemplateId: string | null }[]
-): PhaseSpan[] {
+export function phaseSpansWithIds(
+  phases: PhaseSpanRow[]
+): Array<PhaseSpan & { phaseId: string }> {
   let cursor = 0;
   return [...phases]
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -38,13 +48,18 @@ function phaseSpans(
       const startWeekIndex = hasStoredStart ? p.startWeekIndex : cursor;
       const endWeekIndex = startWeekIndex + p.weekCount - 1;
       if (!hasStoredStart) cursor += p.weekCount;
-      return { startWeekIndex, endWeekIndex, weeklyTemplateId: p.weeklyTemplateId };
+      return {
+        phaseId: p.id,
+        startWeekIndex,
+        endWeekIndex,
+        weeklyTemplateId: p.weeklyTemplateId,
+      };
     });
 }
 
 /**
- * Materialize a season's assigned weekly templates onto the calendar as
- * PlannedSessions (source = TEMPLATE), one pass over every week.
+ * Materialize a phase's assigned weekly template onto the calendar as
+ * PlannedSessions (source = TEMPLATE) for weeks in that phase only.
  *
  * By default it replaces the TEMPLATE-sourced sessions in each targeted week
  * (leaving manually-added sessions untouched); with `onlyEmptyWeeks` it only
@@ -53,8 +68,11 @@ function phaseSpans(
 export async function materializeSeasonTemplates(
   athleteId: string,
   seasonPlanId: string,
-  options: MaterializeSeasonOptions = {}
+  options: MaterializeSeasonOptions
 ): Promise<MaterializeSeasonResult> {
+  const phaseId = options.phaseId;
+  if (!phaseId) throw new Error("phaseId is required");
+
   const plan = await db.seasonPlan.findFirst({
     where: { id: seasonPlanId, athleteId },
     include: {
@@ -63,6 +81,15 @@ export async function materializeSeasonTemplates(
     },
   });
   if (!plan) throw new Error("Season plan not found");
+
+  const targetPhase = plan.phases.find((phase) => phase.id === phaseId);
+  if (!targetPhase) throw new Error("Phase not found");
+
+  const spans = phaseSpansWithIds(plan.phases);
+  const targetSpan = spans.find((span) => span.phaseId === phaseId);
+  if (!targetSpan) {
+    throw new Error("Phase is not assigned to any weeks");
+  }
 
   const templateIds = new Set<string>();
   for (const phase of plan.phases) {
@@ -96,15 +123,27 @@ export async function materializeSeasonTemplates(
     ])
   );
 
-  const spans = phaseSpans(plan.phases);
+  const phaseSpansForLookup: PhaseSpan[] = spans.map(
+    ({ startWeekIndex, endWeekIndex, weeklyTemplateId }) => ({
+      startWeekIndex,
+      endWeekIndex,
+      weeklyTemplateId,
+    })
+  );
 
-  const contexts: WeekMaterializationContext[] = plan.weeks.map((week) => ({
-    weekIndex: week.weekIndex,
-    weekStartKey: formatDateKey(week.weekStartDate),
-    isDeLoadWeek: week.isDeLoadWeek,
-    isTestWeek: isTestWeekAtIndex(week.weekIndex, plan.testWeekFlags),
-    phaseTemplateId: phaseTemplateIdForWeek(week.weekIndex, spans),
-  }));
+  const contexts: WeekMaterializationContext[] = plan.weeks
+    .filter(
+      (week) =>
+        week.weekIndex >= targetSpan.startWeekIndex &&
+        week.weekIndex <= targetSpan.endWeekIndex
+    )
+    .map((week) => ({
+      weekIndex: week.weekIndex,
+      weekStartKey: formatDateKey(week.weekStartDate),
+      isDeLoadWeek: week.isDeLoadWeek,
+      isTestWeek: isTestWeekAtIndex(week.weekIndex, plan.testWeekFlags),
+      phaseTemplateId: phaseTemplateIdForWeek(week.weekIndex, phaseSpansForLookup),
+    }));
 
   const weekPlans = planSeasonMaterialization(contexts, {
     restTemplateId: plan.restWeekTemplateId,
