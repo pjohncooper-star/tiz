@@ -67,15 +67,23 @@ function ZoneProgressRows({
     <div className="space-y-1.5">
       {TIZ_ZONES.map((zone) => {
         const target = targetZones[zone - 1] ?? 0;
-        if (target <= 0) return null;
         const scheduled = scheduledZones[zone - 1] ?? 0;
-        const pct = Math.min(100, Math.round((scheduled / target) * 100));
+        // Show zones with a season target OR scheduled minutes (e.g. watt→zone
+        // landings outside the week's budgeted zones).
+        if (target <= 0 && scheduled <= 0) return null;
+        const pct =
+          target > 0
+            ? Math.min(100, Math.round((scheduled / target) * 100))
+            : scheduled > 0
+              ? 100
+              : 0;
         return (
           <div key={zone}>
             <div className="mb-0.5 flex justify-between tabular-nums text-zinc-600 dark:text-zinc-300">
               <span>Z{zone}</span>
               <span>
-                {formatZoneMinutes(scheduled)} / {formatZoneMinutes(target)}
+                {formatZoneMinutes(scheduled)}
+                {target > 0 ? ` / ${formatZoneMinutes(target)}` : ""}
               </span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
@@ -357,7 +365,9 @@ function WeekTizFooter({
         scheduled: scheduledZonesFromRollup(effectiveScheduled.main, discipline),
       };
     })
-    .filter((row) => zoneArrayHasTarget(row.target));
+    .filter(
+      (row) => zoneArrayHasTarget(row.target) || zoneArrayHasTarget(row.scheduled)
+    );
 
   const longTargetByDiscipline = LONG_TIZ_DISCIPLINES.filter(
     (discipline) => !filteredDiscipline || discipline === filteredDiscipline
@@ -367,11 +377,14 @@ function WeekTizFooter({
       target: sportZoneTotals(discipline, weekTarget.longSessionZoneMinutes ?? {}),
       scheduled: scheduledZonesFromRollup(effectiveScheduled.long, discipline),
     }))
-    .filter((row) => zoneArrayHasTarget(row.target));
+    .filter(
+      (row) => zoneArrayHasTarget(row.target) || zoneArrayHasTarget(row.scheduled)
+    );
 
   const hasLongTarget = separateLongTiz && longTargetByDiscipline.length > 0;
+  const overallScheduled = scheduledZonesFromRollup(effectiveScheduled.main);
   const hasMainTarget = showOverall
-    ? zoneArrayHasTarget(overallTarget)
+    ? zoneArrayHasTarget(overallTarget) || zoneArrayHasTarget(overallScheduled)
     : disciplineColumns.length > 0;
   if (!hasMainTarget && !hasLongTarget) return null;
 
@@ -383,7 +396,7 @@ function WeekTizFooter({
         {showOverall ? (
           <ZoneProgressRows
             targetZones={overallTarget}
-            scheduledZones={scheduledZonesFromRollup(effectiveScheduled.main)}
+            scheduledZones={overallScheduled}
           />
         ) : (
           <div
