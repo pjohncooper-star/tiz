@@ -7,7 +7,7 @@ import {
 } from "@/components/dashboard-day-strip";
 import { DashboardGlanceCharts } from "@/components/dashboard-glance-charts";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
-import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
+import { requireAthlete, gateCompletedOnboarding } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import {
@@ -39,8 +39,8 @@ export default async function DashboardPage() {
   const athlete = await db.athlete.findUnique({
     where: { id: session.user.athleteId! },
   });
-  if (athlete && athlete.onboardingStep !== "COMPLETE") {
-    onboardingRedirect(athlete.onboardingStep);
+  if (athlete) {
+    await gateCompletedOnboarding(athlete.id, athlete.onboardingStep);
   }
 
   const athleteId = session.user.athleteId!;

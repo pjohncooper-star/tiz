@@ -11,16 +11,20 @@ export const ONBOARDING_STEPS = [
   },
   { step: "IMPORT" as const, path: "/onboarding/import", title: "Historical import", number: 4 },
   { step: "STRAVA" as const, path: "/onboarding/strava", title: "Strava connect", number: 5 },
-  { step: "DAY_FLAGS" as const, path: "/onboarding/day-flags", title: "Workout Signaling", number: 6 },
 ];
 
+/**
+ * Route for each onboarding enum value.
+ * DAY_FLAGS remains in the Prisma enum for existing athletes but is no longer
+ * part of the flow — resolve to dashboard (gate will mark COMPLETE).
+ */
 export const ONBOARDING_ROUTES: Record<OnboardingStep, string> = {
   PROFILE: "/onboarding/profile",
   THRESHOLDS: "/onboarding/thresholds",
   HISTORICAL_THRESHOLDS: "/onboarding/threshold-history",
   IMPORT: "/onboarding/import",
   STRAVA: "/onboarding/strava",
-  DAY_FLAGS: "/onboarding/day-flags",
+  DAY_FLAGS: "/dashboard",
   COMPLETE: "/dashboard",
 };
 

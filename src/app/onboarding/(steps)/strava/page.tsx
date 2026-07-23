@@ -27,7 +27,7 @@ export default async function StravaStep() {
       </div>
       <Card>
         <a
-          href="/api/strava/connect"
+          href="/api/strava/connect?returnTo=/dashboard"
           className="inline-block rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700"
         >
           Connect Strava

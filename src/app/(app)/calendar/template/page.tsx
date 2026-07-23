@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { WeeklyTemplateManager } from "@/components/calendar/weekly-template-manager";
-import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
+import { requireAthlete, gateCompletedOnboarding } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { isPlanningCalendarEnabled } from "@/lib/features";
 import { listWeeklyTemplateSummaries } from "@/lib/plan/calendar/template.server";
@@ -16,8 +16,8 @@ export default async function CalendarTemplatePage() {
   const session = await requireAthlete();
   const athleteId = session.user.athleteId!;
   const athlete = await db.athlete.findUnique({ where: { id: athleteId } });
-  if (athlete && athlete.onboardingStep !== "COMPLETE") {
-    onboardingRedirect(athlete.onboardingStep);
+  if (athlete) {
+    await gateCompletedOnboarding(athleteId, athlete.onboardingStep);
   }
 
   const templates = await listWeeklyTemplateSummaries(athleteId);

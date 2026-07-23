@@ -3,7 +3,7 @@ export type StravaOAuthState = {
   returnTo: string;
 };
 
-export const STRAVA_OAUTH_DEFAULT_RETURN = "/onboarding/day-flags";
+export const STRAVA_OAUTH_DEFAULT_RETURN = "/dashboard";
 
 /** Allow only same-origin relative paths (no open redirects). */
 export function safeReturnPath(path: string | null | undefined): string {

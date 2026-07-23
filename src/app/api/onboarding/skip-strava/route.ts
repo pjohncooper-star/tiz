@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import { getAppUrl } from "@/lib/app-url";
 import { db } from "@/lib/db";
 import { advanceOnboardingTo } from "@/lib/onboarding";
-import { ONBOARDING_ROUTES } from "@/lib/onboarding/flow";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -24,9 +23,7 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL("/dashboard", getAppUrl(req)));
   }
 
-  await advanceOnboardingTo(session.user.athleteId, "DAY_FLAGS");
+  await advanceOnboardingTo(session.user.athleteId, "COMPLETE");
 
-  return NextResponse.redirect(
-    new URL(ONBOARDING_ROUTES.DAY_FLAGS, getAppUrl(req))
-  );
+  return NextResponse.redirect(new URL("/dashboard", getAppUrl(req)));
 }

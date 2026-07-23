@@ -13,8 +13,8 @@ describe("safeReturnPath", () => {
   });
 
   it("rejects external URLs", () => {
-    assert.equal(safeReturnPath("//evil.com"), "/onboarding/day-flags");
-    assert.equal(safeReturnPath("https://evil.com"), "/onboarding/day-flags");
+    assert.equal(safeReturnPath("//evil.com"), "/dashboard");
+    assert.equal(safeReturnPath("https://evil.com"), "/dashboard");
   });
 });
 
@@ -33,7 +33,7 @@ describe("Strava OAuth state", () => {
   it("parses legacy raw athleteId state", () => {
     assert.deepEqual(parseStravaOAuthState("clxyz123"), {
       athleteId: "clxyz123",
-      returnTo: "/onboarding/day-flags",
+      returnTo: "/dashboard",
     });
   });
 });

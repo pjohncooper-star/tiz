@@ -109,9 +109,7 @@ export function DayFlagsForm() {
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [submitError, setSubmitError] = useState("");
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
 
   const loadDay = useCallback(async (date?: string) => {
     setLoading(true);
@@ -125,7 +123,6 @@ export function DayFlagsForm() {
     setDateRange(data.dateRange ?? { min: null, max: null });
     setSelectedDate(data.selectedDate ?? null);
     setTotalUnflagged(data.totalUnflagged ?? 0);
-    setOnboardingComplete(data.onboardingComplete === true);
     if (data.savedFlags) {
       setSavedFlagIds(new Set(data.savedFlags.map((s: SavedFlag) => s.activityId)));
       setFlags((prev) => mergeSavedFlags(prev, data.savedFlags, nextCandidates));
@@ -161,7 +158,7 @@ export function DayFlagsForm() {
     loadDay(date);
   }
 
-  async function saveFlags(finishOnboarding: boolean) {
+  async function saveFlags() {
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -181,39 +178,24 @@ export function DayFlagsForm() {
       const res = await fetch("/api/day-flags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          flags: flagsToSave,
-          complete: finishOnboarding,
-        }),
+        body: JSON.stringify({ flags: flagsToSave }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setSubmitError(data.error ?? "Could not save day flags");
         return;
       }
-      if (finishOnboarding) {
-        router.push("/dashboard");
-        router.refresh();
-      } else {
-        setDirtyIds(new Set());
-        setPendingClears(new Set());
-        await loadDay(selectedDate ?? undefined);
-        router.push("/dashboard");
-        router.refresh();
-      }
+      setDirtyIds(new Set());
+      setPendingClears(new Set());
+      await loadDay(selectedDate ?? undefined);
+      router.refresh();
     } catch {
       setSubmitError("Could not save day flags. Check your connection and try again.");
     } finally {
       setSubmitting(false);
-      setConfirmOpen(false);
     }
   }
 
-  async function complete() {
-    await saveFlags(true);
-  }
-
-  const flaggedCount = Object.keys(flags).length;
   const flagSummary = summarizeFlaggedDays(flags);
   const flaggedDayCount = FLAGS.reduce((sum, flag) => sum + flagSummary[flag], 0);
 
@@ -311,71 +293,24 @@ export function DayFlagsForm() {
           </ul>
         )}
         <div className="mt-4 flex flex-wrap gap-2">
-          {onboardingComplete ? (
-            <>
-              <Button
-                type="button"
-                onClick={() => void saveFlags(false)}
-                disabled={submitting || (dirtyIds.size === 0 && pendingClears.size === 0)}
-              >
-                {submitting ? "Saving…" : "Save flags"}
-              </Button>
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-              >
-                Back to dashboard
-              </Link>
-            </>
-          ) : (
-            <Button className="mt-4" onClick={() => setConfirmOpen(true)}>
-              Finish onboarding
-            </Button>
-          )}
-        </div>
-      </Card>
-
-      {!onboardingComplete && confirmOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !submitting && setConfirmOpen(false)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="finish-onboarding-title"
-            className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-5 shadow-lg dark:border-zinc-800 dark:bg-zinc-900"
-            onClick={(e) => e.stopPropagation()}
+          <Button
+            type="button"
+            onClick={() => void saveFlags()}
+            disabled={submitting || (dirtyIds.size === 0 && pendingClears.size === 0)}
           >
-            <h2 id="finish-onboarding-title" className="text-lg font-semibold">
-              Finish onboarding?
-            </h2>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Your flags will be saved and you&apos;ll go to the dashboard.
-              {flaggedCount > 0
-                ? ` You've flagged ${flaggedCount} ${flaggedCount === 1 ? "activity" : "activities"} across ${flaggedDayCount} ${flaggedDayCount === 1 ? "day" : "days"}.`
-                : " You haven't flagged any activities yet — you can keep reviewing days before finishing."}
-            </p>
-            <FlagSummary summary={flagSummary} />
-            {submitError && (
-              <p className="mt-3 text-sm text-red-600">{submitError}</p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setConfirmOpen(false)}
-                disabled={submitting}
-              >
-                Keep flagging
-              </Button>
-              <Button type="button" onClick={complete} disabled={submitting}>
-                {submitting ? "Finishing…" : "Finish onboarding"}
-              </Button>
-            </div>
-          </div>
+            {submitting ? "Saving…" : "Save flags"}
+          </Button>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            Back to dashboard
+          </Link>
         </div>
-      )}
+        {submitError && (
+          <p className="mt-3 text-sm text-red-600">{submitError}</p>
+        )}
+      </Card>
     </div>
   );
 }

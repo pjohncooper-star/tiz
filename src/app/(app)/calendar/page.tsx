@@ -6,7 +6,7 @@ import {
 } from "date-fns";
 import Link from "next/link";
 import { PlanningCalendar } from "@/components/calendar/planning-calendar";
-import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
+import { requireAthlete, gateCompletedOnboarding } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
@@ -52,8 +52,8 @@ export default async function CalendarPage({
       ecoLoadEnabled: true,
     },
   });
-  if (athlete && athlete.onboardingStep !== "COMPLETE") {
-    onboardingRedirect(athlete.onboardingStep);
+  if (athlete) {
+    await gateCompletedOnboarding(session.user.athleteId!, athlete.onboardingStep);
   }
 
   const athleteId = session.user.athleteId!;

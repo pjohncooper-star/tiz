@@ -51,7 +51,9 @@ npm run strava:register-webhook
 2. **Threshold history** — effective-dated entries
 3. **Bulk import** — upload Garmin or Strava export zip (.fit/.tcx/.gpx)
 4. **Strava connect** — ongoing sync
-5. **Day flags** — tag great/good/rough/bad standout days → v0 Workout Signaling
+5. **Strava connect** — ongoing sync → dashboard
+
+Workout Signaling (day flags) is available from the sidebar after onboarding.
 
 ## Stack
 

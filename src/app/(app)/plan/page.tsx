@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { SimplePlannerView } from "@/components/simple-planner/simple-planner-view";
-import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
+import { requireAthlete, gateCompletedOnboarding } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,8 @@ export default async function PlanPage() {
     where: { id: session.user.athleteId! },
     select: { onboardingStep: true, ecoLoadEnabled: true },
   });
-  if (athlete && athlete.onboardingStep !== "COMPLETE") {
-    onboardingRedirect(athlete.onboardingStep);
+  if (athlete) {
+    await gateCompletedOnboarding(session.user.athleteId!, athlete.onboardingStep);
   }
 
   const ecoLoadEnabled = Boolean(

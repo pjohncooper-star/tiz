@@ -75,12 +75,26 @@ const ONBOARDING_STEP_ORDER: OnboardingStep[] = [
   "HISTORICAL_THRESHOLDS",
   "IMPORT",
   "STRAVA",
+  // Legacy: kept so athletes stuck on DAY_FLAGS still advance past it to COMPLETE.
   "DAY_FLAGS",
   "COMPLETE",
 ];
 
 function onboardingIndex(step: OnboardingStep): number {
   return ONBOARDING_STEP_ORDER.indexOf(step);
+}
+
+/**
+ * Athletes previously parked on Workout Signaling (DAY_FLAGS) finish onboarding
+ * without visiting that step — signaling stays available from the sidebar after.
+ */
+export async function finalizeLegacyDayFlagsStep(
+  athleteId: string,
+  step: OnboardingStep
+): Promise<OnboardingStep> {
+  if (step !== "DAY_FLAGS") return step;
+  await setOnboardingStep(athleteId, "COMPLETE");
+  return "COMPLETE";
 }
 
 /** Move forward to `target` only if the athlete has not reached it yet. Never demotes. */

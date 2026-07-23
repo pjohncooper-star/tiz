@@ -1,9 +1,9 @@
 import { Card } from "@/components/ui";
 import { InsightsPanel } from "@/components/insights-panel";
-import { OnboardingBack } from "@/components/onboarding-nav";
 import { DayFlagsForm } from "@/app/onboarding/day-flags/day-flags-form";
 import { requireAthlete, onboardingRedirect } from "@/lib/auth/session";
 import { db } from "@/lib/db";
+import { finalizeLegacyDayFlagsStep } from "@/lib/onboarding";
 import { getSignalingGateStatus } from "@/lib/signaling/gates";
 import { insightPolarityFromOutcome } from "@/lib/signaling/v0";
 import { isEcoTriggerPattern } from "@/lib/signaling/eco-patterns";
@@ -13,22 +13,24 @@ export const dynamic = "force-dynamic";
 
 export default async function WorkoutSignalingPage() {
   const session = await requireAthlete();
+  const athleteId = session.user.athleteId!;
   const athlete = await db.athlete.findUnique({
-    where: { id: session.user.athleteId! },
+    where: { id: athleteId },
   });
-  if (
-    athlete &&
-    athlete.onboardingStep !== "COMPLETE" &&
-    athlete.onboardingStep !== "DAY_FLAGS"
-  ) {
-    onboardingRedirect(athlete.onboardingStep);
+  if (!athlete) {
+    onboardingRedirect("PROFILE");
+    return null;
   }
 
-  const athleteId = session.user.athleteId!;
+  const step = await finalizeLegacyDayFlagsStep(athleteId, athlete.onboardingStep);
+  if (step !== "COMPLETE") {
+    onboardingRedirect(step);
+    return null;
+  }
+
   const ecoLoadEnabled = Boolean(
-    athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
+    "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
   );
-  const onboardingComplete = athlete?.onboardingStep === "COMPLETE";
 
   const [gate, insights] = await Promise.all([
     getSignalingGateStatus(athleteId),
@@ -45,18 +47,12 @@ export default async function WorkoutSignalingPage() {
 
   return (
     <div className="space-y-6">
-      {onboardingComplete ? (
-        <Link href="/dashboard" className="text-sm text-sky-600 hover:underline">
-          ← Back to dashboard
-        </Link>
-      ) : (
-        <OnboardingBack current="DAY_FLAGS" />
-      )}
+      <Link href="/dashboard" className="text-sm text-sky-600 hover:underline">
+        ← Back to dashboard
+      </Link>
 
       <div>
-        <h1 className="text-2xl font-semibold">
-          {onboardingComplete ? "Workout Signaling" : "Step 6 — Workout Signaling"}
-        </h1>
+        <h1 className="text-2xl font-semibold">Workout Signaling</h1>
         <p className="text-sm text-zinc-500">
           Flag standout days, then scan for risk and protective load patterns before
           flagged workouts.
