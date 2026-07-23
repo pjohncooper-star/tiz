@@ -90,15 +90,10 @@ describe("workoutZoneRollup", () => {
         powerZoneBoundaries: [55, 75, 90, 105],
       },
     });
-    // 4×5m @ 250W → Z4. Recovery intensity is typed as rest and excluded from TiZ.
+    // 4×5m @ 250W → Z4; 4×3m @ 150W recovery → Z2 (recovery still counts toward TiZ).
     assert.equal(rollup.zones["BIKE-4"], 20);
+    assert.equal(rollup.zones["BIKE-2"], 12);
     assert.equal(rollup.zones["BIKE-7"], undefined);
-    assert.ok(
-      (rollup.zones["BIKE-3"] ?? 0) +
-        (rollup.zones["BIKE-4"] ?? 0) +
-        (rollup.zones["BIKE-5"] ?? 0) >
-        0
-    );
   });
 });
 

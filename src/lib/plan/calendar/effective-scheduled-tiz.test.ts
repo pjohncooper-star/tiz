@@ -252,4 +252,52 @@ describe("effective-scheduled-tiz", () => {
     });
     assert.equal(Object.keys(rollup.main).length, 0);
   });
+
+  it("maps absolute watt bike draft steps into Z1–Z5 via FTP", () => {
+    const weekTarget = baseWeekTarget();
+    const chips = [chip("bike-int-0", "BIKE", "INTENSITY")];
+    const wattNodes = [
+      {
+        kind: "repeat" as const,
+        repeatCount: 4,
+        children: [
+          {
+            kind: "step" as const,
+            intensity: "interval" as const,
+            duration: { type: "time" as const, value: 300 },
+            target: { signal: "power" as const, mode: "value" as const, value: 250 },
+          },
+          {
+            kind: "step" as const,
+            intensity: "recovery" as const,
+            duration: { type: "time" as const, value: 180 },
+            target: { signal: "power" as const, mode: "value" as const, value: 150 },
+          },
+        ],
+      },
+    ];
+    const rollup = computeEffectiveScheduledTiz({
+      weekTarget,
+      sessions: [],
+      drafts: {
+        "bike-int-0": {
+          nodes: wattNodes,
+          durationMinutes: 32,
+          profile: null,
+        },
+      },
+      chips,
+      paceContext: {
+        BIKE: {
+          thresholdPaceSeconds: null,
+          zoneBoundaries: [55, 75, 90, 105],
+          thresholdFtpWatts: 250,
+          powerZoneBoundaries: [55, 75, 90, 105],
+        },
+      },
+    });
+    // 4×5m @ 250W (100% FTP) → Z4; 4×3m @ 150W (60%) → Z2
+    assert.equal(rollup.main[zoneKey("BIKE", 4)], 20);
+    assert.equal(rollup.main[zoneKey("BIKE", 2)], 12);
+  });
 });

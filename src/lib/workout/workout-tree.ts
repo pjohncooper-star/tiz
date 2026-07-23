@@ -109,7 +109,8 @@ const INTENSITY_TO_LEGACY: Record<StepIntensity, WorkoutStepType> = {
   warmup: "warmup",
   cooldown: "cooldown",
   rest: "rest",
-  recovery: "rest",
+  // Active recovery (e.g. spinning at watts) still counts toward TiZ; true rest does not.
+  recovery: "steady",
   active: "steady",
   interval: "steady",
 };
