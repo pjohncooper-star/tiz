@@ -30,7 +30,10 @@ import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serializ
 import { totalZoneMinutes } from "@/lib/workout/steps";
 import type { UnscheduledChip, PoolDiscipline } from "@/lib/plan/calendar/unscheduled-chips";
 import type { PoolLibraryTemplate } from "@/lib/plan/calendar/pool-library";
-import { unscheduledSessionTitle } from "@/components/calendar/workout-pool";
+import {
+  PoolSessionCardPreview,
+  unscheduledSessionTitle,
+} from "@/components/calendar/workout-pool";
 import {
   WorkoutPoolWizardBand,
   WorkoutPoolWizardSideColumn,
@@ -53,6 +56,7 @@ import {
   type PoolCardDraft,
   type PoolCardDraftMap,
   type PoolDisciplineFilter,
+  type PoolSessionCard,
 } from "@/lib/plan/calendar/pool-session-card";
 import {
   applyTargetSessionId,
@@ -174,6 +178,7 @@ export function PlanningCalendar({
   const router = useRouter();
   const [data, setData] = useState(initialData);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [activePoolCard, setActivePoolCard] = useState<PoolSessionCard | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
@@ -1049,6 +1054,7 @@ export function PlanningCalendar({
 
   async function handleDragEnd(event: DragEndEvent) {
     setActiveDragId(null);
+    setActivePoolCard(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -1569,9 +1575,31 @@ export function PlanningCalendar({
   return (
     <DndContext
       sensors={sensors}
-      onDragStart={(e) => setActiveDragId(String(e.active.id))}
+      autoScroll={{
+        canScroll: (element) => {
+          // Keep pool pane from stealing scroll while dragging onto the calendar.
+          if (
+            element instanceof HTMLElement &&
+            element.dataset.workoutPoolScroll === "true"
+          ) {
+            return false;
+          }
+          return true;
+        },
+      }}
+      onDragStart={(e) => {
+        setActiveDragId(String(e.active.id));
+        if (e.active.data.current?.type === "pool-session-card") {
+          setActivePoolCard(e.active.data.current.chip as PoolSessionCard);
+        } else {
+          setActivePoolCard(null);
+        }
+      }}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => setActiveDragId(null)}
+      onDragCancel={() => {
+        setActiveDragId(null);
+        setActivePoolCard(null);
+      }}
     >
       <div className="w-full space-y-4">
         <div className="sticky top-0 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
@@ -1662,7 +1690,7 @@ export function PlanningCalendar({
 
         {useWizardPool && poolOpen ? (
           <div className="xl:flex xl:items-start xl:gap-4">
-            <aside className="mb-4 w-full shrink-0 xl:sticky xl:top-[4.5rem] xl:mb-0 xl:h-[calc(100vh-4.5rem)] xl:w-72">
+            <aside className="mb-4 w-full min-w-0 shrink-0 overflow-x-hidden xl:sticky xl:top-[4.5rem] xl:mb-0 xl:h-[calc(100vh-4.5rem)] xl:w-72">
               <WorkoutPoolWizardSideColumn {...poolWizardProps} />
             </aside>
             <div className="min-w-0 flex-1 space-y-4">
@@ -1680,7 +1708,7 @@ export function PlanningCalendar({
         )}
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeSession ? (
           <CalendarSessionCard
             session={activeSession}
@@ -1696,6 +1724,9 @@ export function PlanningCalendar({
             disciplineSettings={disciplineSettings}
             isDragging
           />
+        ) : null}
+        {activePoolCard ? (
+          <PoolSessionCardPreview card={activePoolCard} selected />
         ) : null}
       </DragOverlay>
 
