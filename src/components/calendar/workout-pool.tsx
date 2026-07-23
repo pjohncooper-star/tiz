@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 import type { Discipline, PlanningMode } from "@prisma/client";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
@@ -127,6 +126,76 @@ const SLOT_KIND_SHORT: Record<UnscheduledChip["slotKind"], string> = {
   SUBSTITUTE_ENDURANCE: "Endurance (sub)",
 };
 
+function poolCardDurationLabel(card: PoolSessionCard): string | null {
+  if (card.draft) return formatChipDurationMinutes(card.draft.durationMinutes);
+  if (card.targetDurationMinutes != null && card.targetDurationMinutes > 0) {
+    return formatChipDurationMinutes(card.targetDurationMinutes);
+  }
+  return null;
+}
+
+function poolCardDistanceLabel(card: PoolSessionCard): string | null {
+  if (card.draft?.distanceMeters != null && card.draft.distanceMeters > 0) {
+    return formatSessionDistance(card.draft.distanceMeters, card.discipline, "METRIC");
+  }
+  return null;
+}
+
+function PoolSessionCardBody({ card }: { card: PoolSessionCard }) {
+  const canBuild = isEndurancePoolDiscipline(card.discipline);
+  const durationLabel = poolCardDurationLabel(card);
+  const distanceLabel = poolCardDistanceLabel(card);
+
+  return (
+    <>
+      <div className="flex items-start justify-between gap-1">
+        <div className="min-w-0">
+          <p className="truncate font-medium text-zinc-800 dark:text-zinc-100">
+            {DISCIPLINE_DISPLAY_LABELS[card.discipline] ?? card.discipline}
+          </p>
+          <p className="truncate text-[10px] text-zinc-400">{SLOT_KIND_SHORT[card.slotKind]}</p>
+        </div>
+        <SessionRoleBadge role={sessionRoleForChip(card)} />
+      </div>
+      {card.draft?.profile ? (
+        <div className="mt-1.5">
+          <WorkoutProfileMiniChart profile={card.draft.profile} />
+        </div>
+      ) : (
+        <div className="mt-1.5 flex h-8 items-center justify-center rounded bg-zinc-100 text-[10px] text-zinc-400 dark:bg-zinc-800">
+          {canBuild ? "Click to build" : "Drag to day"}
+        </div>
+      )}
+      {durationLabel || distanceLabel ? (
+        <p className="mt-1 tabular-nums text-[10px] text-zinc-500">
+          {[durationLabel, distanceLabel].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+/** Presentational pool card for DragOverlay (pointer follows outside overflow panes). */
+export function PoolSessionCardPreview({
+  card,
+  selected = false,
+}: {
+  card: PoolSessionCard;
+  selected?: boolean;
+}) {
+  return (
+    <div
+      className={`w-full max-w-[11rem] rounded-md border bg-white p-2 text-xs shadow-lg dark:bg-zinc-900 ${
+        selected
+          ? "border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500"
+          : "border-zinc-200 dark:border-zinc-700"
+      }`}
+    >
+      <PoolSessionCardBody card={card} />
+    </div>
+  );
+}
+
 function PoolSessionCardView({
   card,
   selected,
@@ -137,7 +206,9 @@ function PoolSessionCardView({
   onSelect: () => void;
 }) {
   const canBuild = isEndurancePoolDiscipline(card.discipline);
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  // Do not apply CSS transform on the source — it lives inside overflow-y-auto and
+  // would clip the drag + autoscroll the pool pane. Visual follows via DragOverlay.
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: poolSessionCardDragId(card.id),
     data: {
       type: "pool-session-card",
@@ -146,30 +217,14 @@ function PoolSessionCardView({
     },
   });
 
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform), opacity: isDragging ? 0.5 : 1 }
-    : undefined;
-
-  const durationLabel = card.draft
-    ? formatChipDurationMinutes(card.draft.durationMinutes)
-    : card.targetDurationMinutes != null && card.targetDurationMinutes > 0
-      ? formatChipDurationMinutes(card.targetDurationMinutes)
-      : null;
-
-  const distanceLabel =
-    card.draft?.distanceMeters != null && card.draft.distanceMeters > 0
-      ? formatSessionDistance(card.draft.distanceMeters, card.discipline, "METRIC")
-      : null;
-
   return (
     <div
       ref={setNodeRef}
-      style={style}
       className={`w-full max-w-[11rem] rounded-md border bg-white p-2 text-xs shadow-sm dark:bg-zinc-900 ${
         selected
           ? "border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500"
           : "border-zinc-200 dark:border-zinc-700"
-      } ${isDragging ? "opacity-50" : ""}`}
+      } ${isDragging ? "opacity-40" : ""}`}
     >
       <button
         type="button"
@@ -179,29 +234,7 @@ function PoolSessionCardView({
         }}
         disabled={!canBuild}
       >
-        <div className="flex items-start justify-between gap-1">
-          <div className="min-w-0">
-            <p className="truncate font-medium text-zinc-800 dark:text-zinc-100">
-              {DISCIPLINE_DISPLAY_LABELS[card.discipline] ?? card.discipline}
-            </p>
-            <p className="truncate text-[10px] text-zinc-400">{SLOT_KIND_SHORT[card.slotKind]}</p>
-          </div>
-          <SessionRoleBadge role={sessionRoleForChip(card)} />
-        </div>
-        {card.draft?.profile ? (
-          <div className="mt-1.5">
-            <WorkoutProfileMiniChart profile={card.draft.profile} />
-          </div>
-        ) : (
-          <div className="mt-1.5 flex h-8 items-center justify-center rounded bg-zinc-100 text-[10px] text-zinc-400 dark:bg-zinc-800">
-            {canBuild ? "Click to build" : "Drag to day"}
-          </div>
-        )}
-        {durationLabel || distanceLabel ? (
-          <p className="mt-1 tabular-nums text-[10px] text-zinc-500">
-            {[durationLabel, distanceLabel].filter(Boolean).join(" · ")}
-          </p>
-        ) : null}
+        <PoolSessionCardBody card={card} />
       </button>
       <button
         type="button"

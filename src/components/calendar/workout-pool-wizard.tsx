@@ -177,7 +177,10 @@ export function WorkoutPoolWizardSideColumn(props: WorkoutPoolWizardProps) {
         onPoolWeekChange={props.onPoolWeekChange}
         weekTarget={weekTarget}
       />
-      <div className="mt-3 flex-1 overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800">
+      <div
+        data-workout-pool-scroll="true"
+        className="mt-3 min-w-0 flex-1 overflow-x-hidden overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800"
+      >
         <WorkoutPool
           weekTarget={weekTarget}
           sessions={props.sessions}
