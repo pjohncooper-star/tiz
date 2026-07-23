@@ -31,25 +31,49 @@ export function speedBoundariesFromPaceTops(paceTops: number[]): number[] {
 
 /**
  * Defaults keyed by discipline + signal.
- * Pace values are stored as speed %; derived from the coaching tables:
- * Run pace tops 129 / 114 / 106 / 100; swim CSS pace tops 107 / 102 / 98 / 94.
+ * Pace values are stored as % of threshold *speed* (higher = harder), then
+ * converted to pace for display. Coaching model:
+ * Z1 <75%, Z2 75–90%, Z3 (tempo) 90–99%, Z4 (threshold) 99–105%, Z5 ≥105%.
  */
 export const DEFAULT_ZONE_BOUNDARIES_BY_KEY: Record<ZoneBoundaryKey, number[]> = {
   "BIKE:POWER": [55, 75, 90, 105],
   "BIKE:HEART_RATE": [68, 83, 94, 100, 106],
-  "BIKE:PACE": [78, 88, 94, 100],
+  "BIKE:PACE": [75, 90, 99, 105],
   "RUN:POWER": [55, 75, 90, 105],
   "RUN:HEART_RATE": [68, 83, 94, 100, 106],
-  // 100/1.29, 100/1.14, 100/1.06, 100
-  "RUN:PACE": speedBoundariesFromPaceTops([129, 114, 106, 100]),
+  "RUN:PACE": [75, 90, 99, 105],
   "SWIM:POWER": [55, 75, 90, 105],
   "SWIM:HEART_RATE": [68, 83, 94, 100, 106],
-  // 100/1.07, 100/1.02, 100/0.98, 100/0.94
-  "SWIM:PACE": speedBoundariesFromPaceTops([107, 102, 98, 94]),
+  "SWIM:PACE": [75, 90, 99, 105],
   "STRENGTH:POWER": [55, 75, 90, 105],
   "STRENGTH:HEART_RATE": [68, 83, 94, 100, 106],
-  "STRENGTH:PACE": speedBoundariesFromPaceTops([129, 114, 106, 100]),
+  "STRENGTH:PACE": [75, 90, 99, 105],
 };
+
+/**
+ * Prior default speed-% arrays (Z4/Z5 cut at ~100% so threshold scored as Z5).
+ * Soft-upgrade when loading stored profiles that still match these.
+ */
+const LEGACY_PACE_SPEED_DEFAULTS: Array<{ from: number[]; to: number[] }> = [
+  // Old RUN/STRENGTH via speedBoundariesFromPaceTops([129, 114, 106, 100])
+  { from: [77.5, 87.7, 94.3, 100], to: [75, 90, 99, 105] },
+  // Old BIKE:PACE hardcoded
+  { from: [78, 88, 94, 100], to: [75, 90, 99, 105] },
+  // Old SWIM via speedBoundariesFromPaceTops([107, 102, 98, 94])
+  { from: [93.5, 98, 102, 106.4], to: [75, 90, 99, 105] },
+];
+
+export function coalesceLegacyPaceBoundaries(boundaries: number[]): number[] {
+  for (const { from, to } of LEGACY_PACE_SPEED_DEFAULTS) {
+    if (
+      boundaries.length === from.length &&
+      boundaries.every((b, i) => Math.abs(b - from[i]!) < 0.06)
+    ) {
+      return [...to];
+    }
+  }
+  return boundaries;
+}
 
 export function zoneBoundaryKey(
   discipline: Discipline,
@@ -106,24 +130,22 @@ export function validateZoneBoundaries(
 
 /**
  * UI values for editing cutoffs.
- * Power/HR: same as stored %. Pace: % of threshold pace (higher = slower), descending.
+ * Power/HR/Pace: same as stored % of threshold intensity (for pace: % of threshold speed).
  */
 export function boundariesToEditorValues(
   signalType: SignalType,
   storedSpeedPct: number[]
 ): number[] {
-  if (signalType !== "PACE") return storedSpeedPct.map((v) => roundPct(v));
-  // Pace editor shows zone tops as pace % (Z1 slowest first): descending
-  return storedSpeedPct.map((v) => roundPct(speedPctToPacePct(v)));
+  void signalType;
+  return storedSpeedPct.map((v) => roundPct(v));
 }
 
 export function editorValuesToBoundaries(
   signalType: SignalType,
   editorValues: number[]
 ): number[] {
-  if (signalType !== "PACE") return editorValues.map((v) => roundPct(v));
-  // Editor lists pace % tops Z1→Z4 (descending / slowing). Convert to ascending speed %.
-  return editorValues.map((v) => roundPct(pacePctToSpeedPct(v)));
+  void signalType;
+  return editorValues.map((v) => roundPct(v));
 }
 
 export function validateEditorValues(
@@ -131,6 +153,7 @@ export function validateEditorValues(
   editorValues: number[],
   zoneCount: number = DEFAULT_ZONE_COUNT
 ): string | null {
+  void signalType;
   if (editorValues.length !== zoneCount - 1 && editorValues.length !== zoneCount) {
     return `Expected ${zoneCount - 1} or ${zoneCount} cutoffs`;
   }
@@ -138,15 +161,6 @@ export function validateEditorValues(
     if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {
       return "Cutoffs must be positive numbers";
     }
-  }
-  if (signalType === "PACE") {
-    // Pace % tops should be strictly decreasing (Z1 slowest → faster)
-    for (let i = 1; i < editorValues.length; i++) {
-      if (editorValues[i] >= editorValues[i - 1]) {
-        return "Pace zone cutoffs must decrease (slower → faster)";
-      }
-    }
-    return null;
   }
   for (let i = 1; i < editorValues.length; i++) {
     if (editorValues[i] <= editorValues[i - 1]) {

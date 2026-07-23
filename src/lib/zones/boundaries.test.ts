@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   boundariesToEditorValues,
+  coalesceLegacyPaceBoundaries,
   editorValuesToBoundaries,
   pacePctToSpeedPct,
   speedPctToPacePct,
@@ -9,6 +10,8 @@ import {
   validateZoneBoundaries,
   zoneBoundariesFor,
 } from "@/lib/zones/boundaries";
+import { assignZoneFromPercent } from "@/lib/zones/assign-zone";
+import { parseZoneBoundaries } from "@/lib/zones/parse-boundaries";
 
 describe("pace ↔ speed conversion", () => {
   it("round-trips pace and speed percentages", () => {
@@ -20,21 +23,50 @@ describe("pace ↔ speed conversion", () => {
 });
 
 describe("zoneBoundariesFor", () => {
-  it("keys defaults by discipline and signal", () => {
+  it("stores pace cutoffs as % of threshold speed with Z4 straddling threshold", () => {
     const run = zoneBoundariesFor("RUN", "PACE");
     const swim = zoneBoundariesFor("SWIM", "PACE");
+    const bike = zoneBoundariesFor("BIKE", "PACE");
     const power = zoneBoundariesFor("BIKE", "POWER");
 
     assert.deepEqual(power, [55, 75, 90, 105]);
-    assert.notDeepEqual(run, swim);
-    assert.equal(run.length, 4);
-    assert.equal(swim.length, 4);
-    // Run Z1 top ~129% pace → ~77.5 speed
-    assert.ok(run[0] > 77 && run[0] < 78);
-    assert.equal(run[3], 100);
-    // Swim Z1 top ~107% pace → ~93.5 speed
-    assert.ok(swim[0] > 93 && swim[0] < 94);
-    assert.ok(swim[3] > 106 && swim[3] < 107);
+    assert.deepEqual(run, [75, 90, 99, 105]);
+    assert.deepEqual(swim, [75, 90, 99, 105]);
+    assert.deepEqual(bike, [75, 90, 99, 105]);
+  });
+});
+
+describe("assignZoneFromPercent pace", () => {
+  it("scores threshold speed as Zone 4, not Zone 5", () => {
+    const boundaries = zoneBoundariesFor("RUN", "PACE");
+    assert.equal(assignZoneFromPercent(74, boundaries, "PACE"), 1);
+    assert.equal(assignZoneFromPercent(80, boundaries, "PACE"), 2);
+    assert.equal(assignZoneFromPercent(95, boundaries, "PACE"), 3);
+    assert.equal(assignZoneFromPercent(100, boundaries, "PACE"), 4);
+    assert.equal(assignZoneFromPercent(103, boundaries, "PACE"), 4);
+    assert.equal(assignZoneFromPercent(106, boundaries, "PACE"), 5);
+  });
+});
+
+describe("coalesceLegacyPaceBoundaries", () => {
+  it("upgrades inverted legacy defaults so threshold no longer sits at Z5 floor", () => {
+    assert.deepEqual(
+      coalesceLegacyPaceBoundaries([77.5, 87.7, 94.3, 100]),
+      [75, 90, 99, 105]
+    );
+    assert.deepEqual(
+      coalesceLegacyPaceBoundaries([78, 88, 94, 100]),
+      [75, 90, 99, 105]
+    );
+    assert.deepEqual(
+      parseZoneBoundaries([93.5, 98, 102, 106.4]),
+      [75, 90, 99, 105]
+    );
+  });
+
+  it("leaves custom boundaries unchanged", () => {
+    const custom = [70, 85, 95, 110];
+    assert.deepEqual(coalesceLegacyPaceBoundaries(custom), custom);
   });
 });
 
@@ -52,27 +84,18 @@ describe("validateZoneBoundaries", () => {
 });
 
 describe("editor pace values", () => {
-  it("converts stored speed % to descending pace % for editing", () => {
+  it("edits pace cutoffs as ascending % of threshold speed", () => {
     const stored = zoneBoundariesFor("RUN", "PACE");
     const editor = boundariesToEditorValues("PACE", stored);
-    assert.equal(editor.length, 4);
-    assert.ok(editor[0] > editor[1]);
-    assert.ok(Math.abs(editor[0] - 129) < 0.2);
-    assert.equal(editor[3], 100);
+    assert.deepEqual(editor, [75, 90, 99, 105]);
+    assert.deepEqual(editorValuesToBoundaries("PACE", editor), stored);
   });
 
-  it("round-trips editor values back to stored speed %", () => {
-    const stored = zoneBoundariesFor("SWIM", "PACE");
-    const editor = boundariesToEditorValues("PACE", stored);
-    const back = editorValuesToBoundaries("PACE", editor);
-    assert.deepEqual(back, stored);
-  });
-
-  it("requires decreasing pace cutoffs", () => {
+  it("requires increasing speed cutoffs", () => {
     assert.match(
-      validateEditorValues("PACE", [100, 110, 120, 130]) ?? "",
-      /decrease/
+      validateEditorValues("PACE", [105, 99, 90, 75]) ?? "",
+      /increasing/
     );
-    assert.equal(validateEditorValues("PACE", [129, 114, 106, 100]), null);
+    assert.equal(validateEditorValues("PACE", [75, 90, 99, 105]), null);
   });
 });
