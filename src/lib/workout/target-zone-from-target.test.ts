@@ -43,6 +43,30 @@ describe("targetZoneFromTarget power values", () => {
     );
   });
 
+  it("folds zone-6 into zone-5 when zoneCount is 5", () => {
+    assert.equal(
+      targetZoneFromTarget(
+        { signal: "power", mode: "zone", zone: 6 },
+        { ...powerOpts, zoneCount: 5 }
+      ),
+      5
+    );
+  });
+
+  it("maps high watts into Z5 when zoneCount is 5 even with 7-zone boundaries", () => {
+    assert.equal(
+      targetZoneFromTarget(
+        { signal: "power", mode: "value", value: 350 },
+        {
+          thresholdFtpWatts: 250,
+          powerZoneBoundaries: [55, 75, 90, 105, 120, 150],
+          zoneCount: 5,
+        }
+      ),
+      5
+    );
+  });
+
   it("does not treat large non-power values as zones", () => {
     assert.equal(
       targetZoneFromTarget({ signal: "pace", mode: "value", value: 300 }),

@@ -352,19 +352,23 @@ function isZoneIndexRange(low: number, high: number): boolean {
 
 export type TargetZoneOptions = Pick<
   FlattenPlanningOptions,
-  "thresholdFtpWatts" | "powerZoneBoundaries"
+  "thresholdFtpWatts" | "powerZoneBoundaries" | "zoneCount"
 >;
 
 /**
  * Resolve a planning zone index from a step target.
  * Absolute power watts are mapped via FTP — never treated as zone numbers.
+ * When `zoneCount` is set (Week TiZ uses 5), zones above that are folded down.
  */
 export function targetZoneFromTarget(
   target: StepTarget,
   options: TargetZoneOptions = {}
 ): number {
+  const maxZone = options.zoneCount ?? 7;
+  const clamp = (zone: number) => Math.max(1, Math.min(maxZone, zone));
+
   if (target.mode === "zone" && target.zone) {
-    return Math.max(1, Math.min(7, target.zone));
+    return clamp(target.zone);
   }
 
   if (target.signal === "power") {
@@ -373,24 +377,24 @@ export function targetZoneFromTarget(
     }
     if (target.mode === "range" && target.low != null && target.high != null) {
       if (isZoneIndexRange(target.low, target.high)) {
-        return Math.round((target.low + target.high) / 2);
+        return clamp(Math.round((target.low + target.high) / 2));
       }
       return zoneFromPowerWatts((target.low + target.high) / 2, options);
     }
   }
 
   if (target.mode === "range" && target.low != null && target.high != null) {
-    return Math.round((target.low + target.high) / 2);
+    return clamp(Math.round((target.low + target.high) / 2));
   }
   // Zone-like numeric values only (do not clamp watts/pace seconds into 1–7).
   if (target.value != null && target.value >= 1 && target.value <= 7) {
-    return Math.round(target.value);
+    return clamp(Math.round(target.value));
   }
   return 2;
 }
 
-export function rampMidpointZone(low: number, high: number): number {
-  return Math.max(1, Math.min(7, Math.round((low + high) / 2)));
+export function rampMidpointZone(low: number, high: number, maxZone = 7): number {
+  return Math.max(1, Math.min(maxZone, Math.round((low + high) / 2)));
 }
 
 function leafDurationSeconds(step: LeafStep): number {
@@ -490,16 +494,17 @@ function rampToFlatPlanningSteps(
   step: RampStep,
   options: FlattenPlanningOptions = {}
 ): FlatPlanningStep[] {
+  const maxZone = options.zoneCount ?? 7;
   let zone: number;
   if (step.target.lowZone != null && step.target.highZone != null) {
-    zone = rampMidpointZone(step.target.lowZone, step.target.highZone);
+    zone = rampMidpointZone(step.target.lowZone, step.target.highZone, maxZone);
   } else if (
     step.target.signal === "power" &&
     !isZoneIndexRange(step.target.low, step.target.high)
   ) {
     zone = zoneFromPowerWatts((step.target.low + step.target.high) / 2, options);
   } else {
-    zone = rampMidpointZone(step.target.low, step.target.high);
+    zone = rampMidpointZone(step.target.low, step.target.high, maxZone);
   }
   const durationSeconds = rampDurationSeconds(step);
   const durationMinutes = Math.max(1, Math.round(durationSeconds / 60));

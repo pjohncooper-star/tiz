@@ -16,6 +16,7 @@ import {
   zoneKey,
   type ZoneMinutes,
 } from "@/lib/workout/steps";
+import { DEFAULT_ZONE_COUNT } from "@/lib/zones/boundaries";
 
 const ZONES = [1, 2, 3, 4, 5] as const;
 
@@ -26,14 +27,20 @@ export type SessionZoneRollup = {
   durationMinutes: number;
 };
 
+/** Fold zones above Week TiZ's Z5 into Z5 so minutes are not dropped. */
 function disciplineZoneMinutes(
   discipline: Discipline,
-  rawZones: ZoneMinutes
+  rawZones: ZoneMinutes,
+  maxZone: number = DEFAULT_ZONE_COUNT
 ): ZoneMinutes {
   const zones: ZoneMinutes = {};
   for (const [zone, minutes] of Object.entries(rawZones)) {
     if (minutes > 0) {
-      zones[zoneKey(discipline, Number(zone))] = minutes;
+      const z = Number(zone);
+      if (!Number.isFinite(z) || z < 1) continue;
+      const displayZone = Math.min(Math.round(z), maxZone);
+      const key = zoneKey(discipline, displayZone);
+      zones[key] = (zones[key] ?? 0) + minutes;
     }
   }
   return zones;

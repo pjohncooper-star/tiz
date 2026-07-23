@@ -95,6 +95,48 @@ describe("workoutZoneRollup", () => {
     assert.equal(rollup.zones["BIKE-2"], 12);
     assert.equal(rollup.zones["BIKE-7"], undefined);
   });
+
+  it("folds explicit zone-6/7 interval minutes into zone-5 for Week TiZ", () => {
+    const z6Workout = {
+      version: 2,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "interval",
+          duration: { type: "time", value: 300 },
+          target: { signal: "power", mode: "zone", zone: 6 },
+        },
+      ],
+    };
+    const rollup = workoutZoneRollup("BIKE", z6Workout, { zoneCount: 5 });
+    assert.equal(rollup.zones["BIKE-5"], 5);
+    assert.equal(rollup.zones["BIKE-6"], undefined);
+  });
+
+  it("folds high watts from 7-zone power profiles into Z5", () => {
+    const vo2 = {
+      version: 2,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "interval",
+          duration: { type: "time", value: 300 },
+          target: { signal: "power", mode: "value", value: 350 },
+        },
+      ],
+    };
+    const rollup = sessionPlannedZoneRollup("BIKE", {
+      structuredSteps: vo2,
+      flattenOptions: {
+        thresholdFtpWatts: 250,
+        // Coggan-style 7-zone cutoffs
+        powerZoneBoundaries: [55, 75, 90, 105, 120, 150],
+        zoneCount: 5,
+      },
+    });
+    assert.equal(rollup.zones["BIKE-5"], 5);
+    assert.equal(rollup.zones["BIKE-6"], undefined);
+  });
 });
 
 describe("rollupSessions", () => {

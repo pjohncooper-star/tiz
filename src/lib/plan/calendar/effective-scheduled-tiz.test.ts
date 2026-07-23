@@ -300,4 +300,56 @@ describe("effective-scheduled-tiz", () => {
     assert.equal(rollup.main[zoneKey("BIKE", 4)], 20);
     assert.equal(rollup.main[zoneKey("BIKE", 2)], 12);
   });
+
+  it("folds zone-6 draft steps into BIKE-5 for Week TiZ", () => {
+    const weekTarget = baseWeekTarget();
+    const chips = [chip("bike-int-0", "BIKE", "INTENSITY")];
+    const rollup = computeEffectiveScheduledTiz({
+      weekTarget,
+      sessions: [],
+      drafts: {
+        "bike-int-0": {
+          nodes: [
+            {
+              kind: "step",
+              intensity: "interval",
+              duration: { type: "time", value: 300 },
+              target: { signal: "power", mode: "zone", zone: 6 },
+            },
+          ],
+          durationMinutes: 5,
+          profile: null,
+        },
+      },
+      chips,
+    });
+    assert.equal(rollup.main[zoneKey("BIKE", 5)], 5);
+    assert.equal(rollup.main[zoneKey("BIKE", 6)] ?? 0, 0);
+  });
+
+  it("folds persisted BIKE-6 session minutes into BIKE-5 for Week TiZ", () => {
+    const weekTarget = baseWeekTarget();
+    const rollup = computeEffectiveScheduledTiz({
+      weekTarget,
+      sessions: [
+        session(
+          "intensity-ride",
+          "BIKE",
+          { "BIKE-6": 5, "BIKE-2": 20 },
+          {
+            sessionRole: "INTENSITY",
+            poolSlotKind: "INTENSITY",
+            stepCount: 8,
+            source: "TEMPLATE",
+            plannedMinutes: 40,
+          }
+        ),
+      ],
+      drafts: {},
+      chips: [],
+    });
+    assert.equal(rollup.main[zoneKey("BIKE", 5)], 5);
+    assert.equal(rollup.main[zoneKey("BIKE", 2)], 20);
+    assert.equal(rollup.main["BIKE-6"] ?? 0, 0);
+  });
 });
