@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { phaseSpansWithIds } from "./materialize-season.server";
+import { phaseSpansWithIds, resolveLongSeatAction } from "./materialize-season.server";
 
 describe("phaseSpansWithIds", () => {
   it("resolves stored start indices and includes phase ids", () => {
@@ -74,5 +74,82 @@ describe("phaseSpansWithIds", () => {
       },
     ]);
     assert.equal(spans.length, 0);
+  });
+});
+
+describe("resolveLongSeatAction", () => {
+  it("returns null when planning mode does not separate longs", () => {
+    assert.equal(
+      resolveLongSeatAction({
+        planningMode: "BY_DISCIPLINE",
+        isRestWeek: false,
+        isTaperPhase: false,
+        longWeekOn: false,
+        policy: "EXTRA_INTENSITY",
+        endurancePercent: 60,
+        fullLongMinutes: 120,
+      }),
+      null
+    );
+  });
+
+  it("returns full_long when the long-week checkbox is on", () => {
+    assert.deepEqual(
+      resolveLongSeatAction({
+        planningMode: "SEPARATE_LONGS",
+        isRestWeek: false,
+        isTaperPhase: false,
+        longWeekOn: true,
+        policy: "EXTRA_INTENSITY",
+        endurancePercent: 60,
+        fullLongMinutes: 120,
+      }),
+      { kind: "full_long" }
+    );
+  });
+
+  it("returns extra_intensity on off weeks with EXTRA_INTENSITY policy", () => {
+    assert.deepEqual(
+      resolveLongSeatAction({
+        planningMode: "SEPARATE_LONG_TIZ",
+        isRestWeek: false,
+        isTaperPhase: false,
+        longWeekOn: false,
+        policy: "EXTRA_INTENSITY",
+        endurancePercent: 60,
+        fullLongMinutes: 120,
+      }),
+      { kind: "extra_intensity" }
+    );
+  });
+
+  it("returns substitute_endurance with scaled minutes", () => {
+    assert.deepEqual(
+      resolveLongSeatAction({
+        planningMode: "SEPARATE_LONGS",
+        isRestWeek: false,
+        isTaperPhase: false,
+        longWeekOn: false,
+        policy: "ENDURANCE_PERCENT",
+        endurancePercent: 50,
+        fullLongMinutes: 120,
+      }),
+      { kind: "substitute_endurance", durationMinutes: 60 }
+    );
+  });
+
+  it("omits longs on rest or taper weeks", () => {
+    assert.deepEqual(
+      resolveLongSeatAction({
+        planningMode: "SEPARATE_LONGS",
+        isRestWeek: true,
+        isTaperPhase: false,
+        longWeekOn: true,
+        policy: "EXTRA_INTENSITY",
+        endurancePercent: 60,
+        fullLongMinutes: 120,
+      }),
+      { kind: "omit" }
+    );
   });
 });

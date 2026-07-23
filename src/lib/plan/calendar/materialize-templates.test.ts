@@ -159,3 +159,65 @@ test("planSeasonMaterialization maps every week", () => {
   assert.equal(plans[0]!.sessions.length, 2);
   assert.equal(plans[1]!.sessions.length, 0);
 });
+
+test("extra intensity converts templated long run to intensity in place", () => {
+  const plan = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "phase-1",
+      runLongSeat: { kind: "extra_intensity" },
+      bikeLongSeat: { kind: "full_long" },
+    },
+    opts()
+  );
+  const run = plan.sessions.find((s) => s.discipline === "RUN");
+  assert.ok(run);
+  assert.equal(run!.sessionRole, "INTENSITY");
+  assert.equal(run!.poolSlotKind, "INTENSITY");
+  assert.equal(run!.title, "Intensity run");
+  assert.equal(run!.durationMinutes, 90);
+  assert.equal(run!.scheduledDateKey, "2026-01-10");
+});
+
+test("omit long seat drops the templated long workout", () => {
+  const plan = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "phase-1",
+      runLongSeat: { kind: "omit" },
+    },
+    opts()
+  );
+  assert.equal(plan.sessions.some((s) => s.discipline === "RUN"), false);
+  assert.equal(plan.sessions.length, 1);
+});
+
+test("substitute endurance rewrites long bike duration and slot", () => {
+  const tpl: MaterializeTemplate = {
+    id: "bike-long",
+    items: [
+      {
+        weekday: "SUN",
+        discipline: "BIKE",
+        title: "Long ride",
+        durationMinutes: 180,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "LONG",
+      },
+    ],
+  };
+  const plan = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "bike-long",
+      bikeLongSeat: { kind: "substitute_endurance", durationMinutes: 90 },
+    },
+    opts({ templatesById: new Map([["bike-long", tpl]]) })
+  );
+  assert.equal(plan.sessions.length, 1);
+  assert.equal(plan.sessions[0]!.sessionRole, "EASY");
+  assert.equal(plan.sessions[0]!.poolSlotKind, "SUBSTITUTE_ENDURANCE");
+  assert.equal(plan.sessions[0]!.durationMinutes, 90);
+  assert.equal(plan.sessions[0]!.title, "Endurance ride");
+});
