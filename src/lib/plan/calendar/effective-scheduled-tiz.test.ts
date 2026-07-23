@@ -352,4 +352,81 @@ describe("effective-scheduled-tiz", () => {
     assert.equal(rollup.main[zoneKey("BIKE", 2)], 20);
     assert.equal(rollup.main["BIKE-6"] ?? 0, 0);
   });
+
+  it("counts TEMPLATE long bike zone minutes in main (SEPARATE_LONGS, no draft)", () => {
+    const weekTarget = baseWeekTarget({ planningMode: "SEPARATE_LONGS" });
+    const longBike = session(
+      "long-bike-1",
+      "BIKE",
+      { [zoneKey("BIKE", 1)]: 9, [zoneKey("BIKE", 2)]: 81 },
+      {
+        source: "TEMPLATE",
+        stepCount: 0,
+        sessionRole: "LONG",
+        poolSlotKind: "LONG",
+        plannedMinutes: 90,
+      }
+    );
+    const rollup = computeEffectiveScheduledTiz({
+      weekTarget,
+      sessions: [longBike],
+      drafts: {},
+      chips: [],
+    });
+    assert.equal(rollup.main[zoneKey("BIKE", 1)], 9);
+    assert.equal(rollup.main[zoneKey("BIKE", 2)], 81);
+    assert.equal(Object.keys(rollup.long).length, 0);
+  });
+
+  it("counts TEMPLATE long bike zone minutes in long bucket (SEPARATE_LONG_TIZ, no draft)", () => {
+    const weekTarget = baseWeekTarget({
+      planningMode: "SEPARATE_LONG_TIZ",
+      longSessionZoneMinutes: {
+        [zoneKey("BIKE", 1)]: 9,
+        [zoneKey("BIKE", 2)]: 81,
+      },
+    });
+    const longBike = session(
+      "long-bike-2",
+      "BIKE",
+      { [zoneKey("BIKE", 2)]: 90 },
+      {
+        source: "TEMPLATE",
+        stepCount: 0,
+        sessionRole: "LONG",
+        poolSlotKind: "LONG",
+        plannedMinutes: 90,
+      }
+    );
+    const rollup = computeEffectiveScheduledTiz({
+      weekTarget,
+      sessions: [longBike],
+      drafts: {},
+      chips: [],
+    });
+    assert.equal(rollup.long[zoneKey("BIKE", 2)], 90);
+    assert.equal(rollup.main[zoneKey("BIKE", 2)] ?? 0, 0);
+  });
+
+  it("still excludes non-long fillable generated sessions without a draft", () => {
+    const weekTarget = baseWeekTarget({ planningMode: "SEPARATE_LONGS" });
+    const easy = session(
+      "easy-bike",
+      "BIKE",
+      { [zoneKey("BIKE", 2)]: 60 },
+      {
+        source: "TEMPLATE",
+        stepCount: 0,
+        sessionRole: "EASY",
+        poolSlotKind: "ENDURANCE",
+      }
+    );
+    const rollup = computeEffectiveScheduledTiz({
+      weekTarget,
+      sessions: [easy],
+      drafts: {},
+      chips: [],
+    });
+    assert.equal(rollup.main[zoneKey("BIKE", 2)] ?? 0, 0);
+  });
 });

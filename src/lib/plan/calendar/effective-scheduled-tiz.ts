@@ -150,6 +150,19 @@ function addDraftContribution(
   mergeZoneMinutes(bucket, zones);
 }
 
+function addSessionZoneContribution(
+  rollup: EffectiveScheduledTizRollup,
+  weekTarget: CalendarWeekTarget,
+  session: CalendarPlannedSession,
+  zones: ZoneMinutes
+): void {
+  if (shouldExcludeLongSessionFromMainBudget(weekTarget, session)) {
+    mergeZoneMinutes(rollup.long, zones);
+  } else {
+    mergeZoneMinutes(rollup.main, zones);
+  }
+}
+
 /** Persisted sessions + pool drafts + live composer overlay (excluding placeholder generated zones). */
 export function computeEffectiveScheduledTiz(
   input: EffectiveScheduledTizInput
@@ -161,11 +174,7 @@ export function computeEffectiveScheduledTiz(
     if (isFillableGeneratedSession(session)) continue;
 
     const zones = foldZoneMinutesForWeekTiz(session.zoneMinutes);
-    if (shouldExcludeLongSessionFromMainBudget(weekTarget, session)) {
-      mergeZoneMinutes(rollup.long, zones);
-    } else {
-      mergeZoneMinutes(rollup.main, zones);
-    }
+    addSessionZoneContribution(rollup, weekTarget, session, zones);
   }
 
   for (const chip of chips) {
@@ -179,15 +188,22 @@ export function computeEffectiveScheduledTiz(
     if (!isFillableGeneratedSession(session)) continue;
     const cardId = generatedPoolCardId(session.id);
     const draft = effectiveDraftForCard(cardId, drafts, liveOverlay);
-    if (!draft) continue;
-    addDraftContribution(
-      rollup,
-      weekTarget,
-      session.discipline as Discipline,
-      poolSlotKindForSession(session),
-      draft,
-      paceContext
-    );
+    if (draft) {
+      addDraftContribution(
+        rollup,
+        weekTarget,
+        session.discipline as Discipline,
+        poolSlotKindForSession(session),
+        draft,
+        paceContext
+      );
+      continue;
+    }
+    // TEMPLATE long seats often have duration/targetZones but no structured workout.
+    // Count stored zone minutes so Week TiZ includes the long ride/run.
+    if (poolSlotKindForSession(session) !== "LONG") continue;
+    const zones = foldZoneMinutesForWeekTiz(session.zoneMinutes);
+    addSessionZoneContribution(rollup, weekTarget, session, zones);
   }
 
   return rollup;
