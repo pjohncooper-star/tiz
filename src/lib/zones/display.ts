@@ -1,6 +1,5 @@
 import type { Discipline, SignalType, ThresholdProfile } from "@prisma/client";
 import { formatPace, thresholdPaceToInput } from "@/lib/units/pace";
-import { roundPct, speedPctToPacePct } from "@/lib/zones/boundaries";
 import { parseZoneBoundaries } from "./thresholds";
 
 export type ZoneRange = {
@@ -56,21 +55,8 @@ function formatPctRange(
   minPct: number | null,
   maxPct: number | null
 ): string {
-  if (signalType === "PACE") {
-    // Display as % of threshold pace (higher = slower).
-    // minPct/maxPct are stored speed % (higher = faster).
-    const slowPacePct =
-      minPct != null ? roundPct(speedPctToPacePct(minPct)) : null;
-    const fastPacePct =
-      maxPct != null ? roundPct(speedPctToPacePct(maxPct)) : null;
-    if (slowPacePct == null && fastPacePct != null) return `> ${fastPacePct}%`;
-    if (slowPacePct != null && fastPacePct == null) return `< ${slowPacePct}%`;
-    if (slowPacePct != null && fastPacePct != null) {
-      return `${fastPacePct}–${slowPacePct}%`;
-    }
-    return "";
-  }
-
+  // Pace cutoffs are % of threshold speed (same orientation as power/HR).
+  void signalType;
   if (minPct == null && maxPct != null) return `< ${maxPct}%`;
   if (minPct != null && maxPct == null) return `≥ ${minPct}%`;
   if (minPct != null && maxPct != null) return `${minPct}–${maxPct}%`;
@@ -186,7 +172,7 @@ export function zoneRangesForProfile(
   discipline: Discipline,
   displayUnit: "METRIC" | "IMPERIAL"
 ): Array<{ zone: number; label: string }> {
-  const boundaries = parseZoneBoundaries(profile.zoneBoundaries);
+  const boundaries = parseZoneBoundaries(profile.zoneBoundaries, discipline);
   return zonePctRanges(profile.signalType, boundaries, profile.zoneCount).map(
     (range) => ({
       zone: range.zone,

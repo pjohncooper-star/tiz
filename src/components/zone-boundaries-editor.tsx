@@ -27,7 +27,7 @@ function cutoffLabel(signalType: SignalType, index: number): string {
   const from = index + 1;
   const to = index + 2;
   if (signalType === "PACE") {
-    return `Z${from} / Z${to} (pace % of threshold)`;
+    return `Z${from} / Z${to} (% of threshold speed)`;
   }
   return `Z${from} / Z${to} (% of threshold)`;
 }
@@ -111,7 +111,9 @@ export function ZoneBoundariesEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label>
           Zone boundaries
-          {signalType === "PACE" ? " (% of threshold pace)" : " (% of threshold)"}
+          {signalType === "PACE"
+            ? " (% of threshold speed)"
+            : " (% of threshold)"}
         </Label>
         <button
           type="button"
@@ -123,7 +125,7 @@ export function ZoneBoundariesEditor({
       </div>
       <p className="text-xs text-zinc-500">
         {signalType === "PACE"
-          ? "Edit cutoffs as % of threshold pace (higher = slower). Stored as speed % under the hood."
+          ? "Edit cutoffs as % of threshold speed (higher = faster), then shown as pace."
           : "Edit the upper cutoff of each zone as a percentage of threshold."}
       </p>
       <div className="space-y-2">

@@ -124,7 +124,7 @@ export function computeZoneBreakdown(
   discipline: Discipline,
   durationSeconds?: number
 ): ZoneMinutes {
-  const boundaries = parseZoneBoundaries(profile.zoneBoundaries);
+  const boundaries = parseZoneBoundaries(profile.zoneBoundaries, discipline);
   const signal = profile.signalType;
   const length = Math.max(
     signal === "POWER"
