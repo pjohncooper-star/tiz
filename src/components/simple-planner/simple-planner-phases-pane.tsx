@@ -13,8 +13,18 @@ import {
   phaseKindLabel,
   seedPhaseZoneSplits,
 } from "@/lib/plan/season/phase-zone-defaults";
-import type { PhaseKind, PlanningMode, WeeklyTemplateKind } from "@prisma/client";
+import type {
+  PhaseKind,
+  PlanningMode,
+  VolumeProgressionMode,
+  WeeklyTemplateKind,
+} from "@prisma/client";
 import type { LongOffWeekPolicy } from "@prisma/client";
+import {
+  VOLUME_PROGRESSION_MODE_LABELS,
+  VOLUME_PROGRESSION_MODES,
+  inferVolumeProgressionMode,
+} from "@/lib/plan/season/volume-progression";
 import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
@@ -614,9 +624,9 @@ function PhaseVolumeEditor({
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onChange: (phase: SimplePhase) => void;
 }) {
+  const progressionMode = inferVolumeProgressionMode(phase);
   const swimDistance = disciplinePlanningMode("swim", rampDefaults) === "DISTANCE";
   const runDistance = disciplinePlanningMode("run", rampDefaults) === "DISTANCE";
-  const usesDistance = swimDistance || runDistance;
 
   const disciplineLabels: Record<"swim" | "bike" | "run", string> = {
     swim: "Swim",
@@ -624,19 +634,46 @@ function PhaseVolumeEditor({
     run: showLongSettings ? "Main run" : "Run",
   };
 
+  function setProgressionMode(next: VolumeProgressionMode) {
+    onChange({ ...phase, volumeProgressionMode: next });
+  }
+
+  const help =
+    progressionMode === "PERCENT"
+      ? "Compound weekly growth from start (skips rest weeks). Optional end acts as a cap."
+      : progressionMode === "STEP"
+        ? "Add a fixed amount each training week from start. Optional end acts as a cap."
+        : "Linear ramp from start to end. Blank start chains from the prior phase exit.";
+
   return (
     <fieldset className="mt-4 space-y-3">
       <legend className="text-sm font-medium">Phase volume</legend>
-      <p className="text-xs text-zinc-500">
-        {usesDistance
-          ? "Start and end targets for this phase. Swim/run use distance from season ramp settings; hours are derived from reference pace. Blank start chains from the prior phase exit."
-          : "Start and end hours for this phase. Blank start chains from the prior phase exit. Linear ramp between weeks."}
-      </p>
+      <div>
+        <Label>Progression</Label>
+        <select
+          className="mt-1 w-full max-w-md rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          value={progressionMode}
+          onChange={(event) =>
+            setProgressionMode(event.target.value as VolumeProgressionMode)
+          }
+        >
+          {VOLUME_PROGRESSION_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {VOLUME_PROGRESSION_MODE_LABELS[mode]}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500">{help}</p>
+      </div>
+
       {effectiveMode === "OVERALL" ? (
-        <VolumeHoursRow
+        <VolumeProgressionRow
           label="Total hours"
+          progressionMode={progressionMode}
           startHours={phase.volumeStartHours}
           endHours={phase.volumeEndHours}
+          rampPercent={phase.volumeRampPercent}
+          stepHours={phase.volumeStepHours}
           chainedStart={resolveChainedPhaseVolumeStart({
             phase,
             phases,
@@ -646,6 +683,8 @@ function PhaseVolumeEditor({
           })}
           onStartChange={(value) => onChange({ ...phase, volumeStartHours: value })}
           onEndChange={(value) => onChange({ ...phase, volumeEndHours: value })}
+          onRampPercentChange={(value) => onChange({ ...phase, volumeRampPercent: value })}
+          onStepHoursChange={(value) => onChange({ ...phase, volumeStepHours: value })}
         />
       ) : (
         (["swim", "bike", "run"] as const).map((discipline) => {
@@ -661,66 +700,391 @@ function PhaseVolumeEditor({
             effectiveMode,
             discipline,
           });
+          const startHours =
+            discipline === "swim"
+              ? phase.swimStartHours
+              : discipline === "bike"
+                ? phase.bikeStartHours
+                : phase.runStartHours;
+          const endHours =
+            discipline === "swim"
+              ? phase.swimEndHours
+              : discipline === "bike"
+                ? phase.bikeEndHours
+                : phase.runEndHours;
+          const rampPercent =
+            discipline === "swim"
+              ? phase.swimRampPercent
+              : discipline === "bike"
+                ? phase.bikeRampPercent
+                : phase.runRampPercent;
+          const stepHours =
+            discipline === "swim"
+              ? phase.swimStepHours
+              : discipline === "bike"
+                ? phase.bikeStepHours
+                : phase.runStepHours;
+
+          function patchDiscipline(patch: {
+            start?: number | null;
+            end?: number | null;
+            ramp?: number | null;
+            step?: number | null;
+          }) {
+            if (discipline === "swim") {
+              onChange({
+                ...phase,
+                ...(patch.start !== undefined ? { swimStartHours: patch.start } : {}),
+                ...(patch.end !== undefined ? { swimEndHours: patch.end } : {}),
+                ...(patch.ramp !== undefined ? { swimRampPercent: patch.ramp } : {}),
+                ...(patch.step !== undefined ? { swimStepHours: patch.step } : {}),
+              });
+            } else if (discipline === "bike") {
+              onChange({
+                ...phase,
+                ...(patch.start !== undefined ? { bikeStartHours: patch.start } : {}),
+                ...(patch.end !== undefined ? { bikeEndHours: patch.end } : {}),
+                ...(patch.ramp !== undefined ? { bikeRampPercent: patch.ramp } : {}),
+                ...(patch.step !== undefined ? { bikeStepHours: patch.step } : {}),
+              });
+            } else {
+              onChange({
+                ...phase,
+                ...(patch.start !== undefined ? { runStartHours: patch.start } : {}),
+                ...(patch.end !== undefined ? { runEndHours: patch.end } : {}),
+                ...(patch.ramp !== undefined ? { runRampPercent: patch.ramp } : {}),
+                ...(patch.step !== undefined ? { runStepHours: patch.step } : {}),
+              });
+            }
+          }
 
           if (distanceMode) {
             return (
-              <VolumeDistanceRow
+              <VolumeDistanceProgressionRow
                 key={discipline}
                 label={disciplineLabels[discipline]}
+                progressionMode={progressionMode}
                 paceDiscipline={paceDiscipline}
                 def={def}
                 disciplineSettings={disciplineSettings}
-                startHours={
-                  discipline === "swim" ? phase.swimStartHours : phase.runStartHours
-                }
-                endHours={discipline === "swim" ? phase.swimEndHours : phase.runEndHours}
+                startHours={startHours}
+                endHours={endHours}
+                rampPercent={rampPercent}
+                stepHours={stepHours}
                 chainedStart={chainedStart}
-                onStartChange={(hours) => {
-                  if (discipline === "swim") onChange({ ...phase, swimStartHours: hours });
-                  else onChange({ ...phase, runStartHours: hours });
-                }}
-                onEndChange={(hours) => {
-                  if (discipline === "swim") onChange({ ...phase, swimEndHours: hours });
-                  else onChange({ ...phase, runEndHours: hours });
-                }}
+                onStartChange={(hours) => patchDiscipline({ start: hours })}
+                onEndChange={(hours) => patchDiscipline({ end: hours })}
+                onRampPercentChange={(value) => patchDiscipline({ ramp: value })}
+                onStepHoursChange={(hours) => patchDiscipline({ step: hours })}
               />
             );
           }
 
           return (
-            <VolumeHoursRow
+            <VolumeProgressionRow
               key={discipline}
               label={`${disciplineLabels[discipline]} hours`}
-              startHours={
-                discipline === "swim"
-                  ? phase.swimStartHours
-                  : discipline === "bike"
-                    ? phase.bikeStartHours
-                    : phase.runStartHours
-              }
-              endHours={
-                discipline === "swim"
-                  ? phase.swimEndHours
-                  : discipline === "bike"
-                    ? phase.bikeEndHours
-                    : phase.runEndHours
-              }
+              progressionMode={progressionMode}
+              startHours={startHours}
+              endHours={endHours}
+              rampPercent={rampPercent}
+              stepHours={stepHours}
               chainedStart={chainedStart}
-              onStartChange={(value) => {
-                if (discipline === "swim") onChange({ ...phase, swimStartHours: value });
-                else if (discipline === "bike") onChange({ ...phase, bikeStartHours: value });
-                else onChange({ ...phase, runStartHours: value });
-              }}
-              onEndChange={(value) => {
-                if (discipline === "swim") onChange({ ...phase, swimEndHours: value });
-                else if (discipline === "bike") onChange({ ...phase, bikeEndHours: value });
-                else onChange({ ...phase, runEndHours: value });
-              }}
+              onStartChange={(value) => patchDiscipline({ start: value })}
+              onEndChange={(value) => patchDiscipline({ end: value })}
+              onRampPercentChange={(value) => patchDiscipline({ ramp: value })}
+              onStepHoursChange={(value) => patchDiscipline({ step: value })}
             />
           );
         })
       )}
     </fieldset>
+  );
+}
+
+function VolumeProgressionRow({
+  label,
+  progressionMode,
+  startHours,
+  endHours,
+  rampPercent,
+  stepHours,
+  chainedStart,
+  onStartChange,
+  onEndChange,
+  onRampPercentChange,
+  onStepHoursChange,
+}: {
+  label: string;
+  progressionMode: VolumeProgressionMode;
+  startHours?: number | null;
+  endHours?: number | null;
+  rampPercent?: number | null;
+  stepHours?: number | null;
+  chainedStart: ResolvedChainedStart | null;
+  onStartChange: (value: number | null) => void;
+  onEndChange: (value: number | null) => void;
+  onRampPercentChange: (value: number | null) => void;
+  onStepHoursChange: (value: number | null) => void;
+}) {
+  const startDisplay = formatChainedVolumeStartDisplay(
+    startHours,
+    chainedStart?.kind === "hours" ? chainedStart : null,
+    (value) => String(value)
+  );
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <ChainedVolumeStartInput
+          label="Start (h)"
+          displayValue={startDisplay}
+          chainedStart={chainedStart?.kind === "hours" ? chainedStart : null}
+          placeholder="Chain from prior phase"
+          onCommitStored={onStartChange}
+          parseNumeric={(raw) => {
+            const value = Number(raw);
+            return Number.isFinite(value) && value >= 0 ? value : null;
+          }}
+        />
+        {progressionMode === "TARGET" ? (
+          <div>
+            <Label>End (h)</Label>
+            <NumberEditorInput
+              min={0}
+              nullable
+              integer={false}
+              className="mt-1"
+              placeholder="Phase end"
+              value={endHours ?? null}
+              onCommit={onEndChange}
+            />
+          </div>
+        ) : null}
+        {progressionMode === "PERCENT" ? (
+          <>
+            <div>
+              <Label>Rate / week (%)</Label>
+              <NumberEditorInput
+                min={0}
+                max={100}
+                nullable
+                integer={false}
+                className="mt-1"
+                placeholder="e.g. 10"
+                value={rampPercent ?? null}
+                onCommit={onRampPercentChange}
+              />
+            </div>
+            <div>
+              <Label>Cap (h, optional)</Label>
+              <NumberEditorInput
+                min={0}
+                nullable
+                integer={false}
+                className="mt-1"
+                placeholder="Peak cap"
+                value={endHours ?? null}
+                onCommit={onEndChange}
+              />
+            </div>
+          </>
+        ) : null}
+        {progressionMode === "STEP" ? (
+          <>
+            <div>
+              <Label>Step / week (h)</Label>
+              <NumberEditorInput
+                min={0}
+                nullable
+                integer={false}
+                className="mt-1"
+                placeholder="e.g. 0.25"
+                value={stepHours ?? null}
+                onCommit={onStepHoursChange}
+              />
+            </div>
+            <div>
+              <Label>Cap (h, optional)</Label>
+              <NumberEditorInput
+                min={0}
+                nullable
+                integer={false}
+                className="mt-1"
+                placeholder="Peak cap"
+                value={endHours ?? null}
+                onCommit={onEndChange}
+              />
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function VolumeDistanceProgressionRow({
+  label,
+  progressionMode,
+  paceDiscipline,
+  def,
+  disciplineSettings,
+  startHours,
+  endHours,
+  rampPercent,
+  stepHours,
+  chainedStart,
+  onStartChange,
+  onEndChange,
+  onRampPercentChange,
+  onStepHoursChange,
+}: {
+  label: string;
+  progressionMode: VolumeProgressionMode;
+  paceDiscipline: "SWIM" | "RUN";
+  def: SimpleRampDefaults["swim"];
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  startHours?: number | null;
+  endHours?: number | null;
+  rampPercent?: number | null;
+  stepHours?: number | null;
+  chainedStart: ResolvedChainedStart | null;
+  onStartChange: (hours: number | null) => void;
+  onEndChange: (hours: number | null) => void;
+  onRampPercentChange: (value: number | null) => void;
+  onStepHoursChange: (hours: number | null) => void;
+}) {
+  const unitLabel = distanceInputLabel(paceDiscipline, disciplineSettings).replace("/wk", "");
+
+  function displayFromHours(hours: number | null | undefined): string {
+    if (hours == null) return "";
+    const meters = distanceMetersFromHoursPace(
+      paceDiscipline,
+      hours,
+      def.referencePaceSeconds
+    );
+    return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
+  }
+
+  function formatMeters(meters: number): string {
+    return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
+  }
+
+  const startDisplay =
+    startHours != null
+      ? displayFromHours(startHours)
+      : chainedStart?.kind === "meters"
+        ? formatChainedVolumeStartDisplay(null, chainedStart, formatMeters)
+        : "";
+
+  function commitDistance(raw: string, kind: "start" | "end" | "step") {
+    if (!raw.trim()) {
+      if (kind === "start") onStartChange(null);
+      else if (kind === "end") onEndChange(null);
+      else onStepHoursChange(null);
+      return;
+    }
+    const meters = distanceDisplayToMeters(raw, paceDiscipline, disciplineSettings);
+    if (meters == null) return;
+    const hours = exactHoursFromDisciplineDistance(paceDiscipline, meters, def);
+    if (kind === "start") onStartChange(hours);
+    else if (kind === "end") onEndChange(hours);
+    else onStepHoursChange(hours);
+  }
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <p className="text-sm font-medium">{label}</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <ChainedVolumeStartInput
+          label={`${unitLabel} start`}
+          displayValue={startDisplay}
+          chainedStart={chainedStart}
+          placeholder="Chain from prior phase"
+          onCommitStored={(parsedMeters) => {
+            const storedMeters = resolveStoredStartAfterEdit(parsedMeters, chainedStart);
+            if (storedMeters == null) {
+              onStartChange(null);
+              return;
+            }
+            onStartChange(
+              exactHoursFromDisciplineDistance(paceDiscipline, storedMeters, def)
+            );
+          }}
+          parseNumeric={(raw) =>
+            distanceDisplayToMeters(raw, paceDiscipline, disciplineSettings)
+          }
+        />
+        {progressionMode === "TARGET" ? (
+          <div>
+            <Label>{unitLabel} end</Label>
+            <TextEditorInput
+              inputMode="decimal"
+              className="mt-1"
+              value={displayFromHours(endHours)}
+              placeholder="Phase end"
+              allowEmpty
+              onCommit={(raw) => commitDistance(raw, "end")}
+            />
+          </div>
+        ) : null}
+        {progressionMode === "PERCENT" ? (
+          <>
+            <div>
+              <Label>Rate / week (%)</Label>
+              <NumberEditorInput
+                min={0}
+                max={100}
+                nullable
+                integer={false}
+                className="mt-1"
+                placeholder="e.g. 10"
+                value={rampPercent ?? null}
+                onCommit={onRampPercentChange}
+              />
+            </div>
+            <div>
+              <Label>{unitLabel} cap (optional)</Label>
+              <TextEditorInput
+                inputMode="decimal"
+                className="mt-1"
+                value={displayFromHours(endHours)}
+                placeholder="Peak cap"
+                allowEmpty
+                onCommit={(raw) => commitDistance(raw, "end")}
+              />
+            </div>
+          </>
+        ) : null}
+        {progressionMode === "STEP" ? (
+          <>
+            <div>
+              <Label>{unitLabel} step / week</Label>
+              <TextEditorInput
+                inputMode="decimal"
+                className="mt-1"
+                value={displayFromHours(stepHours)}
+                placeholder="e.g. 1"
+                allowEmpty
+                onCommit={(raw) => commitDistance(raw, "step")}
+              />
+            </div>
+            <div>
+              <Label>{unitLabel} cap (optional)</Label>
+              <TextEditorInput
+                inputMode="decimal"
+                className="mt-1"
+                value={displayFromHours(endHours)}
+                placeholder="Peak cap"
+                allowEmpty
+                onCommit={(raw) => commitDistance(raw, "end")}
+              />
+            </div>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -761,156 +1125,6 @@ function ChainedVolumeStartInput({
           onCommitStored(resolveStoredStartAfterEdit(parsed, chainedStart));
         }}
       />
-    </div>
-  );
-}
-
-function VolumeDistanceRow({
-  label,
-  paceDiscipline,
-  def,
-  disciplineSettings,
-  startHours,
-  endHours,
-  chainedStart,
-  onStartChange,
-  onEndChange,
-}: {
-  label: string;
-  paceDiscipline: "SWIM" | "RUN";
-  def: SimpleRampDefaults["swim"];
-  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
-  startHours?: number | null;
-  endHours?: number | null;
-  chainedStart: ResolvedChainedStart | null;
-  onStartChange: (hours: number | null) => void;
-  onEndChange: (hours: number | null) => void;
-}) {
-  const startLabel = distanceInputLabel(paceDiscipline, disciplineSettings).replace("/wk", " start");
-  const endLabel = distanceInputLabel(paceDiscipline, disciplineSettings).replace("/wk", " end");
-
-  function displayFromHours(hours: number | null | undefined): string {
-    if (hours == null) return "";
-    const meters = distanceMetersFromHoursPace(
-      paceDiscipline,
-      hours,
-      def.referencePaceSeconds
-    );
-    return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
-  }
-
-  function formatMeters(meters: number): string {
-    return distanceMetersToDisplay(meters, paceDiscipline, disciplineSettings);
-  }
-
-  const startDisplay =
-    startHours != null
-      ? displayFromHours(startHours)
-      : chainedStart?.kind === "meters"
-        ? formatChainedVolumeStartDisplay(null, chainedStart, formatMeters)
-        : "";
-
-  function commitDistance(input: string, kind: "start" | "end") {
-    if (!input.trim()) {
-      if (kind === "start") onStartChange(null);
-      else onEndChange(null);
-      return;
-    }
-    const meters = distanceDisplayToMeters(input, paceDiscipline, disciplineSettings);
-    if (meters == null) return;
-    const hours = exactHoursFromDisciplineDistance(paceDiscipline, meters, def);
-    if (kind === "start") onStartChange(hours);
-    else onEndChange(hours);
-  }
-
-  return (
-    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-      <p className="text-sm font-medium">{label}</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <ChainedVolumeStartInput
-          label={startLabel}
-          displayValue={startDisplay}
-          chainedStart={chainedStart}
-          placeholder="Chain from prior phase"
-          onCommitStored={(parsedMeters) => {
-            const storedMeters = resolveStoredStartAfterEdit(parsedMeters, chainedStart);
-            if (storedMeters == null) {
-              onStartChange(null);
-              return;
-            }
-            onStartChange(
-              exactHoursFromDisciplineDistance(paceDiscipline, storedMeters, def)
-            );
-          }}
-          parseNumeric={(raw) =>
-            distanceDisplayToMeters(raw, paceDiscipline, disciplineSettings)
-          }
-        />
-        <div>
-          <Label>{endLabel}</Label>
-          <TextEditorInput
-            inputMode="decimal"
-            className="mt-1"
-            value={displayFromHours(endHours)}
-            placeholder="Phase default"
-            allowEmpty
-            onCommit={(raw) => commitDistance(raw, "end")}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function VolumeHoursRow({
-  label,
-  startHours,
-  endHours,
-  chainedStart,
-  onStartChange,
-  onEndChange,
-}: {
-  label: string;
-  startHours?: number | null;
-  endHours?: number | null;
-  chainedStart: ResolvedChainedStart | null;
-  onStartChange: (value: number | null) => void;
-  onEndChange: (value: number | null) => void;
-}) {
-  const startDisplay = formatChainedVolumeStartDisplay(
-    startHours,
-    chainedStart?.kind === "hours" ? chainedStart : null,
-    (value) => String(value)
-  );
-
-  return (
-    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-      <p className="text-sm font-medium">{label}</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <ChainedVolumeStartInput
-          label="Start (h)"
-          displayValue={startDisplay}
-          chainedStart={chainedStart?.kind === "hours" ? chainedStart : null}
-          placeholder="Chain from prior phase"
-          onCommitStored={onStartChange}
-          parseNumeric={(raw) => {
-            const value = Number(raw);
-            return Number.isFinite(value) && value >= 0 ? value : null;
-          }}
-        />
-        <div>
-          <Label>End (h)</Label>
-          <NumberEditorInput
-            min={0}
-            nullable
-            integer={false}
-            className="mt-1"
-            placeholder="Phase default"
-            value={endHours ?? null}
-            onCommit={onEndChange}
-          />
-        </div>
-      </div>
     </div>
   );
 }

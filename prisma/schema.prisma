@@ -193,6 +193,12 @@ enum VolumeMesocycleMode {
   DECREASE
 }
 
+enum VolumeProgressionMode {
+  TARGET
+  PERCENT
+  STEP
+}
+
 enum PhaseFocus {
   AEROBIC_BASE
   THRESHOLD
@@ -579,18 +585,23 @@ model SeasonPhase {
   bikeSessionsPerWeek  Int      @default(4)
   runSessionsPerWeek   Int      @default(3)
   volumeMesocycleMode  VolumeMesocycleMode @default(INCREASE)
+  volumeProgressionMode VolumeProgressionMode?
   volumeStartHours     Float?
   volumeEndHours       Float?
   volumeRampPercent    Float?
+  volumeStepHours      Float?
   swimStartHours       Float?
   swimEndHours         Float?
   swimRampPercent      Float?
+  swimStepHours        Float?
   bikeStartHours       Float?
   bikeEndHours         Float?
   bikeRampPercent      Float?
+  bikeStepHours        Float?
   runStartHours        Float?
   runEndHours          Float?
   runRampPercent       Float?
+  runStepHours         Float?
   rampSwimEnabled      Boolean    @default(true)
   rampBikeEnabled      Boolean    @default(true)
   rampRunEnabled       Boolean    @default(true)

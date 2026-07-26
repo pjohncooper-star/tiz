@@ -66,6 +66,68 @@ describe("simple-phase-volume", () => {
     assert.equal(linearVolumeAtWeek(6, 8, weeks, phase, 3, true), 8);
   });
 
+  it("compounds percent progression for run volume", () => {
+    const phases = [
+      basePhase({
+        volumeProgressionMode: "PERCENT",
+        runStartHours: 2,
+        runRampPercent: 10,
+        runEndHours: 10,
+      }),
+    ];
+    const defaults = defaultSimpleRampDefaults();
+    const weeks = [week(0, 0, 0, 2), week(1, 0, 0, 2), week(2, 0, 0, 2), week(3, 0, 0, 2)];
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+    assert.equal(result[0]!.runHours, 2);
+    assert.equal(result[1]!.runHours, 2.2);
+    assert.equal(result[2]!.runHours, 2.42);
+  });
+
+  it("applies absolute step progression for run volume", () => {
+    const phases = [
+      basePhase({
+        volumeProgressionMode: "STEP",
+        runStartHours: 2,
+        runStepHours: 0.25,
+        runEndHours: 10,
+      }),
+    ];
+    const defaults = defaultSimpleRampDefaults();
+    const weeks = [week(0, 0, 0, 2), week(1, 0, 0, 2), week(2, 0, 0, 2)];
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases: [{ ...phases[0]!, endWeekIndex: 2 }],
+      rampPhaseSpans: [
+        {
+          startWeekIndex: 0,
+          endWeekIndex: 2,
+          rampEnabled: phases[0]!.rampEnabled,
+        },
+      ],
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+    assert.equal(result[0]!.runHours, 2);
+    assert.equal(result[1]!.runHours, 2.25);
+    assert.equal(result[2]!.runHours, 2.5);
+  });
+
   it("ramps per discipline with linear lerp when phase fields set", () => {
     const phases = [
       basePhase({

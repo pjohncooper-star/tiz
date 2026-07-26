@@ -6,6 +6,10 @@ import {
 } from "./mesocycle-ramp";
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
 import { volumeEndFromStartAndRamp, weeklyCompoundVolumeAtWeek } from "./volume-ramp-triad";
+import {
+  inferVolumeProgressionMode,
+  resolveProgressionExit,
+} from "./volume-progression";
 
 export type SeasonVolumeAnchors = {
   startHours: number;
@@ -55,16 +59,22 @@ function resolveVolumeExit(
   anchors: SeasonVolumeAnchors,
   nextRampPhase: SeasonPhaseInput | undefined
 ): number {
-  if (phase.volumeEndHours != null) {
-    return phase.volumeEndHours;
-  }
-  if (phase.volumeRampPercent != null && mode !== "HOLD") {
-    return volumeEndFromStartAndRamp(
-      volumeEntry,
-      phase.volumeRampPercent,
-      phase.weekCount,
-      mode
-    );
+  const progressionMode = inferVolumeProgressionMode(phase);
+  if (
+    phase.volumeEndHours != null ||
+    phase.volumeRampPercent != null ||
+    phase.volumeStepHours != null ||
+    phase.volumeProgressionMode != null
+  ) {
+    return resolveProgressionExit({
+      entry: volumeEntry,
+      exit: phase.volumeEndHours,
+      rampPercent: phase.volumeRampPercent,
+      stepHours: phase.volumeStepHours,
+      progressionMode,
+      mesocycleMode: mode,
+      weekCount: phase.weekCount,
+    });
   }
   return defaultVolumeExit(phase, mode, anchors, nextRampPhase);
 }

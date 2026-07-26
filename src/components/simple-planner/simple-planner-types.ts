@@ -1,4 +1,9 @@
-import type { PlanningMode, PhaseKind } from "@prisma/client";
+import type {
+  PlanningMode,
+  PhaseKind,
+  VolumeMesocycleMode,
+  VolumeProgressionMode,
+} from "@prisma/client";
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
   defaultPhaseKindZoneDefaults,
@@ -65,18 +70,24 @@ export type SimplePhase = {
   longRunOffWeekPolicy?: LongOffWeekPolicy;
   longRideOffWeekEndurancePercent?: number;
   longRunOffWeekEndurancePercent?: number;
+  volumeMesocycleMode?: VolumeMesocycleMode | null;
+  volumeProgressionMode?: VolumeProgressionMode | null;
   volumeStartHours?: number | null;
   volumeEndHours?: number | null;
   volumeRampPercent?: number | null;
+  volumeStepHours?: number | null;
   swimStartHours?: number | null;
   swimEndHours?: number | null;
   swimRampPercent?: number | null;
+  swimStepHours?: number | null;
   bikeStartHours?: number | null;
   bikeEndHours?: number | null;
   bikeRampPercent?: number | null;
+  bikeStepHours?: number | null;
   runStartHours?: number | null;
   runEndHours?: number | null;
   runRampPercent?: number | null;
+  runStepHours?: number | null;
 };
 
 export type SimpleWeek = {
