@@ -617,6 +617,8 @@ export function SimplePlannerView({
       zoneFocusCatalog?: ZoneFocusCatalog;
     };
     const normalized = normalizeSeason(data.season);
+    lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+    setVolumePreviewDirty(false);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
