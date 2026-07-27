@@ -15,7 +15,13 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebarNav({ items }: { items: SidebarNavItem[] }) {
+export function AppSidebarNav({
+  items,
+  onNavigate,
+}: {
+  items: SidebarNavItem[];
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -26,6 +32,7 @@ export function AppSidebarNav({ items }: { items: SidebarNavItem[] }) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             className={`rounded-md px-3 py-2 text-sm font-medium transition ${
               active
                 ? "bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100"

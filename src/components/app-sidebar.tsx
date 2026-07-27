@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AppSidebarClient } from "@/components/app-sidebar-client";
 import type { SidebarNavItem } from "@/components/app-sidebar-nav";
 import { auth, signOut } from "@/lib/auth";
