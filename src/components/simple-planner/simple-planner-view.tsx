@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
-import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
+import { NumberEditorInput } from "@/components/number-editor-input";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
 import {
   SimplePlannerPhasesPane,
@@ -19,9 +27,7 @@ import {
   DEFAULT_PHASE_SESSIONS,
   DEFAULT_PHASE_INTENSE_DAYS,
   type SimpleGoalEvent,
-  type SimplePhase,
   type SimpleSeason,
-  type SimpleWeek,
 } from "@/components/simple-planner/simple-planner-types";
 import { defaultSimpleRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import { DEFAULT_REST_VOLUME_PERCENT } from "@/lib/plan/season/constants";
@@ -33,13 +39,12 @@ import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { PhaseKindZoneDefaultsEditor } from "@/components/simple-planner/zone-split-editor";
 import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import {
-  distanceDisplayToMeters,
-  distanceMetersToDisplay,
   hoursFromDisciplineDistance,
   PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { applySimpleSeasonDateBounds } from "@/lib/plan/season/simple-season-weeks";
 import { resolveLongWeekFlagsForSeason } from "@/lib/plan/season/long-session-schedule";
+import { previewPhaseAwareVolumes } from "@/lib/plan/season/preview-phase-volumes";
 import {
   DISCIPLINE_LABELS,
   DISCIPLINES,
@@ -62,7 +67,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     totalWeeks: season.totalWeeks,
     stored: season.testWeekFlags ?? null,
   });
-  return {
+  const base: SimpleSeason = {
     ...season,
     testWeekFlags,
     deLoadVolumePercent: season.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
@@ -91,6 +96,55 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
       zoneMinutes: week.zoneMinutes ?? {},
     })),
   };
+
+  const preview = previewPhaseAwareVolumes({
+    weeks: base.weeks,
+    phases: base.phases,
+    rampDefaults: base.rampDefaults,
+    restVolumePercent: base.deLoadVolumePercent,
+    seasonDefaultPlanningMode: base.defaultPlanningMode ?? "BY_DISCIPLINE",
+  });
+
+  return {
+    ...base,
+    phases: preview.phases,
+    weeks: preview.weeks,
+  };
+}
+
+function volumePreviewSignature(season: SimpleSeason): string {
+  return JSON.stringify({
+    planningMode: season.defaultPlanningMode,
+    restVolumePercent: season.deLoadVolumePercent,
+    rampDefaults: season.rampDefaults,
+    restFlags: season.weeks.map((week) => week.isRestWeek),
+    phases: season.phases.map((phase) => ({
+      id: phase.id,
+      startWeekIndex: phase.startWeekIndex,
+      endWeekIndex: phase.endWeekIndex,
+      phaseKind: phase.phaseKind,
+      planningMode: phase.planningMode,
+      rampEnabled: phase.rampEnabled,
+      volumeMesocycleMode: phase.volumeMesocycleMode,
+      volumeProgressionMode: phase.volumeProgressionMode,
+      volumeStartHours: phase.volumeStartHours,
+      volumeEndHours: phase.volumeEndHours,
+      volumeRampPercent: phase.volumeRampPercent,
+      volumeStepHours: phase.volumeStepHours,
+      swimStartHours: phase.swimStartHours,
+      swimEndHours: phase.swimEndHours,
+      swimRampPercent: phase.swimRampPercent,
+      swimStepHours: phase.swimStepHours,
+      bikeStartHours: phase.bikeStartHours,
+      bikeEndHours: phase.bikeEndHours,
+      bikeRampPercent: phase.bikeRampPercent,
+      bikeStepHours: phase.bikeStepHours,
+      runStartHours: phase.runStartHours,
+      runEndHours: phase.runEndHours,
+      runRampPercent: phase.runRampPercent,
+      runStepHours: phase.runStepHours,
+    })),
+  });
 }
 
 type PlannerSectionId =
@@ -307,6 +361,39 @@ export function SimplePlannerView({
   const [createMode, setCreateMode] = useState(false);
   const [draftName, setDraftName] = useState("2026 Season");
   const [draftDates, setDraftDates] = useState(defaultSeasonDates);
+  const [volumePreviewDirty, setVolumePreviewDirty] = useState(false);
+  const lastVolumeSignatureRef = useRef<string | null>(null);
+  const seasonRef = useRef(season);
+  seasonRef.current = season;
+
+  const volumeSignature = season ? volumePreviewSignature(season) : null;
+
+  useEffect(() => {
+    if (!volumeSignature) return;
+    if (lastVolumeSignatureRef.current === volumeSignature) return;
+    const current = seasonRef.current;
+    if (!current) return;
+    lastVolumeSignatureRef.current = volumeSignature;
+
+    startTransition(() => {
+      const preview = previewPhaseAwareVolumes({
+        weeks: current.weeks,
+        phases: current.phases,
+        rampDefaults: current.rampDefaults,
+        restVolumePercent: current.deLoadVolumePercent,
+        seasonDefaultPlanningMode: current.defaultPlanningMode ?? "BY_DISCIPLINE",
+      });
+      setVolumePreviewDirty(true);
+      setSeason((draft) => {
+        if (!draft) return draft;
+        return {
+          ...draft,
+          phases: preview.migrated ? preview.phases : draft.phases,
+          weeks: preview.weeks,
+        };
+      });
+    });
+  }, [volumeSignature]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -328,6 +415,8 @@ export function SimplePlannerView({
       zoneFocusCatalog?: ZoneFocusCatalog;
     };
     const loaded = data.season ? normalizeSeason(data.season) : null;
+    lastVolumeSignatureRef.current = loaded ? volumePreviewSignature(loaded) : null;
+    setVolumePreviewDirty(false);
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
@@ -401,6 +490,8 @@ export function SimplePlannerView({
       zoneFocusCatalog?: ZoneFocusCatalog;
     };
     const normalized = normalizeSeason(data.season);
+    lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+    setVolumePreviewDirty(false);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
@@ -526,6 +617,8 @@ export function SimplePlannerView({
       zoneFocusCatalog?: ZoneFocusCatalog;
     };
     const normalized = normalizeSeason(data.season);
+    lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+    setVolumePreviewDirty(false);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
@@ -670,6 +763,22 @@ export function SimplePlannerView({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
+      <SimplePlannerTimeline
+        sticky
+        seasonStart={season.startDate}
+        weeks={season.weeks}
+        phases={season.phases}
+        goalEvents={season.goalEvents}
+        primaryGoalEvent={season.primaryGoalEvent}
+        selectedWeekIndex={selectedWeekIndex}
+        onSelectWeek={handleSelectWeek}
+        previewHint={
+          volumePreviewDirty
+            ? "Live preview — Save & recalculate to persist volume"
+            : null
+        }
+      />
+
       {ecoLoadEnabled ? (
         <Card title="Fitness / fatigue (season TiZ → ECO)">
           <FitnessFatigueChart
@@ -804,15 +913,6 @@ export function SimplePlannerView({
         actions={sectionActions("phases", "Save & recalculate")}
       >
         <div ref={phaseWorkspaceRef} className="space-y-4">
-          <SimplePlannerTimeline
-            seasonStart={season.startDate}
-            weeks={season.weeks}
-            phases={season.phases}
-            goalEvents={season.goalEvents}
-            primaryGoalEvent={season.primaryGoalEvent}
-            selectedWeekIndex={selectedWeekIndex}
-            onSelectWeek={handleSelectWeek}
-          />
           <SeasonWeekTemplatePicker
             templates={templates}
             restWeekTemplateId={season.restWeekTemplateId ?? null}
@@ -877,9 +977,13 @@ export function SimplePlannerView({
           </div>
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
             <p className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-              Ramp defaults
+              Planning units
             </p>
-            <RampDefaultsEditor
+            <p className="mb-3 text-xs text-zinc-500">
+              Hours vs distance mode and reference paces for swim/run translation.
+              Weekly volume growth is set per phase.
+            </p>
+            <SeasonUnitsEditor
               value={season.rampDefaults}
               disciplineSettings={disciplineSettings}
               onChange={(rampDefaults) => setSeason({ ...season, rampDefaults })}
@@ -1001,7 +1105,7 @@ function SeasonWeekTemplatePicker({
   );
 }
 
-function RampDefaultsEditor({
+function SeasonUnitsEditor({
   value,
   disciplineSettings,
   onChange,
@@ -1051,165 +1155,59 @@ function RampDefaultsEditor({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
-              <th className="pb-2 pr-4">Discipline</th>
-              <th className="pb-2 pr-4">Mode</th>
-              <th className="pb-2 pr-4">Start</th>
-              <th className="pb-2 pr-4">Peak</th>
-              <th className="pb-2 pr-4">Rate / wk</th>
-              <th className="pb-2">Pace</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const def = value[row.key];
-              const distanceMode = row.key !== "bike" && def.mode === "DISTANCE";
-              return (
-                <tr key={row.key} className="border-t border-zinc-100 dark:border-zinc-800">
-                  <td className="py-2 pr-4 font-medium">{row.label}</td>
-                  <td className="py-2 pr-4">
-                    {row.key === "bike" ? (
-                      <span className="text-zinc-500">Hours</span>
-                    ) : (
-                      <select
-                        className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                        value={def.mode}
-                        onChange={(event) =>
-                          updateDiscipline(row.key, {
-                            mode: event.target.value as "HOURS" | "DISTANCE",
-                          })
-                        }
-                      >
-                        <option value="HOURS">Hours</option>
-                        <option value="DISTANCE">Distance</option>
-                      </select>
-                    )}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {distanceMode && row.paceDiscipline ? (
-                      <TextEditorInput
-                        inputMode="decimal"
-                        className="w-28"
-                        value={distanceMetersToDisplay(
-                          def.startDistanceMeters,
-                          row.paceDiscipline,
-                          disciplineSettings
-                        )}
-                        onCommit={(raw) => {
-                          const meters = distanceDisplayToMeters(
-                            raw,
-                            row.paceDiscipline!,
-                            disciplineSettings
-                          );
-                          if (meters == null) return;
-                          updateDiscipline(row.key, {
-                            startDistanceMeters: meters,
-                            startHours: hoursFromDisciplineDistance(
-                              row.paceDiscipline!,
-                              meters,
-                              def
-                            ),
-                          });
-                        }}
-                      />
-                    ) : (
-                      <NumberEditorInput
-                        min={0}
-                        integer={false}
-                        className="w-24"
-                        value={def.startHours}
-                        onCommit={(v) => {
-                          if (v == null) return;
-                          updateDiscipline(row.key, { startHours: v });
-                        }}
-                      />
-                    )}
-                  </td>
-                  <td className="py-2 pr-4">
-                    {distanceMode && row.paceDiscipline ? (
-                      <TextEditorInput
-                        inputMode="decimal"
-                        className="w-28"
-                        value={distanceMetersToDisplay(
-                          def.peakDistanceMeters,
-                          row.paceDiscipline,
-                          disciplineSettings
-                        )}
-                        onCommit={(raw) => {
-                          const meters = distanceDisplayToMeters(
-                            raw,
-                            row.paceDiscipline!,
-                            disciplineSettings
-                          );
-                          if (meters == null) return;
-                          updateDiscipline(row.key, {
-                            peakDistanceMeters: meters,
-                            peakHours: hoursFromDisciplineDistance(
-                              row.paceDiscipline!,
-                              meters,
-                              def
-                            ),
-                          });
-                        }}
-                      />
-                    ) : (
-                      <NumberEditorInput
-                        min={0}
-                        integer={false}
-                        className="w-24"
-                        value={def.peakHours}
-                        onCommit={(v) => {
-                          if (v == null) return;
-                          updateDiscipline(row.key, { peakHours: v });
-                        }}
-                      />
-                    )}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <div className="flex items-center gap-1">
-                      <NumberEditorInput
-                        min={0}
-                        max={100}
-                        integer={false}
-                        className="w-20"
-                        value={def.ratePercent}
-                        onCommit={(v) => {
-                          if (v == null) return;
-                          updateDiscipline(row.key, { ratePercent: v });
-                        }}
-                      />
-                      <span className="text-zinc-500">%</span>
-                    </div>
-                  </td>
-                  <td className="py-2">
-                    {row.paceDiscipline ? (
-                      <PlannerPaceInput
-                        className="w-28 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                        value={def.referencePaceSeconds}
-                        discipline={row.paceDiscipline}
-                        disciplineSettings={disciplineSettings}
-                        onChange={(seconds) =>
-                          updatePace(row.key, row.paceDiscipline!, seconds)
-                        }
-                      />
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-zinc-500">
-        Save this section to persist ramp settings and recalculate auto-filled volume weeks.
-        Rest weeks and ramp-off phases stay unchanged.
-      </p>
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
+            <th className="pb-2 pr-4">Discipline</th>
+            <th className="pb-2 pr-4">Mode</th>
+            <th className="pb-2">Reference pace</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const def = value[row.key];
+            return (
+              <tr key={row.key} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="py-2 pr-4 font-medium">{row.label}</td>
+                <td className="py-2 pr-4">
+                  {row.key === "bike" ? (
+                    <span className="text-zinc-500">Hours</span>
+                  ) : (
+                    <select
+                      className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                      value={def.mode}
+                      onChange={(event) =>
+                        updateDiscipline(row.key, {
+                          mode: event.target.value as "HOURS" | "DISTANCE",
+                        })
+                      }
+                    >
+                      <option value="HOURS">Hours</option>
+                      <option value="DISTANCE">Distance</option>
+                    </select>
+                  )}
+                </td>
+                <td className="py-2">
+                  {row.paceDiscipline ? (
+                    <PlannerPaceInput
+                      className="w-28 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                      value={def.referencePaceSeconds}
+                      discipline={row.paceDiscipline}
+                      disciplineSettings={disciplineSettings}
+                      onChange={(seconds) =>
+                        updatePace(row.key, row.paceDiscipline!, seconds)
+                      }
+                    />
+                  ) : (
+                    <span className="text-zinc-400">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

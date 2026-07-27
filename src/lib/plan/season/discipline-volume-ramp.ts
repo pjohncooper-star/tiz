@@ -21,6 +21,10 @@ import {
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
 import { roundHours } from "./volume-curve";
 import { volumeEndFromStartAndRamp, weeklyCompoundVolumeAtWeek } from "./volume-ramp-triad";
+import {
+  inferVolumeProgressionMode,
+  resolveProgressionExit,
+} from "./volume-progression";
 
 export type DisciplineKey = "swim" | "bike" | "run";
 
@@ -30,6 +34,7 @@ type DisciplineFieldMap = {
   startHours: keyof SeasonPhaseInput;
   endHours: keyof SeasonPhaseInput;
   rampPercent: keyof SeasonPhaseInput;
+  stepHours: keyof SeasonPhaseInput;
 };
 
 const DISCIPLINE_FIELDS: Record<DisciplineKey, DisciplineFieldMap> = {
@@ -37,16 +42,19 @@ const DISCIPLINE_FIELDS: Record<DisciplineKey, DisciplineFieldMap> = {
     startHours: "swimStartHours",
     endHours: "swimEndHours",
     rampPercent: "swimRampPercent",
+    stepHours: "swimStepHours",
   },
   bike: {
     startHours: "bikeStartHours",
     endHours: "bikeEndHours",
     rampPercent: "bikeRampPercent",
+    stepHours: "bikeStepHours",
   },
   run: {
     startHours: "runStartHours",
     endHours: "runEndHours",
     rampPercent: "runRampPercent",
+    stepHours: "runStepHours",
   },
 };
 
@@ -66,7 +74,8 @@ export function disciplineHasRampConfig(
   return (
     phaseField(phase, discipline, "startHours") != null ||
     phaseField(phase, discipline, "endHours") != null ||
-    phaseField(phase, discipline, "rampPercent") != null
+    phaseField(phase, discipline, "rampPercent") != null ||
+    phaseField(phase, discipline, "stepHours") != null
   );
 }
 
@@ -130,11 +139,25 @@ function resolveDisciplineExit(
   firstRampPhaseKind: PhaseKind
 ): number {
   const endHours = phaseField(phase, discipline, "endHours");
-  if (endHours != null) return endHours;
-
   const rampPercent = phaseField(phase, discipline, "rampPercent");
-  if (rampPercent != null && mode !== "HOLD") {
-    return volumeEndFromStartAndRamp(entry, rampPercent, phase.weekCount, mode);
+  const stepHours = phaseField(phase, discipline, "stepHours");
+  const progressionMode = inferVolumeProgressionMode(phase);
+
+  if (
+    endHours != null ||
+    rampPercent != null ||
+    stepHours != null ||
+    phase.volumeProgressionMode != null
+  ) {
+    return resolveProgressionExit({
+      entry,
+      exit: endHours,
+      rampPercent,
+      stepHours: typeof stepHours === "number" ? stepHours : null,
+      progressionMode,
+      mesocycleMode: mode,
+      weekCount: phase.weekCount,
+    });
   }
 
   return defaultDisciplineExit(

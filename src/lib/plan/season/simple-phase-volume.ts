@@ -1,4 +1,9 @@
-import type { PhaseKind, PlanningMode, VolumeMesocycleMode } from "@prisma/client";
+import type {
+  PhaseKind,
+  PlanningMode,
+  VolumeMesocycleMode,
+  VolumeProgressionMode,
+} from "@prisma/client";
 import {
   distanceMetersFromHoursPace,
   hoursFromDistancePace,
@@ -30,24 +35,33 @@ import {
   recalculateSimpleVolumes,
 } from "./simple-ramp";
 import { roundHours } from "./volume-curve";
+import {
+  inferVolumeProgressionMode,
+  volumeAtProgressionWeek,
+} from "./volume-progression";
 
 export type PhaseVolumeSpan = PhasePlanningSpan & {
   id?: string;
   phaseKind: PhaseKind;
   rampEnabled: Record<SimpleDiscipline, boolean>;
   volumeMesocycleMode?: VolumeMesocycleMode | null;
+  volumeProgressionMode?: VolumeProgressionMode | null;
   volumeStartHours?: number | null;
   volumeEndHours?: number | null;
   volumeRampPercent?: number | null;
+  volumeStepHours?: number | null;
   swimStartHours?: number | null;
   swimEndHours?: number | null;
   swimRampPercent?: number | null;
+  swimStepHours?: number | null;
   bikeStartHours?: number | null;
   bikeEndHours?: number | null;
   bikeRampPercent?: number | null;
+  bikeStepHours?: number | null;
   runStartHours?: number | null;
   runEndHours?: number | null;
   runRampPercent?: number | null;
+  runStepHours?: number | null;
 };
 
 const DISCIPLINE_KEYS: DisciplineKey[] = ["swim", "bike", "run"];
@@ -204,18 +218,23 @@ function resolveExitMeters(
 
 export function phaseHasVolumeConfig(phase: PhaseVolumeSpan): boolean {
   return (
+    phase.volumeProgressionMode != null ||
     phase.volumeStartHours != null ||
     phase.volumeEndHours != null ||
     phase.volumeRampPercent != null ||
+    phase.volumeStepHours != null ||
     phase.swimStartHours != null ||
     phase.swimEndHours != null ||
     phase.swimRampPercent != null ||
+    phase.swimStepHours != null ||
     phase.bikeStartHours != null ||
     phase.bikeEndHours != null ||
     phase.bikeRampPercent != null ||
+    phase.bikeStepHours != null ||
     phase.runStartHours != null ||
     phase.runEndHours != null ||
-    phase.runRampPercent != null
+    phase.runRampPercent != null ||
+    phase.runStepHours != null
   );
 }
 
@@ -241,19 +260,90 @@ function toSeasonPhaseInput(phase: PhaseVolumeSpan, sortOrder: number): SeasonPh
     bikeSessionsPerWeek: 4,
     runSessionsPerWeek: 3,
     volumeMesocycleMode: phase.volumeMesocycleMode ?? undefined,
+    volumeProgressionMode: phase.volumeProgressionMode ?? null,
     volumeStartHours: phase.volumeStartHours,
     volumeEndHours: phase.volumeEndHours,
     volumeRampPercent: phase.volumeRampPercent,
+    volumeStepHours: phase.volumeStepHours,
     swimStartHours: phase.swimStartHours,
     swimEndHours: phase.swimEndHours,
     swimRampPercent: phase.swimRampPercent,
+    swimStepHours: phase.swimStepHours,
     bikeStartHours: phase.bikeStartHours,
     bikeEndHours: phase.bikeEndHours,
     bikeRampPercent: phase.bikeRampPercent,
+    bikeStepHours: phase.bikeStepHours,
     runStartHours: phase.runStartHours,
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
+    runStepHours: phase.runStepHours,
   };
+}
+
+function nonRestOffsetInPhase(
+  weeks: SimpleWeekVolume[],
+  phase: PhaseVolumeSpan,
+  weekIndex: number
+): { offset: number; nonRestCount: number } {
+  const phaseWeeks = weeks.filter(
+    (w) => w.weekIndex >= phase.startWeekIndex && w.weekIndex <= phase.endWeekIndex
+  );
+  const nonRest = phaseWeeks.filter((w) => !w.isRestWeek);
+  const offset = nonRest.findIndex((w) => w.weekIndex === weekIndex);
+  return {
+    offset: offset < 0 ? 0 : offset,
+    nonRestCount: Math.max(nonRest.length, 1),
+  };
+}
+
+function progressionModeFor(phase: PhaseVolumeSpan): VolumeProgressionMode {
+  return inferVolumeProgressionMode(phase);
+}
+
+function mesocycleModeFor(phase: PhaseVolumeSpan): VolumeMesocycleMode {
+  return phase.volumeMesocycleMode ?? "INCREASE";
+}
+
+function disciplineRampPercent(
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline
+): number | null | undefined {
+  if (discipline === "swim") return phase.swimRampPercent;
+  if (discipline === "bike") return phase.bikeRampPercent;
+  return phase.runRampPercent;
+}
+
+function disciplineStepHours(
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline
+): number | null | undefined {
+  if (discipline === "swim") return phase.swimStepHours;
+  if (discipline === "bike") return phase.bikeStepHours;
+  return phase.runStepHours;
+}
+
+function progressionVolumeAtWeek(
+  entry: number,
+  exit: number,
+  weeks: SimpleWeekVolume[],
+  phase: PhaseVolumeSpan,
+  weekIndex: number,
+  rampOn: boolean,
+  rampPercent?: number | null,
+  stepHours?: number | null
+): number {
+  const { offset, nonRestCount } = nonRestOffsetInPhase(weeks, phase, weekIndex);
+  return volumeAtProgressionWeek({
+    entry,
+    exit,
+    rampPercent,
+    stepHours,
+    progressionMode: progressionModeFor(phase),
+    mesocycleMode: mesocycleModeFor(phase),
+    weekOffset: offset,
+    weekCount: nonRestCount,
+    rampOn,
+  });
 }
 
 function phaseAtWeek(
@@ -373,29 +463,48 @@ function applyDisciplineVolume(
   rampOn: boolean,
   defaults: SimpleRampDefaults
 ): void {
+  const rampPercent = disciplineRampPercent(phase, discipline) ?? phase.volumeRampPercent;
+  const stepHours = disciplineStepHours(phase, discipline) ?? phase.volumeStepHours;
+
   if (isDistanceDiscipline(discipline, defaults)) {
     const phaseIndex = phaseIndexOf(sorted, phase);
     const entryM = resolveEntryMeters(discipline, phase, phaseIndex, sorted, weeks, defaults);
     const exitM = resolveExitMeters(discipline, phase, defaults);
-    const meters = linearNumericAtWeek(
+    // Convert step/cap semantics: stepHours → meters via reference pace for this discipline.
+    const paceDiscipline = paceDisciplineFor(discipline)!;
+    const stepMeters =
+      stepHours != null
+        ? roundMeters(
+            distanceMetersFromHoursPace(
+              paceDiscipline,
+              stepHours,
+              defaults[discipline].referencePaceSeconds
+            )
+          )
+        : null;
+    const meters = progressionVolumeAtWeek(
       entryM,
       exitM,
       weeks,
       phase,
       week.weekIndex,
-      rampOn
+      rampOn,
+      rampPercent,
+      stepMeters
     );
-    applyMetersToWeek(week, discipline, meters, defaults);
+    applyMetersToWeek(week, discipline, roundMeters(meters), defaults);
     return;
   }
 
-  const hours = linearVolumeAtWeek(
+  const hours = progressionVolumeAtWeek(
     targets.entry,
     targets.exit,
     weeks,
     phase,
     week.weekIndex,
-    rampOn
+    rampOn,
+    rampPercent,
+    stepHours
   );
   if (discipline === "swim") week.swimHours = hours;
   else if (discipline === "bike") week.bikeHours = hours;
@@ -530,13 +639,15 @@ export function recalculatePhaseAwareVolumes(input: {
     if (mode === "OVERALL") {
       const targets = findTotalTargets(totalTargets, week.weekIndex);
       if (!targets) continue;
-      const totalHours = linearVolumeAtWeek(
+      const totalHours = progressionVolumeAtWeek(
         targets.volumeEntry,
         targets.volumeExit,
         result,
         phase,
         week.weekIndex,
-        true
+        true,
+        phase.volumeRampPercent,
+        phase.volumeStepHours
       );
       Object.assign(
         week,
