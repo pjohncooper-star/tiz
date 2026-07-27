@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarCsvImportSettings } from "@/components/calendar-csv-import-settings";
 import { DisciplineUnitsSettings } from "@/components/discipline-units-settings";
 import { EcoLoadSettingsPanel } from "@/components/eco-load-settings-panel";
 import { SelfEvalSettingsPanel } from "@/components/self-eval-settings-panel";
@@ -115,6 +116,11 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-semibold">Settings</h1>
       <Card title="Units">
         <DisciplineUnitsSettings initialSettings={disciplineSettings} />
+      </Card>
+      <Card title="Calendar CSV import">
+        <div id="calendar-import">
+          <CalendarCsvImportSettings />
+        </div>
       </Card>
       <Card title="Workout shading">
         <WorkoutShadingSettingsPanel
