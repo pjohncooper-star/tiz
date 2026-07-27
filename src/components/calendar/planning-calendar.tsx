@@ -261,7 +261,9 @@ export function PlanningCalendar({
     const mq = window.matchMedia("(min-width: 1280px)");
     const sync = () => {
       setIsXl(mq.matches);
-      setPoolOpen(mq.matches);
+      // Keep the pool closed on landing/refresh and when entering xl;
+      // only auto-close if the viewport drops below the wizard breakpoint.
+      if (!mq.matches) setPoolOpen(false);
     };
     sync();
     mq.addEventListener("change", sync);
