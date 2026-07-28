@@ -214,11 +214,11 @@ export const DAY_QUALITY_LABELS: Record<DayQualityFlag, string> = {
   BAD: "Bad",
 };
 
-/** Re-apply feel-first (+ role-aware RPE) standout mapping for FIT-imported surveys. */
+/** Re-apply feel-first (+ role-aware RPE) standout mapping for device/manual surveys. */
 export async function remapFitSurveyStandoutFlags(): Promise<number> {
   const surveys = await db.surveyResponse.findMany({
     where: {
-      source: "FIT_IMPORT",
+      source: { in: ["FIT_IMPORT", "MANUAL"] },
       OR: [{ freshness: { not: null } }, { rpe: { not: null } }],
     },
     select: {
