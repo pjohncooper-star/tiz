@@ -87,7 +87,8 @@ import { WORKOUT_TREE_VERSION } from "@/lib/workout/workout-tree";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
-import { Button } from "@/components/ui";
+import { CalendarTodayIcon } from "@/components/calendar/calendar-today-icon";
+import { Button, Input } from "@/components/ui";
 import { computeEasyTizSpread, computeLongPoolDrafts } from "@/lib/plan/calendar/spread-easy-tiz";
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import {
@@ -1446,13 +1447,23 @@ export function PlanningCalendar({
     void reloadCalendarData([...weeks].sort());
   }
 
-  function scrollToToday() {
+  function jumpToDate(dateKey: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
     setCalendarOpen(false);
+    setSelectedDateKey(dateKey);
+    const weekStart = format(
+      startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS),
+      "yyyy-MM-dd"
+    );
     if (poolOpen) {
-      handlePoolWeekChange(currentWeekStart);
+      handlePoolWeekChange(weekStart);
     } else {
-      void scrollToWeekAsync(currentWeekStart);
+      void scrollToWeekAsync(weekStart);
     }
+  }
+
+  function scrollToToday() {
+    jumpToDate(format(new Date(), "yyyy-MM-dd"));
   }
 
   async function handleUnassignWorkout(session: CalendarPlannedSession) {
@@ -1634,9 +1645,29 @@ export function PlanningCalendar({
               >
                 {poolOpen ? "Hide pool" : "Workout pool"}
               </Button>
-              <Button type="button" variant="secondary" onClick={scrollToToday}>
-                Today
+              <Button
+                type="button"
+                variant="secondary"
+                className="px-2.5"
+                aria-label="Today"
+                title="Today"
+                onClick={scrollToToday}
+              >
+                <CalendarTodayIcon day={Number(format(new Date(), "d"))} />
               </Button>
+              <label className="flex items-center gap-1.5 text-sm text-zinc-500">
+                <span className="hidden sm:inline">Jump to</span>
+                <Input
+                  type="date"
+                  className="w-auto min-w-[9.5rem] py-1.5"
+                  aria-label="Jump to date"
+                  value={selectedDateKey ?? focusedWeekStart}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    if (next) jumpToDate(next);
+                  }}
+                />
+              </label>
               {poolOpen ? (
                 <Button
                   type="button"
@@ -1651,7 +1682,7 @@ export function PlanningCalendar({
                 variant="secondary"
                 onClick={() => setCalendarOpen((open) => !open)}
               >
-                {calendarOpen ? "Hide calendar" : "Jump to week"}
+                {calendarOpen ? "Hide calendar" : "Browse calendar"}
               </Button>
             </div>
           </div>
@@ -1666,24 +1697,19 @@ export function PlanningCalendar({
           {calendarOpen && (
             <div className="mt-3 max-h-[min(70vh,32rem)] overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800">
               <p className="mb-3 text-xs text-zinc-500">
-                Pick any day to jump to that week (Mon–Sun). Click the month or year header to zoom
+                Pick any day to jump there (week Mon–Sun). Click the month or year header to zoom
                 out to months or years.
               </p>
               <div className="mx-auto w-full max-w-sm">
                 <DayCalendarPicker
-                  selectedDate={currentWeekStart}
+                  selectedDate={selectedDateKey ?? focusedWeekStart}
                   onSelect={(date) => {
-                    setCalendarOpen(false);
-                    const weekStart = format(
-                      startOfWeek(parseISO(`${date}T12:00:00`), WEEK_OPTS),
-                      "yyyy-MM-dd"
-                    );
-                    void scrollToWeekAsync(weekStart);
+                    jumpToDate(date);
                   }}
                   flaggableDates={activityDates}
                   minDate={null}
                   maxDate={null}
-                  highlightWeekStart={currentWeekStart}
+                  highlightWeekStart={focusedWeekStart}
                 />
               </div>
             </div>
