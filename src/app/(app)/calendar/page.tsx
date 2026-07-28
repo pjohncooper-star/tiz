@@ -254,8 +254,8 @@ export default async function CalendarPage({
         activities.length === 0 &&
         plannedSessions.length === 0 && (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-            No workouts in the loaded date range. Use <strong>Jump to week</strong> and pick your
-            last training day
+            No workouts in the loaded date range. Use <strong>Jump to</strong> date or{" "}
+            <strong>Browse calendar</strong> and pick your last training day
             {maxDate ? ` (${maxDate})` : ""}, or scroll to find planned races.
           </p>
         )}
