@@ -7,6 +7,7 @@ import {
   stravaFetch,
 } from "./client";
 import { fetchStravaActivityLaps, mapStravaLapsToSwimLaps } from "./laps";
+import { pickRunSplitsFromActivity, type StravaSplit } from "./splits";
 
 async function getToken(athleteId: string) {
   const conn = await db.stravaConnection.findUnique({ where: { athleteId } });
@@ -36,6 +37,8 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
     utc_offset?: number;
     moving_time: number;
     distance?: number;
+    splits_metric?: StravaSplit[] | null;
+    splits_standard?: StravaSplit[] | null;
   }>(`/activities/${stravaId}`, token);
 
   const discipline = mapStravaType(activity.type);
@@ -78,6 +81,13 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
       }
     } catch {
       // Laps are optional; open-water swims may rely on velocity streams.
+    }
+  }
+
+  if (discipline === "RUN") {
+    const runSplits = pickRunSplitsFromActivity(activity);
+    if (runSplits) {
+      streams = { ...streams, runSplits: { data: runSplits } };
     }
   }
 
