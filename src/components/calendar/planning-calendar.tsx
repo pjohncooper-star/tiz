@@ -93,6 +93,8 @@ import { computeEasyTizSpread, computeLongPoolDrafts } from "@/lib/plan/calendar
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import {
   calendarStickyOffsetPx,
+  FOCUS_TOP_OFFSET_PX,
+  MOBILE_APP_HEADER_PX,
   pickFirstFullyVisibleWeek,
   scrollElementBelowSticky,
 } from "@/lib/plan/calendar/week-scroll-focus";
@@ -193,6 +195,8 @@ export function PlanningCalendar({
   const [poolOpen, setPoolOpen] = useState(false);
   const [isXl, setIsXl] = useState(false);
   const [editorBandHeightPx, setEditorBandHeightPx] = useState(0);
+  const [toolbarHeightPx, setToolbarHeightPx] = useState(FOCUS_TOP_OFFSET_PX);
+  const [mobileHeaderPx, setMobileHeaderPx] = useState(0);
   // Pool week for the wizard; changing it scrolls the calendar to match.
   const [poolWeekStart, setPoolWeekStart] = useState(
     () => initialScrollWeekStart ?? currentWeekStart
@@ -209,6 +213,7 @@ export function PlanningCalendar({
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const loadPreviousSentinelRef = useRef<HTMLDivElement>(null);
   const editorBandRef = useRef<HTMLDivElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const pendingPoolScrollRef = useRef<string | null>(null);
   const scrolledRef = useRef(false);
   const canLoadPreviousRef = useRef(false);
@@ -229,6 +234,8 @@ export function PlanningCalendar({
   const stickyOffsetPx = calendarStickyOffsetPx({
     editorBandHeightPx,
     includeEditorBand: useWizardPool,
+    toolbarHeightPx,
+    mobileHeaderPx,
   });
   const stickyOffsetPxRef = useRef(stickyOffsetPx);
   stickyOffsetPxRef.current = stickyOffsetPx;
@@ -270,6 +277,26 @@ export function PlanningCalendar({
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setMobileHeaderPx(mq.matches ? MOBILE_APP_HEADER_PX : 0);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useLayoutEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    const measure = () => {
+      setToolbarHeightPx(el.getBoundingClientRect().height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [calendarOpen, poolOpen, useWizardPool, workoutBuilder.open]);
 
   useLayoutEffect(() => {
     if (!useWizardPool) {
@@ -1615,36 +1642,12 @@ export function PlanningCalendar({
       }}
     >
       <div className="w-full space-y-4">
-        <div className="sticky top-0 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-          <div className="flex items-center justify-between gap-3 overflow-x-auto">
-            <div className="flex shrink-0 gap-2">
-              <WorkoutUploadButton onUploaded={() => void handleRefresh()} />
-              <Button type="button" onClick={() => void openApplyDialog()}>
-                Apply template
-              </Button>
-              <Link href="/calendar/template">
-                <Button type="button" variant="secondary">
-                  Edit weekly template
-                </Button>
-              </Link>
-              {!useWizardPool ? (
-                <Button
-                  type="button"
-                  variant={workoutBuilder.open ? "primary" : "secondary"}
-                  onClick={() => workoutBuilder.setOpen((v) => !v)}
-                >
-                  Workout builder
-                </Button>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant={poolOpen ? "primary" : "secondary"}
-                onClick={() => setPoolOpen((open) => !open)}
-              >
-                {poolOpen ? "Hide pool" : "Workout pool"}
-              </Button>
+        <div
+          ref={toolbarRef}
+          className="sticky top-12 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur md:top-0 dark:border-zinc-800 dark:bg-zinc-950/95"
+        >
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -1653,13 +1656,16 @@ export function PlanningCalendar({
                 title="Today"
                 onClick={scrollToToday}
               >
-                <CalendarTodayIcon day={Number(format(new Date(), "d"))} />
+                <span className="inline-flex items-center gap-1.5">
+                  <CalendarTodayIcon day={Number(format(new Date(), "d"))} />
+                  <span className="sm:hidden">Today</span>
+                </span>
               </Button>
-              <label className="flex items-center gap-1.5 text-sm text-zinc-500">
-                <span className="hidden sm:inline">Jump to</span>
+              <label className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-zinc-500 sm:flex-none">
+                <span className="shrink-0">Jump to</span>
                 <Input
                   type="date"
-                  className="w-auto min-w-[9.5rem] py-1.5"
+                  className="min-w-0 flex-1 py-1.5 sm:w-auto sm:min-w-[9.5rem] sm:flex-none"
                   aria-label="Jump to date"
                   value={selectedDateKey ?? focusedWeekStart}
                   onChange={(e) => {
@@ -1668,6 +1674,20 @@ export function PlanningCalendar({
                   }}
                 />
               </label>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCalendarOpen((open) => !open)}
+              >
+                {calendarOpen ? "Hide calendar" : "Browse calendar"}
+              </Button>
+              <Button
+                type="button"
+                variant={poolOpen ? "primary" : "secondary"}
+                onClick={() => setPoolOpen((open) => !open)}
+              >
+                {poolOpen ? "Hide pool" : "Workout pool"}
+              </Button>
               {poolOpen ? (
                 <Button
                   type="button"
@@ -1677,13 +1697,27 @@ export function PlanningCalendar({
                   Next unplanned week
                 </Button>
               ) : null}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setCalendarOpen((open) => !open)}
-              >
-                {calendarOpen ? "Hide calendar" : "Browse calendar"}
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-0.5">
+              <WorkoutUploadButton onUploaded={() => void handleRefresh()} />
+              <Button type="button" className="shrink-0" onClick={() => void openApplyDialog()}>
+                Apply template
               </Button>
+              <Link href="/calendar/template" className="shrink-0">
+                <Button type="button" variant="secondary">
+                  Edit weekly template
+                </Button>
+              </Link>
+              {!useWizardPool ? (
+                <Button
+                  type="button"
+                  className="shrink-0"
+                  variant={workoutBuilder.open ? "primary" : "secondary"}
+                  onClick={() => workoutBuilder.setOpen((v) => !v)}
+                >
+                  Workout builder
+                </Button>
+              ) : null}
             </div>
           </div>
 

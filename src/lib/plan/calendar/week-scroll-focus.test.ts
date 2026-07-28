@@ -27,6 +27,18 @@ describe("calendarStickyOffsetPx", () => {
       FOCUS_TOP_OFFSET_PX
     );
   });
+
+  it("adds measured toolbar and mobile header heights", () => {
+    assert.equal(
+      calendarStickyOffsetPx({
+        editorBandHeightPx: 0,
+        includeEditorBand: false,
+        toolbarHeightPx: 96,
+        mobileHeaderPx: 48,
+      }),
+      144
+    );
+  });
 });
 
 describe("pickFirstFullyVisibleWeek", () => {
