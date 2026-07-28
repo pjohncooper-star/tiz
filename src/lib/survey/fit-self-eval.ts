@@ -1,4 +1,4 @@
-import type { DayQualityFlag } from "@prisma/client";
+import type { DayQualityFlag, SessionRole } from "@prisma/client";
 import { db } from "@/lib/db";
 
 /** Garmin FIT session self-evaluation (workoutFeel 0–100, workoutRpe ×10). */
@@ -47,10 +47,35 @@ export function dayQualityFromWorkoutFeel(feel: number): DayQualityFlag {
   return "GREAT";
 }
 
-export function dayQualityFromRpe(rpe: number): DayQualityFlag {
-  if (rpe <= 4) return "GOOD";
-  if (rpe <= 6) return "ROUGH";
-  return "BAD";
+/**
+ * RPE as unexpected effort vs planned session role — not absolute intensity.
+ * - EASY: strong signal (easy days shouldn't feel hard)
+ * - LONG: light signal (only very high RPE)
+ * - INTENSITY / MODERATE: ignored (hard effort is expected / ambiguous)
+ */
+export function dayQualityFromRoleUnexpectedRpe(
+  rpe: number,
+  sessionRole: SessionRole | null | undefined
+): DayQualityFlag | null {
+  if (!(rpe > 0) || sessionRole == null) return null;
+
+  if (sessionRole === "EASY") {
+    if (rpe >= 7) return "BAD";
+    if (rpe >= 6) return "ROUGH";
+    return null;
+  }
+
+  if (sessionRole === "LONG") {
+    if (rpe >= 9) return "ROUGH";
+    return null;
+  }
+
+  return null;
+}
+
+/** @deprecated Absolute RPE is not a day-quality signal; use role-aware unexpected RPE. */
+export function dayQualityFromRpe(_rpe: number): DayQualityFlag | null {
+  return null;
 }
 
 const DAY_QUALITY_RANK: Record<DayQualityFlag, number> = {
@@ -71,25 +96,55 @@ export function worstDayQuality(
   );
 }
 
+/**
+ * Day quality from feel, optionally worsened by unexpected RPE for the session role.
+ * Absolute RPE alone never sets day quality.
+ */
 export function dayQualityFromFitSelfEval(
   freshness: number | null | undefined,
-  rpe: number | null | undefined
+  rpe: number | null | undefined,
+  sessionRole?: SessionRole | null
 ): DayQualityFlag | null {
   const fromFeel =
     freshness != null ? dayQualityFromWorkoutFeel(freshness) : null;
-  const fromRpe = rpe != null && rpe > 0 ? dayQualityFromRpe(rpe) : null;
-  return worstDayQuality(fromFeel, fromRpe);
+  const fromRoleRpe =
+    rpe != null && rpe > 0
+      ? dayQualityFromRoleUnexpectedRpe(rpe, sessionRole)
+      : null;
+  return worstDayQuality(fromFeel, fromRoleRpe);
 }
 
+/**
+ * Resolve standout quality for signaling: trust stored flag, and only worsen
+ * via role-aware unexpected RPE (never absolute RPE).
+ */
 export function effectiveDayQuality(
   dayQualityFlag: DayQualityFlag | null | undefined,
-  rpe: number | null | undefined
+  rpe: number | null | undefined,
+  sessionRole?: SessionRole | null
 ): DayQualityFlag | null {
-  const fromRpe = rpe != null && rpe > 0 ? dayQualityFromRpe(rpe) : null;
-  return worstDayQuality(dayQualityFlag, fromRpe);
+  const fromRoleRpe =
+    rpe != null && rpe > 0
+      ? dayQualityFromRoleUnexpectedRpe(rpe, sessionRole)
+      : null;
+  return worstDayQuality(dayQualityFlag, fromRoleRpe);
 }
 
-export function mapFitSelfEvalToSurveyFields(selfEval: FitSessionSelfEval): {
+export async function sessionRoleForLinkedActivity(
+  athleteId: string,
+  activityId: string
+): Promise<SessionRole | null> {
+  const planned = await db.plannedSession.findFirst({
+    where: { athleteId, linkedActivityId: activityId },
+    select: { sessionRole: true },
+  });
+  return planned?.sessionRole ?? null;
+}
+
+export function mapFitSelfEvalToSurveyFields(
+  selfEval: FitSessionSelfEval,
+  sessionRole?: SessionRole | null
+): {
   rpe: number | null;
   freshness: number | null;
   dayQualityFlag: DayQualityFlag | null;
@@ -102,7 +157,7 @@ export function mapFitSelfEvalToSurveyFields(selfEval: FitSessionSelfEval): {
 
   if (freshness == null && rpe == null) return null;
 
-  const dayQualityFlag = dayQualityFromFitSelfEval(freshness, rpe);
+  const dayQualityFlag = dayQualityFromFitSelfEval(freshness, rpe, sessionRole);
 
   return { rpe, freshness, dayQualityFlag };
 }
@@ -114,7 +169,8 @@ export async function upsertFitSelfEvalSurvey(
 ) {
   if (!selfEval) return;
 
-  const fields = mapFitSelfEvalToSurveyFields(selfEval);
+  const sessionRole = await sessionRoleForLinkedActivity(athleteId, activityId);
+  const fields = mapFitSelfEvalToSurveyFields(selfEval, sessionRole);
   if (!fields) return;
 
   const existing = await db.surveyResponse.findUnique({ where: { activityId } });
@@ -123,7 +179,11 @@ export async function upsertFitSelfEvalSurvey(
   if (existing) {
     const mergedFreshness = existing.freshness ?? fields.freshness;
     const mergedRpe = existing.rpe ?? fields.rpe;
-    const dayQualityFlag = dayQualityFromFitSelfEval(mergedFreshness, mergedRpe);
+    const dayQualityFlag = dayQualityFromFitSelfEval(
+      mergedFreshness,
+      mergedRpe,
+      sessionRole
+    );
     await db.surveyResponse.update({
       where: { activityId },
       data: {
@@ -154,20 +214,36 @@ export const DAY_QUALITY_LABELS: Record<DayQualityFlag, string> = {
   BAD: "Bad",
 };
 
-/** Re-apply standout mapping for FIT-imported surveys using feel and RPE together. */
+/** Re-apply feel-first (+ role-aware RPE) standout mapping for device/manual surveys. */
 export async function remapFitSurveyStandoutFlags(): Promise<number> {
   const surveys = await db.surveyResponse.findMany({
     where: {
-      source: "FIT_IMPORT",
+      source: { in: ["FIT_IMPORT", "MANUAL"] },
       OR: [{ freshness: { not: null } }, { rpe: { not: null } }],
     },
-    select: { id: true, freshness: true, rpe: true, dayQualityFlag: true },
+    select: {
+      id: true,
+      athleteId: true,
+      activityId: true,
+      freshness: true,
+      rpe: true,
+      dayQualityFlag: true,
+    },
   });
 
   let updated = 0;
   for (const survey of surveys) {
-    const dayQualityFlag = dayQualityFromFitSelfEval(survey.freshness, survey.rpe);
-    if (dayQualityFlag && survey.dayQualityFlag !== dayQualityFlag) {
+    if (!survey.activityId) continue;
+    const sessionRole = await sessionRoleForLinkedActivity(
+      survey.athleteId,
+      survey.activityId
+    );
+    const dayQualityFlag = dayQualityFromFitSelfEval(
+      survey.freshness,
+      survey.rpe,
+      sessionRole
+    );
+    if (dayQualityFlag !== survey.dayQualityFlag) {
       await db.surveyResponse.update({
         where: { id: survey.id },
         data: { dayQualityFlag },

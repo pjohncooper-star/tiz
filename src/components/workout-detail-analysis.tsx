@@ -17,6 +17,7 @@ type WorkoutDetailAnalysisProps = {
     | "structuredSteps"
     | "linkedActivity"
     | "selfEvalConfig"
+    | "sessionRole"
     | "ecoLoadEnabled"
     | "workoutLaps"
     | "swimLaps"
@@ -34,6 +35,7 @@ export function WorkoutDetailAnalysis({ viewModel }: WorkoutDetailAnalysisProps)
     structuredSteps,
     linkedActivity,
     selfEvalConfig,
+    sessionRole,
     ecoLoadEnabled,
     workoutLaps,
     swimLaps,
@@ -120,6 +122,7 @@ export function WorkoutDetailAnalysis({ viewModel }: WorkoutDetailAnalysisProps)
         {linkedActivity ? (
           <ActivitySelfEvalEditor
             activityId={linkedActivity.id}
+            sessionRole={sessionRole}
             initialSurvey={
               linkedActivity.surveyResponse
                 ? {
