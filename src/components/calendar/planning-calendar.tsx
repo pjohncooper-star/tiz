@@ -280,7 +280,14 @@ export function PlanningCalendar({
 
   useLayoutEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
-    const sync = () => setMobileHeaderPx(mq.matches ? MOBILE_APP_HEADER_PX : 0);
+    const sync = () => {
+      const isMobile = mq.matches;
+      setMobileHeaderPx(isMobile ? MOBILE_APP_HEADER_PX : 0);
+      if (isMobile) {
+        setPoolOpen(false);
+        setCalendarOpen(false);
+      }
+    };
     sync();
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
@@ -1644,28 +1651,28 @@ export function PlanningCalendar({
       <div className="w-full space-y-4">
         <div
           ref={toolbarRef}
-          className="sticky top-12 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur md:top-0 dark:border-zinc-800 dark:bg-zinc-950/95"
+          className="sticky top-12 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-2 backdrop-blur md:top-0 md:py-3 dark:border-zinc-800 dark:bg-zinc-950/95"
         >
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 type="button"
                 variant="secondary"
-                className="px-2.5"
+                className="shrink-0 px-2.5"
                 aria-label="Today"
                 title="Today"
                 onClick={scrollToToday}
               >
                 <span className="inline-flex items-center gap-1.5">
                   <CalendarTodayIcon day={Number(format(new Date(), "d"))} />
-                  <span className="sm:hidden">Today</span>
+                  <span>Today</span>
                 </span>
               </Button>
-              <label className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-zinc-500 sm:flex-none">
+              <label className="flex min-w-0 flex-1 items-center gap-1.5 text-sm text-zinc-500 md:flex-none">
                 <span className="shrink-0">Jump to</span>
                 <Input
                   type="date"
-                  className="min-w-0 flex-1 py-1.5 sm:w-auto sm:min-w-[9.5rem] sm:flex-none"
+                  className="min-w-0 flex-1 py-1.5 md:w-auto md:min-w-[9.5rem] md:flex-none"
                   aria-label="Jump to date"
                   value={selectedDateKey ?? focusedWeekStart}
                   onChange={(e) => {
@@ -1674,6 +1681,8 @@ export function PlanningCalendar({
                   }}
                 />
               </label>
+            </div>
+            <div className="hidden flex-wrap items-center gap-2 md:flex">
               <Button
                 type="button"
                 variant="secondary"
@@ -1698,7 +1707,7 @@ export function PlanningCalendar({
                 </Button>
               ) : null}
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-0.5">
+            <div className="hidden gap-2 overflow-x-auto pb-0.5 md:flex">
               <WorkoutUploadButton onUploaded={() => void handleRefresh()} />
               <Button type="button" className="shrink-0" onClick={() => void openApplyDialog()}>
                 Apply template
@@ -1722,14 +1731,16 @@ export function PlanningCalendar({
           </div>
 
           {workoutBuilder.open && !useWizardPool ? (
-            <WorkoutBuilderPane
-              builder={workoutBuilder}
-              onClose={() => workoutBuilder.setOpen(false)}
-            />
+            <div className="hidden md:block">
+              <WorkoutBuilderPane
+                builder={workoutBuilder}
+                onClose={() => workoutBuilder.setOpen(false)}
+              />
+            </div>
           ) : null}
 
-          {calendarOpen && (
-            <div className="mt-3 max-h-[min(70vh,32rem)] overflow-y-auto border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          {calendarOpen ? (
+            <div className="mt-3 hidden max-h-[min(70vh,32rem)] overflow-y-auto border-t border-zinc-200 pt-3 md:block dark:border-zinc-800">
               <p className="mb-3 text-xs text-zinc-500">
                 Pick any day to jump there (week Mon–Sun). Click the month or year header to zoom
                 out to months or years.
@@ -1747,7 +1758,7 @@ export function PlanningCalendar({
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         {useWizardPool && poolOpen ? (
