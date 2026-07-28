@@ -45,6 +45,7 @@ export function mergeActivityStreams(
     distance: pick(incoming.distance, prev.distance),
     velocityTime: pick(incoming.velocityTime, prev.velocityTime),
     swimLaps: pick(incoming.swimLaps, prev.swimLaps),
+    runSplits: pick(incoming.runSplits, prev.runSplits),
     workoutLaps: pick(incoming.workoutLaps, prev.workoutLaps),
     meta: { ...prev.meta, ...incoming.meta },
   };
@@ -59,6 +60,7 @@ export function incomingHasStreamData(streams: NormalizedStreams): boolean {
     seriesHasData(streams.cadence) ||
     seriesHasData(streams.distance) ||
     seriesHasData(streams.workoutLaps) ||
-    seriesHasData(streams.swimLaps)
+    seriesHasData(streams.swimLaps) ||
+    seriesHasData(streams.runSplits)
   );
 }

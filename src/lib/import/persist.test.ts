@@ -51,4 +51,32 @@ describe("mergeActivityStreams", () => {
     assert.deepEqual(merged.watts?.data, [150, 160, 170]);
     assert.equal(merged.workoutLaps?.data?.length, 1);
   });
+
+  it("merges Strava run splits with grade-adjusted speed", () => {
+    const existing: NormalizedStreams = {
+      time: { data: [0, 1] },
+      velocity: { data: [3.2, 3.3] },
+    };
+    const incoming: NormalizedStreams = {
+      runSplits: {
+        data: [
+          {
+            split: 1,
+            distanceMeters: 1000,
+            elapsedTimeSec: 300,
+            movingTimeSec: 295,
+            averageSpeedMps: 3.39,
+            averageGradeAdjustedSpeedMps: 3.5,
+            elevationDifferenceMeters: 8,
+            unit: "metric",
+          },
+        ],
+      },
+    };
+
+    const merged = mergeActivityStreams(existing, incoming);
+    assert.deepEqual(merged.time?.data, [0, 1]);
+    assert.equal(merged.runSplits?.data?.length, 1);
+    assert.equal(merged.runSplits?.data?.[0]?.averageGradeAdjustedSpeedMps, 3.5);
+  });
 });

@@ -5,6 +5,7 @@ import type {
   ThresholdProfile,
 } from "@prisma/client";
 import type { SwimLapPoint } from "@/lib/import/swim-laps";
+import type { RunSplitPoint } from "@/lib/strava/splits";
 import { velocityToPaceSecPer100m, velocityToPaceSecPerKm } from "@/lib/units/pace";
 import { parseZoneBoundaries } from "./parse-boundaries";
 import { resolveSampleDurations } from "./sample-time";
@@ -38,6 +39,11 @@ export type NormalizedStreams = {
   velocityTime?: StreamSeries;
   /** Per-lap swim timeline (charts + pace zone calculation). */
   swimLaps?: { data: SwimLapPoint[] };
+  /**
+   * Strava run km/mi splits with optional grade-adjusted average speed (GAP).
+   * Interval-level only — not a stream and not a workout summary field.
+   */
+  runSplits?: { data: RunSplitPoint[] };
   /** Workout step alignment from device laps (Garmin wktStepIndex). */
   workoutLaps?: { data: WorkoutExecutionLap[] };
   watts?: StreamSeries;
