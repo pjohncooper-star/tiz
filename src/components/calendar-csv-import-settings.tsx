@@ -6,6 +6,7 @@ import type { CsvImportRowError } from "@/lib/plan/csv-import";
 
 type ImportResponse = {
   created?: number;
+  structured?: number;
   error?: string;
   errors?: CsvImportRowError[];
 };
@@ -36,7 +37,12 @@ export function CalendarCsvImportSettings() {
         return;
       }
 
-      setMessage(`Imported ${data.created ?? 0} planned session(s) to your calendar.`);
+      setMessage(
+        `Imported ${data.created ?? 0} planned session(s) to your calendar` +
+          (data.structured
+            ? ` (${data.structured} with structured workouts).`
+            : ".")
+      );
       setErrors([]);
     } catch {
       setMessage("Import failed");
@@ -50,9 +56,10 @@ export function CalendarCsvImportSettings() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-zinc-500">
-        Import planned sessions by date onto your calendar. Distances and paces use your
-        Units settings (km/mi for run and bike; m/yd for swim based on pool size). Sessions
-        are added as flexible calendar sessions and do not change your season plan.
+        Import planned sessions by date onto your calendar. Leave step columns blank for
+        skeleton sessions, or add step/repeat rows for a simplified structured workout.
+        Distances and paces use your Units settings. Sessions are added as flexible calendar
+        sessions and do not change your season plan.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -102,8 +109,10 @@ export function CalendarCsvImportSettings() {
         </ul>
       ) : null}
       <p className="text-xs text-zinc-500">
-        Columns: date, discipline, title, duration_min, distance, pace_or_speed, notes,
-        role, pool. Pace is mm:ss for run/swim; speed is km/h or mph for bike.
+        Session columns: date, discipline, title, duration_min, distance, pace_or_speed,
+        notes, role, pool. Step columns (optional): step, kind, intensity, duration_type,
+        duration, zone, signal, repeat, step_notes. Pace is mm:ss for run/swim; speed is km/h
+        or mph for bike. Time step durations are minutes.
       </p>
     </div>
   );
