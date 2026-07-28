@@ -164,10 +164,30 @@ export async function generateV0Insights(
     include: { activity: true },
   });
 
+  const activityIds = flagged
+    .map((f) => f.activityId)
+    .filter((id): id is string => id != null);
+  const linkedRoles =
+    activityIds.length > 0
+      ? await db.plannedSession.findMany({
+          where: { athleteId, linkedActivityId: { in: activityIds } },
+          select: { linkedActivityId: true, sessionRole: true },
+        })
+      : [];
+  const roleByActivityId = new Map(
+    linkedRoles
+      .filter((row) => row.linkedActivityId != null)
+      .map((row) => [row.linkedActivityId!, row.sessionRole])
+  );
+
   const withQuality = flagged
     .map((f) => ({
       ...f,
-      resolvedQuality: effectiveDayQuality(f.dayQualityFlag, f.rpe),
+      resolvedQuality: effectiveDayQuality(
+        f.dayQualityFlag,
+        f.rpe,
+        f.activityId ? roleByActivityId.get(f.activityId) ?? null : null
+      ),
     }))
     .filter((f) => f.resolvedQuality != null);
 

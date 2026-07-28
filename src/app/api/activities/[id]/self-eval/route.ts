@@ -3,7 +3,7 @@ import type { DayQualityFlag } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { dayQualityFromFitSelfEval } from "@/lib/survey/fit-self-eval";
+import { dayQualityFromFitSelfEval, sessionRoleForLinkedActivity } from "@/lib/survey/fit-self-eval";
 import {
   buildSurveyUpdateFromValues,
   parseSelfEvalConfig,
@@ -79,7 +79,12 @@ export async function PUT(request: Request, context: RouteContext) {
   const existing = await db.surveyResponse.findUnique({ where: { activityId } });
   const mergedFreshness = update.freshness !== undefined ? update.freshness : existing?.freshness ?? null;
   const mergedRpe = update.rpe !== undefined ? update.rpe : existing?.rpe ?? null;
-  const dayQualityFlag = dayQualityFromFitSelfEval(mergedFreshness, mergedRpe);
+  const sessionRole = await sessionRoleForLinkedActivity(athleteId, activityId);
+  const dayQualityFlag = dayQualityFromFitSelfEval(
+    mergedFreshness,
+    mergedRpe,
+    sessionRole
+  );
 
   const data = surveyFieldsForDb({
     ...update,

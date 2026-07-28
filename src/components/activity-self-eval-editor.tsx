@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { DayQualityFlag, Prisma, SurveySource } from "@prisma/client";
+import type { DayQualityFlag, Prisma, SessionRole, SurveySource } from "@prisma/client";
 import { Button, Label, SegmentedControl, Select } from "@/components/ui";
 import {
   DAY_QUALITY_LABELS,
@@ -32,6 +32,7 @@ type ActivitySelfEvalEditorProps = {
   activityId: string;
   initialSurvey: ActivitySelfEvalSurvey | null;
   fieldConfig: SelfEvalConfig;
+  sessionRole?: SessionRole | null;
 };
 
 function feelBucketValue(freshness: number | null): string {
@@ -80,6 +81,7 @@ export function ActivitySelfEvalEditor({
   activityId,
   initialSurvey,
   fieldConfig,
+  sessionRole = null,
 }: ActivitySelfEvalEditorProps) {
   const initialValues = useMemo(() => {
     if (!initialSurvey) {
@@ -98,7 +100,9 @@ export function ActivitySelfEvalEditor({
     typeof values.freshness === "number" ? values.freshness : null;
   const rpe = typeof values.rpe === "number" ? values.rpe : null;
   const derivedDayQuality =
-    freshness != null || rpe != null ? dayQualityFromFitSelfEval(freshness, rpe) : null;
+    freshness != null || rpe != null
+      ? dayQualityFromFitSelfEval(freshness, rpe, sessionRole)
+      : null;
 
   const dirty = fieldConfig.fields.some(
     (field) => values[field.id] !== savedValues[field.id]
@@ -220,7 +224,8 @@ export function ActivitySelfEvalEditor({
             {DAY_QUALITY_LABELS[derivedDayQuality]}
           </p>
           <p className="mt-1 text-xs text-zinc-500">
-            Derived from how it felt and perceived effort
+            Based on how it felt. High RPE can lower quality on easy days, and only very high RPE
+            on long days — not on intensity or moderate sessions.
           </p>
         </div>
       ) : null}
