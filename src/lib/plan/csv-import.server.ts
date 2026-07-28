@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import {
   buildDisciplineSettings,
@@ -11,6 +12,7 @@ import {
   type CsvImportRowError,
   type ParsedPlannedSessionImport,
 } from "@/lib/plan/csv-import";
+import { serializeWorkoutTree } from "@/lib/workout/workout-tree";
 
 export class PlannedSessionsCsvImportError extends Error {
   status: number;
@@ -61,7 +63,11 @@ function toCreateData(athleteId: string, session: ParsedPlannedSessionImport) {
 export async function importPlannedSessionsCsv(
   athleteId: string,
   csvText: string
-): Promise<{ created: number; sessions: ParsedPlannedSessionImport[] }> {
+): Promise<{
+  created: number;
+  structured: number;
+  sessions: ParsedPlannedSessionImport[];
+}> {
   const byteLength = new TextEncoder().encode(csvText).byteLength;
   if (byteLength > MAX_PLANNED_SESSION_CSV_BYTES) {
     throw new PlannedSessionsCsvImportError(
@@ -76,9 +82,31 @@ export async function importPlannedSessionsCsv(
     throw new PlannedSessionsCsvImportError("CSV validation failed", 400, parsed.errors);
   }
 
-  await db.plannedSession.createMany({
-    data: parsed.sessions.map((session) => toCreateData(athleteId, session)),
+  let structured = 0;
+  await db.$transaction(async (tx) => {
+    for (const session of parsed.sessions) {
+      const created = await tx.plannedSession.create({
+        data: toCreateData(athleteId, session),
+      });
+      if (session.workoutTree) {
+        await tx.structuredWorkout.create({
+          data: {
+            athleteId,
+            plannedSessionId: created.id,
+            discipline: session.discipline,
+            steps: serializeWorkoutTree(
+              session.workoutTree
+            ) as Prisma.InputJsonValue,
+          },
+        });
+        structured += 1;
+      }
+    }
   });
 
-  return { created: parsed.sessions.length, sessions: parsed.sessions };
+  return {
+    created: parsed.sessions.length,
+    structured,
+    sessions: parsed.sessions,
+  };
 }
