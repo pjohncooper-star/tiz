@@ -118,6 +118,39 @@ describe("resolveSessionShadingTone", () => {
     );
     assert.equal(tone, null);
   });
+
+  it("treats unplanned completed swim (no prescription) as green, not red", () => {
+    const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+    const tone = resolveSessionShadingTone(
+      session({
+        scheduledDate: yesterday,
+        discipline: "SWIM",
+        plannedMinutes: 0,
+        totalMinutes: 0,
+        distanceMeters: null,
+        zoneMinutes: {},
+        linkedActivity: linkedActivity({
+          discipline: "SWIM",
+          durationSeconds: 3174,
+          elapsedSeconds: 3900,
+          movingSeconds: 3174,
+          distanceMeters: 3500,
+          zoneMinutes: 65,
+        }),
+      }),
+      { ...DEFAULT_WORKOUT_SHADING, SWIM: "TIZ" }
+    );
+    assert.equal(tone, "green");
+  });
+
+  it("keeps past planned sessions without a linked activity red", () => {
+    const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+    const tone = resolveSessionShadingTone(
+      session({ scheduledDate: yesterday, plannedMinutes: 60 }),
+      { ...DEFAULT_WORKOUT_SHADING, RUN: "DURATION" }
+    );
+    assert.equal(tone, "red");
+  });
 });
 
 describe("resolveCompletedMetricPillTone", () => {

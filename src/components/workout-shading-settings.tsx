@@ -102,8 +102,8 @@ export function WorkoutShadingSettingsPanel({
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">
         Shade past planned workout cards on the calendar by comparing planned vs completed metrics.
-        Within 10% is green, within 25% is amber, outside 25% or not completed is red. Off uses
-        gray for past workouts.
+        Within 10% is green, within 25% is amber, outside 25% or not completed is red. Completed
+        work with no planned target stays green. Off uses gray for past workouts.
       </p>
       <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
         <Label>Apply shading to</Label>

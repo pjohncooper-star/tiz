@@ -211,8 +211,9 @@ export function metricComparisonTone(
   if (completed == null || !Number.isFinite(completed) || completed < 0) {
     return "red";
   }
+  // No prescription to miss against (e.g. unplanned / blank linked session).
   if (planned == null || !Number.isFinite(planned) || planned <= 0) {
-    return completed <= 0 ? "green" : "red";
+    return "green";
   }
 
   const absDiff = Math.abs(planned - completed);

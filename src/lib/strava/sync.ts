@@ -35,6 +35,7 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
     timezone?: string;
     utc_offset?: number;
     moving_time: number;
+    elapsed_time: number;
     distance?: number;
   }>(`/activities/${stravaId}`, token);
 
@@ -86,6 +87,25 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
       ? Math.round(activity.utc_offset)
       : null;
 
+  const elapsedSeconds =
+    typeof activity.elapsed_time === "number" && activity.elapsed_time > 0
+      ? activity.elapsed_time
+      : activity.moving_time;
+  const movingSeconds =
+    typeof activity.moving_time === "number" && activity.moving_time > 0
+      ? activity.moving_time
+      : null;
+
+  // Persist wall-clock elapsed so swim TiZ (rest → Z1) can budget against it.
+  streams = {
+    ...streams,
+    meta: {
+      ...streams.meta,
+      elapsedSeconds,
+      ...(movingSeconds != null ? { movingSeconds } : {}),
+    },
+  };
+
   const synced = await upsertSyncedActivity(
     athleteId,
     {
@@ -93,6 +113,7 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
       discipline,
       startTime: new Date(activity.start_date),
       utcOffsetSeconds,
+      // Keep moving time for activity matching; elapsed lives on streams.meta.
       durationSeconds: activity.moving_time,
       distanceMeters: activity.distance,
       externalId: String(activity.id),

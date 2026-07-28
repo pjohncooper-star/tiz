@@ -56,6 +56,14 @@ function movingSecondsFromSwimLaps(streams: NormalizedStreams): number | null {
   return active.reduce((sum, l) => sum + l.durationSec, 0);
 }
 
+/** Active + rest lap time — used when Strava/meta elapsed was not stored. */
+function elapsedSecondsFromSwimLaps(streams: NormalizedStreams): number | null {
+  const laps = streams.swimLaps?.data;
+  if (!laps?.length) return null;
+  const total = laps.reduce((sum, l) => sum + (l.durationSec > 0 ? l.durationSec : 0), 0);
+  return total > 0 ? total : null;
+}
+
 function movingSecondsFromVelocity(
   streams: NormalizedStreams,
   elapsedSeconds: number
@@ -96,6 +104,11 @@ function resolveElapsedSeconds(
 ): number {
   const meta = streams?.meta?.elapsedSeconds;
   if (meta != null && meta > 0) return Math.round(meta);
+  // Legacy Strava swims stored moving_time as durationSeconds; recover elapsed from laps.
+  if (streams) {
+    const fromSwim = elapsedSecondsFromSwimLaps(streams);
+    if (fromSwim != null) return Math.round(fromSwim);
+  }
   return durationSeconds;
 }
 
