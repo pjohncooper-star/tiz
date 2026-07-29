@@ -94,8 +94,10 @@ import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import {
   calendarStickyOffsetPx,
   FOCUS_TOP_OFFSET_PX,
+  isCalendarWeekRowLayout,
   MOBILE_APP_HEADER_PX,
   pickFirstFullyVisibleWeek,
+  scrollDateBelowSticky,
   scrollElementBelowSticky,
 } from "@/lib/plan/calendar/week-scroll-focus";
 
@@ -793,16 +795,60 @@ export function PlanningCalendar({
     : null;
 
   const scrollToWeekAsync = useCallback(
-    async (weekStart: string) => {
+    async (weekStart: string, behavior: ScrollBehavior = "smooth") => {
       setFocusedWeek(weekStart, { lockMs: 1200 });
       const scroll = () => {
         const el = document.querySelector(`[data-week-start="${weekStart}"]`);
         if (!(el instanceof HTMLElement)) return;
-        scrollElementBelowSticky(el, stickyOffsetPxRef.current, "smooth");
+        scrollElementBelowSticky(el, stickyOffsetPxRef.current, behavior);
       };
 
       if (sortedWeeks.includes(weekStart)) {
         scroll();
+        return;
+      }
+
+      const from = weekStart;
+      const to = format(endOfWeek(parseISO(`${weekStart}T12:00:00`), WEEK_OPTS), "yyyy-MM-dd");
+
+      try {
+        const res = await fetch(
+          `/api/plan/calendar/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        );
+        if (res.ok) {
+          const next: CalendarRangeData = await res.json();
+          setData((prev) => mergeRangeData(prev, next));
+          requestAnimationFrame(() => scroll());
+        }
+      } catch {
+        // ignore
+      }
+    },
+    [setFocusedWeek, sortedWeeks]
+  );
+
+  const scrollToDateAsync = useCallback(
+    async (dateKey: string, behavior: ScrollBehavior = "smooth") => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
+      const weekStart = format(
+        startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS),
+        "yyyy-MM-dd"
+      );
+      setFocusedWeek(weekStart, { lockMs: 1200 });
+      setSelectedDateKey(dateKey);
+
+      const scroll = () => {
+        if (scrollDateBelowSticky(dateKey, stickyOffsetPxRef.current, behavior)) {
+          return;
+        }
+        const el = document.querySelector(`[data-week-start="${weekStart}"]`);
+        if (el instanceof HTMLElement) {
+          scrollElementBelowSticky(el, stickyOffsetPxRef.current, behavior);
+        }
+      };
+
+      if (sortedWeeks.includes(weekStart)) {
+        requestAnimationFrame(() => scroll());
         return;
       }
 
@@ -923,7 +969,22 @@ export function PlanningCalendar({
     if (scrolledRef.current) return;
     scrolledRef.current = true;
 
+    const stackedDays = !isCalendarWeekRowLayout();
+    const todayKey = format(new Date(), "yyyy-MM-dd");
     const targetWeek = initialScrollWeekStart ?? currentWeekStart;
+
+    const finish = () => {
+      requestAnimationFrame(() => {
+        canLoadPreviousRef.current = true;
+      });
+    };
+
+    // Narrow layout stacks days vertically — land on today (or Monday of ?week=).
+    if (stackedDays) {
+      const landDate = initialScrollWeekStart ? initialScrollWeekStart : todayKey;
+      void scrollToDateAsync(landDate, "auto").finally(finish);
+      return;
+    }
 
     const scrollToTarget = () => {
       const byWeek = document.querySelector(`[data-week-start="${targetWeek}"]`);
@@ -940,19 +1001,13 @@ export function PlanningCalendar({
     };
 
     if (initialScrollWeekStart && !sortedWeeks.includes(initialScrollWeekStart)) {
-      void scrollToWeekAsync(initialScrollWeekStart).finally(() => {
-        requestAnimationFrame(() => {
-          canLoadPreviousRef.current = true;
-        });
-      });
+      void scrollToWeekAsync(initialScrollWeekStart, "auto").finally(finish);
       return;
     }
 
     scrollToTarget();
-    requestAnimationFrame(() => {
-      canLoadPreviousRef.current = true;
-    });
-  }, [currentWeekStart, initialScrollWeekStart, scrollToWeekAsync, sortedWeeks]);
+    finish();
+  }, [currentWeekStart, initialScrollWeekStart, scrollToDateAsync, scrollToWeekAsync, sortedWeeks]);
 
   const earliestLoadableWeek = useMemo(() => {
     if (minDate) {
@@ -1489,6 +1544,16 @@ export function PlanningCalendar({
       startOfWeek(parseISO(`${dateKey}T12:00:00`), WEEK_OPTS),
       "yyyy-MM-dd"
     );
+    // Stacked day list: scroll the day into view (not the week's Monday).
+    if (!isCalendarWeekRowLayout()) {
+      if (poolOpen) {
+        pendingPoolScrollRef.current = null;
+        setPoolWeekStart(weekStart);
+        void ensurePoolWeekLoaded(weekStart);
+      }
+      void scrollToDateAsync(dateKey);
+      return;
+    }
     if (poolOpen) {
       handlePoolWeekChange(weekStart);
     } else {

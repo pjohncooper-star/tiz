@@ -124,7 +124,7 @@ export function CalendarDayColumn({
   const groupedSessions = groupPlannedSessions(sessions);
 
   return (
-    <div className={weekDayColumnClass(isSelected || addOpen)}>
+    <div className={weekDayColumnClass(isSelected || addOpen)} data-date-key={dateKey}>
       <div
         ref={setNodeRef}
         className={`flex h-full min-h-[8rem] flex-col rounded-md border p-2 transition ${

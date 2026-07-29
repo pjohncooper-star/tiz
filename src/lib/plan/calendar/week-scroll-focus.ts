@@ -78,3 +78,35 @@ export function scrollElementBelowSticky(
   const top = window.scrollY + el.getBoundingClientRect().top - stickyOffset;
   window.scrollTo({ top: Math.max(0, top), behavior });
 }
+
+/**
+ * Sticky week title height inside a week section, if present.
+ * Used when scrolling to a day column in the stacked (narrow) day list.
+ */
+export function stickyWeekHeaderHeightPx(fromEl: Element): number {
+  const weekSection = fromEl.closest("[data-week-start]");
+  const header = weekSection?.querySelector("h2");
+  if (!(header instanceof HTMLElement)) return 0;
+  return header.getBoundingClientRect().height;
+}
+
+/** Scroll a day column so it is the first full day below sticky chrome + week title. */
+export function scrollDateBelowSticky(
+  dateKey: string,
+  stickyOffset: number,
+  behavior: ScrollBehavior = "smooth"
+): boolean {
+  const dayEl = document.querySelector(`[data-date-key="${dateKey}"]`);
+  if (!(dayEl instanceof HTMLElement)) return false;
+  scrollElementBelowSticky(
+    dayEl,
+    stickyOffset + stickyWeekHeaderHeightPx(dayEl),
+    behavior
+  );
+  return true;
+}
+
+/** xl and up: horizontal week row. Below xl: vertical day stack. */
+export function isCalendarWeekRowLayout(): boolean {
+  return window.matchMedia("(min-width: 1280px)").matches;
+}
