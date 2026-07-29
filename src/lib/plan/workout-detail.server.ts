@@ -80,7 +80,7 @@ export type WorkoutDetailViewModel = {
   prescriptionSignal: SignalType | null;
   sessionRole: import("@prisma/client").SessionRole;
   tizSignalOverride: SignalType | null;
-  sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE";
+  sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
   workoutSource: {
     folder: { id: string; name: string; folderKind: string } | null;
     workoutTemplate: { id: string; name: string; sortOrder: number | null };
@@ -101,7 +101,7 @@ export function detectWorkoutDetailMode(input: {
   hasPlannedMetrics: boolean;
   hasNotes: boolean;
   isDefaultTitle: boolean;
-  source: "FLEXIBLE" | "TEMPLATE" | "RACE";
+  source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
 }): WorkoutDetailMode {
   const hasPlannedContent =
     input.hasStructuredWorkout ||

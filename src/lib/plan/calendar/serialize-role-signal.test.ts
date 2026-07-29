@@ -35,6 +35,7 @@ function sessionRow(
     targetPaceSeconds: null,
     poolSize: null,
     source: "FLEXIBLE" as const,
+    trainingPlanId: null,
     multisportGroupId: null,
     sessionIndex: null,
     estimatedDurationMinutes: 45,

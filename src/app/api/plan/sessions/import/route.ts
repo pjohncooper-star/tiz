@@ -40,6 +40,7 @@ export async function POST(request: Request) {
     const result = await importPlannedSessionsCsv(athleteId, text);
     return NextResponse.json({
       created: result.created,
+      structured: result.structured,
       sessions: result.sessions.map((s) => ({
         scheduledDate: s.scheduledDateKey,
         discipline: s.discipline,
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
         estimatedDurationMinutes: s.estimatedDurationMinutes,
         distanceMeters: s.distanceMeters,
         sessionRole: s.sessionRole,
+        hasStructuredWorkout: Boolean(s.workoutTree),
       })),
     });
   } catch (e) {

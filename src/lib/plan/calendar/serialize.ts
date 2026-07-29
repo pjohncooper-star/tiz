@@ -67,7 +67,7 @@ export type CalendarPlannedSession = {
   stepCount: number;
   metricsSummary: string | null;
   zoneAllocationMissing: boolean;
-  source: "FLEXIBLE" | "TEMPLATE" | "RACE";
+  source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
   poolSize: PoolSize | null;
   multisportGroupId: string | null;
   sessionIndex: number | null;
