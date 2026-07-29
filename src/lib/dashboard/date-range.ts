@@ -57,6 +57,8 @@ function addDaysKey(dateKey: string, days: number): string {
 }
 
 export function localTodayKey(now = new Date()): string {
+  // Prefer Intl with an explicit zone when available; this helper remains for
+  // non-request callers. Dashboard/calendar should use requestTodayKey().
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");

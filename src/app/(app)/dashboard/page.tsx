@@ -12,11 +12,11 @@ import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import {
   cycleBoundsFromSeason,
-  localTodayKey,
   type CycleRangeBounds,
   type SeasonRangeBounds,
 } from "@/lib/dashboard/date-range";
 import { endDateKey, formatDateKey, parseDateKey } from "@/lib/dates";
+import { requestTodayKey } from "@/lib/timezone";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
@@ -48,7 +48,7 @@ export default async function DashboardPage() {
     athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
   );
 
-  const todayKey = localTodayKey();
+  const todayKey = await requestTodayKey();
   const yesterdayKey = format(subDays(parseDateKey(todayKey), 1), "yyyy-MM-dd");
   const tomorrowKey = format(addDays(parseDateKey(todayKey), 1), "yyyy-MM-dd");
   const fromDate = parseDateKey(yesterdayKey);

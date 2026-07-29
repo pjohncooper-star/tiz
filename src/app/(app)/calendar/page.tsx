@@ -18,10 +18,12 @@ import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import {
   calendarDateFromDb,
   endDateKey,
+  mondayWeekStartKey,
   normalizeWeekStart,
   parseDateKey,
   WEEK_OPTS,
 } from "@/lib/dates";
+import { requestTodayKey } from "@/lib/timezone";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { buildWorkoutShadingSettings, parseWorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import { isPlanningCalendarEnabled } from "@/lib/features";
@@ -61,7 +63,8 @@ export default async function CalendarPage({
   const scrollWeekStart =
     weekParam && DATE_KEY.test(weekParam) ? normalizeWeekStart(weekParam) : null;
 
-  const currentWeekStart = startOfWeek(new Date(), WEEK_OPTS);
+  const todayKey = await requestTodayKey();
+  const currentWeekStart = parseDateKey(mondayWeekStartKey(todayKey));
 
   const [activityBounds, plannedBounds, totalActivityCount] = await Promise.all([
     db.syncedActivity.aggregate({
