@@ -1,48 +1,100 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, Input, Label, SegmentedControl } from "@/components/ui";
 import type { CsvImportRowError } from "@/lib/plan/csv-import";
+
+type ImportMode = "calendar" | "plan";
 
 type ImportResponse = {
   created?: number;
   structured?: number;
+  plan?: {
+    id: string;
+    name: string;
+    sessionCount: number;
+    durationDays: number;
+    gapWarning?: boolean;
+    maxGapDays?: number;
+  };
   error?: string;
   errors?: CsvImportRowError[];
+  code?: string;
 };
 
-export function CalendarCsvImportSettings() {
+type CalendarCsvImportSettingsProps = {
+  onPlanSaved?: () => void;
+};
+
+export function CalendarCsvImportSettings({
+  onPlanSaved,
+}: CalendarCsvImportSettingsProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<ImportMode>("calendar");
+  const [planName, setPlanName] = useState("");
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<CsvImportRowError[]>([]);
+  const [pendingLargeGapFile, setPendingLargeGapFile] = useState<File | null>(null);
 
-  async function handleFile(file: File) {
+  async function handleFile(file: File, confirmLargeGaps = false) {
     setUploading(true);
     setMessage(null);
     setErrors([]);
+    setPendingLargeGapFile(null);
 
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch("/api/plan/sessions/import", {
-        method: "POST",
-        body: form,
-      });
+
+      if (mode === "plan") {
+        const name = planName.trim();
+        if (!name) {
+          setMessage("Enter a plan name before uploading");
+          setUploading(false);
+          if (inputRef.current) inputRef.current.value = "";
+          return;
+        }
+        form.append("name", name);
+        if (confirmLargeGaps) form.append("confirmLargeGaps", "true");
+      }
+
+      const res = await fetch(
+        mode === "plan" ? "/api/plan/training-plans" : "/api/plan/sessions/import",
+        { method: "POST", body: form }
+      );
       const data = (await res.json().catch(() => ({}))) as ImportResponse;
 
       if (!res.ok) {
+        if (mode === "plan" && data.code === "LARGE_GAP") {
+          setPendingLargeGapFile(file);
+          setMessage(data.error ?? "Large gap between sessions");
+          setErrors([]);
+          return;
+        }
         setMessage(data.error ?? "Import failed");
         setErrors(Array.isArray(data.errors) ? data.errors.slice(0, 20) : []);
         return;
       }
 
-      setMessage(
-        `Imported ${data.created ?? 0} planned session(s) to your calendar` +
-          (data.structured
-            ? ` (${data.structured} with structured workouts).`
-            : ".")
-      );
+      if (mode === "plan" && data.plan) {
+        const gapNote =
+          data.plan.gapWarning && data.plan.maxGapDays
+            ? ` Note: largest gap between sessions is ${data.plan.maxGapDays} days.`
+            : "";
+        setMessage(
+          `Saved training plan “${data.plan.name}” (${data.plan.sessionCount} sessions, ${data.plan.durationDays} days).${gapNote}`
+        );
+        setPlanName("");
+        onPlanSaved?.();
+      } else {
+        setMessage(
+          `Imported ${data.created ?? 0} planned session(s) to your calendar` +
+            (data.structured
+              ? ` (${data.structured} with structured workouts).`
+              : ".")
+        );
+      }
       setErrors([]);
     } catch {
       setMessage("Import failed");
@@ -56,11 +108,30 @@ export function CalendarCsvImportSettings() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-zinc-500">
-        Import planned sessions by date onto your calendar. Leave step columns blank for
-        skeleton sessions, or add step/repeat rows for a simplified structured workout.
-        Distances and paces use your Units settings. Sessions are added as flexible calendar
-        sessions and do not change your season plan.
+        Import sessions from CSV. Upload onto the calendar by date, or save as a reusable
+        training plan (relative dates from the first session). Leave step columns blank for
+        skeletons, or add step/repeat rows for structured workouts. Distances and paces use
+        your Units settings.
       </p>
+      <SegmentedControl
+        value={mode}
+        onChange={setMode}
+        options={[
+          { value: "calendar", label: "Upload to calendar" },
+          { value: "plan", label: "Save as training plan" },
+        ]}
+      />
+      {mode === "plan" ? (
+        <div>
+          <Label>Plan name</Label>
+          <Input
+            value={planName}
+            onChange={(e) => setPlanName(e.target.value)}
+            placeholder="e.g. 8-week run base"
+            maxLength={120}
+          />
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -83,16 +154,33 @@ export function CalendarCsvImportSettings() {
         />
         <Button
           type="button"
-          disabled={uploading}
+          disabled={uploading || (mode === "plan" && !planName.trim())}
           onClick={() => inputRef.current?.click()}
         >
-          {uploading ? "Uploading…" : "Upload CSV"}
+          {uploading
+            ? "Uploading…"
+            : mode === "plan"
+              ? "Save plan from CSV"
+              : "Upload CSV"}
         </Button>
       </div>
-      {message ? (
+      {pendingLargeGapFile ? (
+        <div className="space-y-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-700 dark:bg-amber-950/40">
+          <p>{message}</p>
+          <Button
+            type="button"
+            disabled={uploading}
+            onClick={() => void handleFile(pendingLargeGapFile, true)}
+          >
+            Save anyway
+          </Button>
+        </div>
+      ) : message ? (
         <p
           className={`text-sm ${
-            errors.length > 0 ? "text-red-600 dark:text-red-400" : "text-zinc-700 dark:text-zinc-300"
+            errors.length > 0
+              ? "text-red-600 dark:text-red-400"
+              : "text-zinc-700 dark:text-zinc-300"
           }`}
         >
           {message}
@@ -111,8 +199,8 @@ export function CalendarCsvImportSettings() {
       <p className="text-xs text-zinc-500">
         Session columns: date, discipline, title, duration_min, distance, pace_or_speed,
         notes, role, pool. Step columns (optional): step, kind, intensity, duration_type,
-        duration, zone, signal, repeat, step_notes. Pace is mm:ss for run/swim; speed is km/h
-        or mph for bike. Time step durations are minutes.
+        duration, zone, signal, repeat, step_notes. Pace is mm:ss for run/swim; speed is
+        km/h or mph for bike. Time step durations are minutes.
       </p>
     </div>
   );

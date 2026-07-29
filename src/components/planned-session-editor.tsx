@@ -80,7 +80,7 @@ type PlannedSessionEditorProps = {
   prescriptionSignal?: SignalType | null;
   sessionRole?: SessionRole;
   tizSignalOverride?: SignalType | null;
-  sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE";
+  sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
   returnHref: string;
   children?: ReactNode;
 };

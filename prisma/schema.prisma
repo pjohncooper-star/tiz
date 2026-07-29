@@ -125,6 +125,7 @@ enum PlannedSessionSource {
   FLEXIBLE
   TEMPLATE
   RACE
+  PLAN
 }
 
 enum SessionRole {
@@ -316,6 +317,7 @@ model Athlete {
   consentGrants       ConsentGrant[]           @relation("AthleteGrants")
   seasonPlans         SeasonPlan[]
   goalEvents          GoalEvent[]
+  trainingPlans       TrainingPlan[]
 }
 
 model AthleteDisciplineSettings {
@@ -685,6 +687,53 @@ model SeasonWeek {
   @@index([seasonPlanId, weekStartDate])
 }
 
+/**
+ * Athlete-owned reusable training plan (immutable session pack).
+ * Relative dayOffset from first session; applied onto the calendar with source PLAN.
+ */
+model TrainingPlan {
+  id             String   @id @default(cuid())
+  athleteId      String
+  name           String
+  description    String?
+  durationDays   Int
+  sessionCount   Int
+  anchorWeekday  Weekday
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  athlete           Athlete               @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  sessions          TrainingPlanSession[]
+  appliedSessions   PlannedSession[]
+
+  @@unique([athleteId, name])
+  @@index([athleteId, updatedAt])
+}
+
+model TrainingPlanSession {
+  id                       String      @id @default(cuid())
+  trainingPlanId           String
+  dayOffset                Int
+  sortOrder                Int         @default(0)
+  discipline               Discipline
+  title                    String
+  notes                    String?
+  sessionRole              SessionRole @default(MODERATE)
+  estimatedDurationMinutes Int?
+  distanceMeters           Float?
+  targetSpeedMps           Float?
+  targetPaceSeconds        Float?
+  poolSize                 PoolSize?
+  /**
+   * Optional workout tree document `{ version: 2, nodes }`. Null = skeleton session.
+   */
+  steps                    Json?
+
+  trainingPlan TrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+
+  @@index([trainingPlanId, dayOffset, sortOrder])
+}
+
 model PlannedSession {
   id                       String               @id @default(cuid())
   athleteId                String
@@ -700,6 +749,7 @@ model PlannedSession {
   targetPaceSeconds        Float?
   poolSize                 PoolSize?
   source                   PlannedSessionSource @default(FLEXIBLE)
+  trainingPlanId           String?
   multisportGroupId        String?
   sessionIndex             Int?
   estimatedDurationMinutes Int?
@@ -719,6 +769,7 @@ model PlannedSession {
   poolSlotKind             PoolSlotKind?
 
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainingPlan         TrainingPlan?               @relation(fields: [trainingPlanId], references: [id], onDelete: SetNull)
   weeklyTemplateItem   WeeklyScheduleTemplateItem? @relation(fields: [weeklyTemplateItemId], references: [id], onDelete: SetNull)
   goalEvent            GoalEvent?                  @relation("GoalEventCalendarSessions", fields: [goalEventId], references: [id], onDelete: SetNull)
   primaryForGoalEvent  GoalEvent?                  @relation("GoalEventPrimarySession")
@@ -728,6 +779,7 @@ model PlannedSession {
   foldersLastCompleted WorkoutFolder[]       @relation("FolderLastCompleted")
 
   @@index([athleteId, scheduledDate])
+  @@index([athleteId, trainingPlanId, scheduledDate])
   @@index([goalEventId])
   @@index([multisportGroupId])
 }

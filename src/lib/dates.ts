@@ -100,4 +100,18 @@ export function calendarDateFromDb(date: Date): Date {
   return parseDateKey(formatDateKey(date));
 }
 
+/** Add (or subtract) whole calendar days to a yyyy-MM-dd key (UTC noon stepping). */
+export function addDaysToDateKey(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` to `to` (can be negative). */
+export function daysBetweenDateKeys(from: string, to: string): number {
+  const a = new Date(`${from}T12:00:00.000Z`).getTime();
+  const b = new Date(`${to}T12:00:00.000Z`).getTime();
+  return Math.round((b - a) / 86_400_000);
+}
+
 export { WEEK_OPTS };
