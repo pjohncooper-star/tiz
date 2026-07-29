@@ -1,5 +1,5 @@
-/** Sticky toolbar offset used for focused-week detection and week scroll targets. */
-export const FOCUS_TOP_OFFSET_PX = 72;
+/** Fallback sticky toolbar height before the DOM is measured (multi-row chrome). */
+export const FOCUS_TOP_OFFSET_PX = 140;
 
 /** Fixed app header height (`h-12` in AppSidebarClient), all breakpoints. */
 export const APP_HEADER_PX = 48;

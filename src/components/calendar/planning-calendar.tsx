@@ -246,6 +246,25 @@ export function PlanningCalendar({
   });
   const stickyOffsetPxRef = useRef(stickyOffsetPx);
   stickyOffsetPxRef.current = stickyOffsetPx;
+  const useWizardPoolRef = useRef(useWizardPool);
+  useWizardPoolRef.current = useWizardPool;
+
+  /** Live chrome height from the DOM — avoids landing/scroll races with measured state. */
+  const readStickyOffsetPx = useCallback((includeEditorBand = useWizardPoolRef.current) => {
+    const toolbarH =
+      toolbarRef.current?.getBoundingClientRect().height ??
+      stickyOffsetPxRef.current - APP_HEADER_PX;
+    const bandH = includeEditorBand
+      ? editorBandRef.current?.getBoundingClientRect().height ?? 0
+      : 0;
+    return calendarStickyOffsetPx({
+      editorBandHeightPx: bandH,
+      includeEditorBand,
+      toolbarHeightPx: toolbarH,
+      appHeaderPx: APP_HEADER_PX,
+    });
+  }, []);
+
   const composerActive = useWizardPool && selectedPoolCardId != null && builderExpanded;
   const generatedWorkoutAppliedRef = useRef<(sessionId: string) => void>(() => {});
   const boundApplySessionId = applyTargetSessionId(selectedPoolCardId);
@@ -803,7 +822,7 @@ export function PlanningCalendar({
       const scroll = () => {
         const el = document.querySelector(`[data-week-start="${weekStart}"]`);
         if (!(el instanceof HTMLElement)) return;
-        scrollElementBelowSticky(el, stickyOffsetPxRef.current, behavior);
+        scrollElementBelowSticky(el, readStickyOffsetPx(), behavior);
       };
 
       if (sortedWeeks.includes(weekStart)) {
@@ -827,7 +846,7 @@ export function PlanningCalendar({
         // ignore
       }
     },
-    [setFocusedWeek, sortedWeeks]
+    [readStickyOffsetPx, setFocusedWeek, sortedWeeks]
   );
 
   const scrollToDateAsync = useCallback(
@@ -841,12 +860,12 @@ export function PlanningCalendar({
       setSelectedDateKey(dateKey);
 
       const scroll = () => {
-        if (scrollDateBelowSticky(dateKey, stickyOffsetPxRef.current, behavior)) {
+        if (scrollDateBelowSticky(dateKey, readStickyOffsetPx(), behavior)) {
           return;
         }
         const el = document.querySelector(`[data-week-start="${weekStart}"]`);
         if (el instanceof HTMLElement) {
-          scrollElementBelowSticky(el, stickyOffsetPxRef.current, behavior);
+          scrollElementBelowSticky(el, readStickyOffsetPx(), behavior);
         }
       };
 
@@ -871,7 +890,7 @@ export function PlanningCalendar({
         // ignore
       }
     },
-    [setFocusedWeek, sortedWeeks]
+    [readStickyOffsetPx, setFocusedWeek, sortedWeeks]
   );
 
   const handlePoolWeekChange = useCallback(
@@ -968,13 +987,21 @@ export function PlanningCalendar({
     weekHasUnplanned,
   ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (scrolledRef.current) return;
     scrolledRef.current = true;
+
+    // Sync measured toolbar height before computing the landing offset.
+    const toolbarEl = toolbarRef.current;
+    if (toolbarEl) {
+      const measured = toolbarEl.getBoundingClientRect().height;
+      setToolbarHeightPx(measured);
+    }
 
     const stackedDays = !isCalendarWeekRowLayout();
     const todayKey = format(new Date(), "yyyy-MM-dd");
     const targetWeek = initialScrollWeekStart ?? currentWeekStart;
+    const offset = readStickyOffsetPx(false);
 
     const finish = () => {
       requestAnimationFrame(() => {
@@ -992,13 +1019,13 @@ export function PlanningCalendar({
     const scrollToTarget = () => {
       const byWeek = document.querySelector(`[data-week-start="${targetWeek}"]`);
       if (byWeek instanceof HTMLElement) {
-        scrollElementBelowSticky(byWeek, stickyOffsetPxRef.current, "auto");
+        scrollElementBelowSticky(byWeek, offset, "auto");
         return;
       }
       if (targetWeek === currentWeekStart) {
         const current = document.getElementById("calendar-current-week");
         if (current instanceof HTMLElement) {
-          scrollElementBelowSticky(current, stickyOffsetPxRef.current, "auto");
+          scrollElementBelowSticky(current, offset, "auto");
         }
       }
     };
@@ -1010,7 +1037,14 @@ export function PlanningCalendar({
 
     scrollToTarget();
     finish();
-  }, [currentWeekStart, initialScrollWeekStart, scrollToDateAsync, scrollToWeekAsync, sortedWeeks]);
+  }, [
+    currentWeekStart,
+    initialScrollWeekStart,
+    readStickyOffsetPx,
+    scrollToDateAsync,
+    scrollToWeekAsync,
+    sortedWeeks,
+  ]);
 
   const earliestLoadableWeek = useMemo(() => {
     if (minDate) {
@@ -1122,7 +1156,7 @@ export function PlanningCalendar({
         weekTops.push({ weekStart, top: el.getBoundingClientRect().top });
       }
 
-      const bestWeek = pickFirstFullyVisibleWeek(weekTops, stickyOffsetPxRef.current);
+      const bestWeek = pickFirstFullyVisibleWeek(weekTops, readStickyOffsetPx());
       if (bestWeek) {
         setFocusedWeek(bestWeek);
       }
@@ -1135,7 +1169,7 @@ export function PlanningCalendar({
       window.removeEventListener("scroll", updateFocusedWeekFromScroll);
       window.removeEventListener("resize", updateFocusedWeekFromScroll);
     };
-  }, [setFocusedWeek, sortedWeeks, stickyOffsetPx]);
+  }, [readStickyOffsetPx, setFocusedWeek, sortedWeeks]);
 
   async function openApplyDialog() {
     setApplyWeekStart(currentWeekStart);
