@@ -1,14 +1,17 @@
 /** Sticky toolbar offset used for focused-week detection and week scroll targets. */
 export const FOCUS_TOP_OFFSET_PX = 72;
 
-/** Fixed mobile app header height (`h-12` in AppSidebarClient). */
-export const MOBILE_APP_HEADER_PX = 48;
+/** Fixed app header height (`h-12` in AppSidebarClient), all breakpoints. */
+export const APP_HEADER_PX = 48;
+
+/** @deprecated Use APP_HEADER_PX — header is no longer mobile-only. */
+export const MOBILE_APP_HEADER_PX = APP_HEADER_PX;
 
 /** Small tolerance so sub-pixel sticky alignment still counts as fully visible. */
 export const FULLY_VISIBLE_TOP_SLOP_PX = 8;
 
 /**
- * Effective sticky chrome height: optional mobile app header, calendar toolbar,
+ * Effective sticky chrome height: app header, calendar toolbar,
  * plus optional Week TiZ editor band when the wizard layout pins that band.
  */
 export function calendarStickyOffsetPx(options: {
@@ -16,18 +19,23 @@ export function calendarStickyOffsetPx(options: {
   includeEditorBand: boolean;
   /** Measured sticky toolbar height; defaults to FOCUS_TOP_OFFSET_PX. */
   toolbarHeightPx?: number;
-  /** Mobile fixed header height; 0 on desktop. */
+  /** Fixed app header height; defaults to APP_HEADER_PX. */
+  appHeaderPx?: number;
+  /** @deprecated Prefer appHeaderPx. */
   mobileHeaderPx?: number;
 }): number {
   const toolbar =
     options.toolbarHeightPx != null
       ? Math.max(0, options.toolbarHeightPx)
       : FOCUS_TOP_OFFSET_PX;
-  const mobileHeader = Math.max(0, options.mobileHeaderPx ?? 0);
+  const appHeader = Math.max(
+    0,
+    options.appHeaderPx ?? options.mobileHeaderPx ?? APP_HEADER_PX
+  );
   const band = options.includeEditorBand
     ? Math.max(0, options.editorBandHeightPx)
     : 0;
-  return mobileHeader + toolbar + band;
+  return appHeader + toolbar + band;
 }
 
 export type WeekTop = {

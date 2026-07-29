@@ -1,40 +1,60 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  APP_HEADER_PX,
   FOCUS_TOP_OFFSET_PX,
   calendarStickyOffsetPx,
   pickFirstFullyVisibleWeek,
 } from "./week-scroll-focus";
 
 describe("calendarStickyOffsetPx", () => {
-  it("returns base header offset without editor band", () => {
+  it("includes the app header by default", () => {
     assert.equal(
       calendarStickyOffsetPx({ editorBandHeightPx: 240, includeEditorBand: false }),
+      APP_HEADER_PX + FOCUS_TOP_OFFSET_PX
+    );
+  });
+
+  it("returns toolbar offset without editor band when header is zeroed", () => {
+    assert.equal(
+      calendarStickyOffsetPx({
+        editorBandHeightPx: 240,
+        includeEditorBand: false,
+        appHeaderPx: 0,
+      }),
       FOCUS_TOP_OFFSET_PX
     );
   });
 
   it("adds editor band height when included", () => {
     assert.equal(
-      calendarStickyOffsetPx({ editorBandHeightPx: 240, includeEditorBand: true }),
+      calendarStickyOffsetPx({
+        editorBandHeightPx: 240,
+        includeEditorBand: true,
+        appHeaderPx: 0,
+      }),
       FOCUS_TOP_OFFSET_PX + 240
     );
   });
 
   it("clamps negative band height to zero", () => {
     assert.equal(
-      calendarStickyOffsetPx({ editorBandHeightPx: -10, includeEditorBand: true }),
+      calendarStickyOffsetPx({
+        editorBandHeightPx: -10,
+        includeEditorBand: true,
+        appHeaderPx: 0,
+      }),
       FOCUS_TOP_OFFSET_PX
     );
   });
 
-  it("adds measured toolbar and mobile header heights", () => {
+  it("adds measured toolbar and app header heights", () => {
     assert.equal(
       calendarStickyOffsetPx({
         editorBandHeightPx: 0,
         includeEditorBand: false,
         toolbarHeightPx: 96,
-        mobileHeaderPx: 48,
+        appHeaderPx: 48,
       }),
       144
     );

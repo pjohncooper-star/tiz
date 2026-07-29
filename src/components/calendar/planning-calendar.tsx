@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -95,7 +95,7 @@ import {
   calendarStickyOffsetPx,
   FOCUS_TOP_OFFSET_PX,
   isCalendarWeekRowLayout,
-  MOBILE_APP_HEADER_PX,
+  APP_HEADER_PX,
   pickFirstFullyVisibleWeek,
   scrollDateBelowSticky,
   scrollElementBelowSticky,
@@ -198,7 +198,6 @@ export function PlanningCalendar({
   const [isXl, setIsXl] = useState(false);
   const [editorBandHeightPx, setEditorBandHeightPx] = useState(0);
   const [toolbarHeightPx, setToolbarHeightPx] = useState(FOCUS_TOP_OFFSET_PX);
-  const [mobileHeaderPx, setMobileHeaderPx] = useState(0);
   // Pool week for the wizard; changing it scrolls the calendar to match.
   const [poolWeekStart, setPoolWeekStart] = useState(
     () => initialScrollWeekStart ?? currentWeekStart
@@ -233,11 +232,17 @@ export function PlanningCalendar({
   });
 
   const useWizardPool = poolOpen && isXl;
+  const chromeOffsetPx = calendarStickyOffsetPx({
+    editorBandHeightPx: 0,
+    includeEditorBand: false,
+    toolbarHeightPx,
+    appHeaderPx: APP_HEADER_PX,
+  });
   const stickyOffsetPx = calendarStickyOffsetPx({
     editorBandHeightPx,
     includeEditorBand: useWizardPool,
     toolbarHeightPx,
-    mobileHeaderPx,
+    appHeaderPx: APP_HEADER_PX,
   });
   const stickyOffsetPxRef = useRef(stickyOffsetPx);
   stickyOffsetPxRef.current = stickyOffsetPx;
@@ -283,9 +288,7 @@ export function PlanningCalendar({
   useLayoutEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
     const sync = () => {
-      const isMobile = mq.matches;
-      setMobileHeaderPx(isMobile ? MOBILE_APP_HEADER_PX : 0);
-      if (isMobile) {
+      if (mq.matches) {
         setPoolOpen(false);
         setCalendarOpen(false);
       }
@@ -1716,7 +1719,7 @@ export function PlanningCalendar({
       <div className="w-full space-y-4">
         <div
           ref={toolbarRef}
-          className="sticky top-12 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-2 backdrop-blur md:top-0 md:py-3 dark:border-zinc-800 dark:bg-zinc-950/95"
+          className="sticky top-12 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-2 backdrop-blur md:py-3 dark:border-zinc-800 dark:bg-zinc-950/95"
         >
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -1828,13 +1831,26 @@ export function PlanningCalendar({
 
         {useWizardPool && poolOpen ? (
           <div className="xl:flex xl:items-start xl:gap-4">
-            <aside className="mb-4 w-full min-w-0 shrink-0 overflow-x-hidden xl:sticky xl:top-[4.5rem] xl:mb-0 xl:h-[calc(100vh-4.5rem)] xl:w-72">
+            <aside
+              className="mb-4 w-full min-w-0 shrink-0 overflow-x-hidden xl:sticky xl:top-[var(--calendar-chrome-offset)] xl:mb-0 xl:h-[calc(100vh-var(--calendar-chrome-offset))] xl:w-72"
+              style={
+                {
+                  "--calendar-chrome-offset": `${chromeOffsetPx}px`,
+                } as CSSProperties
+              }
+            >
               <WorkoutPoolWizardSideColumn {...poolWizardProps} />
             </aside>
             <div className="min-w-0 flex-1 space-y-4">
               <div
                 ref={editorBandRef}
-                className="scroll-mt-[4.5rem] bg-white dark:bg-black xl:sticky xl:top-[4.5rem] xl:z-20 xl:max-h-[calc(100vh-4.5rem)] xl:overflow-y-auto"
+                className="bg-white dark:bg-black xl:sticky xl:top-[var(--calendar-chrome-offset)] xl:z-20 xl:max-h-[calc(100vh-var(--calendar-chrome-offset))] xl:overflow-y-auto"
+                style={
+                  {
+                    "--calendar-chrome-offset": `${chromeOffsetPx}px`,
+                    scrollMarginTop: chromeOffsetPx,
+                  } as CSSProperties
+                }
               >
                 <WorkoutPoolWizardBand {...poolWizardProps} />
               </div>
