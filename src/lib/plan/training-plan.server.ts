@@ -7,6 +7,7 @@ import {
   parsePlannedSessionsCsv,
   type CsvImportRowError,
 } from "@/lib/plan/csv-import";
+import { loadCsvImportThresholds } from "@/lib/plan/csv-import.server";
 import {
   buildDisciplineSettings,
   type DisciplineUnitSettings,
@@ -122,8 +123,11 @@ export async function createTrainingPlanFromCsv(
     );
   }
 
-  const settings = await loadDisciplineSettings(athleteId);
-  const parsed = parsePlannedSessionsCsv(input.csvText, settings);
+  const [settings, thresholds] = await Promise.all([
+    loadDisciplineSettings(athleteId),
+    loadCsvImportThresholds(athleteId),
+  ]);
+  const parsed = parsePlannedSessionsCsv(input.csvText, settings, thresholds);
   if (!parsed.ok) {
     throw new TrainingPlanError("CSV validation failed", 400, {
       errors: parsed.errors,

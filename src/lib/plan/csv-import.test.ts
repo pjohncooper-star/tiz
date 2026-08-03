@@ -149,18 +149,106 @@ describe("planned sessions CSV import", () => {
     assert.equal(session.estimatedDurationMinutes, 40);
   });
 
-  it("rejects nested repeats deeper than one level", () => {
+  it("builds nested repeats with percent-of-threshold power targets", () => {
+    const csv = [
+      "date,discipline,title,role,step,kind,intensity,duration_type,duration,zone,signal,repeat,target_mode,target",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,1,step,warmup,time,10,1,power,,,",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,2,repeat,,,,,,3,,",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,2.1,repeat,,,,,,10,,",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,2.1.1,step,interval,time,0.5,,power,,value,130%",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,2.1.2,step,rest,time,0.5,,power,,value,20%",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,2.2,step,recovery,time,5,1,power,,,",
+      "2027-07-05,BIKE,VO2 nest,INTENSITY,3,step,cooldown,time,10,1,power,,,",
+    ].join("\n");
+
+    const result = parsePlannedSessionsCsv(
+      csv,
+      { BIKE: { displayUnit: "METRIC", poolSize: null } },
+      { ftpWatts: 200 }
+    );
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const session = result.sessions[0]!;
+    assert.ok(session.workoutTree);
+    assert.equal(session.workoutTree!.nodes.length, 3);
+
+    const outer = session.workoutTree!.nodes[1]!;
+    if (outer.kind !== "repeat") throw new Error("expected outer repeat");
+    assert.equal(outer.repeatCount, 3);
+    assert.equal(outer.children.length, 2);
+
+    const inner = outer.children[0]!;
+    if (inner.kind !== "repeat") throw new Error("expected inner repeat");
+    assert.equal(inner.repeatCount, 10);
+    assert.equal(inner.children.length, 2);
+
+    const hard = inner.children[0]!;
+    const easy = inner.children[1]!;
+    if (hard.kind !== "step" || easy.kind !== "step") throw new Error("expected steps");
+    assert.deepEqual(hard.target, { signal: "power", mode: "value", value: 260 });
+    assert.deepEqual(easy.target, { signal: "power", mode: "value", value: 40 });
+    assert.deepEqual(hard.duration, { type: "time", value: 30 });
+    assert.deepEqual(easy.duration, { type: "time", value: 30 });
+
+    // 10 + 3*(10*(0.5+0.5)+5) + 10 = 65
+    assert.equal(session.estimatedDurationMinutes, 65);
+  });
+
+  it("parses absolute power ranges and pace values", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target",
+      "2026-08-04,BIKE,Sweet spot,1,step,active,time,20,power,range,220,250,",
+      "2026-08-05,RUN,Tempo,1,step,active,time,20,pace,value,,,4:30",
+    ].join("\n");
+
+    const result = parsePlannedSessionsCsv(csv, {
+      BIKE: { displayUnit: "METRIC", poolSize: null },
+      RUN: { displayUnit: "METRIC", poolSize: null },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const bikeStep = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (bikeStep.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(bikeStep.target, {
+      signal: "power",
+      mode: "range",
+      low: 220,
+      high: 250,
+    });
+
+    const runStep = result.sessions[1]!.workoutTree!.nodes[0]!;
+    if (runStep.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(runStep.target, { signal: "pace", mode: "value", value: 270 });
+    assert.equal(runStep.targetPaceSeconds, 270);
+  });
+
+  it("rejects percent power targets without FTP", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
+      "2026-08-04,BIKE,Bad,1,step,interval,time,1,power,value,130%",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(result.errors.some((e) => /bike FTP/i.test(e.message)));
+  });
+
+  it("rejects step nesting deeper than three id segments", () => {
     const csv = [
       PLANNED_SESSIONS_CSV_HEADERS.join(","),
       "2026-08-04,RUN,Bad,,,,,,,1,repeat,,,,,,2,",
       "2026-08-04,RUN,Bad,,,,,,,1.1,repeat,,,,,,2,",
-      "2026-08-04,RUN,Bad,,,,,,,1.1.1,step,interval,time,1,4,,,",
+      "2026-08-04,RUN,Bad,,,,,,,1.1.1,repeat,,,,,,2,",
+      "2026-08-04,RUN,Bad,,,,,,,1.1.1.1,step,interval,time,1,4,,,",
     ].join("\n");
 
     const result = parsePlannedSessionsCsv(csv);
     assert.equal(result.ok, false);
     if (result.ok) return;
-    assert.ok(result.errors.some((e) => /one repeat nesting level/i.test(e.message)));
+    assert.ok(result.errors.some((e) => /deeper than 3 levels/i.test(e.message)));
   });
 
   it("keeps skeleton and structured sessions in the same file", () => {

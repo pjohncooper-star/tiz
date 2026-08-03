@@ -1,0 +1,20 @@
+date,discipline,title,duration_min,distance,pace_or_speed,notes,role,pool,step,kind,intensity,duration_type,duration,zone,signal,repeat,step_notes,target_mode,target_low,target_high,target
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,1,step,warmup,time,10,1,power,,,,,,
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,2,repeat,,,,,,3,,,,,,
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,2.1,repeat,,,,,,10,10x 30s @ 130%/20% FTP,,,,,
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,2.1.1,step,interval,time,0.5,,power,,,value,,,130%
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,2.1.2,step,rest,time,0.5,,power,,,value,,,20%
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,2.2,step,recovery,time,5,1,power,,between sets,,,,
+2027-07-05,BIKE,Nested VO2,,,,,INTENSITY,,3,step,cooldown,time,10,1,power,,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,1,step,active,time,10,2,pace,,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,2,repeat,,,,,,10,10x100 ON 1:30 approx,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,2.1,step,interval,distance,100,4,pace,,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,3,step,rest,time,1,,open,,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,4,repeat,,,,,,5,5x200 REST 20s approx,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,4.1,step,interval,distance,200,3,pace,,,,,,
+2027-07-06,SWIM,Swim,,,,,EASY,SCY,4.2,step,rest,time,0.333333,,open,,,,,,
+2027-07-07,RUN,Run,,5.1,,,EASY,,1,step,active,time,40,2,pace,,,,,,
+2027-07-07,RUN,Run,,5.1,,,EASY,,2,repeat,,,,,,4,,,,,,
+2027-07-07,RUN,Run,,5.1,,,EASY,,2.1,step,interval,time,0.333333,5,pace,,,,,,
+2027-07-07,RUN,Run,,5.1,,,EASY,,2.2,step,recovery,time,0.666667,2,pace,,,,,,
+2027-07-08,BIKE,Bike,10,,,,,,,,,,,,,,,,,

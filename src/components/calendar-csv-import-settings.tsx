@@ -110,8 +110,8 @@ export function CalendarCsvImportSettings({
       <p className="text-sm text-zinc-500">
         Import sessions from CSV. Upload onto the calendar by date, or save as a reusable
         training plan (relative dates from the first session). Leave step columns blank for
-        skeletons, or add step/repeat rows for structured workouts. Distances and paces use
-        your Units settings.
+        skeletons, or add step/repeat rows for structured workouts (nested repeats and
+        absolute targets supported). Distances and paces use your Units settings.
       </p>
       <SegmentedControl
         value={mode}
@@ -199,8 +199,11 @@ export function CalendarCsvImportSettings({
       <p className="text-xs text-zinc-500">
         Session columns: date, discipline, title, duration_min, distance, pace_or_speed,
         notes, role, pool. Step columns (optional): step, kind, intensity, duration_type,
-        duration, zone, signal, repeat, step_notes. Pace is mm:ss for run/swim; speed is
-        km/h or mph for bike. Time step durations are minutes.
+        duration, zone, signal, repeat, step_notes, target_mode, target_low, target_high,
+        target. Nested repeats use dotted step ids (e.g. 2 / 2.1 / 2.1.1, max depth 3).
+        target_mode is zone (default), range, or value. Power/HR absolutes are watts or bpm;
+        use 130% for percent of bike FTP / max HR. Pace is mm:ss; speed is km/h or mph.
+        Time step durations are minutes.
       </p>
     </div>
   );
