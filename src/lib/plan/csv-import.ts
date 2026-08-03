@@ -23,6 +23,8 @@ import {
   WORKOUT_TREE_VERSION,
   type LeafStep,
   type StepIntensity,
+  type StepTarget,
+  type TargetMode,
   type TargetSignal,
   type WorkoutNode,
   type WorkoutTreeDocument,
@@ -47,6 +49,10 @@ export const PLANNED_SESSIONS_CSV_HEADERS = [
   "signal",
   "repeat",
   "step_notes",
+  "target_mode",
+  "target_low",
+  "target_high",
+  "target",
 ] as const;
 
 export type PlannedSessionsCsvHeader = (typeof PLANNED_SESSIONS_CSV_HEADERS)[number];
@@ -56,6 +62,8 @@ export const PLANNED_SESSIONS_CSV_TEMPLATE =
 
 export const MAX_PLANNED_SESSION_CSV_ROWS = 2000;
 export const MAX_PLANNED_SESSION_CSV_BYTES = 1024 * 1024;
+/** Max dotted segments in a step id (e.g. `2.1.1` → 3). */
+export const MAX_CSV_STEP_ID_DEPTH = 3;
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 const STEP_ID_RE = /^\d+(?:\.\d+)*$/;
@@ -73,6 +81,7 @@ const INTENSITIES = new Set<string>([
 ]);
 const DURATION_TYPES = new Set<string>(["time", "distance", "open"]);
 const SIGNALS = new Set<string>(["power", "heart_rate", "pace", "speed", "open"]);
+const TARGET_MODES = new Set<string>(["zone", "range", "value"]);
 
 const SESSION_ONLY_HEADERS = [
   "date",
@@ -96,11 +105,22 @@ const STEP_HEADERS = [
   "signal",
   "repeat",
   "step_notes",
+  "target_mode",
+  "target_low",
+  "target_high",
+  "target",
 ] as const satisfies readonly PlannedSessionsCsvHeader[];
 
 export type CsvImportRowError = {
   row: number;
   message: string;
+};
+
+export type CsvImportThresholds = {
+  /** Bike FTP in watts — required to resolve power targets like `130%`. */
+  ftpWatts?: number | null;
+  /** Max HR in bpm — required to resolve HR targets like `80%`. */
+  maxHeartRateBpm?: number | null;
 };
 
 type CsvStepDraft = {
@@ -114,6 +134,10 @@ type CsvStepDraft = {
   signal: TargetSignal | null;
   repeat: number | null;
   stepNotes: string | null;
+  targetMode: TargetMode | null;
+  targetLowRaw: string;
+  targetHighRaw: string;
+  targetRaw: string;
 };
 
 export type ParsedPlannedSessionImport = {
@@ -373,9 +397,32 @@ function parseStepDraft(
     return "step_notes must be 2000 characters or fewer";
   }
 
+  const targetModeRaw = cell(record, "target_mode").toLowerCase();
+  let targetMode: TargetMode | null = null;
+  if (targetModeRaw) {
+    if (!TARGET_MODES.has(targetModeRaw)) {
+      return 'target_mode must be "zone", "range", or "value"';
+    }
+    targetMode = targetModeRaw as TargetMode;
+  }
+
+  const targetLowRaw = cell(record, "target_low");
+  const targetHighRaw = cell(record, "target_high");
+  const targetRaw = cell(record, "target");
+
   if (kind === "repeat") {
     if (repeat == null) return "repeat rows require repeat count";
-    if (intensity || durationType || durationRaw || zone || signal) {
+    if (
+      intensity ||
+      durationType ||
+      durationRaw ||
+      zone ||
+      signal ||
+      targetMode ||
+      targetLowRaw ||
+      targetHighRaw ||
+      targetRaw
+    ) {
       return "repeat rows only use step, kind, repeat, and step_notes";
     }
   } else {
@@ -398,13 +445,165 @@ function parseStepDraft(
     signal,
     repeat,
     stepNotes,
+    targetMode,
+    targetLowRaw,
+    targetHighRaw,
+    targetRaw,
   };
+}
+
+function parsePercentOrNumber(raw: string): { kind: "percent" | "number"; value: number } | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const percentMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*%$/);
+  if (percentMatch) {
+    const value = Number(percentMatch[1]);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return { kind: "percent", value };
+  }
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return { kind: "number", value };
+}
+
+function parseAbsoluteTarget(
+  raw: string,
+  signal: Exclude<TargetSignal, "open">,
+  discipline: PlanDiscipline,
+  displayUnit: DisplayUnit,
+  thresholds: CsvImportThresholds
+): number | string {
+  if (signal === "pace") {
+    if (discipline !== "RUN" && discipline !== "SWIM") {
+      return "pace targets are only valid for RUN or SWIM";
+    }
+    const pace = paceInputToCanonical(raw, discipline, displayUnit);
+    if (pace == null) return "pace target must be mm:ss";
+    return pace;
+  }
+
+  if (signal === "speed") {
+    const speed = speedInputToMps(raw, displayUnit);
+    if (speed == null) {
+      return displayUnit === "METRIC"
+        ? "speed target must be a positive number in km/h"
+        : "speed target must be a positive number in mph";
+    }
+    return speed;
+  }
+
+  const parsed = parsePercentOrNumber(raw);
+  if (!parsed) {
+    return signal === "power"
+      ? "power target must be watts or a percent like 130%"
+      : "heart_rate target must be bpm or a percent like 80%";
+  }
+
+  if (parsed.kind === "percent") {
+    if (signal === "power") {
+      const ftp = thresholds.ftpWatts;
+      if (ftp == null || !(ftp > 0)) {
+        return "power percent targets require athlete bike FTP";
+      }
+      return Math.round((ftp * parsed.value) / 100);
+    }
+    const maxHr = thresholds.maxHeartRateBpm;
+    if (maxHr == null || !(maxHr > 0)) {
+      return "heart_rate percent targets require athlete max heart rate";
+    }
+    return Math.round((maxHr * parsed.value) / 100);
+  }
+
+  return Math.round(parsed.value);
+}
+
+function resolveTargetMode(draft: CsvStepDraft): TargetMode {
+  if (draft.targetMode) return draft.targetMode;
+  if (draft.targetRaw) return "value";
+  if (draft.targetLowRaw || draft.targetHighRaw) return "range";
+  return "zone";
+}
+
+function targetFromDraft(
+  draft: CsvStepDraft,
+  signal: TargetSignal,
+  discipline: PlanDiscipline,
+  displayUnit: DisplayUnit,
+  thresholds: CsvImportThresholds
+): StepTarget | string {
+  if (signal === "open") {
+    if (
+      draft.zone != null ||
+      draft.targetRaw ||
+      draft.targetLowRaw ||
+      draft.targetHighRaw ||
+      (draft.targetMode && draft.targetMode !== "value")
+    ) {
+      return "open signal cannot combine with zone or absolute targets";
+    }
+    return { signal: "open", mode: "value" };
+  }
+
+  const mode = resolveTargetMode(draft);
+
+  if (mode === "zone") {
+    if (draft.targetRaw || draft.targetLowRaw || draft.targetHighRaw) {
+      return "zone target_mode cannot include target, target_low, or target_high";
+    }
+    return {
+      signal,
+      mode: "zone",
+      zone: draft.zone ?? (draft.intensity === "rest" ? 1 : 2),
+    };
+  }
+
+  if (mode === "value") {
+    if (!draft.targetRaw) return "value target_mode requires target";
+    if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
+      return "value target_mode cannot include zone, target_low, or target_high";
+    }
+    const value = parseAbsoluteTarget(
+      draft.targetRaw,
+      signal,
+      discipline,
+      displayUnit,
+      thresholds
+    );
+    if (typeof value === "string") return value;
+    return { signal, mode: "value", value };
+  }
+
+  // range
+  if (!draft.targetLowRaw || !draft.targetHighRaw) {
+    return "range target_mode requires target_low and target_high";
+  }
+  if (draft.zone != null || draft.targetRaw) {
+    return "range target_mode cannot include zone or target";
+  }
+  const low = parseAbsoluteTarget(
+    draft.targetLowRaw,
+    signal,
+    discipline,
+    displayUnit,
+    thresholds
+  );
+  if (typeof low === "string") return low;
+  const high = parseAbsoluteTarget(
+    draft.targetHighRaw,
+    signal,
+    discipline,
+    displayUnit,
+    thresholds
+  );
+  if (typeof high === "string") return high;
+  return { signal, mode: "range", low, high };
 }
 
 function leafFromDraft(
   draft: CsvStepDraft,
   discipline: PlanDiscipline,
-  displayUnit: DisplayUnit
+  displayUnit: DisplayUnit,
+  thresholds: CsvImportThresholds
 ): LeafStep | string {
   if (draft.kind !== "step" || !draft.intensity || !draft.durationType) {
     return `Row ${draft.rowNumber}: invalid step`;
@@ -446,14 +645,10 @@ function leafFromDraft(
     };
   }
 
-  const target: LeafStep["target"] =
-    signal === "open"
-      ? { signal: "open", mode: "value" }
-      : {
-          signal,
-          mode: "zone",
-          zone: draft.zone ?? (draft.intensity === "rest" ? 1 : 2),
-        };
+  const target = targetFromDraft(draft, signal, discipline, displayUnit, thresholds);
+  if (typeof target === "string") {
+    return `Row ${draft.rowNumber}: ${target}`;
+  }
 
   const step: LeafStep = {
     kind: "step",
@@ -467,13 +662,57 @@ function leafFromDraft(
     step.distanceMeters = duration.value;
   }
 
+  if (target.signal === "pace" && target.mode === "value" && target.value != null) {
+    step.targetPaceSeconds = target.value;
+  }
+  if (target.signal === "pace" && target.mode === "range" && target.low != null && target.high != null) {
+    step.targetPaceSeconds = Math.round((target.low + target.high) / 2);
+  }
+  if (target.signal === "speed" && target.mode === "value" && target.value != null) {
+    step.targetSpeedMps = target.value;
+  }
+
   return step;
+}
+
+function buildNodeFromDraft(
+  draft: CsvStepDraft,
+  drafts: CsvStepDraft[],
+  discipline: PlanDiscipline,
+  displayUnit: DisplayUnit,
+  thresholds: CsvImportThresholds
+): WorkoutNode | string {
+  if (draft.kind === "step") {
+    return leafFromDraft(draft, discipline, displayUnit, thresholds);
+  }
+
+  const children = drafts
+    .filter((child) => parentStepId(child.stepId) === draft.stepId)
+    .sort((a, b) => compareStepIds(a.stepId, b.stepId));
+  if (children.length === 0) {
+    return `Row ${draft.rowNumber}: repeat "${draft.stepId}" has no child steps`;
+  }
+
+  const childNodes: WorkoutNode[] = [];
+  for (const child of children) {
+    const built = buildNodeFromDraft(child, drafts, discipline, displayUnit, thresholds);
+    if (typeof built === "string") return built;
+    childNodes.push(built);
+  }
+
+  return {
+    kind: "repeat",
+    repeatCount: draft.repeat!,
+    children: childNodes,
+    ...(draft.stepNotes ? { notes: draft.stepNotes } : {}),
+  };
 }
 
 export function buildWorkoutTreeFromStepDrafts(
   drafts: CsvStepDraft[],
   discipline: PlanDiscipline,
-  displayUnit: DisplayUnit
+  displayUnit: DisplayUnit,
+  thresholds: CsvImportThresholds = {}
 ): WorkoutTreeDocument | string {
   if (drafts.length === 0) {
     return { version: WORKOUT_TREE_VERSION, nodes: [] };
@@ -488,22 +727,18 @@ export function buildWorkoutTreeFromStepDrafts(
   }
 
   for (const draft of drafts) {
-    if (draft.stepId.split(".").length > 2) {
-      return `Row ${draft.rowNumber}: only one repeat nesting level is supported`;
+    const depth = draft.stepId.split(".").length;
+    if (depth > MAX_CSV_STEP_ID_DEPTH) {
+      return `Row ${draft.rowNumber}: step nesting deeper than ${MAX_CSV_STEP_ID_DEPTH} levels is not supported`;
     }
     const parentId = parentStepId(draft.stepId);
-    if (!parentId) {
-      continue;
-    }
+    if (!parentId) continue;
     const parent = byId.get(parentId);
     if (!parent) {
       return `Row ${draft.rowNumber}: missing parent step "${parentId}"`;
     }
     if (parent.kind !== "repeat") {
       return `Row ${draft.rowNumber}: parent "${parentId}" must be a repeat row`;
-    }
-    if (draft.kind !== "step") {
-      return `Row ${draft.rowNumber}: only one repeat nesting level is supported`;
     }
   }
 
@@ -513,31 +748,9 @@ export function buildWorkoutTreeFromStepDrafts(
 
   const nodes: WorkoutNode[] = [];
   for (const root of roots) {
-    if (root.kind === "repeat") {
-      const children = drafts
-        .filter((draft) => parentStepId(draft.stepId) === root.stepId)
-        .sort((a, b) => compareStepIds(a.stepId, b.stepId));
-      if (children.length === 0) {
-        return `Row ${root.rowNumber}: repeat "${root.stepId}" has no child steps`;
-      }
-      const childNodes: LeafStep[] = [];
-      for (const child of children) {
-        const leaf = leafFromDraft(child, discipline, displayUnit);
-        if (typeof leaf === "string") return leaf;
-        childNodes.push(leaf);
-      }
-      nodes.push({
-        kind: "repeat",
-        repeatCount: root.repeat!,
-        children: childNodes,
-        ...(root.stepNotes ? { notes: root.stepNotes } : {}),
-      });
-      continue;
-    }
-
-    const leaf = leafFromDraft(root, discipline, displayUnit);
-    if (typeof leaf === "string") return leaf;
-    nodes.push(leaf);
+    const built = buildNodeFromDraft(root, drafts, discipline, displayUnit, thresholds);
+    if (typeof built === "string") return built;
+    nodes.push(built);
   }
 
   return serializeWorkoutTree({ version: WORKOUT_TREE_VERSION, nodes });
@@ -686,7 +899,8 @@ function parseSessionFields(
 
 export function parsePlannedSessionsCsv(
   text: string,
-  settingsInput: Partial<Record<PlanDiscipline, DisciplineUnitSettings>> = {}
+  settingsInput: Partial<Record<PlanDiscipline, DisciplineUnitSettings>> = {},
+  thresholds: CsvImportThresholds = {}
 ): ParsePlannedSessionsCsvResult {
   const settings = buildDisciplineSettings(
     (["BIKE", "RUN", "SWIM"] as const).map((discipline) => ({
@@ -803,7 +1017,8 @@ export function parsePlannedSessionsCsv(
       const built = buildWorkoutTreeFromStepDrafts(
         group.steps,
         discipline,
-        displayUnit
+        displayUnit,
+        thresholds
       );
       if (typeof built === "string") {
         errors.push({ row: group.firstRowNumber, message: built });

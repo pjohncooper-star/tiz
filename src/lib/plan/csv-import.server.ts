@@ -10,6 +10,7 @@ import {
   MAX_PLANNED_SESSION_CSV_BYTES,
   parsePlannedSessionsCsv,
   type CsvImportRowError,
+  type CsvImportThresholds,
   type ParsedPlannedSessionImport,
 } from "@/lib/plan/csv-import";
 import { serializeWorkoutTree } from "@/lib/workout/workout-tree";
@@ -40,6 +41,25 @@ async function loadDisciplineSettings(
       poolSize: row.poolSize as PoolSize | null,
     }))
   );
+}
+
+export async function loadCsvImportThresholds(athleteId: string): Promise<CsvImportThresholds> {
+  const [power, heartRate] = await Promise.all([
+    db.thresholdProfile.findFirst({
+      where: { athleteId, discipline: "BIKE", signalType: "POWER" },
+      orderBy: { effectiveDate: "desc" },
+      select: { thresholdValue: true },
+    }),
+    db.thresholdProfile.findFirst({
+      where: { athleteId, signalType: "HEART_RATE" },
+      orderBy: { effectiveDate: "desc" },
+      select: { thresholdValue: true },
+    }),
+  ]);
+  return {
+    ftpWatts: power?.thresholdValue ?? null,
+    maxHeartRateBpm: heartRate?.thresholdValue ?? null,
+  };
 }
 
 function toCreateData(athleteId: string, session: ParsedPlannedSessionImport) {
@@ -76,8 +96,11 @@ export async function importPlannedSessionsCsv(
     );
   }
 
-  const settings = await loadDisciplineSettings(athleteId);
-  const parsed = parsePlannedSessionsCsv(csvText, settings);
+  const [settings, thresholds] = await Promise.all([
+    loadDisciplineSettings(athleteId),
+    loadCsvImportThresholds(athleteId),
+  ]);
+  const parsed = parsePlannedSessionsCsv(csvText, settings, thresholds);
   if (!parsed.ok) {
     throw new PlannedSessionsCsvImportError("CSV validation failed", 400, parsed.errors);
   }
