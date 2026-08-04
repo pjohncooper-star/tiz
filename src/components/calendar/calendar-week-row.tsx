@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   eachDayOfInterval,
   endOfWeek,
@@ -9,8 +9,13 @@ import {
   parseISO,
   startOfWeek,
 } from "date-fns";
+import type { Discipline } from "@prisma/client";
 import { CalendarDayColumn } from "@/components/calendar/calendar-day-column";
 import { CalendarWeekSummary } from "@/components/calendar/calendar-week-summary";
+import {
+  ShiftWeekDialog,
+  type ShiftWeekMode,
+} from "@/components/calendar/shift-week-dialog";
 import { WorkoutPool } from "@/components/calendar/workout-pool";
 import {
   WEEK_DAY_HEADER_ROW_CLASS,
@@ -33,6 +38,8 @@ import type {
   PoolCardDraftMap,
   PoolDisciplineFilter,
 } from "@/lib/plan/calendar/pool-session-card";
+
+const ALL_DISCIPLINES: Discipline[] = ["BIKE", "RUN", "SWIM", "STRENGTH"];
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DAY_HEADERS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -138,8 +145,28 @@ export function CalendarWeekRow({
     isCurrentWeek ?? isSameWeek(new Date(), start, WEEK_OPTS);
 
   const [clearing, setClearing] = useState(false);
+  const [shiftOpen, setShiftOpen] = useState(false);
+  const [shiftMode, setShiftMode] = useState<ShiftWeekMode>("week");
+  const [toolsOpen, setToolsOpen] = useState(false);
   const deletableSessions = sessions.filter((session) => session.source !== "RACE");
   const hasDeletableSessions = deletableSessions.length > 0;
+  /** Season pool target present ⇒ week is inside a planner season; hide shift. */
+  const canShiftWeek = weekTarget == null;
+  const shiftDisciplines = useMemo(() => {
+    const present = new Set(
+      sessions
+        .filter((session) => session.source !== "RACE")
+        .map((session) => session.discipline as Discipline)
+    );
+    const fromWeek = ALL_DISCIPLINES.filter((d) => present.has(d));
+    return fromWeek.length > 0 ? fromWeek : ALL_DISCIPLINES;
+  }, [sessions]);
+
+  function openShift(mode: ShiftWeekMode) {
+    setShiftMode(mode);
+    setShiftOpen(true);
+    setToolsOpen(false);
+  }
 
   async function clearPlannedSessions() {
     if (!hasDeletableSessions || clearing) return;
@@ -242,7 +269,8 @@ export function CalendarWeekRow({
       <h2
         style={{ top: scrollMarginTopPx }}
         className="sticky z-10 mb-2 flex items-center justify-between gap-2 border-b border-zinc-200 bg-white/95 py-2 text-sm font-semibold backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
-      >        <div className="min-w-0">
+      >
+        <div className="min-w-0">
           Week of {format(start, "MMM d, yyyy")}
           {current && (
             <span className="ml-2 rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900 dark:text-sky-200">
@@ -260,18 +288,73 @@ export function CalendarWeekRow({
             </span>
           ) : null}
         </div>
-        {hasDeletableSessions ? (
-          <button
-            type="button"
-            disabled={clearing}
-            className="shrink-0 rounded px-1.5 text-base leading-none text-zinc-400 hover:bg-red-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
-            onClick={() => void clearPlannedSessions()}
-            aria-label={`Delete all planned sessions for the week of ${format(start, "MMMM d, yyyy")}`}
-          >
-            ×
-          </button>
-        ) : null}
+        <div className="relative flex shrink-0 items-center gap-0.5">
+          {canShiftWeek ? (
+            <>
+              <button
+                type="button"
+                className="rounded px-1.5 py-0.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                aria-expanded={toolsOpen}
+                aria-haspopup="menu"
+                onClick={() => setToolsOpen((open) => !open)}
+              >
+                Shift
+              </button>
+              {toolsOpen ? (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-20 cursor-default"
+                    aria-label="Close shift menu"
+                    onClick={() => setToolsOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-30 mt-1 min-w-[11rem] rounded-md border border-zinc-200 bg-white py-1 text-xs font-medium shadow-md dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-1.5 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      onClick={() => openShift("week")}
+                    >
+                      Shift week…
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-1.5 text-left text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      onClick={() => openShift("discipline")}
+                    >
+                      Shift discipline…
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+          {hasDeletableSessions ? (
+            <button
+              type="button"
+              disabled={clearing}
+              className="rounded px-1.5 text-base leading-none text-zinc-400 hover:bg-red-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+              onClick={() => void clearPlannedSessions()}
+              aria-label={`Delete all planned sessions for the week of ${format(start, "MMMM d, yyyy")}`}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
       </h2>
+
+      <ShiftWeekDialog
+        open={shiftOpen}
+        weekStart={weekStart}
+        mode={shiftMode}
+        disciplinesInWeek={shiftDisciplines}
+        onClose={() => setShiftOpen(false)}
+        onShifted={onSessionCreated}
+      />
 
       {showPool && !useWizardPool ? (
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
