@@ -201,9 +201,10 @@ export function CalendarCsvImportSettings({
         notes, role, pool. Step columns (optional): step, kind, intensity, duration_type,
         duration, zone, signal, repeat, step_notes, target_mode, target_low, target_high,
         target. Nested repeats use dotted step ids (e.g. 2 / 2.1 / 2.1.1, max depth 3).
+        duration_type is time (minutes), distance (athlete units), or open (lap-button end;
+        optional duration is an estimate in minutes). Steps in one workout may mix these.
         target_mode is zone (default), range, or value. Power/HR absolutes are watts or bpm;
         use 130% for percent of bike FTP / max HR. Pace is mm:ss; speed is km/h or mph.
-        Time step durations are minutes.
       </p>
     </div>
   );
