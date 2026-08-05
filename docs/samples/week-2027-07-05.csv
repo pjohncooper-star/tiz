@@ -18,3 +18,7 @@ date,discipline,title,duration_min,distance,pace_or_speed,notes,role,pool,step,k
 2027-07-07,RUN,Run,,5.1,,,EASY,,2.1,step,interval,time,0.333333,5,pace,,,,,,
 2027-07-07,RUN,Run,,5.1,,,EASY,,2.2,step,recovery,time,0.666667,2,pace,,,,,,
 2027-07-08,BIKE,Bike,10,,,,,,,,,,,,,,,,,
+2027-07-09,RUN,Mixed length,,,,,MODERATE,,1,step,warmup,distance,1.609344,2,pace,,,,,,
+2027-07-09,RUN,Mixed length,,,,,MODERATE,,2,step,active,time,16,4,pace,,,,,,
+2027-07-09,RUN,Mixed length,,,,,MODERATE,,3,step,active,open,12,4,pace,,lap-button tempo estimate,,,,
+2027-07-09,RUN,Mixed length,,,,,MODERATE,,4,step,cooldown,distance,1.609344,2,pace,,,,,,

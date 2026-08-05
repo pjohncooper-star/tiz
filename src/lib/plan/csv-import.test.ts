@@ -225,6 +225,51 @@ describe("planned sessions CSV import", () => {
     assert.equal(runStep.targetPaceSeconds, 270);
   });
 
+  it("builds mixed distance, time, and open (lap-end) steps in one workout", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,zone,signal",
+      "2027-07-07,RUN,Tempo mix,1,step,warmup,distance,1.609344,2,pace",
+      "2027-07-07,RUN,Tempo mix,2,step,active,time,16,4,pace",
+      "2027-07-07,RUN,Tempo mix,3,step,active,open,12,4,pace",
+      "2027-07-07,RUN,Tempo mix,4,step,cooldown,distance,1.609344,2,pace",
+      "2027-07-07,RUN,Tempo mix,5,step,recovery,open,,1,pace",
+    ].join("\n");
+
+    const result = parsePlannedSessionsCsv(csv, {
+      RUN: { displayUnit: "METRIC", poolSize: null },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const session = result.sessions[0]!;
+    assert.ok(session.workoutTree);
+    const nodes = session.workoutTree!.nodes;
+    assert.equal(nodes.length, 5);
+
+    const [wu, tempo, openEst, cd, openBare] = nodes;
+    if (
+      wu!.kind !== "step" ||
+      tempo!.kind !== "step" ||
+      openEst!.kind !== "step" ||
+      cd!.kind !== "step" ||
+      openBare!.kind !== "step"
+    ) {
+      throw new Error("expected leaf steps");
+    }
+
+    assert.equal(wu.duration.type, "distance");
+    if (wu.duration.type === "distance") {
+      assert.ok(Math.abs(wu.duration.value - 1609.344) < 1e-3);
+    }
+    assert.deepEqual(tempo.duration, { type: "time", value: 16 * 60 });
+    assert.deepEqual(openEst.duration, {
+      type: "open",
+      estimateSeconds: 12 * 60,
+    });
+    assert.equal(cd.duration.type, "distance");
+    assert.deepEqual(openBare.duration, { type: "open" });
+  });
+
   it("rejects percent power targets without FTP", () => {
     const csv = [
       "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
