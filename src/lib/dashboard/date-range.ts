@@ -6,6 +6,7 @@ export const DASHBOARD_RANGE_PRESETS = [
   "last_week",
   "last_two_weeks",
   "last_month",
+  "last_6_weeks",
   "last_3_months",
   "last_6_months",
   "last_year",
@@ -20,6 +21,7 @@ export const DASHBOARD_RANGE_LABELS: Record<DashboardRangePreset, string> = {
   last_week: "Last week",
   last_two_weeks: "Last two weeks",
   last_month: "Last month",
+  last_6_weeks: "Last 6 weeks",
   last_3_months: "Last 3 months",
   last_6_months: "Last 6 months",
   last_year: "Last year",
@@ -118,6 +120,7 @@ export function resolveDashboardRange(options: {
     last_week: 6,
     last_two_weeks: 13,
     last_month: 29,
+    last_6_weeks: 41,
     last_3_months: 89,
     last_6_months: 181,
     last_year: 364,
@@ -150,7 +153,7 @@ export function cycleBoundsFromSeason(options: {
 }
 
 export function defaultDashboardPreset(): DashboardRangePreset {
-  return "last_3_months";
+  return "last_6_weeks";
 }
 
 /** Monday of the range start through Monday of the range end (inclusive weeks). */

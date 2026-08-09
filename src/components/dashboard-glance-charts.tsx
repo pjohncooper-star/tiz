@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
@@ -17,6 +18,8 @@ import { Input, Select, SegmentedControl } from "@/components/ui";
 import { useRechartsTooltipStyles } from "@/components/use-recharts-tooltip-styles";
 import { formatPace } from "@/lib/units/pace";
 import { formatDurationWindow } from "@/lib/activity/mean-max";
+import { formatStreamDistance } from "@/lib/activity/record-streams";
+import { formatDurationSeconds } from "@/lib/workout/workout-tree";
 import {
   DASHBOARD_RANGE_LABELS,
   DASHBOARD_RANGE_PRESETS,
@@ -26,6 +29,14 @@ import {
   type DashboardRangePreset,
   type SeasonRangeBounds,
 } from "@/lib/dashboard/date-range";
+
+type LongestActivityResponse = {
+  id: string;
+  name: string;
+  date: string;
+  distanceMeters: number;
+  durationSeconds: number;
+} | null;
 
 type GlanceResponse = {
   from: string;
@@ -39,6 +50,8 @@ type GlanceResponse = {
     runHours: number;
   }>;
   zoneMix: Array<{ zone: number; minutes: number }>;
+  longestRun?: LongestActivityResponse;
+  longestRide?: LongestActivityResponse;
   error?: string;
 };
 
@@ -50,13 +63,55 @@ type DashboardGlanceChartsProps = {
   season?: SeasonRangeBounds | null;
   cycle?: CycleRangeBounds | null;
   displayUnit?: "METRIC" | "IMPERIAL";
+  runDisplayUnit?: "METRIC" | "IMPERIAL";
+  bikeDisplayUnit?: "METRIC" | "IMPERIAL";
 };
+
+function LongestActivityCard({
+  title,
+  emptyLabel,
+  activity,
+  displayUnit,
+}: {
+  title: string;
+  emptyLabel: string;
+  activity: LongestActivityResponse | undefined;
+  displayUnit: "METRIC" | "IMPERIAL";
+}) {
+  return (
+    <section className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <h3 className="mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{title}</h3>
+      {!activity ? (
+        <p className="text-sm text-zinc-500">{emptyLabel}</p>
+      ) : (
+        <div className="space-y-1">
+          <p className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">
+            {formatStreamDistance(activity.distanceMeters, displayUnit)}
+          </p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            {formatDurationSeconds(activity.durationSeconds)} · {activity.date}
+          </p>
+          <Link
+            href={`/activities/${activity.id}`}
+            className="inline-block text-sm text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+          >
+            {activity.name}
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export function DashboardGlanceCharts({
   season = null,
   cycle = null,
   displayUnit = "METRIC",
+  runDisplayUnit,
+  bikeDisplayUnit,
 }: DashboardGlanceChartsProps) {
+  const runUnit = runDisplayUnit ?? displayUnit;
+  const bikeUnit = bikeDisplayUnit ?? displayUnit;
   const [preset, setPreset] = useState<DashboardRangePreset>(defaultDashboardPreset());
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -206,6 +261,19 @@ export function DashboardGlanceCharts({
         <p className="text-sm text-zinc-500">{error}</p>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
+          <LongestActivityCard
+            title="Longest run"
+            emptyLabel="No runs with distance in this range."
+            activity={data?.longestRun}
+            displayUnit={runUnit}
+          />
+          <LongestActivityCard
+            title="Longest ride"
+            emptyLabel="No rides with distance in this range."
+            activity={data?.longestRide}
+            displayUnit={bikeUnit}
+          />
+
           <section className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">

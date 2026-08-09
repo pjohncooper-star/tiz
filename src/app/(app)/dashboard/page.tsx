@@ -111,6 +111,7 @@ export default async function DashboardPage() {
     }))
   );
   const runDisplayUnit = settings.RUN?.displayUnit ?? "METRIC";
+  const bikeDisplayUnit = settings.BIKE?.displayUnit ?? "METRIC";
 
   const paceContext = await loadPaceThresholdContext(athleteId);
   const planned = serializePlannedSessions(
@@ -227,6 +228,8 @@ export default async function DashboardPage() {
           season={seasonBounds}
           cycle={cycleBounds}
           displayUnit={runDisplayUnit === "IMPERIAL" ? "IMPERIAL" : "METRIC"}
+          runDisplayUnit={runDisplayUnit === "IMPERIAL" ? "IMPERIAL" : "METRIC"}
+          bikeDisplayUnit={bikeDisplayUnit === "IMPERIAL" ? "IMPERIAL" : "METRIC"}
         />
       </Card>
     </main>

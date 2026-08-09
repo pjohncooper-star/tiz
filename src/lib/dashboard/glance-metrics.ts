@@ -28,6 +28,24 @@ export type ActivityForVolume = {
   zoneBreakdowns: Array<{ zone: number; minutes: number; isCanonical: boolean }>;
 };
 
+export type ActivityForLongest = {
+  id: string;
+  name: string;
+  startTime: Date;
+  utcOffsetSeconds?: number | null;
+  discipline: string;
+  durationSeconds: number;
+  distanceMeters: number | null;
+};
+
+export type LongestActivity = {
+  id: string;
+  name: string;
+  date: string;
+  distanceMeters: number;
+  durationSeconds: number;
+};
+
 export function computePowerDurationCurve(activities: ActivityForCurves[]): {
   points: MeanMaxPoint[];
   activityCount: number;
@@ -124,6 +142,47 @@ export function computeWeeklyVolumeHours(activities: ActivityForVolume[]): Weekl
       bikeHours: round2(row.BIKE),
       runHours: round2(row.RUN),
     }));
+}
+
+/** Longest activity by distance for a discipline (RUN or BIKE). Ties prefer longer duration, then later start. */
+export function computeLongestByDistance(
+  activities: ActivityForLongest[],
+  discipline: "RUN" | "BIKE"
+): LongestActivity | null {
+  let best: ActivityForLongest | null = null;
+  for (const activity of activities) {
+    if (activity.discipline !== discipline) continue;
+    const distance = activity.distanceMeters;
+    if (distance == null || !(distance > 0)) continue;
+    if (!best) {
+      best = activity;
+      continue;
+    }
+    const bestDistance = best.distanceMeters ?? 0;
+    if (distance > bestDistance) {
+      best = activity;
+      continue;
+    }
+    if (distance < bestDistance) continue;
+    if (activity.durationSeconds > best.durationSeconds) {
+      best = activity;
+      continue;
+    }
+    if (
+      activity.durationSeconds === best.durationSeconds &&
+      activity.startTime.getTime() > best.startTime.getTime()
+    ) {
+      best = activity;
+    }
+  }
+  if (!best || best.distanceMeters == null) return null;
+  return {
+    id: best.id,
+    name: best.name,
+    date: activityDayKey(best.startTime, best.utcOffsetSeconds),
+    distanceMeters: best.distanceMeters,
+    durationSeconds: best.durationSeconds,
+  };
 }
 
 export function computeZoneMix(activities: ActivityForVolume[]): ZoneMixPoint[] {
