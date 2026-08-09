@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import { endDateKey, parseDateKey } from "@/lib/dates";
 import { recordedActivityWhere } from "@/lib/import/classify";
 import {
+  computeLongestByDistance,
   computePowerDurationCurve,
   computeRunPaceDurationCurve,
   computeWeeklyVolumeHours,
   computeZoneMix,
   type ActivityForCurves,
+  type ActivityForLongest,
   type ActivityForVolume,
 } from "@/lib/dashboard/glance-metrics";
 import { parseDashboardDateParam } from "@/lib/dashboard/date-range";
@@ -41,10 +43,13 @@ export async function GET(req: Request) {
       ...recordedActivityWhere,
     },
     select: {
+      id: true,
+      name: true,
       startTime: true,
       utcOffsetSeconds: true,
       discipline: true,
       durationSeconds: true,
+      distanceMeters: true,
       rawStreams: true,
       zoneBreakdowns: {
         where: { isCanonical: true },
@@ -66,11 +71,22 @@ export async function GET(req: Request) {
     durationSeconds: a.durationSeconds,
     zoneBreakdowns: a.zoneBreakdowns,
   }));
+  const forLongest: ActivityForLongest[] = activities.map((a) => ({
+    id: a.id,
+    name: a.name,
+    startTime: a.startTime,
+    utcOffsetSeconds: a.utcOffsetSeconds,
+    discipline: a.discipline,
+    durationSeconds: a.durationSeconds,
+    distanceMeters: a.distanceMeters,
+  }));
 
   const power = computePowerDurationCurve(forCurves);
   const runPace = computeRunPaceDurationCurve(forCurves);
   const weeklyVolume = computeWeeklyVolumeHours(forVolume);
   const zoneMix = computeZoneMix(forVolume);
+  const longestRun = computeLongestByDistance(forLongest, "RUN");
+  const longestRide = computeLongestByDistance(forLongest, "BIKE");
 
   return NextResponse.json({
     from,
@@ -79,6 +95,8 @@ export async function GET(req: Request) {
     runPace,
     weeklyVolume,
     zoneMix,
+    longestRun,
+    longestRide,
     activityCount: activities.length,
   });
 }

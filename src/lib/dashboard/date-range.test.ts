@@ -3,7 +3,14 @@ import { describe, it } from "node:test";
 import {
   resolveDashboardRange,
   cycleBoundsFromSeason,
+  defaultDashboardPreset,
 } from "./date-range";
+
+describe("defaultDashboardPreset", () => {
+  it("defaults to last 6 weeks", () => {
+    assert.equal(defaultDashboardPreset(), "last_6_weeks");
+  });
+});
 
 describe("resolveDashboardRange", () => {
   it("resolves last week ending today", () => {
@@ -12,6 +19,15 @@ describe("resolveDashboardRange", () => {
       todayKey: "2026-07-14",
     });
     assert.equal(range.from, "2026-07-08");
+    assert.equal(range.to, "2026-07-14");
+  });
+
+  it("resolves last 6 weeks ending today", () => {
+    const range = resolveDashboardRange({
+      preset: "last_6_weeks",
+      todayKey: "2026-07-14",
+    });
+    assert.equal(range.from, "2026-06-03");
     assert.equal(range.to, "2026-07-14");
   });
 
