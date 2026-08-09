@@ -15,8 +15,10 @@ import {
   poolSlotKindSchema,
   sessionRoleSchema,
   goalEventDisciplineSchema,
+  workoutTagsSchema,
 } from "@/lib/plan/api-schemas";
 import { createRaceSessionsOnCalendar } from "@/lib/plan/race-calendar-sync";
+import { syncSessionWorkoutTags } from "@/lib/plan/workout-tags.server";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -27,6 +29,7 @@ const createSchema = z
     disciplines: z.array(goalEventDisciplineSchema).min(1).optional(),
     title: z.string().trim().max(200).optional(),
     notes: z.string().trim().max(2000).optional(),
+    tags: workoutTagsSchema.optional(),
     source: z.enum(["FLEXIBLE", "RACE"]).optional(),
     estimatedDurationMinutes: z.number().int().positive().nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).optional(),
@@ -63,6 +66,7 @@ export async function POST(request: Request) {
     disciplines,
     title,
     notes,
+    tags: tagsInput,
     targetZones,
     distanceMeters,
     targetSpeedMps,
@@ -118,6 +122,11 @@ export async function POST(request: Request) {
       durationMinutes: nullableMetric(estimatedDurationMinutes) ?? null,
     });
 
+  const tags =
+    tagsInput !== undefined
+      ? await syncSessionWorkoutTags(db, athleteId, tagsInput)
+      : [];
+
   const plannedSession = await db.plannedSession.create({
     data: {
       athleteId,
@@ -125,6 +134,7 @@ export async function POST(request: Request) {
       discipline: resolvedDiscipline,
       title: sessionTitle,
       notes: notes || null,
+      tags,
       targetZones: zonesJson,
       zoneAllocationMissing,
       sessionRole,

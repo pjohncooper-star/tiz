@@ -51,6 +51,7 @@ import {
 import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
 import { parseTargetZones } from "@/lib/workout/steps";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
+import { WorkoutTagsInput } from "@/components/workout-tags-input";
 import { sessionReturnLabel } from "@/lib/plan/session-return";
 
 type PlannedSessionEditorProps = {
@@ -59,6 +60,7 @@ type PlannedSessionEditorProps = {
   discipline: Discipline;
   title: string;
   notes: string;
+  tags?: string[];
   distanceMeters: number | null;
   targetSpeedMps: number | null;
   targetPaceSeconds: number | null;
@@ -91,6 +93,7 @@ export function PlannedSessionEditor({
   discipline: initialDiscipline,
   title: initialTitle,
   notes: initialNotes,
+  tags: initialTags = [],
   distanceMeters: initialDistanceMeters,
   targetSpeedMps: initialTargetSpeedMps,
   targetPaceSeconds: initialTargetPaceSeconds,
@@ -132,6 +135,7 @@ export function PlannedSessionEditor({
   const sessionPoolSize = discipline === "SWIM" ? poolSize : null;
   const [title, setTitle] = useState(initialTitle);
   const [notes, setNotes] = useState(initialNotes);
+  const [tags, setTags] = useState<string[]>(initialTags);
   const [sessionRole, setSessionRole] = useState<SessionRole>(initialSessionRole);
   const [tizSignalOverride, setTizSignalOverride] = useState<SignalType | null>(
     initialTizSignalOverride
@@ -332,6 +336,7 @@ export function PlannedSessionEditor({
       discipline,
       title: title.trim(),
       notes: notes.trim() || null,
+      tags,
       sessionRole,
       tizSignalOverride: discipline === "STRENGTH" ? null : tizSignalOverride,
       distanceMeters: plannedTriad.distanceMeters,
@@ -723,6 +728,10 @@ export function PlannedSessionEditor({
             />
           </div>
         )}
+
+        <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
+          <WorkoutTagsInput value={tags} onChange={setTags} />
+        </div>
 
         <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
           <Label>Notes</Label>

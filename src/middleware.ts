@@ -29,6 +29,15 @@ function isSessionApiPath(pathname: string): boolean {
   return pathname.startsWith("/api/plan/sessions");
 }
 
+function isTrainingSearchApiPath(pathname: string): boolean {
+  return (
+    pathname === "/api/plan/search" ||
+    pathname.startsWith("/api/plan/search/") ||
+    pathname === "/api/plan/tags" ||
+    pathname.startsWith("/api/plan/tags/")
+  );
+}
+
 function isWorkoutLibraryPath(pathname: string): boolean {
   return (
     pathname === "/plan/library" ||
@@ -46,6 +55,7 @@ function isPlanBuilderApiPath(pathname: string): boolean {
   if (pathname.startsWith("/api/plan/sessions")) return false;
   if (pathname.startsWith("/api/plan/workout-folders")) return false;
   if (pathname.startsWith("/api/plan/components")) return false;
+  if (isTrainingSearchApiPath(pathname)) return false;
   return pathname.startsWith("/api/plan");
 }
 
@@ -78,6 +88,11 @@ export default auth((req) => {
   }
 
   if (!sessions && isSessionApiPath(pathname)) {
+    return blockApi();
+  }
+
+  // Search/tags are used from the planning calendar and session details.
+  if (!sessions && !calendar && isTrainingSearchApiPath(pathname)) {
     return blockApi();
   }
 

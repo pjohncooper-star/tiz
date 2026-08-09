@@ -88,6 +88,7 @@ import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { CalendarTodayIcon } from "@/components/calendar/calendar-today-icon";
+import { CalendarSearchPane } from "@/components/calendar/calendar-search-pane";
 import { Button, Input } from "@/components/ui";
 import { computeEasyTizSpread, computeLongPoolDrafts } from "@/lib/plan/calendar/spread-easy-tiz";
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
@@ -190,6 +191,7 @@ export function PlanningCalendar({
   const [applyWeekStart, setApplyWeekStart] = useState(currentWeekStart);
   const [applyHasSessions, setApplyHasSessions] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [focusedWeekStart, setFocusedWeekStart] = useState(
     () => initialScrollWeekStart ?? currentWeekStart
   );
@@ -327,7 +329,7 @@ export function PlanningCalendar({
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [calendarOpen, poolOpen, useWizardPool, workoutBuilder.open]);
+  }, [calendarOpen, searchOpen, poolOpen, useWizardPool, workoutBuilder.open]);
 
   useLayoutEffect(() => {
     if (!useWizardPool) {
@@ -1783,12 +1785,36 @@ export function PlanningCalendar({
                   }}
                 />
               </label>
+              <Button
+                type="button"
+                variant={searchOpen ? "primary" : "secondary"}
+                className="shrink-0 px-2.5 md:hidden"
+                onClick={() => {
+                  setSearchOpen((open) => !open);
+                  setCalendarOpen(false);
+                }}
+              >
+                Search
+              </Button>
             </div>
             <div className="hidden flex-wrap items-center gap-2 md:flex">
               <Button
                 type="button"
+                variant={searchOpen ? "primary" : "secondary"}
+                onClick={() => {
+                  setSearchOpen((open) => !open);
+                  setCalendarOpen(false);
+                }}
+              >
+                {searchOpen ? "Hide search" : "Search"}
+              </Button>
+              <Button
+                type="button"
                 variant="secondary"
-                onClick={() => setCalendarOpen((open) => !open)}
+                onClick={() => {
+                  setCalendarOpen((open) => !open);
+                  setSearchOpen(false);
+                }}
               >
                 {calendarOpen ? "Hide calendar" : "Browse calendar"}
               </Button>
@@ -1861,6 +1887,13 @@ export function PlanningCalendar({
               </div>
             </div>
           ) : null}
+
+          <CalendarSearchPane
+            open={searchOpen}
+            onClose={() => setSearchOpen(false)}
+            onJumpToDate={jumpToDate}
+            displayUnit={disciplineSettings.BIKE?.displayUnit ?? "METRIC"}
+          />
         </div>
 
         {useWizardPool && poolOpen ? (
