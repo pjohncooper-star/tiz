@@ -2,6 +2,7 @@
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { enrichDistanceFlatStep, type DistanceDurationOptions } from "@/lib/workout/distance-duration";
 import type { DisplayUnit } from "@/lib/workout/metrics";
+import { isPercentTarget, resolveTargetMidpoint } from "@/lib/workout/target-units";
 import { paceSecondsAtZoneMidpoint } from "@/lib/workout/zone-pace";
 import type {
   FlatPlanningStep,
@@ -30,6 +31,7 @@ function parseTarget(raw: unknown): StepTarget {
   const low = Number(raw.low);
   const high = Number(raw.high);
   const value = Number(raw.value);
+  const unit = raw.unit === "percent" || raw.unit === "absolute" ? raw.unit : null;
   return {
     signal:
       signal === "heart_rate" ||
@@ -43,6 +45,7 @@ function parseTarget(raw: unknown): StepTarget {
     ...(Number.isFinite(low) ? { low } : {}),
     ...(Number.isFinite(high) ? { high } : {}),
     ...(Number.isFinite(value) ? { value } : {}),
+    ...(unit ? { unit } : {}),
   };
 }
 
@@ -140,7 +143,14 @@ export function resolveSwimIntervalPaceSeconds(
     thresholdPaceSeconds != null && thresholdPaceSeconds > 0
       ? thresholdPaceSeconds
       : FALLBACK_SWIM_PACE_SECONDS;
-  const zone = targetZoneFromTarget(set.target);
+  if (isPercentTarget(set.target)) {
+    const resolved = resolveTargetMidpoint(set.target, {
+      thresholdPaceSeconds: threshold,
+      thresholdHrBpm: null,
+    });
+    if (resolved != null && resolved > 0) return resolved;
+  }
+  const zone = targetZoneFromTarget(set.target, { discipline: "SWIM" });
   if (zone >= 1) {
     const pace = paceSecondsAtZoneMidpoint(
       zone,
@@ -184,13 +194,17 @@ export function swimIntervalSetDurationSeconds(
   return set.repeatCount * (swimTime + rest);
 }
 
-function swimIntervalWorkLeaf(set: SwimIntervalSet): LeafStep {
+function swimIntervalWorkLeaf(
+  set: SwimIntervalSet,
+  resolvedPaceSeconds?: number
+): LeafStep {
+  const pace = set.targetPaceSeconds ?? resolvedPaceSeconds;
   return {
     kind: "step",
     intensity: "interval",
     duration: { type: "distance", value: set.distanceMeters },
     target: set.target,
-    ...(set.targetPaceSeconds ? { targetPaceSeconds: set.targetPaceSeconds } : {}),
+    ...(pace && pace > 0 ? { targetPaceSeconds: pace } : {}),
   };
 }
 
@@ -208,7 +222,11 @@ export function swimIntervalToRepeatBlock(
   thresholdPaceSeconds?: number | null
 ): RepeatBlock {
   const restSeconds = swimIntervalRestSeconds(set, thresholdPaceSeconds);
-  const children: LeafStep[] = [swimIntervalWorkLeaf(set)];
+  // Percent targets carry no stored pace, so resolve one for downstream math.
+  const resolvedPace = isPercentTarget(set.target)
+    ? resolveSwimIntervalPaceSeconds(set, thresholdPaceSeconds)
+    : undefined;
+  const children: LeafStep[] = [swimIntervalWorkLeaf(set, resolvedPace)];
   if (restSeconds > 0) {
     children.push(swimIntervalRestLeaf(restSeconds));
   }

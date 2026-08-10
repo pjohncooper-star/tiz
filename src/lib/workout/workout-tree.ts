@@ -1,15 +1,22 @@
-import type { Discipline } from "@prisma/client";
+import type { Discipline, SignalType } from "@prisma/client";
+import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import {
+  effectiveThresholdPaceSeconds,
   enrichDistanceFlatStep,
   type DistanceDurationOptions,
 } from "@/lib/workout/distance-duration";
+import {
+  isPercentTarget,
+  percentMidpoint,
+  resolveTargetMidpoint,
+} from "@/lib/workout/target-units";
 import {
   parseSwimIntervalSet,
   swimIntervalSetDurationSeconds,
   swimIntervalToFlatSteps,
 } from "@/lib/workout/swim-interval-set";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
-import { zoneFromPowerWatts } from "@/lib/zones/assign-zone";
+import { assignZoneFromPercent, zoneFromPowerWatts } from "@/lib/zones/assign-zone";
 
 export type FlattenPlanningOptions = DistanceDurationOptions;
 
@@ -27,6 +34,13 @@ export type TargetSignal = "power" | "heart_rate" | "pace" | "speed" | "open";
 
 export type TargetMode = "zone" | "range" | "value";
 
+/**
+ * Unit for `value`/`low`/`high` on non-zone targets.
+ * `percent` keeps a target relative to the athlete's threshold so it tracks
+ * fitness; `absolute` (the default when omitted) pins raw watts/seconds/bpm.
+ */
+export type TargetUnit = "absolute" | "percent";
+
 export type StepDuration =
   | { type: "time"; value: number }
   | { type: "distance"; value: number }
@@ -39,6 +53,7 @@ export type StepTarget = {
   low?: number;
   high?: number;
   value?: number;
+  unit?: TargetUnit;
 };
 
 export type LeafStep = {
@@ -83,6 +98,7 @@ export type RampStep = {
     mode?: "zone" | "range";
     lowZone?: number;
     highZone?: number;
+    unit?: TargetUnit;
   };
   notes?: string;
 };
@@ -119,6 +135,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
+function parseTargetUnit(raw: unknown): TargetUnit | null {
+  return raw === "percent" || raw === "absolute" ? raw : null;
+}
+
 function parseTarget(raw: unknown): StepTarget {
   if (!isRecord(raw)) return { signal: "power", mode: "zone", zone: 2 };
   const signal = raw.signal;
@@ -127,6 +147,7 @@ function parseTarget(raw: unknown): StepTarget {
   const low = Number(raw.low);
   const high = Number(raw.high);
   const value = Number(raw.value);
+  const unit = parseTargetUnit(raw.unit);
   return {
     signal:
       signal === "heart_rate" ||
@@ -140,6 +161,7 @@ function parseTarget(raw: unknown): StepTarget {
     ...(Number.isFinite(low) ? { low } : {}),
     ...(Number.isFinite(high) ? { high } : {}),
     ...(Number.isFinite(value) ? { value } : {}),
+    ...(unit ? { unit } : {}),
   };
 }
 
@@ -224,6 +246,9 @@ function parseRampStep(raw: Record<string, unknown>): RampStep | null {
   const low = Number(targetRaw.low);
   const high = Number(targetRaw.high);
   if (!Number.isFinite(low) || !Number.isFinite(high)) return null;
+  const unit = parseTargetUnit(targetRaw.unit);
+  const lowZone = Number(targetRaw.lowZone);
+  const highZone = Number(targetRaw.highZone);
   return {
     kind: "ramp",
     duration: { type: "time", value: durationVal },
@@ -234,6 +259,12 @@ function parseRampStep(raw: Record<string, unknown>): RampStep | null {
           : "power",
       low,
       high,
+      ...(targetRaw.mode === "zone" || targetRaw.mode === "range"
+        ? { mode: targetRaw.mode }
+        : {}),
+      ...(Number.isInteger(lowZone) && lowZone >= 1 && lowZone <= 7 ? { lowZone } : {}),
+      ...(Number.isInteger(highZone) && highZone >= 1 && highZone <= 7 ? { highZone } : {}),
+      ...(unit ? { unit } : {}),
     },
     ...(typeof raw.notes === "string" ? { notes: raw.notes } : {}),
   };
@@ -352,12 +383,41 @@ function isZoneIndexRange(low: number, high: number): boolean {
 
 export type TargetZoneOptions = Pick<
   FlattenPlanningOptions,
-  "thresholdFtpWatts" | "powerZoneBoundaries" | "zoneCount"
+  | "thresholdFtpWatts"
+  | "powerZoneBoundaries"
+  | "zoneCount"
+  | "discipline"
+  | "zoneBoundaries"
 >;
+
+/** Boundaries and signal used to bin a % of threshold into a zone. */
+function percentZoneContext(
+  signal: TargetSignal,
+  options: TargetZoneOptions
+): { boundaries: number[]; signalType: SignalType } {
+  if (signal === "pace") {
+    const discipline = options.discipline === "SWIM" ? "SWIM" : "RUN";
+    return {
+      boundaries: options.zoneBoundaries ?? zoneBoundariesFor(discipline, "PACE"),
+      signalType: "PACE",
+    };
+  }
+  if (signal === "heart_rate") {
+    return {
+      boundaries: zoneBoundariesFor("BIKE", "HEART_RATE"),
+      signalType: "HEART_RATE",
+    };
+  }
+  return {
+    boundaries: options.powerZoneBoundaries ?? zoneBoundariesFor("BIKE", "POWER"),
+    signalType: "POWER",
+  };
+}
 
 /**
  * Resolve a planning zone index from a step target.
- * Absolute power watts are mapped via FTP — never treated as zone numbers.
+ * Percent targets bin directly on % of threshold; absolute power watts are
+ * mapped via FTP — never treated as zone numbers.
  * When `zoneCount` is set (Week TiZ uses 5), zones above that are folded down.
  */
 export function targetZoneFromTarget(
@@ -369,6 +429,12 @@ export function targetZoneFromTarget(
 
   if (target.mode === "zone" && target.zone) {
     return clamp(target.zone);
+  }
+
+  const percent = percentMidpoint(target);
+  if (percent != null) {
+    const { boundaries, signalType } = percentZoneContext(target.signal, options);
+    return clamp(assignZoneFromPercent(percent, boundaries, signalType));
   }
 
   if (target.signal === "power") {
@@ -407,12 +473,26 @@ function rampDurationSeconds(step: RampStep): number {
   return step.duration.value;
 }
 
-function paceSecondsFromLeafTarget(step: LeafStep): number | undefined {
+function paceSecondsFromLeafTarget(
+  step: LeafStep,
+  options: FlattenPlanningOptions = {}
+): number | undefined {
   if (step.targetPaceSeconds != null && step.targetPaceSeconds > 0) {
     return step.targetPaceSeconds;
   }
   const t = step.target;
   if (t.signal !== "pace" && t.signal !== "speed") return undefined;
+  if (isPercentTarget(t)) {
+    const discipline = options.discipline;
+    if (discipline !== "RUN" && discipline !== "SWIM") return undefined;
+    const resolved = resolveTargetMidpoint(t, {
+      thresholdPaceSeconds: effectiveThresholdPaceSeconds(
+        discipline,
+        options.thresholdPaceSeconds
+      ),
+    });
+    return resolved != null && resolved > 0 ? resolved : undefined;
+  }
   if (t.mode === "range" && t.low != null && t.high != null) {
     const low = t.low;
     const high = t.high;
@@ -428,11 +508,14 @@ function paceSecondsFromLeafTarget(step: LeafStep): number | undefined {
   return undefined;
 }
 
-function leafPlanningExtras(step: LeafStep): Pick<
+function leafPlanningExtras(
+  step: LeafStep,
+  options: FlattenPlanningOptions = {}
+): Pick<
   FlatPlanningStep,
   "distanceMeters" | "targetSpeedMps" | "targetPaceSeconds"
 > {
-  const pace = paceSecondsFromLeafTarget(step);
+  const pace = paceSecondsFromLeafTarget(step, options);
   return {
     ...(step.distanceMeters ? { distanceMeters: step.distanceMeters } : {}),
     ...(step.targetSpeedMps ? { targetSpeedMps: step.targetSpeedMps } : {}),
@@ -454,7 +537,7 @@ export function leafToFlatPlanningStep(
 ): FlatPlanningStep | null {
   const type = INTENSITY_TO_LEGACY[step.intensity];
   const targetZone = targetZoneFromTarget(step.target, options);
-  const extras = leafPlanningExtras(step);
+  const extras = leafPlanningExtras(step, options);
   if (step.duration.type === "distance") {
     const flat: FlatPlanningStep = {
       type,
@@ -498,6 +581,13 @@ function rampToFlatPlanningSteps(
   let zone: number;
   if (step.target.lowZone != null && step.target.highZone != null) {
     zone = rampMidpointZone(step.target.lowZone, step.target.highZone, maxZone);
+  } else if (step.target.unit === "percent") {
+    const { boundaries, signalType } = percentZoneContext(step.target.signal, options);
+    const pct = (step.target.low + step.target.high) / 2;
+    zone = Math.max(
+      1,
+      Math.min(maxZone, assignZoneFromPercent(pct, boundaries, signalType))
+    );
   } else if (
     step.target.signal === "power" &&
     !isZoneIndexRange(step.target.low, step.target.high)

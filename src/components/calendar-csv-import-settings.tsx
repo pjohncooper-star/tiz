@@ -1,10 +1,55 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { Button, Input, Label, SegmentedControl } from "@/components/ui";
-import type { CsvImportRowError } from "@/lib/plan/csv-import";
+import {
+  CSV_BASELINE_FORM_FIELDS,
+  type CsvImportRowError,
+} from "@/lib/plan/csv-import";
+import {
+  stepPaceCanonicalToInput,
+  stepPaceInputToCanonical,
+  type DisplayUnit,
+} from "@/lib/workout/metrics";
+import type { PoolSize } from "@/lib/units/discipline-settings";
 
 type ImportMode = "calendar" | "plan";
+
+type PlanBaseline = {
+  ftpWatts: number | null;
+  maxHeartRateBpm: number | null;
+  runThresholdPaceSeconds: number | null;
+  swimThresholdPaceSeconds: number | null;
+};
+
+const EMPTY_BASELINE: PlanBaseline = {
+  ftpWatts: null,
+  maxHeartRateBpm: null,
+  runThresholdPaceSeconds: null,
+  swimThresholdPaceSeconds: null,
+};
+
+type SettingsResponse = {
+  settings?: { discipline?: string; displayUnit?: string; poolSize?: string | null }[];
+  thresholds?: {
+    discipline?: string;
+    signalType?: string;
+    thresholdValue?: number;
+  }[];
+};
+
+type PaceUnits = {
+  run: DisplayUnit;
+  swim: DisplayUnit;
+  poolSize: PoolSize | null;
+};
+
+const DEFAULT_PACE_UNITS: PaceUnits = {
+  run: "METRIC",
+  swim: "METRIC",
+  poolSize: null,
+};
 
 type ImportResponse = {
   created?: number;
@@ -26,6 +71,45 @@ type CalendarCsvImportSettingsProps = {
   onPlanSaved?: () => void;
 };
 
+/** Blur-commit mm:ss pace field in the athlete's display units. */
+function BaselinePaceInput({
+  label,
+  seconds,
+  discipline,
+  displayUnit,
+  poolSize,
+  onCommit,
+}: {
+  label: string;
+  seconds: number | null;
+  discipline: "RUN" | "SWIM";
+  displayUnit: DisplayUnit;
+  poolSize: PoolSize | null;
+  onCommit: (seconds: number | null) => void;
+}) {
+  const formatted = seconds
+    ? stepPaceCanonicalToInput(seconds, discipline, displayUnit, poolSize)
+    : "";
+  return (
+    <TextEditorInput
+      label={label}
+      value={formatted}
+      placeholder={discipline === "RUN" ? "4:30" : "1:40"}
+      validate={(raw) =>
+        !raw.trim() ||
+        stepPaceInputToCanonical(raw, discipline, displayUnit, poolSize) != null
+      }
+      onCommit={(raw) => {
+        if (!raw.trim()) {
+          onCommit(null);
+          return;
+        }
+        onCommit(stepPaceInputToCanonical(raw, discipline, displayUnit, poolSize));
+      }}
+    />
+  );
+}
+
 export function CalendarCsvImportSettings({
   onPlanSaved,
 }: CalendarCsvImportSettingsProps) {
@@ -36,6 +120,65 @@ export function CalendarCsvImportSettings({
   const [message, setMessage] = useState<string | null>(null);
   const [errors, setErrors] = useState<CsvImportRowError[]>([]);
   const [pendingLargeGapFile, setPendingLargeGapFile] = useState<File | null>(null);
+  const [baseline, setBaseline] = useState<PlanBaseline>(EMPTY_BASELINE);
+  const [paceUnits, setPaceUnits] = useState<PaceUnits>(DEFAULT_PACE_UNITS);
+  const [showBaseline, setShowBaseline] = useState(false);
+
+  // Prefill with the athlete's current thresholds: importing "as I see it today"
+  // is the common case, and an override only matters for borrowed plans.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadBaseline() {
+      try {
+        const res = await fetch("/api/settings");
+        if (!res.ok) return;
+        const data = (await res.json()) as SettingsResponse;
+        if (cancelled) return;
+        const rows = data.thresholds ?? [];
+        const latest = (signalType: string, discipline?: string) =>
+          rows.find(
+            (row) =>
+              row.signalType === signalType &&
+              (discipline == null || row.discipline === discipline) &&
+              typeof row.thresholdValue === "number" &&
+              row.thresholdValue > 0
+          )?.thresholdValue ?? null;
+        setBaseline({
+          ftpWatts: latest("POWER", "BIKE"),
+          maxHeartRateBpm: latest("HEART_RATE"),
+          runThresholdPaceSeconds: latest("PACE", "RUN"),
+          swimThresholdPaceSeconds: latest("PACE", "SWIM"),
+        });
+        const settingFor = (discipline: string) =>
+          data.settings?.find((row) => row.discipline === discipline);
+        const runSetting = settingFor("RUN");
+        const swimSetting = settingFor("SWIM");
+        setPaceUnits({
+          run: runSetting?.displayUnit === "IMPERIAL" ? "IMPERIAL" : "METRIC",
+          swim: swimSetting?.displayUnit === "IMPERIAL" ? "IMPERIAL" : "METRIC",
+          poolSize: (swimSetting?.poolSize as PoolSize | null) ?? null,
+        });
+      } catch {
+        // Baseline stays empty; the importer falls back to stored thresholds.
+      }
+    }
+    void loadBaseline();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function appendBaseline(form: FormData) {
+    const entries: [string, number | null][] = [
+      [CSV_BASELINE_FORM_FIELDS.ftpWatts, baseline.ftpWatts],
+      [CSV_BASELINE_FORM_FIELDS.maxHeartRateBpm, baseline.maxHeartRateBpm],
+      [CSV_BASELINE_FORM_FIELDS.runThresholdPaceSeconds, baseline.runThresholdPaceSeconds],
+      [CSV_BASELINE_FORM_FIELDS.swimThresholdPaceSeconds, baseline.swimThresholdPaceSeconds],
+    ];
+    for (const [field, value] of entries) {
+      if (value != null && value > 0) form.append(field, String(value));
+    }
+  }
 
   async function handleFile(file: File, confirmLargeGaps = false) {
     setUploading(true);
@@ -46,6 +189,7 @@ export function CalendarCsvImportSettings({
     try {
       const form = new FormData();
       form.append("file", file);
+      appendBaseline(form);
 
       if (mode === "plan") {
         const name = planName.trim();
@@ -132,6 +276,66 @@ export function CalendarCsvImportSettings({
           />
         </div>
       ) : null}
+      <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-left text-sm font-medium"
+          onClick={() => setShowBaseline((open) => !open)}
+          aria-expanded={showBaseline}
+        >
+          <span>Plan baseline thresholds</span>
+          <span className="text-xs text-zinc-500">{showBaseline ? "Hide" : "Edit"}</span>
+        </button>
+        <p className="mt-1 text-xs text-zinc-500">
+          Absolute targets in the file are stored as a percentage of these, so the plan keeps
+          its intended intensity as your thresholds change. Defaults to your current
+          thresholds — change them if the plan was written for different ones.
+        </p>
+        {showBaseline ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <NumberEditorInput
+              label="Bike FTP (W)"
+              value={baseline.ftpWatts}
+              nullable
+              min={1}
+              onCommit={(value) => setBaseline((prev) => ({ ...prev, ftpWatts: value }))}
+            />
+            <NumberEditorInput
+              label="Max heart rate (bpm)"
+              value={baseline.maxHeartRateBpm}
+              nullable
+              min={1}
+              onCommit={(value) =>
+                setBaseline((prev) => ({ ...prev, maxHeartRateBpm: value }))
+              }
+            />
+            <BaselinePaceInput
+              label={`Run threshold pace (${paceUnits.run === "METRIC" ? "/km" : "/mi"})`}
+              seconds={baseline.runThresholdPaceSeconds}
+              discipline="RUN"
+              displayUnit={paceUnits.run}
+              poolSize={null}
+              onCommit={(seconds) =>
+                setBaseline((prev) => ({ ...prev, runThresholdPaceSeconds: seconds }))
+              }
+            />
+            <BaselinePaceInput
+              label={`Swim threshold pace (${
+                paceUnits.poolSize === "SCY" || paceUnits.swim === "IMPERIAL"
+                  ? "/100yd"
+                  : "/100m"
+              })`}
+              seconds={baseline.swimThresholdPaceSeconds}
+              discipline="SWIM"
+              displayUnit={paceUnits.swim}
+              poolSize={paceUnits.poolSize}
+              onCommit={(seconds) =>
+                setBaseline((prev) => ({ ...prev, swimThresholdPaceSeconds: seconds }))
+              }
+            />
+          </div>
+        ) : null}
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -200,10 +404,12 @@ export function CalendarCsvImportSettings({
         Session columns: date, discipline, title, duration_min, distance, pace_or_speed,
         notes, role, pool. Step columns (optional): step, kind, intensity, duration_type,
         duration, zone, signal, repeat, step_notes, target_mode, target_low, target_high,
-        target. Nested repeats use dotted step ids (e.g. 2 / 2.1 / 2.1.1, max depth 3).
-        target_mode is zone (default), range, or value. Power/HR absolutes are watts or bpm;
-        use 130% for percent of bike FTP / max HR. Pace is mm:ss; speed is km/h or mph.
-        Time step durations are minutes.
+        target, target_unit. Nested repeats use dotted step ids (e.g. 2 / 2.1 / 2.1.1, max
+        depth 3). target_mode is zone (default), range, or value. Write power in watts or
+        as 130%, HR in bpm or as 80%, pace as mm:ss, speed as km/h or mph. Targets are
+        stored relative to the baseline thresholds above so they scale with your fitness;
+        set target_unit=absolute to pin a step to fixed watts, bpm, or pace. Time step
+        durations are minutes.
       </p>
     </div>
   );

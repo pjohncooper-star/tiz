@@ -17,6 +17,10 @@ import {
   type DisplayUnit,
 } from "@/lib/workout/metrics";
 import {
+  absoluteFromPercent,
+  percentFromAbsolute,
+} from "@/lib/workout/target-units";
+import {
   primarySignalForDiscipline,
   serializeWorkoutTree,
   totalTreeDurationMinutes,
@@ -26,6 +30,7 @@ import {
   type StepTarget,
   type TargetMode,
   type TargetSignal,
+  type TargetUnit,
   type WorkoutNode,
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
@@ -53,6 +58,7 @@ export const PLANNED_SESSIONS_CSV_HEADERS = [
   "target_low",
   "target_high",
   "target",
+  "target_unit",
 ] as const;
 
 export type PlannedSessionsCsvHeader = (typeof PLANNED_SESSIONS_CSV_HEADERS)[number];
@@ -82,6 +88,7 @@ const INTENSITIES = new Set<string>([
 const DURATION_TYPES = new Set<string>(["time", "distance", "open"]);
 const SIGNALS = new Set<string>(["power", "heart_rate", "pace", "speed", "open"]);
 const TARGET_MODES = new Set<string>(["zone", "range", "value"]);
+const TARGET_UNITS = new Set<string>(["absolute", "percent"]);
 
 const SESSION_ONLY_HEADERS = [
   "date",
@@ -109,6 +116,7 @@ const STEP_HEADERS = [
   "target_low",
   "target_high",
   "target",
+  "target_unit",
 ] as const satisfies readonly PlannedSessionsCsvHeader[];
 
 export type CsvImportRowError = {
@@ -116,11 +124,28 @@ export type CsvImportRowError = {
   message: string;
 };
 
+/** Multipart field names carrying plan baseline thresholds on import. */
+export const CSV_BASELINE_FORM_FIELDS = {
+  ftpWatts: "baseline_ftp_watts",
+  maxHeartRateBpm: "baseline_max_hr_bpm",
+  runThresholdPaceSeconds: "baseline_run_pace_seconds",
+  swimThresholdPaceSeconds: "baseline_swim_pace_seconds",
+} as const;
+
+/**
+ * Baseline thresholds the plan was written for. Absolute CSV targets are
+ * normalized against these into % of threshold, so the plan keeps its intended
+ * stimulus as the athlete's thresholds change.
+ */
 export type CsvImportThresholds = {
-  /** Bike FTP in watts — required to resolve power targets like `130%`. */
+  /** Bike FTP in watts. */
   ftpWatts?: number | null;
-  /** Max HR in bpm — required to resolve HR targets like `80%`. */
+  /** Max HR in bpm. */
   maxHeartRateBpm?: number | null;
+  /** Run threshold pace, seconds per km. */
+  runThresholdPaceSeconds?: number | null;
+  /** Swim threshold pace, seconds per 100m. */
+  swimThresholdPaceSeconds?: number | null;
 };
 
 type CsvStepDraft = {
@@ -138,6 +163,7 @@ type CsvStepDraft = {
   targetLowRaw: string;
   targetHighRaw: string;
   targetRaw: string;
+  targetUnit: TargetUnit | null;
 };
 
 export type ParsedPlannedSessionImport = {
@@ -406,6 +432,15 @@ function parseStepDraft(
     targetMode = targetModeRaw as TargetMode;
   }
 
+  const targetUnitRaw = cell(record, "target_unit").toLowerCase();
+  let targetUnit: TargetUnit | null = null;
+  if (targetUnitRaw) {
+    if (!TARGET_UNITS.has(targetUnitRaw)) {
+      return 'target_unit must be "percent" or "absolute"';
+    }
+    targetUnit = targetUnitRaw as TargetUnit;
+  }
+
   const targetLowRaw = cell(record, "target_low");
   const targetHighRaw = cell(record, "target_high");
   const targetRaw = cell(record, "target");
@@ -419,6 +454,7 @@ function parseStepDraft(
       zone ||
       signal ||
       targetMode ||
+      targetUnit ||
       targetLowRaw ||
       targetHighRaw ||
       targetRaw
@@ -449,6 +485,7 @@ function parseStepDraft(
     targetLowRaw,
     targetHighRaw,
     targetRaw,
+    targetUnit,
   };
 }
 
@@ -466,22 +503,52 @@ function parsePercentOrNumber(raw: string): { kind: "percent" | "number"; value:
   return { kind: "number", value };
 }
 
-function parseAbsoluteTarget(
+type NormalizedTargetValue = { value: number; unit: TargetUnit };
+
+function baselineThreshold(
+  signal: Exclude<TargetSignal, "open">,
+  discipline: PlanDiscipline,
+  thresholds: CsvImportThresholds
+): number | null {
+  const value =
+    signal === "power"
+      ? thresholds.ftpWatts
+      : signal === "heart_rate"
+        ? thresholds.maxHeartRateBpm
+        : discipline === "SWIM"
+          ? thresholds.swimThresholdPaceSeconds
+          : thresholds.runThresholdPaceSeconds;
+  return value != null && value > 0 ? value : null;
+}
+
+function missingBaselineMessage(
+  signal: Exclude<TargetSignal, "open">,
+  discipline: PlanDiscipline
+): string {
+  const what =
+    signal === "power"
+      ? "a bike FTP"
+      : signal === "heart_rate"
+        ? "a max heart rate"
+        : discipline === "SWIM"
+          ? "a swim threshold pace"
+          : "a run threshold pace";
+  return `${signal} targets need ${what} baseline — set one in the import form, or use target_unit=absolute to keep raw values`;
+}
+
+/**
+ * Parse one target cell into the stored representation.
+ * Absolute cells are normalized to % of the baseline threshold so the plan
+ * scales with fitness; `target_unit=absolute` opts a step out.
+ */
+function normalizeTargetValue(
   raw: string,
   signal: Exclude<TargetSignal, "open">,
   discipline: PlanDiscipline,
   displayUnit: DisplayUnit,
-  thresholds: CsvImportThresholds
-): number | string {
-  if (signal === "pace") {
-    if (discipline !== "RUN" && discipline !== "SWIM") {
-      return "pace targets are only valid for RUN or SWIM";
-    }
-    const pace = paceInputToCanonical(raw, discipline, displayUnit);
-    if (pace == null) return "pace target must be mm:ss";
-    return pace;
-  }
-
+  thresholds: CsvImportThresholds,
+  requestedUnit: TargetUnit | null
+): NormalizedTargetValue | string {
   if (signal === "speed") {
     const speed = speedInputToMps(raw, displayUnit);
     if (speed == null) {
@@ -489,7 +556,21 @@ function parseAbsoluteTarget(
         ? "speed target must be a positive number in km/h"
         : "speed target must be a positive number in mph";
     }
-    return speed;
+    return { value: speed, unit: "absolute" };
+  }
+
+  if (signal === "pace") {
+    if (discipline !== "RUN" && discipline !== "SWIM") {
+      return "pace targets are only valid for RUN or SWIM";
+    }
+    const pace = paceInputToCanonical(raw, discipline, displayUnit);
+    if (pace == null) return "pace target must be mm:ss";
+    if (requestedUnit === "absolute") return { value: pace, unit: "absolute" };
+    const threshold = baselineThreshold(signal, discipline, thresholds);
+    if (threshold == null) return missingBaselineMessage(signal, discipline);
+    const pct = percentFromAbsolute("pace", pace, threshold);
+    if (pct == null) return "pace target must be mm:ss";
+    return { value: pct, unit: "percent" };
   }
 
   const parsed = parsePercentOrNumber(raw);
@@ -500,21 +581,24 @@ function parseAbsoluteTarget(
   }
 
   if (parsed.kind === "percent") {
-    if (signal === "power") {
-      const ftp = thresholds.ftpWatts;
-      if (ftp == null || !(ftp > 0)) {
-        return "power percent targets require athlete bike FTP";
-      }
-      return Math.round((ftp * parsed.value) / 100);
+    if (requestedUnit !== "absolute") {
+      return { value: parsed.value, unit: "percent" };
     }
-    const maxHr = thresholds.maxHeartRateBpm;
-    if (maxHr == null || !(maxHr > 0)) {
-      return "heart_rate percent targets require athlete max heart rate";
-    }
-    return Math.round((maxHr * parsed.value) / 100);
+    const threshold = baselineThreshold(signal, discipline, thresholds);
+    if (threshold == null) return missingBaselineMessage(signal, discipline);
+    const absolute = absoluteFromPercent(signal, parsed.value, threshold);
+    if (absolute == null) return "target must be a positive value";
+    return { value: absolute, unit: "absolute" };
   }
 
-  return Math.round(parsed.value);
+  if (requestedUnit === "absolute") {
+    return { value: Math.round(parsed.value), unit: "absolute" };
+  }
+  const threshold = baselineThreshold(signal, discipline, thresholds);
+  if (threshold == null) return missingBaselineMessage(signal, discipline);
+  const pct = percentFromAbsolute(signal, parsed.value, threshold);
+  if (pct == null) return "target must be a positive value";
+  return { value: pct, unit: "percent" };
 }
 
 function resolveTargetMode(draft: CsvStepDraft): TargetMode {
@@ -537,6 +621,7 @@ function targetFromDraft(
       draft.targetRaw ||
       draft.targetLowRaw ||
       draft.targetHighRaw ||
+      draft.targetUnit ||
       (draft.targetMode && draft.targetMode !== "value")
     ) {
       return "open signal cannot combine with zone or absolute targets";
@@ -550,6 +635,9 @@ function targetFromDraft(
     if (draft.targetRaw || draft.targetLowRaw || draft.targetHighRaw) {
       return "zone target_mode cannot include target, target_low, or target_high";
     }
+    if (draft.targetUnit) {
+      return "zone target_mode cannot include target_unit";
+    }
     return {
       signal,
       mode: "zone",
@@ -562,15 +650,21 @@ function targetFromDraft(
     if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
       return "value target_mode cannot include zone, target_low, or target_high";
     }
-    const value = parseAbsoluteTarget(
+    const parsed = normalizeTargetValue(
       draft.targetRaw,
       signal,
       discipline,
       displayUnit,
-      thresholds
+      thresholds,
+      draft.targetUnit
     );
-    if (typeof value === "string") return value;
-    return { signal, mode: "value", value };
+    if (typeof parsed === "string") return parsed;
+    return {
+      signal,
+      mode: "value",
+      value: parsed.value,
+      ...(parsed.unit === "percent" ? { unit: parsed.unit } : {}),
+    };
   }
 
   // range
@@ -580,23 +674,34 @@ function targetFromDraft(
   if (draft.zone != null || draft.targetRaw) {
     return "range target_mode cannot include zone or target";
   }
-  const low = parseAbsoluteTarget(
+  const low = normalizeTargetValue(
     draft.targetLowRaw,
     signal,
     discipline,
     displayUnit,
-    thresholds
+    thresholds,
+    draft.targetUnit
   );
   if (typeof low === "string") return low;
-  const high = parseAbsoluteTarget(
+  const high = normalizeTargetValue(
     draft.targetHighRaw,
     signal,
     discipline,
     displayUnit,
-    thresholds
+    thresholds,
+    draft.targetUnit
   );
   if (typeof high === "string") return high;
-  return { signal, mode: "range", low, high };
+  if (low.unit !== high.unit) {
+    return "target_low and target_high must use the same unit";
+  }
+  return {
+    signal,
+    mode: "range",
+    low: low.value,
+    high: high.value,
+    ...(low.unit === "percent" ? { unit: low.unit } : {}),
+  };
 }
 
 function leafFromDraft(
@@ -662,11 +767,20 @@ function leafFromDraft(
     step.distanceMeters = duration.value;
   }
 
-  if (target.signal === "pace" && target.mode === "value" && target.value != null) {
-    step.targetPaceSeconds = target.value;
-  }
-  if (target.signal === "pace" && target.mode === "range" && target.low != null && target.high != null) {
-    step.targetPaceSeconds = Math.round((target.low + target.high) / 2);
+  // Percent targets intentionally carry no cached pace: it is resolved from the
+  // athlete's threshold at read time so the step tracks fitness.
+  if (target.unit !== "percent") {
+    if (target.signal === "pace" && target.mode === "value" && target.value != null) {
+      step.targetPaceSeconds = target.value;
+    }
+    if (
+      target.signal === "pace" &&
+      target.mode === "range" &&
+      target.low != null &&
+      target.high != null
+    ) {
+      step.targetPaceSeconds = Math.round((target.low + target.high) / 2);
+    }
   }
   if (target.signal === "speed" && target.mode === "value" && target.value != null) {
     step.targetSpeedMps = target.value;

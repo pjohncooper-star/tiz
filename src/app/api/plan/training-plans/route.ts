@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { baselineFromFormData } from "@/lib/plan/csv-import.server";
 import {
   createTrainingPlanFromCsv,
   listTrainingPlans,
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
       description: meta.data.description,
       csvText: text,
       confirmLargeGaps,
+      baseline: baselineFromFormData(form),
     });
     return NextResponse.json({ plan }, { status: 201 });
   } catch (e) {
