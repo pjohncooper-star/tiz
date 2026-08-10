@@ -1,5 +1,5 @@
 import type { Discipline } from "@prisma/client";
-import { coalesceLegacyPaceBoundaries } from "@/lib/zones/boundaries";
+import { coalesceLegacyZoneBoundaries } from "@/lib/zones/boundaries";
 
 export function parseZoneBoundaries(
   zoneBoundaries: unknown,
@@ -17,6 +17,5 @@ export function parseZoneBoundaries(
   } else {
     throw new Error("Invalid zone boundaries");
   }
-  // Soft-upgrade known inverted / interim pace defaults.
-  return coalesceLegacyPaceBoundaries(boundaries, discipline);
+  return coalesceLegacyZoneBoundaries(boundaries, discipline);
 }

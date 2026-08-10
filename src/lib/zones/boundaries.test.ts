@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   boundariesToEditorValues,
-  coalesceLegacyPaceBoundaries,
+  coalesceLegacyZoneBoundaries,
   editorValuesToBoundaries,
   pacePctToSpeedPct,
   speedPctToPacePct,
@@ -46,14 +46,14 @@ describe("assignZoneFromPercent pace", () => {
   });
 });
 
-describe("coalesceLegacyPaceBoundaries", () => {
+describe("coalesceLegacyZoneBoundaries", () => {
   it("upgrades inverted and interim RUN defaults to coaching cutoffs", () => {
     assert.deepEqual(
-      coalesceLegacyPaceBoundaries([77.5, 87.7, 94.3, 100], "RUN"),
+      coalesceLegacyZoneBoundaries([77.5, 87.7, 94.3, 100], "RUN"),
       [78, 89, 95, 102]
     );
     assert.deepEqual(
-      coalesceLegacyPaceBoundaries([75, 90, 99, 105], "RUN"),
+      coalesceLegacyZoneBoundaries([75, 90, 99, 105], "RUN"),
       [78, 89, 95, 102]
     );
     assert.deepEqual(
@@ -64,14 +64,29 @@ describe("coalesceLegacyPaceBoundaries", () => {
 
   it("does not rewrite BIKE interim defaults when upgrading RUN", () => {
     assert.deepEqual(
-      coalesceLegacyPaceBoundaries([75, 90, 99, 105], "BIKE"),
+      coalesceLegacyZoneBoundaries([75, 90, 99, 105], "BIKE"),
       [75, 90, 99, 105]
     );
   });
 
   it("leaves custom boundaries unchanged", () => {
     const custom = [70, 85, 95, 110];
-    assert.deepEqual(coalesceLegacyPaceBoundaries(custom, "RUN"), custom);
+    assert.deepEqual(coalesceLegacyZoneBoundaries(custom, "RUN"), custom);
+  });
+
+  it("drops the legacy heart-rate cap that scoring already clamped away", () => {
+    assert.deepEqual(
+      coalesceLegacyZoneBoundaries([68, 83, 94, 100, 106], "RUN"),
+      [68, 83, 94, 100]
+    );
+  });
+
+  it("trims over-specified profiles to the canonical cutoff count", () => {
+    // A 7-zone Coggan power profile keeps Z1–Z4 and merges everything above into Z5.
+    assert.deepEqual(
+      coalesceLegacyZoneBoundaries([55, 75, 90, 105, 120, 150], "BIKE"),
+      [55, 75, 90, 105]
+    );
   });
 });
 
@@ -85,6 +100,34 @@ describe("validateZoneBoundaries", () => {
       validateZoneBoundaries([55, 90, 75, 105], 5) ?? "",
       /increasing/
     );
+  });
+
+  it("rejects a trailing cap that would imply a sixth zone", () => {
+    assert.match(
+      validateZoneBoundaries([68, 83, 94, 100, 106], 5) ?? "",
+      /Expected 4 zone boundaries/
+    );
+  });
+});
+
+describe("heart-rate defaults", () => {
+  it("defines exactly four cutoffs, matching pace and power", () => {
+    for (const discipline of ["BIKE", "RUN", "SWIM"] as const) {
+      assert.deepEqual(
+        zoneBoundariesFor(discipline, "HEART_RATE"),
+        [68, 83, 94, 100]
+      );
+    }
+  });
+
+  it("scores the same bands the clamped five-cutoff profile produced", () => {
+    const boundaries = zoneBoundariesFor("RUN", "HEART_RATE");
+    assert.equal(assignZoneFromPercent(68, boundaries, "HEART_RATE"), 1);
+    assert.equal(assignZoneFromPercent(83, boundaries, "HEART_RATE"), 2);
+    assert.equal(assignZoneFromPercent(94, boundaries, "HEART_RATE"), 3);
+    assert.equal(assignZoneFromPercent(100, boundaries, "HEART_RATE"), 4);
+    assert.equal(assignZoneFromPercent(101, boundaries, "HEART_RATE"), 5);
+    assert.equal(assignZoneFromPercent(130, boundaries, "HEART_RATE"), 5);
   });
 });
 
