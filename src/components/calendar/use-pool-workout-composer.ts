@@ -59,8 +59,12 @@ export function usePoolWorkoutComposer(options: {
 
   const mergedNodes = workoutTree.nodes;
   const durationMinutes = useMemo(
-    () => totalTreeDurationMinutes(mergedNodes),
-    [mergedNodes]
+    () =>
+      totalTreeDurationMinutes(
+        mergedNodes,
+        discipline === "RUN" || discipline === "SWIM" ? { discipline } : {}
+      ),
+    [mergedNodes, discipline]
   );
 
   const clear = useCallback(() => {

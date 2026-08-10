@@ -884,7 +884,8 @@ function mergeSessionFields(
 function parseSessionFields(
   record: Record<PlannedSessionsCsvHeader, string>,
   settings: Record<PlanDiscipline, DisciplineUnitSettings>,
-  workoutTree: WorkoutTreeDocument | null
+  workoutTree: WorkoutTreeDocument | null,
+  thresholds: CsvImportThresholds
 ): ParsedPlannedSessionImport | string {
   const dateRaw = cell(record, "date");
   if (!DATE_KEY.test(dateRaw)) {
@@ -973,7 +974,16 @@ function parseSessionFields(
     workoutTree.nodes.length > 0 &&
     estimatedDurationMinutes == null
   ) {
-    const fromTree = totalTreeDurationMinutes(workoutTree.nodes);
+    // Distance steps need a pace to become minutes, and percent targets keep no
+    // cached pace, so resolve them against the same baseline used on the way in.
+    const paceDiscipline =
+      discipline === "RUN" || discipline === "SWIM" ? discipline : null;
+    const fromTree = totalTreeDurationMinutes(workoutTree.nodes, {
+      discipline: paceDiscipline,
+      thresholdPaceSeconds: paceDiscipline
+        ? baselineThreshold("pace", paceDiscipline, thresholds)
+        : null,
+    });
     estimatedDurationMinutes = fromTree > 0 ? fromTree : null;
   }
 
@@ -1141,7 +1151,12 @@ export function parsePlannedSessionsCsv(
       workoutTree = built;
     }
 
-    const parsed = parseSessionFields(group.sessionRecord, settings, workoutTree);
+    const parsed = parseSessionFields(
+      group.sessionRecord,
+      settings,
+      workoutTree,
+      thresholds
+    );
     if (typeof parsed === "string") {
       errors.push({ row: group.firstRowNumber, message: parsed });
       continue;

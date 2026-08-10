@@ -709,8 +709,11 @@ export function totalTreeDurationSeconds(
   return sum;
 }
 
-export function totalTreeDurationMinutes(nodes: WorkoutNode[]): number {
-  const sec = totalTreeDurationSeconds(nodes);
+export function totalTreeDurationMinutes(
+  nodes: WorkoutNode[],
+  thresholdOrOptions?: number | null | FlattenPlanningOptions
+): number {
+  const sec = totalTreeDurationSeconds(nodes, thresholdOrOptions);
   return sec > 0 ? Math.max(1, Math.round(sec / 60)) : 0;
 }
 

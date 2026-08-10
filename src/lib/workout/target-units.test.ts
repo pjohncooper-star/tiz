@@ -13,6 +13,7 @@ import {
   flattenForPlanning,
   parseWorkoutTree,
   targetZoneFromTarget,
+  totalTreeDurationMinutes,
   type StepTarget,
   type WorkoutNode,
 } from "@/lib/workout/workout-tree";
@@ -142,6 +143,21 @@ describe("percent pace in planning steps", () => {
     });
     assert.equal(atFourMin[0]!.targetPaceSeconds, 216);
     assert.equal(atFourMin[0]!.durationSeconds, 1080);
+  });
+
+  it("estimates total duration for distance steps with a percent pace", () => {
+    assert.equal(
+      totalTreeDurationMinutes(nodes, { discipline: "RUN", thresholdPaceSeconds: 300 }),
+      23
+    );
+    assert.equal(
+      totalTreeDurationMinutes(nodes, { discipline: "RUN", thresholdPaceSeconds: 240 }),
+      18
+    );
+  });
+
+  it("falls back to a default threshold rather than a zero estimate", () => {
+    assert.ok(totalTreeDurationMinutes(nodes, { discipline: "RUN" }) > 0);
   });
 });
 
