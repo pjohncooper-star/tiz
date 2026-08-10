@@ -187,8 +187,18 @@ describe("planned sessions CSV import", () => {
     const hard = inner.children[0]!;
     const easy = inner.children[1]!;
     if (hard.kind !== "step" || easy.kind !== "step") throw new Error("expected steps");
-    assert.deepEqual(hard.target, { signal: "power", mode: "value", value: 260 });
-    assert.deepEqual(easy.target, { signal: "power", mode: "value", value: 40 });
+    assert.deepEqual(hard.target, {
+      signal: "power",
+      mode: "value",
+      value: 130,
+      unit: "percent",
+    });
+    assert.deepEqual(easy.target, {
+      signal: "power",
+      mode: "value",
+      value: 20,
+      unit: "percent",
+    });
     assert.deepEqual(hard.duration, { type: "time", value: 30 });
     assert.deepEqual(easy.duration, { type: "time", value: 30 });
 
@@ -196,17 +206,62 @@ describe("planned sessions CSV import", () => {
     assert.equal(session.estimatedDurationMinutes, 65);
   });
 
-  it("parses absolute power ranges and pace values", () => {
+  it("normalizes absolute power ranges and pace values against the baseline", () => {
     const csv = [
       "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target",
       "2026-08-04,BIKE,Sweet spot,1,step,active,time,20,power,range,220,250,",
       "2026-08-05,RUN,Tempo,1,step,active,time,20,pace,value,,,4:30",
     ].join("\n");
 
-    const result = parsePlannedSessionsCsv(csv, {
-      BIKE: { displayUnit: "METRIC", poolSize: null },
-      RUN: { displayUnit: "METRIC", poolSize: null },
+    const result = parsePlannedSessionsCsv(
+      csv,
+      {
+        BIKE: { displayUnit: "METRIC", poolSize: null },
+        RUN: { displayUnit: "METRIC", poolSize: null },
+      },
+      { ftpWatts: 200, runThresholdPaceSeconds: 300 }
+    );
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const bikeStep = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (bikeStep.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(bikeStep.target, {
+      signal: "power",
+      mode: "range",
+      low: 110,
+      high: 125,
+      unit: "percent",
     });
+
+    // 4:30/km against a 5:00/km threshold is 111.1% of threshold speed.
+    const runStep = result.sessions[1]!.workoutTree!.nodes[0]!;
+    if (runStep.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(runStep.target, {
+      signal: "pace",
+      mode: "value",
+      value: 111.1,
+      unit: "percent",
+    });
+    // Percent targets keep no cached pace: it is resolved from the threshold.
+    assert.equal(runStep.targetPaceSeconds, undefined);
+  });
+
+  it("keeps raw values when target_unit is absolute", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target,target_unit",
+      "2026-08-04,BIKE,Fixed,1,step,active,time,20,power,range,220,250,,absolute",
+      "2026-08-05,RUN,Fixed,1,step,active,time,20,pace,value,,,4:30,absolute",
+    ].join("\n");
+
+    const result = parsePlannedSessionsCsv(
+      csv,
+      {
+        BIKE: { displayUnit: "METRIC", poolSize: null },
+        RUN: { displayUnit: "METRIC", poolSize: null },
+      },
+      { ftpWatts: 200, runThresholdPaceSeconds: 300 }
+    );
     assert.equal(result.ok, true);
     if (!result.ok) return;
 
@@ -225,15 +280,55 @@ describe("planned sessions CSV import", () => {
     assert.equal(runStep.targetPaceSeconds, 270);
   });
 
-  it("rejects percent power targets without FTP", () => {
+  it("stores percent power targets without needing an FTP baseline", () => {
     const csv = [
       "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
-      "2026-08-04,BIKE,Bad,1,step,interval,time,1,power,value,130%",
+      "2026-08-04,BIKE,Relative,1,step,interval,time,1,power,value,130%",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const step = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(step.target, {
+      signal: "power",
+      mode: "value",
+      value: 130,
+      unit: "percent",
+    });
+  });
+
+  it("rejects absolute watt targets without an FTP baseline", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
+      "2026-08-04,BIKE,Bad,1,step,interval,time,1,power,value,260",
     ].join("\n");
     const result = parsePlannedSessionsCsv(csv);
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.ok(result.errors.some((e) => /bike FTP/i.test(e.message)));
+  });
+
+  it("keeps the same stimulus when the athlete's FTP changes", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
+      "2026-08-04,BIKE,Threshold,1,step,interval,time,20,power,value,180",
+    ].join("\n");
+    const settings = { BIKE: { displayUnit: "METRIC" as const, poolSize: null } };
+
+    const atFtp200 = parsePlannedSessionsCsv(csv, settings, { ftpWatts: 200 });
+    const atFtp300 = parsePlannedSessionsCsv(csv, settings, { ftpWatts: 300 });
+    assert.equal(atFtp200.ok, true);
+    assert.equal(atFtp300.ok, true);
+    if (!atFtp200.ok || !atFtp300.ok) return;
+
+    const first = atFtp200.sessions[0]!.workoutTree!.nodes[0]!;
+    const second = atFtp300.sessions[0]!.workoutTree!.nodes[0]!;
+    if (first.kind !== "step" || second.kind !== "step") throw new Error("expected steps");
+    assert.equal(first.target.value, 90);
+    assert.equal(second.target.value, 60);
+    assert.equal(first.target.unit, "percent");
+    assert.equal(second.target.unit, "percent");
   });
 
   it("rejects step nesting deeper than three id segments", () => {

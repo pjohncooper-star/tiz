@@ -73,6 +73,7 @@ type PlannedSessionEditorProps = {
   initialCompletedZones?: unknown;
   workoutTree?: WorkoutTreeDocument;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
   thresholdZoneBoundaries?: number[];
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
@@ -105,6 +106,7 @@ export function PlannedSessionEditor({
   initialCompletedZones,
   workoutTree: initialWorkoutTree,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   thresholdZoneBoundaries,
   primarySignal = null,
   inheritedPrimarySignal = null,
@@ -747,6 +749,7 @@ export function PlannedSessionEditor({
               tree={workoutTree}
               onChange={setWorkoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
               primarySignal={primarySignal}
             />
             <SessionZoneBudget

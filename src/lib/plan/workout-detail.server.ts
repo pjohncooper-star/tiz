@@ -72,6 +72,8 @@ export type WorkoutDetailViewModel = {
   workoutTree: WorkoutTreeDocument | undefined;
   structuredSteps: unknown;
   thresholdPaceSeconds: number | null;
+  /** Bike FTP at the session date; resolves relative power targets. */
+  thresholdFtpWatts: number | null;
   thresholdZoneBoundaries: number[] | undefined;
   primarySignal: SignalType | null;
   /** Effective primary ignoring per-session override (for Default label). */
@@ -237,7 +239,18 @@ export async function loadWorkoutDetail(
   );
 
   let thresholdPaceSeconds: number | null = null;
+  let thresholdFtpWatts: number | null = null;
   let thresholdZoneBoundaries: number[] | undefined;
+
+  if (plannedSession.discipline === "BIKE") {
+    const powerProfile = await getThresholdProfileAtDate(
+      athleteId,
+      "BIKE",
+      "POWER",
+      plannedSession.scheduledDate
+    );
+    thresholdFtpWatts = powerProfile?.thresholdValue ?? null;
+  }
 
   if (plannedSession.discipline === "RUN" || plannedSession.discipline === "SWIM") {
     const paceProfile = await getThresholdProfileAtDate(
@@ -363,6 +376,7 @@ export async function loadWorkoutDetail(
     workoutTree,
     structuredSteps,
     thresholdPaceSeconds,
+    thresholdFtpWatts,
     thresholdZoneBoundaries,
     primarySignal,
     inheritedPrimarySignal,
