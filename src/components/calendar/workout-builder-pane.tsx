@@ -150,7 +150,12 @@ export function WorkoutBuilderPane({ builder, onClose }: WorkoutBuilderPaneProps
   } = builder;
 
   const totalMinutes =
-    mergedNodes.length > 0 ? totalTreeDurationMinutes(mergedNodes) : 0;
+    mergedNodes.length > 0
+      ? totalTreeDurationMinutes(
+          mergedNodes,
+          discipline === "RUN" || discipline === "SWIM" ? { discipline } : {}
+        )
+      : 0;
 
   return (
     <>

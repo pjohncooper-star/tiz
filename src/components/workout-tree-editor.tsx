@@ -36,6 +36,13 @@ import {
   poolSizeForSwimStep,
   type PoolSize,
 } from "@/lib/units/discipline-settings";
+import { effectiveThresholdPaceSeconds } from "@/lib/workout/distance-duration";
+import {
+  absoluteFromPercent,
+  isPercentTarget,
+  percentFromAbsolute,
+  type TargetThresholds,
+} from "@/lib/workout/target-units";
 import {
   defaultLeafStep,
   defaultRampStep,
@@ -80,6 +87,8 @@ type WorkoutTreeEditorProps = {
   tree: WorkoutTreeDocument;
   onChange: (tree: WorkoutTreeDocument) => void;
   thresholdPaceSeconds?: number | null;
+  /** Bike FTP; lets relative power targets be edited in watts. */
+  thresholdFtpWatts?: number | null;
   primarySignal?: SignalType | null;
   /** Compact chart + scrollable chart/steps viewport (calendar Build panel). */
   compact?: boolean;
@@ -244,6 +253,21 @@ function mapLeaves(
   });
 }
 
+/**
+ * Keep a relative target relative when the editor rebuilds it. Zone targets and
+ * signal changes drop the unit: their numbers are zone indices, not percentages.
+ */
+function carryTargetUnit(prev: StepTarget, next: StepTarget): StepTarget {
+  if (prev.unit !== "percent") return next;
+  if (next.mode === "zone" || next.signal !== prev.signal) return next;
+  return { ...next, unit: "percent" };
+}
+
+function carryUnitInPatch(step: LeafStep, patch: Partial<LeafStep>): Partial<LeafStep> {
+  if (!patch.target) return patch;
+  return { ...patch, target: carryTargetUnit(step.target, patch.target) };
+}
+
 function applyTargetView(
   step: LeafStep,
   view: TargetView,
@@ -277,14 +301,20 @@ function applyTargetView(
   if (discipline === "BIKE") {
     return {
       ...withoutPace,
-      target: {
+      target: carryTargetUnit(step.target, {
         signal: "power",
         mode: "value",
         value: step.target.value ?? (step.target.zone ? step.target.zone * 30 + 140 : 200),
-      },
+      }),
     };
   }
   if (discipline === "RUN" || discipline === "SWIM") {
+    if (isPercentTarget(step.target)) {
+      return {
+        ...withoutPace,
+        target: { ...step.target, mode: "value" },
+      };
+    }
     return {
       ...withoutPace,
       target: { signal: "pace", mode: "value" },
@@ -692,22 +722,22 @@ function enableRangeTarget(
   if (discipline === "BIKE") {
     const v = t.value ?? 200;
     return {
-      target: {
+      target: carryTargetUnit(t, {
         signal: "power",
         mode: "range",
         low: Math.round(v * 0.85),
         high: Math.round(v * 1.1),
-      },
+      }),
     };
   }
-  const pace = step.targetPaceSeconds ?? 300;
+  const pace = isPercentTarget(t) ? (t.value ?? 100) : (step.targetPaceSeconds ?? 300);
   return {
-    target: {
+    target: carryTargetUnit(t, {
       signal: "pace",
       mode: "range",
       low: Math.round(pace * 0.92),
       high: Math.round(pace * 1.08),
-    },
+    }),
   };
 }
 
@@ -734,12 +764,19 @@ function disableRangeTarget(
   if (discipline === "BIKE") {
     const mid =
       t.low != null && t.high != null ? Math.round((t.low + t.high) / 2) : (t.value ?? 200);
-    return { target: { signal: "power", mode: "value", value: mid } };
+    return {
+      target: carryTargetUnit(t, { signal: "power", mode: "value", value: mid }),
+    };
   }
   const mid =
     t.low != null && t.high != null
       ? Math.round((t.low + t.high) / 2)
       : (step.targetPaceSeconds ?? 300);
+  if (isPercentTarget(t)) {
+    return {
+      target: carryTargetUnit(t, { signal: "pace", mode: "value", value: mid }),
+    };
+  }
   return { target: { signal: "pace", mode: "value" }, targetPaceSeconds: mid };
 }
 
@@ -779,11 +816,12 @@ function targetFieldLabel(
   targetView: TargetView,
   discipline: Discipline,
   displayUnit: DisplayUnit,
-  poolSize: PoolSize | null
+  poolSize: PoolSize | null,
+  powerAsPercent = false
 ): string {
   if (targetView === "zone") return "Zone";
   if (targetView === "heart_rate") return "HR zone";
-  if (discipline === "BIKE") return "Power (W)";
+  if (discipline === "BIKE") return powerAsPercent ? "Power (% FTP)" : "Power (W)";
   if (discipline === "RUN" || discipline === "SWIM") {
     return stepPaceInputLabel(discipline as PlanDiscipline, displayUnit, poolSize);
   }
@@ -797,6 +835,7 @@ function StepTargetField({
   displayUnit,
   poolSize,
   primaryTargetSignal,
+  thresholds,
   onChange,
 }: {
   step: LeafStep;
@@ -805,11 +844,49 @@ function StepTargetField({
   displayUnit: DisplayUnit;
   poolSize: PoolSize | null;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
+  thresholds: TargetThresholds;
   onChange: (patch: Partial<LeafStep>) => void;
 }) {
   const planDiscipline = discipline as PlanDiscipline;
-  const label = targetFieldLabel(targetView, discipline, displayUnit, poolSize);
   const rangeMode = step.target.mode === "range";
+
+  // Relative targets are edited in native units and written back as percent, so
+  // an imported plan keeps scaling with the athlete's thresholds.
+  const percentTarget = isPercentTarget(step.target);
+  const ftp = thresholds.ftpWatts && thresholds.ftpWatts > 0 ? thresholds.ftpWatts : null;
+  const powerAsPercent = percentTarget && step.target.signal === "power" && ftp == null;
+  const label = targetFieldLabel(
+    targetView,
+    discipline,
+    displayUnit,
+    poolSize,
+    powerAsPercent
+  );
+  const paceThreshold = effectiveThresholdPaceSeconds(
+    planDiscipline === "SWIM" ? "SWIM" : "RUN",
+    thresholds.thresholdPaceSeconds
+  );
+
+  const showPower = (stored: number | undefined, fallback: number): number => {
+    if (stored == null) return fallback;
+    if (percentTarget && ftp) return absoluteFromPercent("power", stored, ftp) ?? stored;
+    return stored;
+  };
+  const storePower = (shown: number): number => {
+    if (percentTarget && ftp) return percentFromAbsolute("power", shown, ftp) ?? shown;
+    return shown;
+  };
+  const showPace = (stored: number | undefined, fallback: number): number => {
+    if (stored == null) return fallback;
+    if (percentTarget) return absoluteFromPercent("pace", stored, paceThreshold) ?? stored;
+    return stored;
+  };
+  const storePace = (shown: number): number => {
+    if (percentTarget) return percentFromAbsolute("pace", shown, paceThreshold) ?? shown;
+    return shown;
+  };
+
+  const emit = (patch: Partial<LeafStep>) => onChange(carryUnitInPatch(step, patch));
 
   if (targetView === "zone") {
     if (rangeMode) {
@@ -963,8 +1040,8 @@ function StepTargetField({
 
   if (discipline === "BIKE") {
     if (rangeMode) {
-      const low = step.target.low ?? 170;
-      const high = step.target.high ?? 230;
+      const low = showPower(step.target.low, 170);
+      const high = showPower(step.target.high, 230);
       return (
         <div className="min-w-0">
           <Label>{label} range</Label>
@@ -973,11 +1050,16 @@ function StepTargetField({
               value={low}
               min={1}
               step={5}
-              ariaLabel="Low power watts"
+              ariaLabel={powerAsPercent ? "Low power percent of FTP" : "Low power watts"}
               onCommit={(v) => {
                 if (v == null) return;
-                onChange({
-                  target: { signal: "power", mode: "range", low: v, high },
+                emit({
+                  target: {
+                    signal: "power",
+                    mode: "range",
+                    low: storePower(v),
+                    high: storePower(high),
+                  },
                 });
               }}
             />
@@ -985,11 +1067,16 @@ function StepTargetField({
               value={high}
               min={1}
               step={5}
-              ariaLabel="High power watts"
+              ariaLabel={powerAsPercent ? "High power percent of FTP" : "High power watts"}
               onCommit={(v) => {
                 if (v == null) return;
-                onChange({
-                  target: { signal: "power", mode: "range", low, high: v },
+                emit({
+                  target: {
+                    signal: "power",
+                    mode: "range",
+                    low: storePower(low),
+                    high: storePower(v),
+                  },
                 });
               }}
             />
@@ -997,7 +1084,7 @@ function StepTargetField({
         </div>
       );
     }
-    const watts = step.target.value ?? 200;
+    const watts = showPower(step.target.value, 200);
     return (
       <NumberEditorInput
         label={label}
@@ -1006,8 +1093,8 @@ function StepTargetField({
         step={5}
         onCommit={(v) => {
           if (v == null) return;
-          onChange({
-            target: { signal: "power", mode: "value", value: v },
+          emit({
+            target: { signal: "power", mode: "value", value: storePower(v) },
           });
         }}
       />
@@ -1016,8 +1103,8 @@ function StepTargetField({
 
   if (discipline === "RUN" || discipline === "SWIM") {
     if (rangeMode) {
-      const low = step.target.low ?? 280;
-      const high = step.target.high ?? 320;
+      const low = showPace(step.target.low, 280);
+      const high = showPace(step.target.high, 320);
       return (
         <div className="min-w-0">
           <Label>{label} range</Label>
@@ -1030,8 +1117,13 @@ function StepTargetField({
               ariaLabel="Fast pace"
               placeholder="Fast"
               onCommit={(pace) =>
-                onChange({
-                  target: { signal: "pace", mode: "range", low: pace, high },
+                emit({
+                  target: {
+                    signal: "pace",
+                    mode: "range",
+                    low: storePace(pace),
+                    high: storePace(high),
+                  },
                 })
               }
             />
@@ -1043,8 +1135,13 @@ function StepTargetField({
               ariaLabel="Slow pace"
               placeholder="Slow"
               onCommit={(pace) =>
-                onChange({
-                  target: { signal: "pace", mode: "range", low, high: pace },
+                emit({
+                  target: {
+                    signal: "pace",
+                    mode: "range",
+                    low: storePace(low),
+                    high: storePace(pace),
+                  },
                 })
               }
             />
@@ -1052,19 +1149,28 @@ function StepTargetField({
         </div>
       );
     }
+    const paceSeconds = percentTarget
+      ? showPace(step.target.value, paceThreshold)
+      : step.targetPaceSeconds;
     return (
       <PaceEditorInput
-        seconds={step.targetPaceSeconds}
+        seconds={paceSeconds}
         discipline={planDiscipline}
         displayUnit={displayUnit}
         poolSize={poolSize}
         label={label}
         placeholder="5:00"
         onCommit={(pace) =>
-          onChange({
-            target: { signal: "pace", mode: "value" },
-            targetPaceSeconds: pace,
-          })
+          emit(
+            percentTarget
+              ? {
+                  target: { signal: "pace", mode: "value", value: storePace(pace) },
+                }
+              : {
+                  target: { signal: "pace", mode: "value" },
+                  targetPaceSeconds: pace,
+                }
+          )
         }
       />
     );
@@ -1081,6 +1187,7 @@ function NodeEditor({
   targetView,
   lengthView,
   primaryTargetSignal,
+  thresholds,
   path,
   siblingCount,
   activeDragPath,
@@ -1093,6 +1200,7 @@ function NodeEditor({
   targetView: TargetView;
   lengthView: LengthView;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
+  thresholds: TargetThresholds;
   path: number[];
   siblingCount: number;
   activeDragPath: number[] | null;
@@ -1113,6 +1221,7 @@ function NodeEditor({
           poolSize={poolSize}
           displayUnit={displayUnit}
           targetView={targetView}
+          thresholdPaceSeconds={thresholds.thresholdPaceSeconds}
           dense={dense}
           canRemove={canRemove}
           onChange={(next) =>
@@ -1162,6 +1271,7 @@ function NodeEditor({
               displayUnit={displayUnit}
               poolSize={poolSize}
               primaryTargetSignal={primaryTargetSignal}
+              thresholds={thresholds}
               onChange={(patch) =>
                 onTreeChange((nodes) =>
                   updateAtPath(nodes, path, (n) => (n.kind === "step" ? { ...n, ...patch } : n))
@@ -1236,6 +1346,23 @@ function NodeEditor({
 
   if (node.kind === "ramp") {
     const step = node;
+    // Ramps edit in native units; relative ramps convert back on commit.
+    const rampPercent = step.target.unit === "percent";
+    const rampFtp =
+      thresholds.ftpWatts && thresholds.ftpWatts > 0 ? thresholds.ftpWatts : null;
+    const rampPaceThreshold = effectiveThresholdPaceSeconds(
+      discipline === "SWIM" ? "SWIM" : "RUN",
+      thresholds.thresholdPaceSeconds
+    );
+    const showRampPower = (v: number) =>
+      rampPercent && rampFtp ? (absoluteFromPercent("power", v, rampFtp) ?? v) : v;
+    const storeRampPower = (v: number) =>
+      rampPercent && rampFtp ? (percentFromAbsolute("power", v, rampFtp) ?? v) : v;
+    const showRampPace = (v: number) =>
+      rampPercent ? (absoluteFromPercent("pace", v, rampPaceThreshold) ?? v) : v;
+    const storeRampPace = (v: number) =>
+      rampPercent ? (percentFromAbsolute("pace", v, rampPaceThreshold) ?? v) : v;
+    const rampUnit = rampPercent ? ({ unit: "percent" } as const) : {};
     return (
       <DraggableNodeShell path={path} dimmed={dimmed}>
         <div className={`${cardGap} rounded-md border border-amber-200 bg-amber-50/50 ${cardPad} dark:border-amber-900 dark:bg-amber-950/20`}>
@@ -1387,8 +1514,8 @@ function NodeEditor({
         {targetView === "pace_power" && discipline === "BIKE" && (
           <div className="grid gap-2 sm:grid-cols-2">
             <NumberEditorInput
-              label="Start power (W)"
-              value={step.target.low}
+              label={rampPercent && !rampFtp ? "Start power (% FTP)" : "Start power (W)"}
+              value={showRampPower(step.target.low)}
               min={1}
               step={5}
               onCommit={(low) => {
@@ -1401,8 +1528,9 @@ function NodeEditor({
                           target: {
                             signal: "power",
                             mode: "range",
-                            low,
+                            low: storeRampPower(low),
                             high: n.target.high,
+                            ...rampUnit,
                           },
                         }
                       : n
@@ -1411,8 +1539,8 @@ function NodeEditor({
               }}
             />
             <NumberEditorInput
-              label="End power (W)"
-              value={step.target.high}
+              label={rampPercent && !rampFtp ? "End power (% FTP)" : "End power (W)"}
+              value={showRampPower(step.target.high)}
               min={1}
               step={5}
               onCommit={(high) => {
@@ -1426,7 +1554,8 @@ function NodeEditor({
                             signal: "power",
                             mode: "range",
                             low: n.target.low,
-                            high,
+                            high: storeRampPower(high),
+                            ...rampUnit,
                           },
                         }
                       : n
@@ -1439,7 +1568,7 @@ function NodeEditor({
         {targetView === "pace_power" && (discipline === "RUN" || discipline === "SWIM") && (
           <div className="grid gap-2 sm:grid-cols-2">
             <PaceEditorInput
-              seconds={step.target.low}
+              seconds={showRampPace(step.target.low)}
               discipline={discipline as PlanDiscipline}
               displayUnit={displayUnit}
               poolSize={poolSize}
@@ -1453,8 +1582,9 @@ function NodeEditor({
                           target: {
                             signal: "pace",
                             mode: "range",
-                            low: pace,
+                            low: storeRampPace(pace),
                             high: n.target.high,
+                            ...rampUnit,
                           },
                         }
                       : n
@@ -1463,7 +1593,7 @@ function NodeEditor({
               }
             />
             <PaceEditorInput
-              seconds={step.target.high}
+              seconds={showRampPace(step.target.high)}
               discipline={discipline as PlanDiscipline}
               displayUnit={displayUnit}
               poolSize={poolSize}
@@ -1478,7 +1608,8 @@ function NodeEditor({
                             signal: "pace",
                             mode: "range",
                             low: n.target.low,
-                            high: pace,
+                            high: storeRampPace(pace),
+                            ...rampUnit,
                           },
                         }
                       : n
@@ -1535,6 +1666,7 @@ function NodeEditor({
           targetView={targetView}
           lengthView={lengthView}
           primaryTargetSignal={primaryTargetSignal}
+          thresholds={thresholds}
           activeDragPath={activeDragPath}
           onTreeChange={onTreeChange}
         />
@@ -1580,6 +1712,7 @@ function WorkoutNodeList({
   targetView,
   lengthView,
   primaryTargetSignal,
+  thresholds,
   activeDragPath,
   onTreeChange,
 }: {
@@ -1591,6 +1724,7 @@ function WorkoutNodeList({
   targetView: TargetView;
   lengthView: LengthView;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
+  thresholds: TargetThresholds;
   activeDragPath: number[] | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
@@ -1611,6 +1745,7 @@ function WorkoutNodeList({
               targetView={targetView}
               lengthView={lengthView}
               primaryTargetSignal={primaryTargetSignal}
+              thresholds={thresholds}
               path={path}
               siblingCount={nodes.length}
               activeDragPath={activeDragPath}
@@ -1631,6 +1766,7 @@ export function WorkoutTreeEditor({
   tree,
   onChange,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   primarySignal = null,
   compact = false,
   stepsPanel = false,
@@ -1639,6 +1775,10 @@ export function WorkoutTreeEditor({
   const primaryTargetSignal = useMemo(
     () => resolvePrimaryTargetSignal(discipline, primarySignal),
     [discipline, primarySignal]
+  );
+  const thresholds = useMemo<TargetThresholds>(
+    () => ({ thresholdPaceSeconds, ftpWatts: thresholdFtpWatts }),
+    [thresholdPaceSeconds, thresholdFtpWatts]
   );
   const totalSeconds = totalTreeDurationSeconds(tree.nodes, thresholdPaceSeconds);
   const totalLabel = totalSeconds > 0 ? formatDurationSeconds(totalSeconds) : "0s";
@@ -1790,6 +1930,7 @@ export function WorkoutTreeEditor({
       targetView={targetView}
       lengthView={lengthView}
       primaryTargetSignal={primaryTargetSignal}
+      thresholds={thresholds}
       activeDragPath={activeDragPath}
       onTreeChange={onTreeChange}
     />
@@ -1803,6 +1944,7 @@ export function WorkoutTreeEditor({
       primarySignal={primarySignal}
       displayUnit={displayUnit}
       thresholdPaceSeconds={thresholdPaceSeconds}
+      thresholdFtpWatts={thresholdFtpWatts}
       compact={compact && !chartOnly}
       poolStrip={chartOnly}
     />

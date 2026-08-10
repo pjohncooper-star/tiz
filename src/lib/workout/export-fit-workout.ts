@@ -1,12 +1,13 @@
 import { Encoder, Profile } from "@garmin/fitsdk";
 import type { Discipline } from "@prisma/client";
 import {
-  encodeFitHeartRate,
   encodeFitHeartRatePercent,
-  encodeFitPower,
+  encodeFitHeartRateValue,
   encodeFitPowerPercent,
+  encodeFitPowerValue,
   encodeFitSpeedMps,
   paceSecondsToMps,
+  percentPaceToMps,
   zoneToPercentFtp,
   zoneToPercentMaxHr,
   zoneToSpeedEncoded,
@@ -102,11 +103,14 @@ function applyLeafTarget(
     }
   }
 
+  // Percent values are relative, so small integers are never zone indices.
+  const percent = target.unit === "percent";
+
   if (target.mode === "range" && target.low != null && target.high != null) {
     if (target.signal === "heart_rate") {
       const lowZone = Math.round(target.low);
       const highZone = Math.round(target.high);
-      if (lowZone >= 1 && lowZone <= 5 && highZone >= 1 && highZone <= 5) {
+      if (!percent && lowZone >= 1 && lowZone <= 5 && highZone >= 1 && highZone <= 5) {
         const { low, high } = encodeZoneRangeAsHeartRate(lowZone, highZone);
         applyCustomRange(msg, "heartRate", "customTargetHeartRateLow", "customTargetHeartRateHigh", low, high);
       } else {
@@ -115,8 +119,8 @@ function applyLeafTarget(
           "heartRate",
           "customTargetHeartRateLow",
           "customTargetHeartRateHigh",
-          encodeFitHeartRate(target.low, thresholds),
-          encodeFitHeartRate(target.high, thresholds)
+          encodeFitHeartRateValue(target.low, target.unit, thresholds),
+          encodeFitHeartRateValue(target.high, target.unit, thresholds)
         );
       }
       return;
@@ -126,6 +130,7 @@ function applyLeafTarget(
       const lowZone = Math.round(target.low);
       const highZone = Math.round(target.high);
       if (
+        !percent &&
         lowZone >= 1 &&
         lowZone <= 7 &&
         highZone >= 1 &&
@@ -137,8 +142,13 @@ function applyLeafTarget(
         const highEnc = zoneToSpeedEncoded(highZone, discipline, thresholds);
         applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh", lowEnc, highEnc);
       } else {
-        const lowMps = paceSecondsToMps(target.high, discipline);
-        const highMps = paceSecondsToMps(target.low, discipline);
+        // Percent is % of threshold speed (higher = faster); pace seconds invert.
+        const lowMps = percent
+          ? percentPaceToMps(Math.min(target.low, target.high), discipline, thresholds)
+          : paceSecondsToMps(target.high, discipline);
+        const highMps = percent
+          ? percentPaceToMps(Math.max(target.low, target.high), discipline, thresholds)
+          : paceSecondsToMps(target.low, discipline);
         applyCustomRange(
           msg,
           "speed",
@@ -155,6 +165,7 @@ function applyLeafTarget(
     const highZone = Math.round(target.high);
     if (
       target.signal === "power" &&
+      !percent &&
       lowZone >= 1 &&
       lowZone <= 7 &&
       highZone >= 1 &&
@@ -172,15 +183,15 @@ function applyLeafTarget(
       "power",
       "customTargetPowerLow",
       "customTargetPowerHigh",
-      encodeFitPower(target.low, thresholds),
-      encodeFitPower(target.high, thresholds)
+      encodeFitPowerValue(target.low, target.unit, thresholds),
+      encodeFitPowerValue(target.high, target.unit, thresholds)
     );
     return;
   }
 
   if (target.mode === "value") {
     if (target.signal === "heart_rate" && target.value != null) {
-      const encoded = encodeFitHeartRate(target.value, thresholds);
+      const encoded = encodeFitHeartRateValue(target.value, target.unit, thresholds);
       applyCustomRange(
         msg,
         "heartRate",
@@ -192,15 +203,22 @@ function applyLeafTarget(
       return;
     }
 
-    if ((target.signal === "pace" || target.signal === "speed") && step.targetPaceSeconds) {
-      const mps = paceSecondsToMps(step.targetPaceSeconds, discipline);
-      const encoded = encodeFitSpeedMps(mps);
-      applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh", encoded, encoded);
-      return;
+    if (target.signal === "pace" || target.signal === "speed") {
+      const mps =
+        percent && target.value != null
+          ? percentPaceToMps(target.value, discipline, thresholds)
+          : step.targetPaceSeconds
+            ? paceSecondsToMps(step.targetPaceSeconds, discipline)
+            : null;
+      if (mps != null) {
+        const encoded = encodeFitSpeedMps(mps);
+        applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh", encoded, encoded);
+        return;
+      }
     }
 
     if (target.signal === "power" && target.value != null) {
-      const encoded = encodeFitPower(target.value, thresholds);
+      const encoded = encodeFitPowerValue(target.value, target.unit, thresholds);
       applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh", encoded, encoded);
     }
   }
@@ -267,21 +285,27 @@ function emitRamp(
     return msg;
   }
 
+  const rampPercent = step.target.unit === "percent";
+
   if (step.target.signal === "heart_rate") {
     applyCustomRange(
       msg,
       "heartRate",
       "customTargetHeartRateLow",
       "customTargetHeartRateHigh",
-      encodeFitHeartRate(step.target.low, thresholds),
-      encodeFitHeartRate(step.target.high, thresholds)
+      encodeFitHeartRateValue(step.target.low, step.target.unit, thresholds),
+      encodeFitHeartRateValue(step.target.high, step.target.unit, thresholds)
     );
     return msg;
   }
 
   if (step.target.signal === "pace" || step.target.signal === "speed") {
-    const lowMps = paceSecondsToMps(step.target.high, discipline);
-    const highMps = paceSecondsToMps(step.target.low, discipline);
+    const lowMps = rampPercent
+      ? percentPaceToMps(Math.min(step.target.low, step.target.high), discipline, thresholds)
+      : paceSecondsToMps(step.target.high, discipline);
+    const highMps = rampPercent
+      ? percentPaceToMps(Math.max(step.target.low, step.target.high), discipline, thresholds)
+      : paceSecondsToMps(step.target.low, discipline);
     applyCustomRange(
       msg,
       "speed",
@@ -298,8 +322,8 @@ function emitRamp(
     "power",
     "customTargetPowerLow",
     "customTargetPowerHigh",
-    encodeFitPower(step.target.low, thresholds),
-    encodeFitPower(step.target.high, thresholds)
+    encodeFitPowerValue(step.target.low, step.target.unit, thresholds),
+    encodeFitPowerValue(step.target.high, step.target.unit, thresholds)
   );
   return msg;
 }

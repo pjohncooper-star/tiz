@@ -7,7 +7,10 @@ import {
   parsePlannedSessionsCsv,
   type CsvImportRowError,
 } from "@/lib/plan/csv-import";
-import { loadCsvImportThresholds } from "@/lib/plan/csv-import.server";
+import {
+  loadCsvImportThresholds,
+  type CsvImportBaselineOverrides,
+} from "@/lib/plan/csv-import.server";
 import {
   buildDisciplineSettings,
   type DisciplineUnitSettings,
@@ -105,6 +108,7 @@ export async function createTrainingPlanFromCsv(
     description?: string | null;
     csvText: string;
     confirmLargeGaps?: boolean;
+    baseline?: CsvImportBaselineOverrides;
   }
 ): Promise<TrainingPlanListItem & { gapWarning: boolean; maxGapDays: number }> {
   const name = input.name.trim();
@@ -125,7 +129,7 @@ export async function createTrainingPlanFromCsv(
 
   const [settings, thresholds] = await Promise.all([
     loadDisciplineSettings(athleteId),
-    loadCsvImportThresholds(athleteId),
+    loadCsvImportThresholds(athleteId, input.baseline ?? {}),
   ]);
   const parsed = parsePlannedSessionsCsv(input.csvText, settings, thresholds);
   if (!parsed.ok) {

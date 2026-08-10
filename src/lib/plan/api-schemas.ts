@@ -20,6 +20,8 @@ const stepDurationSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+const targetUnitSchema = z.enum(["absolute", "percent"]);
+
 const stepTargetSchema = z.object({
   signal: z.enum(["power", "heart_rate", "pace", "speed", "open"]),
   mode: z.enum(["zone", "range", "value"]),
@@ -27,6 +29,7 @@ const stepTargetSchema = z.object({
   low: z.number().optional(),
   high: z.number().optional(),
   value: z.number().optional(),
+  unit: targetUnitSchema.optional(),
 });
 
 const rampTargetSchema = z.object({
@@ -36,6 +39,7 @@ const rampTargetSchema = z.object({
   mode: z.enum(["zone", "range"]).optional(),
   lowZone: z.number().int().min(1).max(7).optional(),
   highZone: z.number().int().min(1).max(7).optional(),
+  unit: targetUnitSchema.optional(),
 });
 
 export const leafStepSchema = z.object({

@@ -9,6 +9,12 @@ import type {
   WorkoutNode,
 } from "@/lib/workout/workout-tree";
 import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
+import {
+  isPercentTarget,
+  resolveRampValues,
+  resolveTargetValues,
+  type ResolvedTargetValues,
+} from "@/lib/workout/target-units";
 import { targetZoneFromTarget } from "@/lib/workout/workout-tree";
 import { inferSignalFromWorkoutNodes } from "@/lib/workout/infer-prescription-signal";
 
@@ -81,6 +87,7 @@ const HR_ZONE_FILL: Record<number, string> = {
 
 function isZoneRange(target: StepTarget): boolean {
   if (target.mode !== "range" || target.low == null || target.high == null) return false;
+  if (isPercentTarget(target)) return false;
   return (
     Number.isInteger(target.low) &&
     Number.isInteger(target.high) &&
@@ -89,6 +96,23 @@ function isZoneRange(target: StepTarget): boolean {
     target.high >= 1 &&
     target.high <= 7
   );
+}
+
+/** Percent targets plot in native units against the athlete's thresholds. */
+function nativeTargetValues(
+  target: StepTarget,
+  discipline: Discipline,
+  thresholds: WorkoutProfileThresholds
+): ResolvedTargetValues {
+  return resolveTargetValues(target, {
+    ftpWatts: thresholds.thresholdFtpWatts,
+    thresholdHrBpm: thresholds.thresholdHrBpm,
+    thresholdPaceSeconds:
+      thresholds.thresholdPaceSeconds ??
+      (discipline === "RUN" || discipline === "SWIM"
+        ? FALLBACK_PACE[discipline]
+        : null),
+  });
 }
 
 function wattsAtZoneMidpoint(zone: number, ftp: number): number {
@@ -111,15 +135,17 @@ function paceSecondsFromLeaf(
   if (step.targetPaceSeconds != null && step.targetPaceSeconds > 0) {
     return step.targetPaceSeconds;
   }
-  const t = step.target;
-  if (t.mode === "value" && t.value != null && t.value > 0 && (t.signal === "pace" || t.signal === "speed")) {
+  const t = nativeTargetValues(step.target, discipline, { thresholdPaceSeconds });
+  const signal = step.target.signal;
+  const mode = step.target.mode;
+  if (mode === "value" && t.value != null && t.value > 0 && (signal === "pace" || signal === "speed")) {
     return t.value;
   }
-  if (t.mode === "range" && t.low != null && t.high != null && !isZoneRange(t)) {
+  if (mode === "range" && t.low != null && t.high != null && !isZoneRange(step.target)) {
     return (t.low + t.high) / 2;
   }
   if (discipline === "RUN" || discipline === "SWIM") {
-    const zone = targetZoneFromTarget(t);
+    const zone = targetZoneFromTarget(step.target, { discipline });
     const threshold =
       thresholdPaceSeconds && thresholdPaceSeconds > 0
         ? thresholdPaceSeconds
@@ -170,24 +196,26 @@ function resolveLeafY(
       thresholds.thresholdFtpWatts && thresholds.thresholdFtpWatts > 0
         ? thresholds.thresholdFtpWatts
         : FALLBACK_FTP;
-    if (t.mode === "range" && t.low != null && t.high != null && t.signal === "power") {
+    const native = nativeTargetValues(t, discipline, { ...thresholds, thresholdFtpWatts: ftp });
+    if (t.mode === "range" && native.low != null && native.high != null && t.signal === "power") {
       return {
-        low: Math.min(t.low, t.high),
-        high: Math.max(t.low, t.high),
+        low: Math.min(native.low, native.high),
+        high: Math.max(native.low, native.high),
         fill: baseFill,
       };
     }
-    if (t.mode === "value" && t.value != null && t.signal === "power") {
-      return { low: t.value, high: t.value, fill: baseFill };
+    if (t.mode === "value" && native.value != null && t.signal === "power") {
+      return { low: native.value, high: native.value, fill: baseFill };
     }
     const watts = wattsAtZoneMidpoint(zone, ftp);
     return { low: watts, high: watts, fill: zoneFill };
   }
 
   if (primarySignal === "PACE" && (discipline === "RUN" || discipline === "SWIM")) {
-    if (t.mode === "range" && t.low != null && t.high != null && !isZoneRange(t)) {
-      const fast = Math.min(t.low, t.high);
-      const slow = Math.max(t.low, t.high);
+    const native = nativeTargetValues(t, discipline, thresholds);
+    if (t.mode === "range" && native.low != null && native.high != null && !isZoneRange(t)) {
+      const fast = Math.min(native.low, native.high);
+      const slow = Math.max(native.low, native.high);
       return {
         low: paceToInvertedY(slow),
         high: paceToInvertedY(fast),
@@ -202,7 +230,9 @@ function resolveLeafY(
   }
 
   if (primarySignal === "POWER") {
-    const watts = t.mode === "value" && t.value != null ? t.value : zone * 30 + 140;
+    const native = nativeTargetValues(t, discipline, thresholds);
+    const watts =
+      t.mode === "value" && native.value != null ? native.value : zone * 30 + 140;
     return { low: watts, high: watts, fill: zoneFill };
   }
 
@@ -222,16 +252,27 @@ function resolveRampY(
     return { low: Math.min(lowZ, highZ), high: Math.max(lowZ, highZ) };
   }
 
+  const native = resolveRampValues(step.target, {
+    ftpWatts:
+      thresholds.thresholdFtpWatts && thresholds.thresholdFtpWatts > 0
+        ? thresholds.thresholdFtpWatts
+        : FALLBACK_FTP,
+    thresholdHrBpm: thresholds.thresholdHrBpm,
+    thresholdPaceSeconds:
+      thresholds.thresholdPaceSeconds ??
+      (discipline === "RUN" || discipline === "SWIM" ? FALLBACK_PACE[discipline] : null),
+  });
+
   if (primarySignal === "POWER" && discipline === "BIKE") {
     return {
-      low: Math.min(step.target.low, step.target.high),
-      high: Math.max(step.target.low, step.target.high),
+      low: Math.min(native.low, native.high),
+      high: Math.max(native.low, native.high),
     };
   }
 
   if (primarySignal === "PACE" && (discipline === "RUN" || discipline === "SWIM")) {
-    const fast = Math.min(step.target.low, step.target.high);
-    const slow = Math.max(step.target.low, step.target.high);
+    const fast = Math.min(native.low, native.high);
+    const slow = Math.max(native.low, native.high);
     return {
       low: paceToInvertedY(slow),
       high: paceToInvertedY(fast),

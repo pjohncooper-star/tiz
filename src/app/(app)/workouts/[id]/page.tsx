@@ -54,6 +54,7 @@ export default async function WorkoutDetailPage({
         initialCompletedZones={viewModel.initialCompletedZones}
         workoutTree={viewModel.workoutTree}
         thresholdPaceSeconds={viewModel.thresholdPaceSeconds}
+        thresholdFtpWatts={viewModel.thresholdFtpWatts}
         thresholdZoneBoundaries={viewModel.thresholdZoneBoundaries}
         primarySignal={viewModel.primarySignal}
         inheritedPrimarySignal={viewModel.inheritedPrimarySignal}

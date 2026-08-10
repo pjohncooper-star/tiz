@@ -45,7 +45,10 @@ export function draftFromNodes(
   metrics?: PoolCardDraftMetrics
 ): PoolCardDraft | null {
   if (nodes.length === 0) return null;
-  const durationMinutes = totalTreeDurationMinutes(nodes);
+  const durationMinutes = totalTreeDurationMinutes(
+    nodes,
+    discipline === "RUN" || discipline === "SWIM" ? { discipline } : {}
+  );
   const built = buildWorkoutProfile(nodes, {
     primarySignal: defaultPrimarySignalForDiscipline(discipline),
     lengthView: "duration",

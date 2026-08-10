@@ -73,6 +73,7 @@ type PlannedSessionEditorProps = {
   initialCompletedZones?: unknown;
   workoutTree?: WorkoutTreeDocument;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
   thresholdZoneBoundaries?: number[];
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
@@ -105,6 +106,7 @@ export function PlannedSessionEditor({
   initialCompletedZones,
   workoutTree: initialWorkoutTree,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   thresholdZoneBoundaries,
   primarySignal = null,
   inheritedPrimarySignal = null,
@@ -176,7 +178,14 @@ export function PlannedSessionEditor({
   useEffect(() => {
     if (!metricsFromSteps || !hasWorkout || !workoutTree || discipline === "STRENGTH") return;
 
-    const durationMinutes = totalTreeDurationMinutes(workoutTree.nodes);
+    const planningOptions =
+      discipline === "RUN" || discipline === "SWIM"
+        ? { discipline, thresholdPaceSeconds, zoneBoundaries: thresholdZoneBoundaries }
+        : {};
+    const durationMinutes = totalTreeDurationMinutes(
+      workoutTree.nodes,
+      planningOptions
+    );
     if (discipline === "BIKE") {
       setPlannedTriad((prev) => ({
         durationMinutes,
@@ -190,7 +199,7 @@ export function PlannedSessionEditor({
     if (discipline !== "RUN" && discipline !== "SWIM") return;
     const derived = derivePlannedMetricsFromPlanningSteps(
       discipline,
-      flattenForPlanning(workoutTree.nodes),
+      flattenForPlanning(workoutTree.nodes, planningOptions),
       { thresholdPaceSeconds, zoneBoundaries: thresholdZoneBoundaries }
     );
     setDistanceMeters(derived.distanceMeters);
@@ -513,7 +522,14 @@ export function PlannedSessionEditor({
     setMetricsFromSteps(false);
   }
 
-  const totalMinutes = workoutTree ? totalTreeDurationMinutes(workoutTree.nodes) : 0;
+  const totalMinutes = workoutTree
+    ? totalTreeDurationMinutes(
+        workoutTree.nodes,
+        discipline === "RUN" || discipline === "SWIM"
+          ? { discipline, thresholdPaceSeconds, zoneBoundaries: thresholdZoneBoundaries }
+          : {}
+      )
+    : 0;
   const durationCap = plannedTriad.durationMinutes ?? null;
 
   function handleCompletedTriadChange(values: PlannedMetricsTriadValues) {
@@ -747,6 +763,7 @@ export function PlannedSessionEditor({
               tree={workoutTree}
               onChange={setWorkoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
               primarySignal={primarySignal}
             />
             <SessionZoneBudget

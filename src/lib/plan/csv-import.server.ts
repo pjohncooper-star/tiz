@@ -7,6 +7,7 @@ import {
 } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import {
+  CSV_BASELINE_FORM_FIELDS,
   MAX_PLANNED_SESSION_CSV_BYTES,
   parsePlannedSessionsCsv,
   type CsvImportRowError,
@@ -43,22 +44,62 @@ async function loadDisciplineSettings(
   );
 }
 
-export async function loadCsvImportThresholds(athleteId: string): Promise<CsvImportThresholds> {
-  const [power, heartRate] = await Promise.all([
-    db.thresholdProfile.findFirst({
-      where: { athleteId, discipline: "BIKE", signalType: "POWER" },
-      orderBy: { effectiveDate: "desc" },
-      select: { thresholdValue: true },
-    }),
-    db.thresholdProfile.findFirst({
-      where: { athleteId, signalType: "HEART_RATE" },
-      orderBy: { effectiveDate: "desc" },
-      select: { thresholdValue: true },
-    }),
-  ]);
+/** Baseline overrides supplied by the import form, when the plan was written for other thresholds. */
+export type CsvImportBaselineOverrides = Partial<CsvImportThresholds>;
+
+function positiveOrNull(value: number | null | undefined): number | null {
+  return value != null && value > 0 ? value : null;
+}
+
+export function baselineFromFormData(form: FormData): CsvImportBaselineOverrides {
+  const read = (field: string): number | null => {
+    const raw = form.get(field);
+    if (typeof raw !== "string" || !raw.trim()) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
   return {
-    ftpWatts: power?.thresholdValue ?? null,
-    maxHeartRateBpm: heartRate?.thresholdValue ?? null,
+    ftpWatts: read(CSV_BASELINE_FORM_FIELDS.ftpWatts),
+    maxHeartRateBpm: read(CSV_BASELINE_FORM_FIELDS.maxHeartRateBpm),
+    runThresholdPaceSeconds: read(CSV_BASELINE_FORM_FIELDS.runThresholdPaceSeconds),
+    swimThresholdPaceSeconds: read(CSV_BASELINE_FORM_FIELDS.swimThresholdPaceSeconds),
+  };
+}
+
+/**
+ * Athlete thresholds used to normalize absolute CSV targets into % of threshold.
+ * Caller overrides win so a plan written for a different athlete or a later
+ * start date can declare its own baseline.
+ */
+export async function loadCsvImportThresholds(
+  athleteId: string,
+  overrides: CsvImportBaselineOverrides = {}
+): Promise<CsvImportThresholds> {
+  const latest = (where: {
+    discipline?: "BIKE" | "RUN" | "SWIM";
+    signalType: "POWER" | "HEART_RATE" | "PACE";
+  }) =>
+    db.thresholdProfile.findFirst({
+      where: { athleteId, ...where },
+      orderBy: { effectiveDate: "desc" },
+      select: { thresholdValue: true },
+    });
+
+  const [power, heartRate, runPace, swimPace] = await Promise.all([
+    latest({ discipline: "BIKE", signalType: "POWER" }),
+    latest({ signalType: "HEART_RATE" }),
+    latest({ discipline: "RUN", signalType: "PACE" }),
+    latest({ discipline: "SWIM", signalType: "PACE" }),
+  ]);
+
+  return {
+    ftpWatts: positiveOrNull(overrides.ftpWatts) ?? power?.thresholdValue ?? null,
+    maxHeartRateBpm:
+      positiveOrNull(overrides.maxHeartRateBpm) ?? heartRate?.thresholdValue ?? null,
+    runThresholdPaceSeconds:
+      positiveOrNull(overrides.runThresholdPaceSeconds) ?? runPace?.thresholdValue ?? null,
+    swimThresholdPaceSeconds:
+      positiveOrNull(overrides.swimThresholdPaceSeconds) ?? swimPace?.thresholdValue ?? null,
   };
 }
 
@@ -82,7 +123,8 @@ function toCreateData(athleteId: string, session: ParsedPlannedSessionImport) {
 
 export async function importPlannedSessionsCsv(
   athleteId: string,
-  csvText: string
+  csvText: string,
+  baseline: CsvImportBaselineOverrides = {}
 ): Promise<{
   created: number;
   structured: number;
@@ -98,7 +140,7 @@ export async function importPlannedSessionsCsv(
 
   const [settings, thresholds] = await Promise.all([
     loadDisciplineSettings(athleteId),
-    loadCsvImportThresholds(athleteId),
+    loadCsvImportThresholds(athleteId, baseline),
   ]);
   const parsed = parsePlannedSessionsCsv(csvText, settings, thresholds);
   if (!parsed.ok) {

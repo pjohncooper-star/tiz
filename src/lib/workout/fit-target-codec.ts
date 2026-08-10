@@ -1,4 +1,5 @@
 import type { Discipline } from "@prisma/client";
+import type { TargetUnit } from "@/lib/workout/workout-tree";
 
 /** Garmin FIT custom targets use targetValue=0; watts/bpm use field offsets. */
 export const POWER_WATTS_OFFSET = 1000;
@@ -41,6 +42,19 @@ export function encodeFitPower(
   return encodeFitPowerWatts(watts);
 }
 
+/**
+ * FIT expresses power targets as % FTP natively, so a percent target encodes
+ * directly and needs no threshold.
+ */
+export function encodeFitPowerValue(
+  value: number,
+  unit: TargetUnit | undefined,
+  thresholds: FitExportThresholds
+): number {
+  if (unit === "percent") return encodeFitPowerPercent(value);
+  return encodeFitPower(value, thresholds);
+}
+
 export function encodeFitHeartRatePercent(percent: number): number {
   return Math.max(0, Math.round(percent));
 }
@@ -59,6 +73,15 @@ export function encodeFitHeartRate(
   return encodeFitHeartRateBpm(bpm);
 }
 
+export function encodeFitHeartRateValue(
+  value: number,
+  unit: TargetUnit | undefined,
+  thresholds: FitExportThresholds
+): number {
+  if (unit === "percent") return encodeFitHeartRatePercent(value);
+  return encodeFitHeartRate(value, thresholds);
+}
+
 /** Canonical pace: sec/km (run) or sec/100m (swim). */
 export function paceSecondsToMps(
   paceSeconds: number,
@@ -71,6 +94,25 @@ export function paceSecondsToMps(
 
 export function encodeFitSpeedMps(mps: number): number {
   return Math.round(mps * SPEED_SCALE);
+}
+
+export function defaultThresholdPaceSeconds(
+  discipline: Discipline,
+  thresholds: FitExportThresholds
+): number {
+  return (
+    thresholds.thresholdPaceSecondsPerKm ?? (discipline === "SWIM" ? 120 : 300)
+  );
+}
+
+/** Pace percent is % of threshold speed, so it scales m/s directly. */
+export function percentPaceToMps(
+  percentOfThresholdSpeed: number,
+  discipline: Discipline,
+  thresholds: FitExportThresholds
+): number {
+  const base = defaultThresholdPaceSeconds(discipline, thresholds);
+  return paceSecondsToMps(base, discipline) * (percentOfThresholdSpeed / 100);
 }
 
 export function zoneToSpeedEncoded(
