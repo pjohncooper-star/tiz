@@ -7,6 +7,7 @@ import {
   normalizeZoneSplitPercents,
 } from "./phase-zone-defaults";
 import type { ZoneFocusCatalog } from "./zone-focus-catalog";
+import { ZONES } from "@/lib/zones/model";
 import {
   phaseForWeek,
   isRampOnForDiscipline,
@@ -169,7 +170,7 @@ export function computeZoneMinutesForWeekFromSplits(input: {
 
     const totalMinutes = input.week[HOURS_KEY[discipline]] * 60;
     const zoneMins = minutesFromPercents(totalMinutes, percents);
-    for (let z = 1; z <= 5; z++) {
+    for (const z of ZONES) {
       zones[zoneKey(discipline, z)] = roundMinutes(zoneMins[z - 1]!);
     }
   }

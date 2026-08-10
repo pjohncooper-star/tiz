@@ -6,6 +6,7 @@ import {
   weightedEcoFromZoneMinutes,
 } from "@/lib/eco/scores";
 import type { EcoZoneMinutes } from "@/lib/eco/compute";
+import { ZONES } from "@/lib/zones/model";
 
 /**
  * Fixed TiZ (5-zone) → ECO (8-zone) minute split.
@@ -43,7 +44,7 @@ export function tizMinutesForDiscipline(
   zoneMinutes: ZoneMinutes
 ): Record<number, number> {
   const out: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  for (let z = 1; z <= 5; z++) {
+  for (const z of ZONES) {
     const keyed = zoneMinutes[zoneKey(discipline, z)];
     const bare = zoneMinutes[String(z)];
     out[z] =
@@ -58,7 +59,7 @@ export function mapTizMinutesToEcoZones(
   tizMinutes: Record<number, number>
 ): EcoZoneMinutes {
   const eco = emptyEcoZoneMinutes();
-  for (let z = 1; z <= 5; z++) {
+  for (const z of ZONES) {
     const minutes = tizMinutes[z] ?? 0;
     if (!(minutes > 0)) continue;
     const splits = TIZ_TO_ECO_SPLIT[z as 1 | 2 | 3 | 4 | 5];

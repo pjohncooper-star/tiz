@@ -5,6 +5,7 @@ import type { PlanDiscipline } from "@/lib/plan/session";
 import type { PlannedMetricsTriadValues } from "@/lib/plan/planned-metrics-triad";
 import { sessionPlannedZoneRollup } from "@/lib/plan/rollup";
 import { parseStoredStreams } from "@/lib/zones/process-activity";
+import { ZONES } from "@/lib/zones/model";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import {
   formatSessionDistance,
@@ -315,7 +316,7 @@ export function disciplineZoneMinutes(
   discipline: Discipline
 ): ZoneMinutes {
   const result: ZoneMinutes = {};
-  for (const zone of [1, 2, 3, 4, 5] as const) {
+  for (const zone of ZONES) {
     const key = zoneKey(discipline, zone);
     const minutes = zones[key];
     if (minutes && minutes > 0) result[key] = minutes;

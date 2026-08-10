@@ -2,6 +2,7 @@ import type { DeLoadStrategy, Discipline, FocusMode, PhaseFocus } from "@prisma/
 import { emptyZoneBudget, zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 import { DE_LOAD_INTENSITY_SHIFT, FOCUS_TIZ_PRESETS } from "./constants";
 import type { PhaseDisciplineFocus, SeasonPhaseInput } from "./types";
+import { ZONES } from "@/lib/zones/model";
 
 const TRI_DISCIPLINES: Discipline[] = ["SWIM", "BIKE", "RUN"];
 
@@ -92,7 +93,7 @@ export function computeZoneMinutesForWeek(input: {
 
     const totalMinutes = hoursByDiscipline[discipline] * 60;
     const zoneMins = minutesFromPercents(totalMinutes, percents);
-    for (let z = 1; z <= 5; z++) {
+    for (const z of ZONES) {
       const key = zoneKey(discipline, z);
       zones[key] = Math.round(zoneMins[z - 1]! * 10) / 10;
     }
@@ -104,7 +105,7 @@ export function computeZoneMinutesForWeek(input: {
 export function aggregateZoneMinutesAcrossDisciplines(zones: ZoneMinutes): number[] {
   const totals = [0, 0, 0, 0, 0];
   for (const discipline of TRI_DISCIPLINES) {
-    for (let z = 1; z <= 5; z++) {
+    for (const z of ZONES) {
       totals[z - 1]! += zones[zoneKey(discipline, z)] ?? 0;
     }
   }

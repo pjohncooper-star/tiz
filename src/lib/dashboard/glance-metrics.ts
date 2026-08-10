@@ -10,6 +10,7 @@ import {
   type MeanMaxPoint,
 } from "@/lib/activity/mean-max";
 import { mondayWeekStartKey } from "@/lib/dates";
+import { ZONES, isZoneNumber } from "@/lib/zones/model";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 
 export type DurationCurveKind = "power" | "run_pace";
@@ -197,11 +198,11 @@ export function computeZoneMix(activities: ActivityForVolume[]): ZoneMixPoint[] 
     }
     for (const zb of activity.zoneBreakdowns) {
       if (!zb.isCanonical || !(zb.minutes > 0)) continue;
-      if (zb.zone < 1 || zb.zone > 5) continue;
+      if (!isZoneNumber(zb.zone)) continue;
       totals[zb.zone] += zb.minutes;
     }
   }
-  return [1, 2, 3, 4, 5].map((zone) => ({
+  return ZONES.map((zone) => ({
     zone,
     minutes: round2(totals[zone] ?? 0),
   }));

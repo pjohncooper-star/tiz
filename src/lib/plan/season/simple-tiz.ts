@@ -7,7 +7,7 @@ import {
   type SimpleDiscipline,
   type SimplePhaseSpan,
 } from "./simple-ramp";
-import { ZONES } from "@/lib/zones/model";
+import { LEGACY_MAX_AUTHORED_ZONE, ZONES, clampZone } from "@/lib/zones/model";
 
 const TRI_DISCIPLINES = ["SWIM", "BIKE", "RUN"] as const;
 type TriDiscipline = (typeof TRI_DISCIPLINES)[number];
@@ -102,18 +102,25 @@ export function parseZoneRampDefaults(raw: unknown): ZoneRampDefaultsByDisciplin
   return defaults;
 }
 
-const DISCIPLINE_ZONE_KEY = /^(SWIM|BIKE|RUN)-([1-7])$/;
+const DISCIPLINE_ZONE_KEY = new RegExp(
+  `^(SWIM|BIKE|RUN)-([1-${LEGACY_MAX_AUTHORED_ZONE}])$`
+);
 
-/** Parse season-week zone minutes keyed by discipline, e.g. RUN-4. */
+/**
+ * Parse season-week zone minutes keyed by discipline, e.g. RUN-4.
+ * Weeks stored before zones were unified can hold RUN-6/RUN-7 keys; those
+ * minutes are clamped into the canonical range rather than dropped.
+ */
 export function parseDisciplineZoneMinutes(raw: unknown): ZoneMinutes {
   if (!raw || typeof raw !== "object") return {};
   const totals: ZoneMinutes = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const minutes = Number(value);
     if (!Number.isFinite(minutes) || minutes < 0) continue;
-    if (DISCIPLINE_ZONE_KEY.test(key)) {
-      totals[key] = minutes;
-    }
+    const match = DISCIPLINE_ZONE_KEY.exec(key);
+    if (!match) continue;
+    const canonical = zoneKey(match[1]!, clampZone(Number(match[2])));
+    totals[canonical] = (totals[canonical] ?? 0) + minutes;
   }
   return totals;
 }
