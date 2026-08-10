@@ -297,6 +297,11 @@ model Athlete {
   phaseKindZoneDefaults Json?
   /** When false, ECO load is still computed but never shown in UI or signaling. */
   ecoLoadEnabled             Boolean              @default(false)
+  /**
+   * Opaque token for private calendar feed subscription (?token=).
+   * Null until the athlete generates a feed URL in Settings.
+   */
+  calendarFeedToken          String?              @unique
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 
@@ -741,6 +746,13 @@ model PlannedSession {
   weeklyTemplateItemId     String?
   goalEventId              String?
   scheduledDate            DateTime             @db.Date
+  /**
+   * Optional local wall-clock start on scheduledDate, as minutes from midnight (0–1439).
+   * Null = untimed; within-day order then uses daySortOrder.
+   */
+  scheduledTimeMinutes     Int?
+  /** Within-day order for untimed sessions (and stable tie-break). */
+  daySortOrder             Int                  @default(0)
   discipline               Discipline
   title                    String
   notes                    String?
@@ -784,6 +796,7 @@ model PlannedSession {
   foldersLastCompleted WorkoutFolder[]       @relation("FolderLastCompleted")
 
   @@index([athleteId, scheduledDate])
+  @@index([athleteId, scheduledDate, daySortOrder])
   @@index([athleteId, trainingPlanId, scheduledDate])
   @@index([goalEventId])
   @@index([multisportGroupId])

@@ -21,6 +21,7 @@ import { workoutHref } from "@/lib/plan/workout-href";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
 import { nextSessionRole, sessionRoleAccentClass, sessionRoleShowsBadge } from "@/lib/plan/session-role";
+import { formatScheduledTimeLabel } from "@/lib/plan/session-day-order";
 import type { SessionRole } from "@prisma/client";
 
 type CalendarSessionCardProps = {
@@ -87,12 +88,15 @@ export function CalendarSessionCard({
     data: {
       type: "session-workout",
       sessionId: session.id,
+      session,
       discipline: session.discipline,
       source: session.source,
       hasStructuredWorkout: session.stepCount > 0,
     },
     disabled: !showWorkoutDropTarget,
   });
+
+  const timeLabel = formatScheduledTimeLabel(session.scheduledTimeMinutes);
 
   const [deleting, setDeleting] = useState(false);
   const [updatingRole, setUpdatingRole] = useState(false);
@@ -201,7 +205,11 @@ export function CalendarSessionCard({
         <button
           type="button"
           className="mt-0.5 shrink-0 cursor-grab touch-none text-zinc-400 hover:text-zinc-600 active:cursor-grabbing"
-          aria-label="Drag to reschedule"
+          aria-label={
+            session.scheduledTimeMinutes != null
+              ? "Drag to move to another day"
+              : "Drag to reorder or reschedule"
+          }
           {...listeners}
           {...attributes}
         >
@@ -214,6 +222,11 @@ export function CalendarSessionCard({
           >
             <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
+              {timeLabel ? (
+                <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+                  {timeLabel}
+                </span>
+              ) : null}
               <span className={pillClassName}>{disciplineLabel(session.discipline)}</span>
               {session.source !== "RACE" ? (
                 sessionRoleShowsBadge(session.displaySessionRole as SessionRole) ? (

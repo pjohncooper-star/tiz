@@ -1,4 +1,5 @@
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
+import { compareSessionsForDayOrder } from "@/lib/plan/session-day-order";
 
 export type PlannedSessionGroup =
   | { kind: "single"; session: CalendarPlannedSession }
@@ -11,6 +12,29 @@ export type PlannedSessionGroup =
       distanceMeters: number | null;
       estimatedDurationMinutes: number | null;
     };
+
+function groupOrderKey(group: PlannedSessionGroup): {
+  scheduledDate: string;
+  scheduledTimeMinutes: number | null;
+  daySortOrder: number;
+  title: string;
+} {
+  if (group.kind === "single") {
+    return {
+      scheduledDate: group.session.scheduledDate,
+      scheduledTimeMinutes: group.session.scheduledTimeMinutes ?? null,
+      daySortOrder: group.session.daySortOrder ?? 0,
+      title: group.session.title,
+    };
+  }
+  const primary = group.legs[0]!;
+  return {
+    scheduledDate: group.scheduledDate,
+    scheduledTimeMinutes: primary.scheduledTimeMinutes ?? null,
+    daySortOrder: primary.daySortOrder ?? 0,
+    title: group.title,
+  };
+}
 
 export function groupPlannedSessions(sessions: CalendarPlannedSession[]): PlannedSessionGroup[] {
   const groups = new Map<string, CalendarPlannedSession[]>();
@@ -46,8 +70,20 @@ export function groupPlannedSessions(sessions: CalendarPlannedSession[]): Planne
   }
 
   return result.sort((a, b) => {
-    const dateA = a.kind === "single" ? a.session.scheduledDate : a.scheduledDate;
-    const dateB = b.kind === "single" ? b.session.scheduledDate : b.scheduledDate;
-    return dateA.localeCompare(dateB);
+    const keyA = groupOrderKey(a);
+    const keyB = groupOrderKey(b);
+    if (keyA.scheduledDate !== keyB.scheduledDate) {
+      return keyA.scheduledDate.localeCompare(keyB.scheduledDate);
+    }
+    return compareSessionsForDayOrder(
+      {
+        id: a.kind === "single" ? a.session.id : a.groupId,
+        ...keyA,
+      },
+      {
+        id: b.kind === "single" ? b.session.id : b.groupId,
+        ...keyB,
+      }
+    );
   });
 }

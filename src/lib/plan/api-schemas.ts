@@ -114,6 +114,14 @@ export const workoutTagsSchema = z
   .array(z.string().trim().min(1).max(40))
   .max(20);
 
+/** Optional local start time as minutes from midnight (0–1439), or null to clear. */
+export const scheduledTimeMinutesSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(1439)
+  .nullable();
+
 export const planSessionCompletedMetricsSchema = z.object({
   completedDurationMinutes: z.number().positive().nullable().optional(),
   completedDistanceMeters: z.number().positive().nullable().optional(),

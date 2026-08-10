@@ -80,7 +80,12 @@ export default async function DashboardPage() {
             },
           },
         },
-        orderBy: [{ scheduledDate: "asc" }, { title: "asc" }],
+        orderBy: [
+          { scheduledDate: "asc" },
+          { scheduledTimeMinutes: { sort: "asc", nulls: "last" } },
+          { daySortOrder: "asc" },
+          { title: "asc" },
+        ],
       }),
       db.syncedActivity.findMany({
         where: {

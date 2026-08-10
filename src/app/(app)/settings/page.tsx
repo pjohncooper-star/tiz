@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TrainingPlanCsvSettings } from "@/components/training-plan-csv-settings";
+import { CalendarFeedSettings } from "@/components/calendar-feed-settings";
 import { DisciplineUnitsSettings } from "@/components/discipline-units-settings";
 import { EcoLoadSettingsPanel } from "@/components/eco-load-settings-panel";
 import { SelfEvalSettingsPanel } from "@/components/self-eval-settings-panel";
@@ -32,12 +33,13 @@ async function loadAthleteSettingsProfile(athleteId: string) {
         phaseKindZoneDefaults: true,
         zoneFocusCatalog: true,
         ecoLoadEnabled: true,
+        calendarFeedToken: true,
       },
     });
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|ecoLoadEnabled|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|ecoLoadEnabled|calendarFeedToken|column/.test(
         error.message
       )
     ) {
@@ -49,21 +51,40 @@ async function loadAthleteSettingsProfile(athleteId: string) {
             selfEvalConfig: true,
             workoutShadingTarget: true,
             ecoLoadEnabled: true,
+            calendarFeedToken: true,
           },
         });
       } catch (inner) {
         if (
           inner instanceof Error &&
-          /ecoLoadEnabled|column/.test(inner.message)
+          /ecoLoadEnabled|calendarFeedToken|column/.test(inner.message)
         ) {
-          return db.athlete.findUnique({
-            where: { id: athleteId },
-            select: {
-              strengthPastWorkoutShading: true,
-              selfEvalConfig: true,
-              workoutShadingTarget: true,
-            },
-          });
+          try {
+            return await db.athlete.findUnique({
+              where: { id: athleteId },
+              select: {
+                strengthPastWorkoutShading: true,
+                selfEvalConfig: true,
+                workoutShadingTarget: true,
+                calendarFeedToken: true,
+              },
+            });
+          } catch (inner2) {
+            if (
+              inner2 instanceof Error &&
+              /calendarFeedToken|column/.test(inner2.message)
+            ) {
+              return db.athlete.findUnique({
+                where: { id: athleteId },
+                select: {
+                  strengthPastWorkoutShading: true,
+                  selfEvalConfig: true,
+                  workoutShadingTarget: true,
+                },
+              });
+            }
+            throw inner2;
+          }
         }
         throw inner;
       }
@@ -110,12 +131,19 @@ export default async function SettingsPage() {
     athlete && "ecoLoadEnabled" in athlete
       ? Boolean(athlete.ecoLoadEnabled)
       : false;
+  const calendarFeedToken =
+    athlete && "calendarFeedToken" in athlete
+      ? (athlete.calendarFeedToken as string | null)
+      : null;
 
   return (
     <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
       <h1 className="text-2xl font-semibold">Settings</h1>
       <Card title="Units">
         <DisciplineUnitsSettings initialSettings={disciplineSettings} />
+      </Card>
+      <Card title="Calendar subscription">
+        <CalendarFeedSettings initialToken={calendarFeedToken} />
       </Card>
       <Card title="Training plans & CSV">
         <div id="calendar-import">

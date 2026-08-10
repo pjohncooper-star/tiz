@@ -101,6 +101,10 @@ import {
   scrollDateBelowSticky,
   scrollElementBelowSticky,
 } from "@/lib/plan/calendar/week-scroll-focus";
+import {
+  compareSessionsForDayOrder,
+  daySortOrdersFromIds,
+} from "@/lib/plan/session-day-order";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const MAX_PAST_WEEKS_WITHOUT_ACTIVITIES = 52;
@@ -1238,16 +1242,77 @@ export function PlanningCalendar({
     if (active.data.current?.type !== "session") return;
 
     const session = active.data.current.session as CalendarPlannedSession;
-    const targetDate = over.data.current?.dateKey as string | undefined;
-    if (!targetDate || targetDate === session.scheduledDate) return;
+    const overSession = over.data.current?.session as CalendarPlannedSession | undefined;
+    const targetDate =
+      (over.data.current?.dateKey as string | undefined) ?? overSession?.scheduledDate;
+    if (!targetDate) return;
+
+    // Same-day: reorder untimed sessions only (drop onto another untimed session).
+    if (targetDate === session.scheduledDate) {
+      if (session.scheduledTimeMinutes != null) return;
+      if (!overSession || overSession.id === session.id) return;
+      if (overSession.scheduledTimeMinutes != null) return;
+
+      const untimed = data.sessions
+        .filter(
+          (s) => s.scheduledDate === targetDate && (s.scheduledTimeMinutes ?? null) == null
+        )
+        .slice()
+        .sort(compareSessionsForDayOrder);
+      const without = untimed.filter((s) => s.id !== session.id);
+      const insertAt = without.findIndex((s) => s.id === overSession.id);
+      if (insertAt < 0) return;
+      const orderedSessionIds = [
+        ...without.slice(0, insertAt).map((s) => s.id),
+        session.id,
+        ...without.slice(insertAt).map((s) => s.id),
+      ];
+      const orders = daySortOrdersFromIds(orderedSessionIds);
+
+      setData((prev) => ({
+        ...prev,
+        sessions: prev.sessions
+          .map((s) =>
+            orders.has(s.id) ? { ...s, daySortOrder: orders.get(s.id)! } : s
+          )
+          .slice()
+          .sort((a, b) => {
+            if (a.scheduledDate !== b.scheduledDate) {
+              return a.scheduledDate.localeCompare(b.scheduledDate);
+            }
+            return compareSessionsForDayOrder(a, b);
+          }),
+      }));
+
+      try {
+        const res = await fetch("/api/plan/calendar/day/reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: targetDate, orderedSessionIds }),
+        });
+        if (!res.ok) throw new Error("Reorder failed");
+        router.refresh();
+      } catch {
+        router.refresh();
+      }
+      return;
+    }
 
     setData((prev) => ({
       ...prev,
-      sessions: prev.sessions.map((s) =>
-        s.id === session.id
-          ? { ...s, scheduledDate: targetDate, linkedActivity: null }
-          : s
-      ),
+      sessions: prev.sessions
+        .map((s) =>
+          s.id === session.id
+            ? { ...s, scheduledDate: targetDate, linkedActivity: null }
+            : s
+        )
+        .slice()
+        .sort((a, b) => {
+          if (a.scheduledDate !== b.scheduledDate) {
+            return a.scheduledDate.localeCompare(b.scheduledDate);
+          }
+          return compareSessionsForDayOrder(a, b);
+        }),
     }));
 
     try {

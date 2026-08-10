@@ -58,6 +58,9 @@ export type CalendarLinkedActivity = {
 export type CalendarPlannedSession = {
   id: string;
   scheduledDate: string;
+  /** Minutes from midnight; null = untimed. */
+  scheduledTimeMinutes: number | null;
+  daySortOrder: number;
   discipline: string;
   title: string;
   totalMinutes: number;
@@ -255,6 +258,14 @@ export function serializePlannedSessions(
     return {
       id: s.id,
       scheduledDate: format(calendarDateFromDb(s.scheduledDate), "yyyy-MM-dd"),
+      scheduledTimeMinutes:
+        "scheduledTimeMinutes" in s
+          ? ((s as { scheduledTimeMinutes?: number | null }).scheduledTimeMinutes ?? null)
+          : null,
+      daySortOrder:
+        "daySortOrder" in s
+          ? ((s as { daySortOrder?: number }).daySortOrder ?? 0)
+          : 0,
       discipline: s.discipline,
       title: s.title,
       totalMinutes: resolvedPlannedMinutes,

@@ -53,10 +53,15 @@ import { parseTargetZones } from "@/lib/workout/steps";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 import { WorkoutTagsInput } from "@/components/workout-tags-input";
 import { sessionReturnLabel } from "@/lib/plan/session-return";
+import {
+  formatScheduledTimeMinutes,
+  parseTimeInputToMinutes,
+} from "@/lib/plan/session-day-order";
 
 type PlannedSessionEditorProps = {
   sessionId: string;
   scheduledDate: string;
+  scheduledTimeMinutes?: number | null;
   discipline: Discipline;
   title: string;
   notes: string;
@@ -90,6 +95,7 @@ type PlannedSessionEditorProps = {
 export function PlannedSessionEditor({
   sessionId,
   scheduledDate: initialDate,
+  scheduledTimeMinutes: initialScheduledTimeMinutes = null,
   discipline: initialDiscipline,
   title: initialTitle,
   notes: initialNotes,
@@ -122,6 +128,9 @@ export function PlannedSessionEditor({
   const returnLabel = sessionReturnLabel(returnHref);
   const initialBudget = sessionBudgetRollup(initialDiscipline, initialTargetZones);
   const [scheduledDate, setScheduledDate] = useState(initialDate);
+  const [scheduledTimeInput, setScheduledTimeInput] = useState(
+    () => formatScheduledTimeMinutes(initialScheduledTimeMinutes) ?? ""
+  );
   const [discipline, setDiscipline] = useState<Discipline>(initialDiscipline);
   const unitSettings =
     discipline === "STRENGTH"
@@ -331,8 +340,15 @@ export function PlannedSessionEditor({
     setSaving(true);
     setError(null);
 
+    const parsedTime = parseTimeInputToMinutes(scheduledTimeInput);
+    if (scheduledTimeInput.trim() && parsedTime == null) {
+      setError("Start time must be HH:MM");
+      return false;
+    }
+
     const body: Record<string, unknown> = {
       scheduledDate,
+      scheduledTimeMinutes: parsedTime,
       discipline,
       title: title.trim(),
       notes: notes.trim() || null,
@@ -585,6 +601,26 @@ export function PlannedSessionEditor({
               value={scheduledDate}
               onChange={(e) => setScheduledDate(e.target.value)}
             />
+          </div>
+          <div>
+            <Label>Start time (optional)</Label>
+            <Input
+              type="time"
+              value={scheduledTimeInput}
+              onChange={(e) => setScheduledTimeInput(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Timed sessions sort by clock on the calendar. Clear to allow drag reorder.
+            </p>
+            {scheduledTimeInput ? (
+              <button
+                type="button"
+                className="mt-1 text-xs text-sky-600 hover:underline"
+                onClick={() => setScheduledTimeInput("")}
+              >
+                Clear time
+              </button>
+            ) : null}
           </div>
           <div>
             <Label>Sport</Label>

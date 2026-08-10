@@ -37,6 +37,7 @@ export default async function WorkoutDetailPage({
       <PlannedSessionEditor
         sessionId={viewModel.sessionId}
         scheduledDate={viewModel.scheduledDateKey}
+        scheduledTimeMinutes={viewModel.scheduledTimeMinutes}
         discipline={viewModel.discipline}
         title={viewModel.title}
         notes={viewModel.notes}

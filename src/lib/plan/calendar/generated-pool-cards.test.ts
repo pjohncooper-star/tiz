@@ -16,6 +16,8 @@ function generatedSession(
   return {
     id: "session-1",
     scheduledDate: "2026-07-07",
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline: "RUN",
     title: "Easy run",
     totalMinutes: 45,
@@ -43,7 +45,10 @@ function generatedSession(
     tizSignalOverride: null,
     poolSlotKind: "ENDURANCE",
     ...overrides,
+    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
+    daySortOrder: overrides.daySortOrder ?? 0,
   };
+
 }
 
 describe("generated-pool-cards", () => {

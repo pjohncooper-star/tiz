@@ -8,6 +8,8 @@ function raceSession(
 ): CalendarPlannedSession {
   return {
     scheduledDate: "2026-09-01",
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline: "RUN",
     title: "Race",
     source: "RACE",

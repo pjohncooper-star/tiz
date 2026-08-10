@@ -15,9 +15,11 @@ import {
   poolSlotKindSchema,
   sessionRoleSchema,
   goalEventDisciplineSchema,
+  scheduledTimeMinutesSchema,
   workoutTagsSchema,
 } from "@/lib/plan/api-schemas";
 import { createRaceSessionsOnCalendar } from "@/lib/plan/race-calendar-sync";
+import { nextDaySortOrderForDate } from "@/lib/plan/session-day-order.server";
 import { syncSessionWorkoutTags } from "@/lib/plan/workout-tags.server";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -30,6 +32,7 @@ const createSchema = z
     title: z.string().trim().max(200).optional(),
     notes: z.string().trim().max(2000).optional(),
     tags: workoutTagsSchema.optional(),
+    scheduledTimeMinutes: scheduledTimeMinutesSchema.optional(),
     source: z.enum(["FLEXIBLE", "RACE"]).optional(),
     estimatedDurationMinutes: z.number().int().positive().nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).optional(),
@@ -67,6 +70,7 @@ export async function POST(request: Request) {
     title,
     notes,
     tags: tagsInput,
+    scheduledTimeMinutes: scheduledTimeMinutesInput,
     targetZones,
     distanceMeters,
     targetSpeedMps,
@@ -127,10 +131,19 @@ export async function POST(request: Request) {
       ? await syncSessionWorkoutTags(db, athleteId, tagsInput)
       : [];
 
+  const scheduledTimeMinutes =
+    scheduledTimeMinutesInput === undefined ? null : scheduledTimeMinutesInput;
+  const daySortOrder =
+    scheduledTimeMinutes == null
+      ? await nextDaySortOrderForDate(db, athleteId, scheduled)
+      : 0;
+
   const plannedSession = await db.plannedSession.create({
     data: {
       athleteId,
       scheduledDate: scheduled,
+      scheduledTimeMinutes,
+      daySortOrder,
       discipline: resolvedDiscipline,
       title: sessionTitle,
       notes: notes || null,

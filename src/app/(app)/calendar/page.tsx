@@ -165,7 +165,12 @@ export default async function CalendarPage({
           },
         },
       },
-      orderBy: [{ scheduledDate: "asc" }, { title: "asc" }],
+      orderBy: [
+        { scheduledDate: "asc" },
+        { scheduledTimeMinutes: { sort: "asc", nulls: "last" } },
+        { daySortOrder: "asc" },
+        { title: "asc" },
+      ],
     }),
     db.syncedActivity.findMany({
       where: {

@@ -15,10 +15,12 @@ import {
   sessionRoleSchema,
   stepsPayloadSchema,
   tizSignalOverrideSchema,
+  scheduledTimeMinutesSchema,
   workoutTagsSchema,
 } from "@/lib/plan/api-schemas";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
+import { nextDaySortOrderForDate } from "@/lib/plan/session-day-order.server";
 import { syncSessionWorkoutTags } from "@/lib/plan/workout-tags.server";
 import { markFolderWorkoutCompleted } from "@/lib/workout/workout-folder-library";
 import { allowedPrimarySignals } from "@/lib/zones/signal-preference";
@@ -32,6 +34,8 @@ const updateSchema = z
     title: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
     tags: workoutTagsSchema.optional(),
+    scheduledTimeMinutes: scheduledTimeMinutesSchema.optional(),
+    daySortOrder: z.number().int().min(0).max(10_000).optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).nullable().optional(),
     sessionRole: sessionRoleSchema.optional(),
     tizSignalOverride: tizSignalOverrideSchema.optional(),
@@ -95,6 +99,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     title,
     notes,
     tags: tagsInput,
+    scheduledTimeMinutes: scheduledTimeMinutesInput,
+    daySortOrder: daySortOrderInput,
     targetZones,
     sessionRole,
     tizSignalOverride,
@@ -187,11 +193,45 @@ export async function PATCH(request: Request, context: RouteContext) {
       scheduledDate?: Date;
       linkedActivityId?: null;
     } = {};
+    let dateChanged = false;
     if (scheduledDate !== undefined) {
       const nextDate = parseDateKey(scheduledDate);
       scheduledDateUpdate.scheduledDate = nextDate;
       if (formatDateKey(nextDate) !== formatDateKey(existing.scheduledDate)) {
         scheduledDateUpdate.linkedActivityId = null;
+        dateChanged = true;
+      }
+    }
+
+    const existingTime =
+      "scheduledTimeMinutes" in existing
+        ? ((existing as { scheduledTimeMinutes?: number | null }).scheduledTimeMinutes ?? null)
+        : null;
+    const nextTime =
+      scheduledTimeMinutesInput !== undefined
+        ? scheduledTimeMinutesInput
+        : existingTime;
+    const timeCleared =
+      scheduledTimeMinutesInput !== undefined &&
+      scheduledTimeMinutesInput == null &&
+      existingTime != null;
+
+    const orderUpdate: { daySortOrder?: number; scheduledTimeMinutes?: number | null } = {};
+    if (scheduledTimeMinutesInput !== undefined) {
+      orderUpdate.scheduledTimeMinutes = scheduledTimeMinutesInput;
+    }
+    if (daySortOrderInput !== undefined) {
+      orderUpdate.daySortOrder = daySortOrderInput;
+    } else if (dateChanged || timeCleared) {
+      if (nextTime == null) {
+        const targetDate =
+          scheduledDateUpdate.scheduledDate ?? existing.scheduledDate;
+        orderUpdate.daySortOrder = await nextDaySortOrderForDate(
+          tx,
+          athleteId,
+          targetDate,
+          id
+        );
       }
     }
 
@@ -199,6 +239,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       where: { id },
       data: {
         ...scheduledDateUpdate,
+        ...orderUpdate,
         ...(discipline !== undefined ? { discipline: discipline as Discipline } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),

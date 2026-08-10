@@ -26,6 +26,8 @@ function sessionRow(
     weeklyTemplateItemId: null,
     goalEventId: null,
     scheduledDate: new Date("2026-07-21T00:00:00.000Z"),
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline: "RUN" as const,
     title: "Easy run",
     notes: null,
