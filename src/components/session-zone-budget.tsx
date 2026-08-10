@@ -7,8 +7,7 @@ import {
   rollupTreeToZoneMinutes,
   type WorkoutTreeDocument,
 } from "@/lib/workout/steps";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
+import { ZONES } from "@/lib/zones/model";
 
 type WeekTargetResponse = {
   weekTarget: CalendarWeekTarget | null;

@@ -7,10 +7,10 @@ import {
   type SimpleDiscipline,
   type SimplePhaseSpan,
 } from "./simple-ramp";
+import { ZONES } from "@/lib/zones/model";
 
 const TRI_DISCIPLINES = ["SWIM", "BIKE", "RUN"] as const;
 type TriDiscipline = (typeof TRI_DISCIPLINES)[number];
-const ZONES = [1, 2, 3, 4, 5] as const;
 
 const DISCIPLINE_TO_SIMPLE: Record<Discipline, SimpleDiscipline> = {
   SWIM: "swim",

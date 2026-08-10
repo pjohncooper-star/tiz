@@ -1,10 +1,10 @@
-const ZONES = [1, 2, 3, 4, 5] as const;
+import { ZONES, emptyZoneRecord, type ZoneNumber } from "@/lib/zones/model";
 
-export type ZoneNumber = (typeof ZONES)[number];
+export type { ZoneNumber };
 export type ZoneMinuteValues = Record<ZoneNumber, string>;
 
 export function emptyZoneMinuteValues(): ZoneMinuteValues {
-  return { 1: "", 2: "", 3: "", 4: "", 5: "" };
+  return emptyZoneRecord("");
 }
 
 export function zoneMinuteValuesFromRecord(

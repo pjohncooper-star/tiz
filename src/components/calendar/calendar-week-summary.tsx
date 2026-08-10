@@ -29,16 +29,7 @@ import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { formatZoneMinutes } from "@/lib/workout/steps";
 import { formatDisplayNumber } from "@/lib/format-display-number";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
-
-const ZONE_COLORS: Record<number, string> = {
-  1: "bg-sky-200 dark:bg-sky-900",
-  2: "bg-sky-400 dark:bg-sky-700",
-  3: "bg-amber-400 dark:bg-amber-700",
-  4: "bg-orange-500 dark:bg-orange-700",
-  5: "bg-red-500 dark:bg-red-700",
-};
+import { ZONES, zoneBarColor } from "@/lib/zones/model";
 
 const COLLAPSED_PILL_STYLES: Record<string, string> = {
   total: "bg-violet-100 text-violet-900 dark:bg-violet-950/80 dark:text-violet-200",
@@ -178,7 +169,7 @@ function TizBarWithTooltip({
           return (
             <div
               key={zone}
-              className={`${ZONE_COLORS[zone]} h-full`}
+              className={`${zoneBarColor(zone)} h-full`}
               style={{ width: `${(minutes / maxMinutes) * 100}%` }}
             />
           );

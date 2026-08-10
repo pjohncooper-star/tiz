@@ -9,8 +9,7 @@ import {
   type ZoneMinuteValues,
   type ZoneNumber,
 } from "@/lib/plan/zone-minute-fit";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
+import { ZONES, isZoneNumber } from "@/lib/zones/model";
 
 export type { ZoneMinuteValues, ZoneNumber };
 
@@ -18,8 +17,8 @@ export { emptyZoneMinuteValues, fitZoneMinuteValuesToDuration, parseZoneMinuteVa
 
 export function zoneMinuteValuesFromSingle(zone: number, minutes: number): ZoneMinuteValues {
   const values = emptyZoneMinuteValues();
-  if (minutes > 0 && zone >= 1 && zone <= 5) {
-    values[zone as ZoneNumber] = String(Math.round(minutes));
+  if (minutes > 0 && isZoneNumber(zone)) {
+    values[zone] = String(Math.round(minutes));
   }
   return values;
 }

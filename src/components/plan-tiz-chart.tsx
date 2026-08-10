@@ -4,16 +4,7 @@ import type { Discipline } from "@prisma/client";
 import { zoneKey } from "@/lib/workout/steps";
 import { formatZoneMinutes } from "@/lib/workout/steps";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
-
-const ZONE_COLORS: Record<number, string> = {
-  1: "bg-sky-200 dark:bg-sky-900",
-  2: "bg-sky-400 dark:bg-sky-700",
-  3: "bg-amber-400 dark:bg-amber-700",
-  4: "bg-orange-500 dark:bg-orange-700",
-  5: "bg-red-500 dark:bg-red-700",
-};
+import { ZONES, zoneBarColor } from "@/lib/zones/model";
 
 type PlanTizChartProps = {
   discipline: Discipline;
@@ -41,7 +32,7 @@ export function PlanTizChart({ discipline, values, maxMinutes }: PlanTizChartPro
           return (
             <div
               key={zone}
-              className={`${ZONE_COLORS[zone]} h-full`}
+              className={`${zoneBarColor(zone)} h-full`}
               style={{ width: `${width}%` }}
               title={`Z${zone}: ${formatZoneMinutes(minutes)} · ${pct}%`}
             />
