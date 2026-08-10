@@ -109,6 +109,11 @@ export const planSessionMetricsSchema = z.object({
   poolSize: z.enum(["SCY", "SCM", "LCM"]).nullable().optional(),
 });
 
+/** Free-text workout tags (normalized server-side). */
+export const workoutTagsSchema = z
+  .array(z.string().trim().min(1).max(40))
+  .max(20);
+
 export const planSessionCompletedMetricsSchema = z.object({
   completedDurationMinutes: z.number().positive().nullable().optional(),
   completedDistanceMeters: z.number().positive().nullable().optional(),

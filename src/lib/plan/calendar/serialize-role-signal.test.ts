@@ -29,6 +29,7 @@ function sessionRow(
     discipline: "RUN" as const,
     title: "Easy run",
     notes: null,
+    tags: [],
     targetZones: null,
     distanceMeters: null,
     targetSpeedMps: null,

@@ -318,6 +318,7 @@ model Athlete {
   seasonPlans         SeasonPlan[]
   goalEvents          GoalEvent[]
   trainingPlans       TrainingPlan[]
+  workoutTags         AthleteWorkoutTag[]
 }
 
 model AthleteDisciplineSettings {
@@ -743,6 +744,10 @@ model PlannedSession {
   discipline               Discipline
   title                    String
   notes                    String?
+  /**
+   * Free-text workout tags (normalized lowercase). Autocomplete catalog is AthleteWorkoutTag.
+   */
+  tags                     String[]             @default([])
   targetZones              Json?
   distanceMeters           Float?
   targetSpeedMps           Float?
@@ -782,6 +787,22 @@ model PlannedSession {
   @@index([athleteId, trainingPlanId, scheduledDate])
   @@index([goalEventId])
   @@index([multisportGroupId])
+}
+
+/** Per-athlete catalog of workout tags used for autocomplete suggestions. */
+model AthleteWorkoutTag {
+  id        String   @id @default(cuid())
+  athleteId String
+  /** Normalized lowercase unique key. */
+  name      String
+  /** Display casing from first use. */
+  label     String
+  createdAt DateTime @default(now())
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, name])
+  @@index([athleteId, name])
 }
 
 model WorkoutFolder {

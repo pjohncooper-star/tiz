@@ -30,6 +30,7 @@ import { getSignalPreferenceAtDate, parseRoleSignals, resolvePrimarySignalForSes
 import { getThresholdProfileAtDate, parseZoneBoundaries } from "@/lib/zones/thresholds";
 import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
 import { DEFAULT_DISCIPLINE_SIGNALS } from "@/lib/zones/defaults";
+import { resolveWorkoutTagLabels } from "@/lib/plan/workout-tags.server";
 
 const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
 
@@ -56,6 +57,8 @@ export type WorkoutDetailViewModel = {
   discipline: Discipline;
   title: string;
   notes: string;
+  /** Display labels for session tags. */
+  tags: string[];
   distanceMeters: number | null;
   targetSpeedMps: number | null;
   targetPaceSeconds: number | null;
@@ -338,6 +341,9 @@ export async function loadWorkoutDetail(
         })
       : [];
 
+  const tagNames = Array.isArray(plannedSession.tags) ? plannedSession.tags : [];
+  const tags = await resolveWorkoutTagLabels(db, athleteId, tagNames);
+
   return {
     mode,
     athleteId,
@@ -347,6 +353,7 @@ export async function loadWorkoutDetail(
     discipline: plannedSession.discipline,
     title: plannedSession.title,
     notes: plannedSession.notes ?? "",
+    tags,
     distanceMeters: plannedSession.distanceMeters,
     targetSpeedMps: plannedSession.targetSpeedMps,
     targetPaceSeconds: plannedSession.targetPaceSeconds,

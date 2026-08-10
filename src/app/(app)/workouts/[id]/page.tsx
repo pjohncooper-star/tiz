@@ -40,6 +40,7 @@ export default async function WorkoutDetailPage({
         discipline={viewModel.discipline}
         title={viewModel.title}
         notes={viewModel.notes}
+        tags={viewModel.tags}
         distanceMeters={viewModel.distanceMeters}
         targetSpeedMps={viewModel.targetSpeedMps}
         targetPaceSeconds={viewModel.targetPaceSeconds}

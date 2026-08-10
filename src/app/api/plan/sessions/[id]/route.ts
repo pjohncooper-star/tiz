@@ -15,9 +15,11 @@ import {
   sessionRoleSchema,
   stepsPayloadSchema,
   tizSignalOverrideSchema,
+  workoutTagsSchema,
 } from "@/lib/plan/api-schemas";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
+import { syncSessionWorkoutTags } from "@/lib/plan/workout-tags.server";
 import { markFolderWorkoutCompleted } from "@/lib/workout/workout-folder-library";
 import { allowedPrimarySignals } from "@/lib/zones/signal-preference";
 
@@ -29,6 +31,7 @@ const updateSchema = z
     discipline: planDisciplineSchema.optional(),
     title: z.string().trim().min(1).max(200).optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
+    tags: workoutTagsSchema.optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).nullable().optional(),
     sessionRole: sessionRoleSchema.optional(),
     tizSignalOverride: tizSignalOverrideSchema.optional(),
@@ -91,6 +94,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     discipline,
     title,
     notes,
+    tags: tagsInput,
     targetZones,
     sessionRole,
     tizSignalOverride,
@@ -130,6 +134,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: zoneError }, { status: 400 });
     }
   }
+
+  const tags =
+    tagsInput !== undefined
+      ? await syncSessionWorkoutTags(db, athleteId, tagsInput)
+      : undefined;
 
   let updated;
   try {
@@ -193,6 +202,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         ...(discipline !== undefined ? { discipline: discipline as Discipline } : {}),
         ...(title !== undefined ? { title } : {}),
         ...(notes !== undefined ? { notes } : {}),
+        ...(tags !== undefined ? { tags } : {}),
         ...(sessionRole !== undefined ? { sessionRole } : {}),
         ...(tizSignalOverride !== undefined ? { tizSignalOverride } : {}),
         zoneAllocationMissing,
