@@ -1221,6 +1221,7 @@ function NodeEditor({
           poolSize={poolSize}
           displayUnit={displayUnit}
           targetView={targetView}
+          thresholdPaceSeconds={thresholds.thresholdPaceSeconds}
           dense={dense}
           canRemove={canRemove}
           onChange={(next) =>

@@ -13,16 +13,24 @@ import {
 } from "@/lib/workout/metrics";
 import { formatSwimIntervalLabel } from "@/lib/workout/swim-interval-set";
 import {
+  absoluteFromPercent,
+  isPercentTarget,
+  percentFromAbsolute,
+} from "@/lib/workout/target-units";
+import {
   formatDurationHms,
   parseDurationInput,
   type SwimIntervalSet,
 } from "@/lib/workout/workout-tree";
+
+const FALLBACK_SWIM_THRESHOLD_SECONDS = 90;
 
 type SwimIntervalSetEditorProps = {
   set: SwimIntervalSet;
   poolSize: PoolSize | null;
   displayUnit: DisplayUnit;
   targetView: "zone" | "pace_power" | "heart_rate";
+  thresholdPaceSeconds?: number | null;
   onChange: (next: SwimIntervalSet) => void;
   onRemove: () => void;
   canRemove: boolean;
@@ -61,12 +69,21 @@ export function SwimIntervalSetEditor({
   poolSize,
   displayUnit,
   targetView,
+  thresholdPaceSeconds = null,
   onChange,
   onRemove,
   canRemove,
   dense = false,
 }: SwimIntervalSetEditorProps) {
   const swimPool = poolSizeForSwimStep(poolSize);
+  const percentTarget = isPercentTarget(set.target);
+  const paceThreshold =
+    thresholdPaceSeconds && thresholdPaceSeconds > 0
+      ? thresholdPaceSeconds
+      : FALLBACK_SWIM_THRESHOLD_SECONDS;
+  const displayPaceSeconds = percentTarget
+    ? absoluteFromPercent("pace", set.target.value ?? 100, paceThreshold)
+    : set.targetPaceSeconds;
   const distanceLabel = swimPool === "SCY" ? "Distance (yd)" : "Distance (m)";
   const distanceStep = swimPool === "SCY" ? 25 : 50;
   const displayDistance =
@@ -192,7 +209,7 @@ export function SwimIntervalSetEditor({
           <Label>{stepPaceInputLabel("SWIM" as PlanDiscipline, displayUnit, poolSize)}</Label>
           <Input
             defaultValue={stepPaceCanonicalToInput(
-              set.targetPaceSeconds,
+              displayPaceSeconds,
               "SWIM" as PlanDiscipline,
               displayUnit,
               poolSize
@@ -205,6 +222,21 @@ export function SwimIntervalSetEditor({
                 displayUnit,
                 poolSize
               );
+              if (percentTarget) {
+                const nextPercent = pace
+                  ? percentFromAbsolute("pace", pace, paceThreshold)
+                  : null;
+                onChange({
+                  ...set,
+                  target: {
+                    signal: "pace",
+                    mode: "value",
+                    unit: "percent",
+                    ...(nextPercent != null ? { value: nextPercent } : {}),
+                  },
+                });
+                return;
+              }
               onChange({
                 ...set,
                 target: { signal: "pace", mode: "value" },
