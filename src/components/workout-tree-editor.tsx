@@ -72,6 +72,7 @@ import {
   signalTypeToTargetSignal,
   signalTypeToTargetView,
 } from "@/lib/zones/signal-preference";
+import { ZONES, isAuthoredZoneIndex } from "@/lib/zones/model";
 
 type WorkoutTreeEditorProps = {
   discipline: Discipline;
@@ -161,14 +162,7 @@ function collectLeaves(nodes: WorkoutNode[]): LeafStep[] {
 
 function isZoneRangeTarget(t: StepTarget): boolean {
   if (t.mode !== "range" || t.low == null || t.high == null) return false;
-  return (
-    Number.isInteger(t.low) &&
-    Number.isInteger(t.high) &&
-    t.low >= 1 &&
-    t.low <= 7 &&
-    t.high >= 1 &&
-    t.high <= 7
-  );
+  return isAuthoredZoneIndex(t.low) && isAuthoredZoneIndex(t.high);
 }
 
 function inferTargetView(
@@ -832,7 +826,7 @@ function StepTargetField({
                 })
               }
             >
-              {[1, 2, 3, 4, 5, 6, 7].map((z) => (
+              {ZONES.map((z) => (
                 <option key={z} value={z}>
                   Z{z}
                 </option>
@@ -851,7 +845,7 @@ function StepTargetField({
                 })
               }
             >
-              {[1, 2, 3, 4, 5, 6, 7].map((z) => (
+              {ZONES.map((z) => (
                 <option key={z} value={z}>
                   Z{z}
                 </option>
@@ -876,7 +870,7 @@ function StepTargetField({
             })
           }
         >
-          {[1, 2, 3, 4, 5, 6, 7].map((z) => (
+          {ZONES.map((z) => (
             <option key={z} value={z}>
               Zone {z}
             </option>
@@ -907,7 +901,7 @@ function StepTargetField({
                 })
               }
             >
-              {[1, 2, 3, 4, 5].map((z) => (
+              {ZONES.map((z) => (
                 <option key={z} value={z}>
                   Z{z}
                 </option>
@@ -926,7 +920,7 @@ function StepTargetField({
                 })
               }
             >
-              {[1, 2, 3, 4, 5].map((z) => (
+              {ZONES.map((z) => (
                 <option key={z} value={z}>
                   Z{z}
                 </option>
@@ -951,7 +945,7 @@ function StepTargetField({
             })
           }
         >
-          {[1, 2, 3, 4, 5].map((z) => (
+          {ZONES.map((z) => (
             <option key={z} value={z}>
               HR zone {z}
             </option>
@@ -1350,7 +1344,7 @@ function NodeEditor({
                   );
                 }}
               >
-                {[1, 2, 3, 4, 5].map((z) => (
+                {ZONES.map((z) => (
                   <option key={z} value={z}>
                     HR zone {z}
                   </option>
@@ -1375,7 +1369,7 @@ function NodeEditor({
                   );
                 }}
               >
-                {[1, 2, 3, 4, 5].map((z) => (
+                {ZONES.map((z) => (
                   <option key={z} value={z}>
                     HR zone {z}
                   </option>

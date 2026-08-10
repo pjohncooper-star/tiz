@@ -17,6 +17,7 @@ import {
   parseDurationInput,
   type SwimIntervalSet,
 } from "@/lib/workout/workout-tree";
+import { ZONES } from "@/lib/zones/model";
 
 type SwimIntervalSetEditorProps = {
   set: SwimIntervalSet;
@@ -178,7 +179,7 @@ export function SwimIntervalSetEditor({
               })
             }
           >
-            {[1, 2, 3, 4, 5, 6, 7].map((z) => (
+            {ZONES.map((z) => (
               <option key={z} value={z}>
                 Zone {z}
               </option>

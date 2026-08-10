@@ -9,6 +9,7 @@ import type {
   WorkoutNode,
 } from "@/lib/workout/workout-tree";
 import { swimIntervalToRepeatBlock } from "@/lib/workout/swim-interval-set";
+import { isAuthoredZoneIndex } from "@/lib/zones/model";
 import { targetZoneFromTarget } from "@/lib/workout/workout-tree";
 import { inferSignalFromWorkoutNodes } from "@/lib/workout/infer-prescription-signal";
 
@@ -81,14 +82,7 @@ const HR_ZONE_FILL: Record<number, string> = {
 
 function isZoneRange(target: StepTarget): boolean {
   if (target.mode !== "range" || target.low == null || target.high == null) return false;
-  return (
-    Number.isInteger(target.low) &&
-    Number.isInteger(target.high) &&
-    target.low >= 1 &&
-    target.low <= 7 &&
-    target.high >= 1 &&
-    target.high <= 7
-  );
+  return isAuthoredZoneIndex(target.low) && isAuthoredZoneIndex(target.high);
 }
 
 function wattsAtZoneMidpoint(zone: number, ftp: number): number {

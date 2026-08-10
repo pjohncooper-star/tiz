@@ -6,6 +6,7 @@ import {
   rollupTreeToZoneMinutes,
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
+import { ZONES, clampZone, isAuthoredZoneIndex } from "@/lib/zones/model";
 
 export type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
 export type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
@@ -68,8 +69,9 @@ export function parseTargetZones(raw: unknown): ZoneMinutes {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const zone = Number(key);
     const minutes = Number(value);
-    if (Number.isInteger(zone) && zone >= 1 && zone <= 7 && Number.isFinite(minutes) && minutes > 0) {
-      totals[zone] = minutes;
+    if (isAuthoredZoneIndex(zone) && Number.isFinite(minutes) && minutes > 0) {
+      const z = clampZone(zone);
+      totals[z] = (totals[z] ?? 0) + minutes;
     }
   }
   return totals;
@@ -86,7 +88,7 @@ export function zoneKey(discipline: Discipline | string, zone: number): string {
 export function emptyZoneBudget(disciplines: Discipline[] = ["BIKE", "RUN", "SWIM"]): ZoneMinutes {
   const budget: ZoneMinutes = {};
   for (const d of disciplines) {
-    for (let z = 1; z <= 5; z++) {
+    for (const z of ZONES) {
       budget[zoneKey(d, z)] = 0;
     }
   }

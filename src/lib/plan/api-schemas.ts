@@ -1,11 +1,14 @@
 import { z } from "zod";
+import { ZONE_COUNT } from "@/lib/zones/model";
 
 const DISCIPLINES = ["BIKE", "RUN", "SWIM"] as const;
+
+const zoneSchema = z.number().int().min(1).max(ZONE_COUNT);
 
 export const planStepSchema = z.object({
   type: z.enum(["steady", "warmup", "cooldown", "rest"]),
   durationMinutes: z.number().positive(),
-  targetZone: z.number().int().min(1).max(7),
+  targetZone: zoneSchema,
   distanceMeters: z.number().positive().optional(),
   targetSpeedMps: z.number().positive().optional(),
   targetPaceSeconds: z.number().positive().optional(),
@@ -23,7 +26,7 @@ const stepDurationSchema = z.discriminatedUnion("type", [
 const stepTargetSchema = z.object({
   signal: z.enum(["power", "heart_rate", "pace", "speed", "open"]),
   mode: z.enum(["zone", "range", "value"]),
-  zone: z.number().int().min(1).max(7).optional(),
+  zone: zoneSchema.optional(),
   low: z.number().optional(),
   high: z.number().optional(),
   value: z.number().optional(),
@@ -34,8 +37,8 @@ const rampTargetSchema = z.object({
   low: z.number(),
   high: z.number(),
   mode: z.enum(["zone", "range"]).optional(),
-  lowZone: z.number().int().min(1).max(7).optional(),
-  highZone: z.number().int().min(1).max(7).optional(),
+  lowZone: zoneSchema.optional(),
+  highZone: zoneSchema.optional(),
 });
 
 export const leafStepSchema = z.object({

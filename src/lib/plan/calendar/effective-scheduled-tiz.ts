@@ -18,6 +18,7 @@ import {
   flattenOptionsForDiscipline,
   type PaceThresholdContext,
 } from "@/lib/plan/pace-threshold-context";
+import { ZONES, clampZone } from "@/lib/zones/model";
 import { planningModeIncludesLongTiz } from "@/lib/plan/season/planning-mode";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 import { rollupTreeToZoneMinutes, type WorkoutNode } from "@/lib/workout/workout-tree";
@@ -76,7 +77,7 @@ function mergeZoneMinutes(into: ZoneMinutes, add: ZoneMinutes): void {
   }
 }
 
-/** Fold SWIM/BIKE/RUN-6+ keys into -5 so Week TiZ (Z1–Z5) does not drop minutes. */
+/** Clamp SWIM/BIKE/RUN keys stored above the canonical zone range instead of dropping them. */
 function foldZoneMinutesForWeekTiz(zones: ZoneMinutes): ZoneMinutes {
   const out: ZoneMinutes = {};
   for (const [key, minutes] of Object.entries(zones)) {
@@ -86,8 +87,7 @@ function foldZoneMinutesForWeekTiz(zones: ZoneMinutes): ZoneMinutes {
       out[key] = (out[key] ?? 0) + minutes;
       continue;
     }
-    const zone = Math.min(Number(match[2]), 5);
-    const folded = `${match[1]}-${zone}`;
+    const folded = `${match[1]}-${clampZone(Number(match[2]))}`;
     out[folded] = (out[folded] ?? 0) + minutes;
   }
   return out;
@@ -101,12 +101,10 @@ function draftZoneMinutesByKey(
   const options = flattenOptionsForDiscipline(discipline, paceContext);
   const rollup = rollupTreeToZoneMinutes(treeFromDraft(draft), options);
   const out: ZoneMinutes = {};
-  // Fold Z6/Z7 into Z5 — Week TiZ only displays five zones.
-  for (let zone = 1; zone <= 7; zone++) {
+  for (const zone of ZONES) {
     const minutes = rollup[String(zone)] ?? 0;
     if (minutes > 0) {
-      const displayZone = Math.min(zone, 5);
-      const key = zoneKey(discipline, displayZone);
+      const key = zoneKey(discipline, zone);
       out[key] = (out[key] ?? 0) + minutes;
     }
   }

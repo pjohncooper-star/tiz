@@ -21,6 +21,20 @@ export function isZoneNumber(value: number): value is ZoneNumber {
 }
 
 /**
+ * Workouts were once authored with up to seven zones. Stored documents may still
+ * hold those indices, so code that has to decide whether a number *is* a zone
+ * index — rather than absolute watts, bpm, or pace seconds — recognises the wider
+ * range and clamps the result. Nothing may author above {@link ZONE_COUNT}.
+ */
+export const LEGACY_MAX_AUTHORED_ZONE = 7;
+
+export function isAuthoredZoneIndex(value: number): boolean {
+  return (
+    Number.isInteger(value) && value >= 1 && value <= LEGACY_MAX_AUTHORED_ZONE
+  );
+}
+
+/**
  * Coerce any zone-ish number into the canonical range.
  *
  * Activities scored before the zone count was unified can hold zone 6/7 rows, and
