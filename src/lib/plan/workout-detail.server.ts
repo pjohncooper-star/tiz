@@ -31,6 +31,10 @@ import { getThresholdProfileAtDate, parseZoneBoundaries } from "@/lib/zones/thre
 import type { CompletedSessionSnapshot } from "@/lib/plan/session-stats";
 import { DEFAULT_DISCIPLINE_SIGNALS } from "@/lib/zones/defaults";
 import { resolveWorkoutTagLabels } from "@/lib/plan/workout-tags.server";
+import {
+  parseSwimEquipmentCatalog,
+  type SwimEquipmentCatalog,
+} from "@/lib/swim/equipment-catalog";
 
 const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
 
@@ -76,6 +80,7 @@ export type WorkoutDetailViewModel = {
   structuredSteps: unknown;
   thresholdPaceSeconds: number | null;
   thresholdZoneBoundaries: number[] | undefined;
+  swimEquipmentCatalog: SwimEquipmentCatalog;
   primarySignal: SignalType | null;
   /** Effective primary ignoring per-session override (for Default label). */
   inheritedPrimarySignal: SignalType | null;
@@ -138,10 +143,23 @@ export async function loadWorkoutDetail(
         },
       },
     }),
-    db.athlete.findUnique({
-      where: { id: athleteId },
-      select: { selfEvalConfig: true, ecoLoadEnabled: true },
-    }),
+    db.athlete
+      .findUnique({
+        where: { id: athleteId },
+        select: { selfEvalConfig: true, ecoLoadEnabled: true, swimEquipmentCatalog: true },
+      })
+      .catch(async (error) => {
+        if (
+          error instanceof Error &&
+          /swimEquipmentCatalog|column/.test(error.message)
+        ) {
+          return db.athlete.findUnique({
+            where: { id: athleteId },
+            select: { selfEvalConfig: true, ecoLoadEnabled: true },
+          });
+        }
+        throw error;
+      }),
   ]);
 
   if (!plannedSession) notFound();
@@ -149,6 +167,9 @@ export async function loadWorkoutDetail(
   const selfEvalConfig = parseSelfEvalConfig(athlete?.selfEvalConfig);
   const ecoLoadEnabled = Boolean(
     athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
+  );
+  const swimEquipmentCatalog = parseSwimEquipmentCatalog(
+    athlete && "swimEquipmentCatalog" in athlete ? athlete.swimEquipmentCatalog : null
   );
 
   const disciplineSettingsRows = await db.athleteDisciplineSettings.findMany({
@@ -371,6 +392,7 @@ export async function loadWorkoutDetail(
     structuredSteps,
     thresholdPaceSeconds,
     thresholdZoneBoundaries,
+    swimEquipmentCatalog,
     primarySignal,
     inheritedPrimarySignal,
     prescriptionSignal,

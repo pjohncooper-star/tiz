@@ -1,6 +1,8 @@
 import type { Discipline } from "@prisma/client";
+import { db } from "@/lib/db";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
 import type { FitExportThresholds } from "@/lib/workout/fit-target-codec";
+import { parseSwimEquipmentCatalog } from "@/lib/swim/equipment-catalog";
 
 export async function loadFitExportThresholds(
   athleteId: string,
@@ -35,6 +37,20 @@ export async function loadFitExportThresholds(
     );
     if (pace?.thresholdValue && pace.thresholdValue > 0) {
       thresholds.thresholdPaceSecondsPerKm = pace.thresholdValue;
+    }
+  }
+
+  if (discipline === "SWIM") {
+    try {
+      const athlete = await db.athlete.findUnique({
+        where: { id: athleteId },
+        select: { swimEquipmentCatalog: true },
+      });
+      thresholds.swimEquipmentCatalog = parseSwimEquipmentCatalog(
+        athlete?.swimEquipmentCatalog ?? null
+      );
+    } catch {
+      thresholds.swimEquipmentCatalog = parseSwimEquipmentCatalog(null);
     }
   }
 

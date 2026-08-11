@@ -1,8 +1,9 @@
 ﻿"use client";
 
-import type { Discipline } from "@prisma/client";
 import { Button, Input, Label, Select } from "@/components/ui";
 import { NumberEditorInput } from "@/components/number-editor-input";
+import { StepNotesInput } from "@/components/step-notes-input";
+import { SwimEquipmentPicker } from "@/components/swim-equipment-picker";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import { poolSizeForSwimStep, type PoolSize } from "@/lib/units/discipline-settings";
 import type { DisplayUnit } from "@/lib/workout/metrics";
@@ -12,6 +13,7 @@ import {
   stepPaceInputToCanonical,
 } from "@/lib/workout/metrics";
 import { formatSwimIntervalLabel } from "@/lib/workout/swim-interval-set";
+import type { SwimEquipmentCatalog } from "@/lib/swim/equipment-catalog";
 import {
   formatDurationHms,
   parseDurationInput,
@@ -23,6 +25,7 @@ type SwimIntervalSetEditorProps = {
   poolSize: PoolSize | null;
   displayUnit: DisplayUnit;
   targetView: "zone" | "pace_power" | "heart_rate";
+  swimEquipment: SwimEquipmentCatalog;
   onChange: (next: SwimIntervalSet) => void;
   onRemove: () => void;
   canRemove: boolean;
@@ -61,6 +64,7 @@ export function SwimIntervalSetEditor({
   poolSize,
   displayUnit,
   targetView,
+  swimEquipment,
   onChange,
   onRemove,
   canRemove,
@@ -214,6 +218,28 @@ export function SwimIntervalSetEditor({
           />
         </div>
       ) : null}
+
+      <StepNotesInput
+        value={set.notes}
+        dense={dense}
+        onCommit={(notes) => {
+          const next = { ...set };
+          if (notes) next.notes = notes;
+          else delete next.notes;
+          onChange(next);
+        }}
+      />
+      <SwimEquipmentPicker
+        catalog={swimEquipment}
+        value={set.equipment}
+        dense={dense}
+        onChange={(equipment) => {
+          const next = { ...set };
+          if (equipment && equipment.length > 0) next.equipment = equipment;
+          else delete next.equipment;
+          onChange(next);
+        }}
+      />
     </div>
   );
 }

@@ -13,11 +13,13 @@ import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
+import { SwimEquipmentSettingsPanel } from "@/components/swim-equipment-settings-panel";
 import { signalLabel } from "@/lib/zones/display";
 import {
   formatRoleSignalSummary,
   parseRoleSignals,
 } from "@/lib/zones/signal-preference";
+import { parseSwimEquipmentCatalog } from "@/lib/swim/equipment-catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +33,14 @@ async function loadAthleteSettingsProfile(athleteId: string) {
         workoutShadingTarget: true,
         phaseKindZoneDefaults: true,
         zoneFocusCatalog: true,
+        swimEquipmentCatalog: true,
         ecoLoadEnabled: true,
       },
     });
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|ecoLoadEnabled|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|ecoLoadEnabled|column/.test(
         error.message
       )
     ) {
@@ -106,6 +109,9 @@ export default async function SettingsPage() {
   const zoneFocusCatalog = parseZoneFocusCatalog(
     athlete && "zoneFocusCatalog" in athlete ? athlete.zoneFocusCatalog : null
   );
+  const swimEquipmentCatalog = parseSwimEquipmentCatalog(
+    athlete && "swimEquipmentCatalog" in athlete ? athlete.swimEquipmentCatalog : null
+  );
   const ecoLoadEnabled =
     athlete && "ecoLoadEnabled" in athlete
       ? Boolean(athlete.ecoLoadEnabled)
@@ -116,6 +122,9 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-semibold">Settings</h1>
       <Card title="Units">
         <DisciplineUnitsSettings initialSettings={disciplineSettings} />
+      </Card>
+      <Card title="Swim equipment">
+        <SwimEquipmentSettingsPanel initialCatalog={swimEquipmentCatalog} />
       </Card>
       <Card title="Training plans & CSV">
         <div id="calendar-import">

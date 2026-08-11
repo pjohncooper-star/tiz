@@ -295,6 +295,8 @@ model Athlete {
   selfEvalConfig             Json?
   zoneFocusCatalog      Json?
   phaseKindZoneDefaults Json?
+  /** Editable swim gear list for workout step equipment pickers. */
+  swimEquipmentCatalog       Json?
   /** When false, ECO load is still computed but never shown in UI or signaling. */
   ecoLoadEnabled             Boolean              @default(false)
   createdAt                  DateTime             @default(now())
