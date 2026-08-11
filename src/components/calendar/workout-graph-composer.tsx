@@ -30,6 +30,7 @@ import {
 } from "@/lib/units/discipline-settings";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisplayUnit } from "@/lib/workout/metrics";
+import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 
 type BuildBodyTab = "steps" | "components";
 
@@ -231,6 +232,7 @@ type WorkoutGraphPanelProps = {
   /** Bound session already has steps — primary action is Save changes. */
   applyTargetHasExistingWorkout?: boolean;
   onApplyToSession?: () => void;
+  paceContext?: PaceThresholdContext | null;
 };
 
 function BuildActionBar({
@@ -333,6 +335,7 @@ export function WorkoutGraphPanel({
   applyTargetSessionId = null,
   applyTargetHasExistingWorkout = false,
   onApplyToSession,
+  paceContext = null,
 }: WorkoutGraphPanelProps) {
   const [bodyTab, setBodyTab] = useState<BuildBodyTab>("steps");
   const { setNodeRef, isOver } = useDroppable({
@@ -341,6 +344,16 @@ export function WorkoutGraphPanel({
   });
 
   const { poolSize, displayUnit } = useComposerUnits(composer, disciplineSettings);
+  const disciplinePace =
+    composer.discipline === "RUN" || composer.discipline === "SWIM"
+      ? paceContext?.[composer.discipline]
+      : composer.discipline === "BIKE"
+        ? paceContext?.BIKE
+        : undefined;
+  const thresholdPaceSeconds = disciplinePace?.thresholdPaceSeconds ?? null;
+  const thresholdFtpWatts =
+    composer.discipline === "BIKE" ? (paceContext?.BIKE?.thresholdFtpWatts ?? null) : null;
+  const racePaces = paceContext?.racePaces ?? null;
 
   if (!expanded) {
     return (
@@ -430,6 +443,9 @@ export function WorkoutGraphPanel({
           poolSize={poolSize}
           tree={composer.workoutTree}
           onChange={composer.setWorkoutTree}
+          thresholdPaceSeconds={thresholdPaceSeconds}
+          thresholdFtpWatts={thresholdFtpWatts}
+          racePaces={racePaces}
           chartOnly
         />
 
@@ -441,6 +457,9 @@ export function WorkoutGraphPanel({
               poolSize={poolSize}
               tree={composer.workoutTree}
               onChange={composer.setWorkoutTree}
+              thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
+              racePaces={racePaces}
               stepsPanel
             />
           ) : (

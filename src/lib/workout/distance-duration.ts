@@ -23,6 +23,8 @@ export type DistanceDurationOptions = {
    * explicit zone targets fold into this many zones.
    */
   zoneCount?: number;
+  /** Race-pace anchors for relative pace targets (sec/km or sec/100m). */
+  racePaces?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
 };
 
 export function effectiveThresholdPaceSeconds(

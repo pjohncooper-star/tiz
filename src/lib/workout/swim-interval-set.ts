@@ -3,6 +3,7 @@ import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { enrichDistanceFlatStep, type DistanceDurationOptions } from "@/lib/workout/distance-duration";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import { paceSecondsAtZoneMidpoint } from "@/lib/workout/zone-pace";
+import { normalizeSwimEquipmentIds } from "@/lib/swim/equipment-catalog";
 import type {
   FlatPlanningStep,
   LeafStep,
@@ -97,6 +98,8 @@ export function parseSwimIntervalSet(raw: Record<string, unknown>): SwimInterval
   const fixedRestSeconds = Number(raw.fixedRestSeconds);
   const targetPaceSeconds = Number(raw.targetPaceSeconds);
 
+  const equipment = normalizeSwimEquipmentIds(raw.equipment);
+
   const set: SwimIntervalSet = {
     kind: "swim_interval",
     repeatCount,
@@ -107,6 +110,7 @@ export function parseSwimIntervalSet(raw: Record<string, unknown>): SwimInterval
     ...(Number.isFinite(fixedRestSeconds) && fixedRestSeconds > 0 ? { fixedRestSeconds } : {}),
     ...(Number.isFinite(targetPaceSeconds) && targetPaceSeconds > 0 ? { targetPaceSeconds } : {}),
     ...(typeof raw.notes === "string" && raw.notes.trim() ? { notes: raw.notes.trim() } : {}),
+    ...(equipment ? { equipment } : {}),
   };
 
   if (set.restMode === "sendoff" && (set.sendOffSeconds == null || set.sendOffSeconds <= 0)) {
@@ -191,6 +195,7 @@ function swimIntervalWorkLeaf(set: SwimIntervalSet): LeafStep {
     duration: { type: "distance", value: set.distanceMeters },
     target: set.target,
     ...(set.targetPaceSeconds ? { targetPaceSeconds: set.targetPaceSeconds } : {}),
+    ...(set.equipment && set.equipment.length > 0 ? { equipment: set.equipment } : {}),
   };
 }
 

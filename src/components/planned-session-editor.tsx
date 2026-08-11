@@ -81,6 +81,10 @@ type PlannedSessionEditorProps = {
   workoutTree?: WorkoutTreeDocument;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
+  thresholdFtpWatts?: number | null;
+  powerZoneBoundaries?: number[];
+  racePaceAnchors?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
+  swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
   /** Present when structured workout targets imply a TiZ signal. */
@@ -115,6 +119,10 @@ export function PlannedSessionEditor({
   workoutTree: initialWorkoutTree,
   thresholdPaceSeconds = null,
   thresholdZoneBoundaries,
+  thresholdFtpWatts = null,
+  powerZoneBoundaries,
+  racePaceAnchors = null,
+  swimEquipmentCatalog,
   primarySignal = null,
   inheritedPrimarySignal = null,
   prescriptionSignal = null,
@@ -740,6 +748,8 @@ export function PlannedSessionEditor({
               }
               thresholdPaceSeconds={thresholdPaceSeconds}
               thresholdZoneBoundaries={thresholdZoneBoundaries}
+              thresholdFtpWatts={thresholdFtpWatts}
+              powerZoneBoundaries={powerZoneBoundaries}
               plannedTriad={plannedTriad}
               completedTriad={completedTriad}
               onPlannedTriadChange={handlePlannedTriadChange}
@@ -792,7 +802,10 @@ export function PlannedSessionEditor({
               tree={workoutTree}
               onChange={setWorkoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
+              racePaces={racePaceAnchors}
               primarySignal={primarySignal}
+              swimEquipment={swimEquipmentCatalog}
             />
             <SessionZoneBudget
               sessionId={sessionId}
@@ -801,6 +814,9 @@ export function PlannedSessionEditor({
               workoutTree={workoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
               thresholdZoneBoundaries={thresholdZoneBoundaries}
+              thresholdFtpWatts={thresholdFtpWatts}
+              powerZoneBoundaries={powerZoneBoundaries}
+              racePaceAnchors={racePaceAnchors}
             />
             <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <Button type="button" variant="secondary" onClick={handleRemoveWorkout}>

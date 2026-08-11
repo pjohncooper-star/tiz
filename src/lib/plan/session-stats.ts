@@ -25,6 +25,7 @@ import {
   type WorkoutStep,
   type ZoneMinutes,
 } from "@/lib/workout/steps";
+import { DEFAULT_ZONE_COUNT } from "@/lib/zones/boundaries";
 
 const STAT_LABEL_ORDER = [
   "Duration",
@@ -69,6 +70,9 @@ export function buildPlannedSessionStats(
     durationHintMinutes?: number | null;
     structuredSteps?: unknown;
     steps?: WorkoutStep[];
+    /** Bike FTP for absolute watt → TiZ mapping. */
+    thresholdFtpWatts?: number | null;
+    powerZoneBoundaries?: number[];
   }
 ): { stats: SummaryStat[]; zoneMinutes: ZoneMinutes } {
   const {
@@ -87,7 +91,13 @@ export function buildPlannedSessionStats(
           thresholdPaceSeconds: paceOptions.thresholdPaceSeconds,
           zoneBoundaries: paceOptions.zoneBoundaries,
         }
-      : undefined;
+      : discipline === "BIKE"
+        ? {
+            thresholdFtpWatts: paceOptions.thresholdFtpWatts,
+            powerZoneBoundaries: paceOptions.powerZoneBoundaries,
+            zoneCount: DEFAULT_ZONE_COUNT,
+          }
+        : undefined;
   const fromPlanning =
     structured && (discipline === "RUN" || discipline === "SWIM")
       ? derivePlannedMetricsFromPlanningSteps(

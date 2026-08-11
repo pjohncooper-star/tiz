@@ -21,6 +21,8 @@ import {
   type WorkoutNode,
 } from "@/lib/workout/workout-tree";
 import { walkFitStepManifest } from "@/lib/workout/fit-step-manifest";
+import { formatFitStepNotes } from "@/lib/workout/fit-step-notes";
+import { resolveRelativePaceSeconds } from "@/lib/workout/relative-pace";
 
 type FitStepMessage = Record<string, unknown>;
 
@@ -203,6 +205,22 @@ function applyLeafTarget(
       const encoded = encodeFitPower(target.value, thresholds);
       applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh", encoded, encoded);
     }
+    return;
+  }
+
+  if (target.mode === "relative" && target.ref && target.signal === "pace") {
+    const paceSec = resolveRelativePaceSeconds(
+      { ref: target.ref, pct: target.pct, refSource: target.refSource },
+      {
+        thresholdPaceSeconds: thresholds.thresholdPaceSecondsPerKm,
+        racePaces: thresholds.racePaces,
+      }
+    );
+    if (paceSec != null && paceSec > 0) {
+      const mps = paceSecondsToMps(paceSec, discipline);
+      const encoded = encodeFitSpeedMps(mps);
+      applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh", encoded, encoded);
+    }
   }
 }
 
@@ -231,7 +249,8 @@ function emitLeaf(
 
   applyLeafTarget(msg, step.target, step, discipline, thresholds);
 
-  if (step.notes) msg.notes = step.notes;
+  const notes = formatFitStepNotes(step, thresholds);
+  if (notes) msg.notes = notes;
   return msg;
 }
 

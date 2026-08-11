@@ -8,8 +8,10 @@ import {
   swimIntervalSetDurationSeconds,
   swimIntervalToFlatSteps,
 } from "@/lib/workout/swim-interval-set";
+import { normalizeSwimEquipmentIds } from "@/lib/swim/equipment-catalog";
+import { resolveRelativePaceSeconds } from "@/lib/workout/relative-pace";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
-import { zoneFromPowerWatts } from "@/lib/zones/assign-zone";
+import { zoneFromPaceSeconds, zoneFromPowerWatts } from "@/lib/zones/assign-zone";
 
 export type FlattenPlanningOptions = DistanceDurationOptions;
 
@@ -25,7 +27,7 @@ export type StepIntensity =
 
 export type TargetSignal = "power" | "heart_rate" | "pace" | "speed" | "open";
 
-export type TargetMode = "zone" | "range" | "value";
+export type TargetMode = "zone" | "range" | "value" | "relative";
 
 export type StepDuration =
   | { type: "time"; value: number }
@@ -39,6 +41,14 @@ export type StepTarget = {
   low?: number;
   high?: number;
   value?: number;
+  /**
+   * Relative pace anchor when mode is "relative" (run/swim).
+   * See `@/lib/workout/relative-pace` — resolve at display/FIT, do not bake.
+   */
+  ref?: import("@/lib/workout/relative-pace").PaceRef;
+  /** Percent of anchor speed (100 = exact). */
+  pct?: number;
+  refSource?: import("@/lib/workout/relative-pace").PaceRefSource;
 };
 
 export type LeafStep = {
@@ -50,6 +60,8 @@ export type LeafStep = {
   targetSpeedMps?: number;
   targetPaceSeconds?: number;
   notes?: string;
+  /** Swim equipment catalog ids (multi-select). */
+  equipment?: string[];
 };
 
 export type SwimIntervalRestMode = "sendoff" | "fixed";
@@ -64,6 +76,8 @@ export type SwimIntervalSet = {
   target: StepTarget;
   targetPaceSeconds?: number;
   notes?: string;
+  /** Swim equipment catalog ids (multi-select). */
+  equipment?: string[];
 };
 
 export type RepeatBlock = {
@@ -127,6 +141,22 @@ function parseTarget(raw: unknown): StepTarget {
   const low = Number(raw.low);
   const high = Number(raw.high);
   const value = Number(raw.value);
+  const pct = Number(raw.pct);
+  const refRaw = typeof raw.ref === "string" ? raw.ref.toLowerCase() : "";
+  const refSourceRaw =
+    typeof raw.refSource === "string" ? raw.refSource.toLowerCase() : "";
+  const resolvedMode: TargetMode =
+    mode === "range" || mode === "value" || mode === "relative"
+      ? mode
+      : "zone";
+  const ref =
+    refRaw === "threshold" ||
+    refRaw === "5k" ||
+    refRaw === "10k" ||
+    refRaw === "half" ||
+    refRaw === "marathon"
+      ? refRaw
+      : undefined;
   return {
     signal:
       signal === "heart_rate" ||
@@ -135,11 +165,19 @@ function parseTarget(raw: unknown): StepTarget {
       signal === "open"
         ? signal
         : "power",
-    mode: mode === "range" || mode === "value" ? mode : "zone",
+    mode: resolvedMode,
     ...(Number.isInteger(zone) && zone >= 1 && zone <= 7 ? { zone } : {}),
     ...(Number.isFinite(low) ? { low } : {}),
     ...(Number.isFinite(high) ? { high } : {}),
     ...(Number.isFinite(value) ? { value } : {}),
+    ...(resolvedMode === "relative" && ref ? { ref } : {}),
+    ...(resolvedMode === "relative" && Number.isFinite(pct) && pct > 0
+      ? { pct }
+      : {}),
+    ...(resolvedMode === "relative" &&
+    (refSourceRaw === "fitness" || refSourceRaw === "goal")
+      ? { refSource: refSourceRaw }
+      : {}),
   };
 }
 
@@ -213,6 +251,8 @@ function parseLeafStep(raw: Record<string, unknown>): LeafStep | null {
     step.targetPaceSeconds = targetPaceSeconds;
   }
   if (typeof raw.notes === "string" && raw.notes.trim()) step.notes = raw.notes.trim();
+  const equipment = normalizeSwimEquipmentIds(raw.equipment);
+  if (equipment) step.equipment = equipment;
   return step;
 }
 
@@ -352,12 +392,19 @@ function isZoneIndexRange(low: number, high: number): boolean {
 
 export type TargetZoneOptions = Pick<
   FlattenPlanningOptions,
-  "thresholdFtpWatts" | "powerZoneBoundaries" | "zoneCount"
+  | "thresholdFtpWatts"
+  | "powerZoneBoundaries"
+  | "zoneCount"
+  | "thresholdPaceSeconds"
+  | "zoneBoundaries"
+  | "discipline"
+  | "racePaces"
 >;
 
 /**
  * Resolve a planning zone index from a step target.
  * Absolute power watts are mapped via FTP — never treated as zone numbers.
+ * Relative / absolute pace maps via threshold speed %.
  * When `zoneCount` is set (Week TiZ uses 5), zones above that are folded down.
  */
 export function targetZoneFromTarget(
@@ -380,6 +427,30 @@ export function targetZoneFromTarget(
         return clamp(Math.round((target.low + target.high) / 2));
       }
       return zoneFromPowerWatts((target.low + target.high) / 2, options);
+    }
+  }
+
+  if (target.signal === "pace") {
+    if (target.mode === "relative" && target.ref) {
+      const resolved = resolveRelativePaceSeconds(
+        { ref: target.ref, pct: target.pct, refSource: target.refSource },
+        {
+          thresholdPaceSeconds: options.thresholdPaceSeconds,
+          racePaces: options.racePaces,
+        }
+      );
+      if (resolved != null) {
+        return zoneFromPaceSeconds(resolved, options);
+      }
+    }
+    if (target.mode === "value" && target.value != null && target.value > 7) {
+      return zoneFromPaceSeconds(target.value, options);
+    }
+    if (target.mode === "range" && target.low != null && target.high != null) {
+      if (isZoneIndexRange(target.low, target.high)) {
+        return clamp(Math.round((target.low + target.high) / 2));
+      }
+      return zoneFromPaceSeconds((target.low + target.high) / 2, options);
     }
   }
 
@@ -407,11 +478,24 @@ function rampDurationSeconds(step: RampStep): number {
   return step.duration.value;
 }
 
-function paceSecondsFromLeafTarget(step: LeafStep): number | undefined {
+function paceSecondsFromLeafTarget(
+  step: LeafStep,
+  options: FlattenPlanningOptions = {}
+): number | undefined {
+  const t = step.target;
+  if (t.mode === "relative" && t.ref) {
+    const resolved = resolveRelativePaceSeconds(
+      { ref: t.ref, pct: t.pct, refSource: t.refSource },
+      {
+        thresholdPaceSeconds: options.thresholdPaceSeconds,
+        racePaces: options.racePaces,
+      }
+    );
+    return resolved ?? undefined;
+  }
   if (step.targetPaceSeconds != null && step.targetPaceSeconds > 0) {
     return step.targetPaceSeconds;
   }
-  const t = step.target;
   if (t.signal !== "pace" && t.signal !== "speed") return undefined;
   if (t.mode === "range" && t.low != null && t.high != null) {
     const low = t.low;
@@ -428,11 +512,14 @@ function paceSecondsFromLeafTarget(step: LeafStep): number | undefined {
   return undefined;
 }
 
-function leafPlanningExtras(step: LeafStep): Pick<
+function leafPlanningExtras(
+  step: LeafStep,
+  options: FlattenPlanningOptions = {}
+): Pick<
   FlatPlanningStep,
   "distanceMeters" | "targetSpeedMps" | "targetPaceSeconds"
 > {
-  const pace = paceSecondsFromLeafTarget(step);
+  const pace = paceSecondsFromLeafTarget(step, options);
   return {
     ...(step.distanceMeters ? { distanceMeters: step.distanceMeters } : {}),
     ...(step.targetSpeedMps ? { targetSpeedMps: step.targetSpeedMps } : {}),
@@ -454,7 +541,7 @@ export function leafToFlatPlanningStep(
 ): FlatPlanningStep | null {
   const type = INTENSITY_TO_LEGACY[step.intensity];
   const targetZone = targetZoneFromTarget(step.target, options);
-  const extras = leafPlanningExtras(step);
+  const extras = leafPlanningExtras(step, options);
   if (step.duration.type === "distance") {
     const flat: FlatPlanningStep = {
       type,

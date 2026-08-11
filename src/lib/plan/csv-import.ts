@@ -29,6 +29,7 @@ import {
   type WorkoutNode,
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
+import { parseRelativePaceToken } from "@/lib/workout/relative-pace";
 
 export const PLANNED_SESSIONS_CSV_HEADERS = [
   "date",
@@ -81,7 +82,7 @@ const INTENSITIES = new Set<string>([
 ]);
 const DURATION_TYPES = new Set<string>(["time", "distance", "open"]);
 const SIGNALS = new Set<string>(["power", "heart_rate", "pace", "speed", "open"]);
-const TARGET_MODES = new Set<string>(["zone", "range", "value"]);
+const TARGET_MODES = new Set<string>(["zone", "range", "value", "relative"]);
 
 const SESSION_ONLY_HEADERS = [
   "date",
@@ -401,7 +402,7 @@ function parseStepDraft(
   let targetMode: TargetMode | null = null;
   if (targetModeRaw) {
     if (!TARGET_MODES.has(targetModeRaw)) {
-      return 'target_mode must be "zone", "range", or "value"';
+      return 'target_mode must be "zone", "range", "value", or "relative"';
     }
     targetMode = targetModeRaw as TargetMode;
   }
@@ -573,6 +574,29 @@ function targetFromDraft(
     return { signal, mode: "value", value };
   }
 
+  if (mode === "relative") {
+    if (signal !== "pace") {
+      return "relative target_mode is only valid with signal=pace";
+    }
+    if (discipline !== "RUN" && discipline !== "SWIM") {
+      return "relative pace targets are only valid for RUN or SWIM";
+    }
+    if (!draft.targetRaw) {
+      return "relative target_mode requires target (e.g. 10k, threshold, 95%|10k)";
+    }
+    if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
+      return "relative target_mode cannot include zone, target_low, or target_high";
+    }
+    const parsed = parseRelativePaceToken(draft.targetRaw);
+    if (typeof parsed === "string") return parsed;
+    return {
+      signal: "pace",
+      mode: "relative",
+      ref: parsed.ref,
+      ...(parsed.pct != null ? { pct: parsed.pct } : {}),
+    };
+  }
+
   // range
   if (!draft.targetLowRaw || !draft.targetHighRaw) {
     return "range target_mode requires target_low and target_high";
@@ -668,6 +692,7 @@ function leafFromDraft(
   if (target.signal === "pace" && target.mode === "range" && target.low != null && target.high != null) {
     step.targetPaceSeconds = Math.round((target.low + target.high) / 2);
   }
+  // relative: do not bake targetPaceSeconds — resolve at display/FIT from athlete anchors
   if (target.signal === "speed" && target.mode === "value" && target.value != null) {
     step.targetSpeedMps = target.value;
   }

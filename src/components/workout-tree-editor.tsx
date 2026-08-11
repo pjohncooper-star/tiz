@@ -24,9 +24,16 @@ import {
   usePanelDensity,
 } from "@/components/panel-density";
 import { SwimIntervalSetEditor } from "@/components/swim-interval-set-editor";
+import { StepNotesInput } from "@/components/step-notes-input";
+import { SwimEquipmentPicker } from "@/components/swim-equipment-picker";
 import { WorkoutProfileChart } from "@/components/workout-profile-chart";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisplayUnit } from "@/lib/workout/metrics";
+import {
+  parseSwimEquipmentCatalog,
+  seedSwimEquipmentCatalog,
+  type SwimEquipmentCatalog,
+} from "@/lib/swim/equipment-catalog";
 import {
   stepPaceCanonicalToInput,
   stepPaceInputLabel,
@@ -59,6 +66,14 @@ import {
 } from "@/lib/workout/workout-tree";
 import { formatSwimIntervalLabel } from "@/lib/workout/swim-interval-set";
 import {
+  formatRelativePaceLabel,
+  PACE_REFS,
+  resolveRelativePaceSeconds,
+  type PaceRef,
+  type RacePaceAnchors,
+} from "@/lib/workout/relative-pace";
+import { formatPace } from "@/lib/units/pace";
+import {
   moveWorkoutNode,
   getNodeAtPath,
   nodeDragId,
@@ -80,7 +95,11 @@ type WorkoutTreeEditorProps = {
   tree: WorkoutTreeDocument;
   onChange: (tree: WorkoutTreeDocument) => void;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
+  racePaces?: RacePaceAnchors | null;
   primarySignal?: SignalType | null;
+  /** Swim equipment options; defaults to the seeded catalog when omitted. */
+  swimEquipment?: SwimEquipmentCatalog;
   /** Compact chart + scrollable chart/steps viewport (calendar Build panel). */
   compact?: boolean;
   /** Step controls + list only (fixed left gutter in calendar Build layout). */
@@ -91,6 +110,26 @@ type WorkoutTreeEditorProps = {
 
 type TargetView = "zone" | "pace_power" | "heart_rate";
 type LengthView = "duration" | "distance";
+
+function withOptionalNotes<T extends { notes?: string }>(
+  node: T,
+  notes: string | undefined
+): T {
+  const next = { ...node };
+  if (notes) next.notes = notes;
+  else delete next.notes;
+  return next;
+}
+
+function withOptionalEquipment<T extends { equipment?: string[] }>(
+  node: T,
+  equipment: string[] | undefined
+): T {
+  const next = { ...node };
+  if (equipment && equipment.length > 0) next.equipment = equipment;
+  else delete next.equipment;
+  return next;
+}
 
 function resolvePrimaryTargetSignal(
   discipline: Discipline,
@@ -188,6 +227,7 @@ function inferTargetView(
     if (t.signal === "heart_rate") return "heart_rate";
     return "zone";
   }
+  if (t.mode === "relative") return "pace_power";
   if (t.mode === "range") {
     if (t.signal === "heart_rate") return "heart_rate";
     if (isZoneRangeTarget(t)) return "zone";
@@ -285,6 +325,20 @@ function applyTargetView(
     };
   }
   if (discipline === "RUN" || discipline === "SWIM") {
+    if (step.target.mode === "relative" && step.target.ref) {
+      return {
+        ...withoutPace,
+        target: {
+          signal: "pace",
+          mode: "relative",
+          ref: step.target.ref,
+          ...(step.target.pct != null && step.target.pct > 0
+            ? { pct: step.target.pct }
+            : {}),
+          ...(step.target.refSource ? { refSource: step.target.refSource } : {}),
+        },
+      };
+    }
     return {
       ...withoutPace,
       target: { signal: "pace", mode: "value" },
@@ -797,6 +851,8 @@ function StepTargetField({
   displayUnit,
   poolSize,
   primaryTargetSignal,
+  thresholdPaceSeconds = null,
+  racePaces = null,
   onChange,
 }: {
   step: LeafStep;
@@ -805,11 +861,17 @@ function StepTargetField({
   displayUnit: DisplayUnit;
   poolSize: PoolSize | null;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
+  thresholdPaceSeconds?: number | null;
+  racePaces?: RacePaceAnchors | null;
   onChange: (patch: Partial<LeafStep>) => void;
 }) {
   const planDiscipline = discipline as PlanDiscipline;
   const label = targetFieldLabel(targetView, discipline, displayUnit, poolSize);
   const rangeMode = step.target.mode === "range";
+  const relativeMode =
+    step.target.mode === "relative" &&
+    step.target.signal === "pace" &&
+    !!step.target.ref;
 
   if (targetView === "zone") {
     if (rangeMode) {
@@ -1015,6 +1077,80 @@ function StepTargetField({
   }
 
   if (discipline === "RUN" || discipline === "SWIM") {
+    if (relativeMode && step.target.ref) {
+      const ref = step.target.ref;
+      const pct = step.target.pct ?? 100;
+      const resolved = resolveRelativePaceSeconds(
+        { ref, pct: step.target.pct, refSource: step.target.refSource },
+        { thresholdPaceSeconds, racePaces }
+      );
+      const resolvedLabel =
+        resolved != null
+          ? formatPace(resolved, planDiscipline === "SWIM" ? "100m" : "km")
+          : "set race paces in Settings";
+      return (
+        <div className="min-w-0 space-y-1">
+          <Label>{label} (relative)</Label>
+          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
+            <Select
+              value={ref}
+              onChange={(e) => {
+                const next = e.target.value as PaceRef;
+                onChange({
+                  target: {
+                    signal: "pace",
+                    mode: "relative",
+                    ref: next,
+                    ...(pct !== 100 ? { pct } : {}),
+                    ...(step.target.refSource
+                      ? { refSource: step.target.refSource }
+                      : {}),
+                  },
+                  targetPaceSeconds: undefined,
+                });
+              }}
+            >
+              {PACE_REFS.map((r) => (
+                <option key={r} value={r}>
+                  {r === "half" ? "HM" : r}
+                </option>
+              ))}
+            </Select>
+            <NumberEditorInput
+              value={pct}
+              min={1}
+              max={200}
+              step={1}
+              ariaLabel="Percent of anchor speed"
+              onCommit={(v) => {
+                if (v == null) return;
+                onChange({
+                  target: {
+                    signal: "pace",
+                    mode: "relative",
+                    ref,
+                    ...(v !== 100 ? { pct: v } : {}),
+                    ...(step.target.refSource
+                      ? { refSource: step.target.refSource }
+                      : {}),
+                  },
+                  targetPaceSeconds: undefined,
+                });
+              }}
+            />
+          </div>
+          <p className="truncate text-[11px] text-zinc-500">
+            {formatRelativePaceLabel({
+              ref,
+              pct: step.target.pct,
+              refSource: step.target.refSource,
+            })}
+            {" → "}
+            {resolvedLabel}
+          </p>
+        </div>
+      );
+    }
     if (rangeMode) {
       const low = step.target.low ?? 280;
       const high = step.target.high ?? 320;
@@ -1084,6 +1220,9 @@ function NodeEditor({
   path,
   siblingCount,
   activeDragPath,
+  swimEquipment,
+  thresholdPaceSeconds = null,
+  racePaces = null,
   onTreeChange,
 }: {
   node: WorkoutNode;
@@ -1096,6 +1235,9 @@ function NodeEditor({
   path: number[];
   siblingCount: number;
   activeDragPath: number[] | null;
+  swimEquipment: SwimEquipmentCatalog;
+  thresholdPaceSeconds?: number | null;
+  racePaces?: RacePaceAnchors | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
   const dense = usePanelDensity();
@@ -1103,6 +1245,7 @@ function NodeEditor({
   const cardGap = dense ? "space-y-1.5" : "space-y-2";
   const canRemove = siblingCount > 1;
   const dimmed = activeDragPath != null && !pathsEqual(activeDragPath, path);
+  const showSwimEquipment = discipline === "SWIM";
 
   if (node.kind === "swim_interval") {
     const swimSet = node as SwimIntervalSet;
@@ -1113,6 +1256,7 @@ function NodeEditor({
           poolSize={poolSize}
           displayUnit={displayUnit}
           targetView={targetView}
+          swimEquipment={swimEquipment}
           dense={dense}
           canRemove={canRemove}
           onChange={(next) =>
@@ -1162,6 +1306,8 @@ function NodeEditor({
               displayUnit={displayUnit}
               poolSize={poolSize}
               primaryTargetSignal={primaryTargetSignal}
+              thresholdPaceSeconds={thresholdPaceSeconds}
+              racePaces={racePaces}
               onChange={(patch) =>
                 onTreeChange((nodes) =>
                   updateAtPath(nodes, path, (n) => (n.kind === "step" ? { ...n, ...patch } : n))
@@ -1229,6 +1375,31 @@ function NodeEditor({
             Remove
           </Button>
         </div>
+        <StepNotesInput
+          value={step.notes}
+          dense={dense}
+          onCommit={(notes) =>
+            onTreeChange((nodes) =>
+              updateAtPath(nodes, path, (n) =>
+                n.kind === "step" ? withOptionalNotes(n, notes) : n
+              )
+            )
+          }
+        />
+        {showSwimEquipment ? (
+          <SwimEquipmentPicker
+            catalog={swimEquipment}
+            value={step.equipment}
+            dense={dense}
+            onChange={(equipment) =>
+              onTreeChange((nodes) =>
+                updateAtPath(nodes, path, (n) =>
+                  n.kind === "step" ? withOptionalEquipment(n, equipment) : n
+                )
+              )
+            }
+          />
+        ) : null}
         </div>
       </DraggableNodeShell>
     );
@@ -1488,6 +1659,17 @@ function NodeEditor({
             />
           </div>
         )}
+        <StepNotesInput
+          value={step.notes}
+          dense={dense}
+          onCommit={(notes) =>
+            onTreeChange((nodes) =>
+              updateAtPath(nodes, path, (n) =>
+                n.kind === "ramp" ? withOptionalNotes(n, notes) : n
+              )
+            )
+          }
+        />
         </div>
       </DraggableNodeShell>
     );
@@ -1525,6 +1707,17 @@ function NodeEditor({
           );
         }}
       />
+      <StepNotesInput
+        value={block.notes}
+        dense={dense}
+        onCommit={(notes) =>
+          onTreeChange((nodes) =>
+            updateAtPath(nodes, path, (n) =>
+              n.kind === "repeat" ? withOptionalNotes(n, notes) : n
+            )
+          )
+        }
+      />
       <div className="space-y-0 border-l-2 border-sky-300 pl-3 dark:border-sky-800">
         <WorkoutNodeList
           parentPath={path}
@@ -1535,6 +1728,9 @@ function NodeEditor({
           targetView={targetView}
           lengthView={lengthView}
           primaryTargetSignal={primaryTargetSignal}
+          swimEquipment={swimEquipment}
+          thresholdPaceSeconds={thresholdPaceSeconds}
+          racePaces={racePaces}
           activeDragPath={activeDragPath}
           onTreeChange={onTreeChange}
         />
@@ -1580,6 +1776,9 @@ function WorkoutNodeList({
   targetView,
   lengthView,
   primaryTargetSignal,
+  swimEquipment,
+  thresholdPaceSeconds = null,
+  racePaces = null,
   activeDragPath,
   onTreeChange,
 }: {
@@ -1591,6 +1790,9 @@ function WorkoutNodeList({
   targetView: TargetView;
   lengthView: LengthView;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
+  swimEquipment: SwimEquipmentCatalog;
+  thresholdPaceSeconds?: number | null;
+  racePaces?: RacePaceAnchors | null;
   activeDragPath: number[] | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
@@ -1611,6 +1813,9 @@ function WorkoutNodeList({
               targetView={targetView}
               lengthView={lengthView}
               primaryTargetSignal={primaryTargetSignal}
+              swimEquipment={swimEquipment}
+              thresholdPaceSeconds={thresholdPaceSeconds}
+              racePaces={racePaces}
               path={path}
               siblingCount={nodes.length}
               activeDragPath={activeDragPath}
@@ -1631,16 +1836,44 @@ export function WorkoutTreeEditor({
   tree,
   onChange,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
+  racePaces = null,
   primarySignal = null,
+  swimEquipment: swimEquipmentProp,
   compact = false,
   stepsPanel = false,
   chartOnly = false,
 }: WorkoutTreeEditorProps) {
+  const [fetchedEquipment, setFetchedEquipment] = useState<SwimEquipmentCatalog | null>(null);
+  useEffect(() => {
+    if (swimEquipmentProp || discipline !== "SWIM") return;
+    let cancelled = false;
+    void fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { swimEquipmentCatalog?: unknown } | null) => {
+        if (cancelled || !data) return;
+        setFetchedEquipment(parseSwimEquipmentCatalog(data.swimEquipmentCatalog ?? null));
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedEquipment(seedSwimEquipmentCatalog());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [discipline, swimEquipmentProp]);
+
+  const swimEquipment =
+    swimEquipmentProp ?? fetchedEquipment ?? seedSwimEquipmentCatalog();
   const primaryTargetSignal = useMemo(
     () => resolvePrimaryTargetSignal(discipline, primarySignal),
     [discipline, primarySignal]
   );
-  const totalSeconds = totalTreeDurationSeconds(tree.nodes, thresholdPaceSeconds);
+  const totalSeconds = totalTreeDurationSeconds(tree.nodes, {
+    thresholdPaceSeconds,
+    racePaces,
+    discipline:
+      discipline === "RUN" || discipline === "SWIM" ? discipline : null,
+  });
   const totalLabel = totalSeconds > 0 ? formatDurationSeconds(totalSeconds) : "0s";
   const [activeDragPath, setActiveDragPath] = useState<number[] | null>(null);
 
@@ -1790,6 +2023,9 @@ export function WorkoutTreeEditor({
       targetView={targetView}
       lengthView={lengthView}
       primaryTargetSignal={primaryTargetSignal}
+      swimEquipment={swimEquipment}
+      thresholdPaceSeconds={thresholdPaceSeconds}
+      racePaces={racePaces}
       activeDragPath={activeDragPath}
       onTreeChange={onTreeChange}
     />
@@ -1803,6 +2039,8 @@ export function WorkoutTreeEditor({
       primarySignal={primarySignal}
       displayUnit={displayUnit}
       thresholdPaceSeconds={thresholdPaceSeconds}
+      thresholdFtpWatts={thresholdFtpWatts}
+      racePaces={racePaces}
       compact={compact && !chartOnly}
       poolStrip={chartOnly}
     />

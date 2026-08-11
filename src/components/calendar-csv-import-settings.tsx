@@ -201,9 +201,11 @@ export function CalendarCsvImportSettings({
         notes, role, pool. Step columns (optional): step, kind, intensity, duration_type,
         duration, zone, signal, repeat, step_notes, target_mode, target_low, target_high,
         target. Nested repeats use dotted step ids (e.g. 2 / 2.1 / 2.1.1, max depth 3).
-        target_mode is zone (default), range, or value. Power/HR absolutes are watts or bpm;
-        use 130% for percent of bike FTP / max HR. Pace is mm:ss; speed is km/h or mph.
-        Time step durations are minutes.
+        target_mode is zone (default), range, value, or relative. Relative run/swim pace:
+        target like 10k, threshold, or 95%|5k — resolved from Settings → Race paces (not
+        baked at import). Power/HR absolutes are watts or bpm; use 130% for percent of bike
+        FTP / max HR. Absolute pace is mm:ss; speed is km/h or mph. Time step durations are
+        minutes.
       </p>
     </div>
   );

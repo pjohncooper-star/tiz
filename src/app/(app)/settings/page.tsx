@@ -14,11 +14,15 @@ import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
+import { SwimEquipmentSettingsPanel } from "@/components/swim-equipment-settings-panel";
+import { RacePaceAnchorsSettingsPanel } from "@/components/race-pace-anchors-settings-panel";
 import { signalLabel } from "@/lib/zones/display";
 import {
   formatRoleSignalSummary,
   parseRoleSignals,
 } from "@/lib/zones/signal-preference";
+import { parseSwimEquipmentCatalog } from "@/lib/swim/equipment-catalog";
+import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +36,8 @@ async function loadAthleteSettingsProfile(athleteId: string) {
         workoutShadingTarget: true,
         phaseKindZoneDefaults: true,
         zoneFocusCatalog: true,
+        swimEquipmentCatalog: true,
+        racePaceAnchors: true,
         ecoLoadEnabled: true,
         calendarFeedToken: true,
       },
@@ -39,7 +45,7 @@ async function loadAthleteSettingsProfile(athleteId: string) {
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|ecoLoadEnabled|calendarFeedToken|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|racePaceAnchors|ecoLoadEnabled|calendarFeedToken|column/.test(
         error.message
       )
     ) {
@@ -127,6 +133,12 @@ export default async function SettingsPage() {
   const zoneFocusCatalog = parseZoneFocusCatalog(
     athlete && "zoneFocusCatalog" in athlete ? athlete.zoneFocusCatalog : null
   );
+  const swimEquipmentCatalog = parseSwimEquipmentCatalog(
+    athlete && "swimEquipmentCatalog" in athlete ? athlete.swimEquipmentCatalog : null
+  );
+  const racePaceAnchors = parseRacePaceAnchors(
+    athlete && "racePaceAnchors" in athlete ? athlete.racePaceAnchors : null
+  );
   const ecoLoadEnabled =
     athlete && "ecoLoadEnabled" in athlete
       ? Boolean(athlete.ecoLoadEnabled)
@@ -144,6 +156,12 @@ export default async function SettingsPage() {
       </Card>
       <Card title="Calendar subscription">
         <CalendarFeedSettings initialToken={calendarFeedToken} />
+      </Card>
+      <Card title="Race paces">
+        <RacePaceAnchorsSettingsPanel initialAnchors={racePaceAnchors} />
+      </Card>
+      <Card title="Swim equipment">
+        <SwimEquipmentSettingsPanel initialCatalog={swimEquipmentCatalog} />
       </Card>
       <Card title="Training plans & CSV">
         <div id="calendar-import">
