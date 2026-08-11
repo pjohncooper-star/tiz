@@ -47,6 +47,7 @@ export const leafStepSchema = z.object({
   targetSpeedMps: z.number().positive().optional(),
   targetPaceSeconds: z.number().positive().optional(),
   notes: z.string().optional(),
+  equipment: z.array(z.string().min(1).max(40)).max(30).optional(),
 });
 
 export const swimIntervalSetSchema = z
@@ -60,6 +61,7 @@ export const swimIntervalSetSchema = z
     target: stepTargetSchema,
     targetPaceSeconds: z.number().positive().optional(),
     notes: z.string().optional(),
+    equipment: z.array(z.string().min(1).max(40)).max(30).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.restMode === "sendoff" && (val.sendOffSeconds == null || val.sendOffSeconds <= 0)) {
@@ -321,6 +323,21 @@ export const phaseKindZoneDefaultsSchema = z.object({
 export const zoneFocusSettingsSchema = z.object({
   zoneFocusCatalog: zoneFocusCatalogSchema,
   phaseKindZoneDefaults: phaseKindZoneDefaultsSchema,
+});
+
+export const swimEquipmentCatalogSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1).max(40),
+      name: z.string().min(1).max(40),
+      sortOrder: z.number().int().nonnegative(),
+    })
+  )
+  .min(1)
+  .max(30);
+
+export const swimEquipmentSettingsSchema = z.object({
+  swimEquipmentCatalog: swimEquipmentCatalogSchema,
 });
 
 export const simpleRampDefaultsSchema = z.object({

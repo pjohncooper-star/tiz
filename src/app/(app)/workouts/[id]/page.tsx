@@ -56,6 +56,7 @@ export default async function WorkoutDetailPage({
         workoutTree={viewModel.workoutTree}
         thresholdPaceSeconds={viewModel.thresholdPaceSeconds}
         thresholdZoneBoundaries={viewModel.thresholdZoneBoundaries}
+        swimEquipmentCatalog={viewModel.swimEquipmentCatalog}
         primarySignal={viewModel.primarySignal}
         inheritedPrimarySignal={viewModel.inheritedPrimarySignal}
         prescriptionSignal={viewModel.prescriptionSignal}

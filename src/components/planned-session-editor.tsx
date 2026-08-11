@@ -76,6 +76,7 @@ type PlannedSessionEditorProps = {
   workoutTree?: WorkoutTreeDocument;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
+  swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
   /** Present when structured workout targets imply a TiZ signal. */
@@ -109,6 +110,7 @@ export function PlannedSessionEditor({
   workoutTree: initialWorkoutTree,
   thresholdPaceSeconds = null,
   thresholdZoneBoundaries,
+  swimEquipmentCatalog,
   primarySignal = null,
   inheritedPrimarySignal = null,
   prescriptionSignal = null,
@@ -757,6 +759,7 @@ export function PlannedSessionEditor({
               onChange={setWorkoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
               primarySignal={primarySignal}
+              swimEquipment={swimEquipmentCatalog}
             />
             <SessionZoneBudget
               sessionId={sessionId}

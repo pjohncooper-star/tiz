@@ -24,9 +24,16 @@ import {
   usePanelDensity,
 } from "@/components/panel-density";
 import { SwimIntervalSetEditor } from "@/components/swim-interval-set-editor";
+import { StepNotesInput } from "@/components/step-notes-input";
+import { SwimEquipmentPicker } from "@/components/swim-equipment-picker";
 import { WorkoutProfileChart } from "@/components/workout-profile-chart";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisplayUnit } from "@/lib/workout/metrics";
+import {
+  parseSwimEquipmentCatalog,
+  seedSwimEquipmentCatalog,
+  type SwimEquipmentCatalog,
+} from "@/lib/swim/equipment-catalog";
 import {
   stepPaceCanonicalToInput,
   stepPaceInputLabel,
@@ -81,6 +88,8 @@ type WorkoutTreeEditorProps = {
   onChange: (tree: WorkoutTreeDocument) => void;
   thresholdPaceSeconds?: number | null;
   primarySignal?: SignalType | null;
+  /** Swim equipment options; defaults to the seeded catalog when omitted. */
+  swimEquipment?: SwimEquipmentCatalog;
   /** Compact chart + scrollable chart/steps viewport (calendar Build panel). */
   compact?: boolean;
   /** Step controls + list only (fixed left gutter in calendar Build layout). */
@@ -91,6 +100,26 @@ type WorkoutTreeEditorProps = {
 
 type TargetView = "zone" | "pace_power" | "heart_rate";
 type LengthView = "duration" | "distance";
+
+function withOptionalNotes<T extends { notes?: string }>(
+  node: T,
+  notes: string | undefined
+): T {
+  const next = { ...node };
+  if (notes) next.notes = notes;
+  else delete next.notes;
+  return next;
+}
+
+function withOptionalEquipment<T extends { equipment?: string[] }>(
+  node: T,
+  equipment: string[] | undefined
+): T {
+  const next = { ...node };
+  if (equipment && equipment.length > 0) next.equipment = equipment;
+  else delete next.equipment;
+  return next;
+}
 
 function resolvePrimaryTargetSignal(
   discipline: Discipline,
@@ -1084,6 +1113,7 @@ function NodeEditor({
   path,
   siblingCount,
   activeDragPath,
+  swimEquipment,
   onTreeChange,
 }: {
   node: WorkoutNode;
@@ -1096,6 +1126,7 @@ function NodeEditor({
   path: number[];
   siblingCount: number;
   activeDragPath: number[] | null;
+  swimEquipment: SwimEquipmentCatalog;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
   const dense = usePanelDensity();
@@ -1103,6 +1134,7 @@ function NodeEditor({
   const cardGap = dense ? "space-y-1.5" : "space-y-2";
   const canRemove = siblingCount > 1;
   const dimmed = activeDragPath != null && !pathsEqual(activeDragPath, path);
+  const showSwimEquipment = discipline === "SWIM";
 
   if (node.kind === "swim_interval") {
     const swimSet = node as SwimIntervalSet;
@@ -1113,6 +1145,7 @@ function NodeEditor({
           poolSize={poolSize}
           displayUnit={displayUnit}
           targetView={targetView}
+          swimEquipment={swimEquipment}
           dense={dense}
           canRemove={canRemove}
           onChange={(next) =>
@@ -1229,6 +1262,31 @@ function NodeEditor({
             Remove
           </Button>
         </div>
+        <StepNotesInput
+          value={step.notes}
+          dense={dense}
+          onCommit={(notes) =>
+            onTreeChange((nodes) =>
+              updateAtPath(nodes, path, (n) =>
+                n.kind === "step" ? withOptionalNotes(n, notes) : n
+              )
+            )
+          }
+        />
+        {showSwimEquipment ? (
+          <SwimEquipmentPicker
+            catalog={swimEquipment}
+            value={step.equipment}
+            dense={dense}
+            onChange={(equipment) =>
+              onTreeChange((nodes) =>
+                updateAtPath(nodes, path, (n) =>
+                  n.kind === "step" ? withOptionalEquipment(n, equipment) : n
+                )
+              )
+            }
+          />
+        ) : null}
         </div>
       </DraggableNodeShell>
     );
@@ -1488,6 +1546,17 @@ function NodeEditor({
             />
           </div>
         )}
+        <StepNotesInput
+          value={step.notes}
+          dense={dense}
+          onCommit={(notes) =>
+            onTreeChange((nodes) =>
+              updateAtPath(nodes, path, (n) =>
+                n.kind === "ramp" ? withOptionalNotes(n, notes) : n
+              )
+            )
+          }
+        />
         </div>
       </DraggableNodeShell>
     );
@@ -1525,6 +1594,17 @@ function NodeEditor({
           );
         }}
       />
+      <StepNotesInput
+        value={block.notes}
+        dense={dense}
+        onCommit={(notes) =>
+          onTreeChange((nodes) =>
+            updateAtPath(nodes, path, (n) =>
+              n.kind === "repeat" ? withOptionalNotes(n, notes) : n
+            )
+          )
+        }
+      />
       <div className="space-y-0 border-l-2 border-sky-300 pl-3 dark:border-sky-800">
         <WorkoutNodeList
           parentPath={path}
@@ -1535,6 +1615,7 @@ function NodeEditor({
           targetView={targetView}
           lengthView={lengthView}
           primaryTargetSignal={primaryTargetSignal}
+          swimEquipment={swimEquipment}
           activeDragPath={activeDragPath}
           onTreeChange={onTreeChange}
         />
@@ -1580,6 +1661,7 @@ function WorkoutNodeList({
   targetView,
   lengthView,
   primaryTargetSignal,
+  swimEquipment,
   activeDragPath,
   onTreeChange,
 }: {
@@ -1591,6 +1673,7 @@ function WorkoutNodeList({
   targetView: TargetView;
   lengthView: LengthView;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
+  swimEquipment: SwimEquipmentCatalog;
   activeDragPath: number[] | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
@@ -1611,6 +1694,7 @@ function WorkoutNodeList({
               targetView={targetView}
               lengthView={lengthView}
               primaryTargetSignal={primaryTargetSignal}
+              swimEquipment={swimEquipment}
               path={path}
               siblingCount={nodes.length}
               activeDragPath={activeDragPath}
@@ -1632,10 +1716,31 @@ export function WorkoutTreeEditor({
   onChange,
   thresholdPaceSeconds = null,
   primarySignal = null,
+  swimEquipment: swimEquipmentProp,
   compact = false,
   stepsPanel = false,
   chartOnly = false,
 }: WorkoutTreeEditorProps) {
+  const [fetchedEquipment, setFetchedEquipment] = useState<SwimEquipmentCatalog | null>(null);
+  useEffect(() => {
+    if (swimEquipmentProp || discipline !== "SWIM") return;
+    let cancelled = false;
+    void fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { swimEquipmentCatalog?: unknown } | null) => {
+        if (cancelled || !data) return;
+        setFetchedEquipment(parseSwimEquipmentCatalog(data.swimEquipmentCatalog ?? null));
+      })
+      .catch(() => {
+        if (!cancelled) setFetchedEquipment(seedSwimEquipmentCatalog());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [discipline, swimEquipmentProp]);
+
+  const swimEquipment =
+    swimEquipmentProp ?? fetchedEquipment ?? seedSwimEquipmentCatalog();
   const primaryTargetSignal = useMemo(
     () => resolvePrimaryTargetSignal(discipline, primarySignal),
     [discipline, primarySignal]
@@ -1790,6 +1895,7 @@ export function WorkoutTreeEditor({
       targetView={targetView}
       lengthView={lengthView}
       primaryTargetSignal={primaryTargetSignal}
+      swimEquipment={swimEquipment}
       activeDragPath={activeDragPath}
       onTreeChange={onTreeChange}
     />

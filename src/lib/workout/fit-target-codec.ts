@@ -9,6 +9,8 @@ export type FitExportThresholds = {
   ftpWatts?: number;
   maxHeartRateBpm?: number;
   thresholdPaceSecondsPerKm?: number;
+  /** Used to resolve swim equipment ids → labels in FIT step notes. */
+  swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;
 };
 
 export function zoneToPercentFtp(zone: number): number {

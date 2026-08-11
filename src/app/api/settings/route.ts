@@ -17,12 +17,16 @@ import {
 } from "@/lib/zones/signal-preference";
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
-import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema } from "@/lib/plan/api-schemas";
+import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema, swimEquipmentSettingsSchema } from "@/lib/plan/api-schemas";
 import { serializePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import {
   serializeZoneFocusCatalog,
   validatePhaseKindDefaultsAgainstCatalog,
 } from "@/lib/plan/season/zone-focus-catalog";
+import {
+  parseSwimEquipmentCatalog,
+  serializeSwimEquipmentCatalog,
+} from "@/lib/swim/equipment-catalog";
 import type { Discipline } from "@prisma/client";
 import {
   DEFAULT_ZONE_COUNT,
@@ -76,6 +80,11 @@ export async function GET() {
     listSignalPreferences(session.user.athleteId),
     db.athlete.findUnique({ where: { id: session.user.athleteId } }),
   ]);
+  const swimEquipmentCatalog = parseSwimEquipmentCatalog(
+    athlete && "swimEquipmentCatalog" in athlete
+      ? (athlete as { swimEquipmentCatalog?: unknown }).swimEquipmentCatalog
+      : null
+  );
   return NextResponse.json({
     settings,
     thresholds,
@@ -85,6 +94,7 @@ export async function GET() {
       athlete && "ecoLoadEnabled" in athlete
         ? Boolean((athlete as { ecoLoadEnabled?: boolean }).ecoLoadEnabled)
         : false,
+    swimEquipmentCatalog,
   });
 }
 
@@ -537,6 +547,32 @@ export async function PUT(req: Request) {
             : error instanceof Error
               ? error.message
               : "Could not save zone focus defaults";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (body.type === "swim-equipment") {
+    try {
+      const data = swimEquipmentSettingsSchema.parse(body.data);
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: {
+          swimEquipmentCatalog: serializeSwimEquipmentCatalog(
+            data.swimEquipmentCatalog
+          ) as import("@prisma/client").Prisma.InputJsonValue,
+        },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid swim equipment catalog"
+          : error instanceof Error &&
+              /swimEquipmentCatalog|column/.test(error.message)
+            ? "Swim equipment settings are not available yet. Run prisma/migrations/manual_swim_equipment.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save swim equipment settings";
       return NextResponse.json({ error: message }, { status: 500 });
     }
   }

@@ -8,6 +8,7 @@ import {
   swimIntervalSetDurationSeconds,
   swimIntervalToFlatSteps,
 } from "@/lib/workout/swim-interval-set";
+import { normalizeSwimEquipmentIds } from "@/lib/swim/equipment-catalog";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
 import { zoneFromPowerWatts } from "@/lib/zones/assign-zone";
 
@@ -50,6 +51,8 @@ export type LeafStep = {
   targetSpeedMps?: number;
   targetPaceSeconds?: number;
   notes?: string;
+  /** Swim equipment catalog ids (multi-select). */
+  equipment?: string[];
 };
 
 export type SwimIntervalRestMode = "sendoff" | "fixed";
@@ -64,6 +67,8 @@ export type SwimIntervalSet = {
   target: StepTarget;
   targetPaceSeconds?: number;
   notes?: string;
+  /** Swim equipment catalog ids (multi-select). */
+  equipment?: string[];
 };
 
 export type RepeatBlock = {
@@ -213,6 +218,8 @@ function parseLeafStep(raw: Record<string, unknown>): LeafStep | null {
     step.targetPaceSeconds = targetPaceSeconds;
   }
   if (typeof raw.notes === "string" && raw.notes.trim()) step.notes = raw.notes.trim();
+  const equipment = normalizeSwimEquipmentIds(raw.equipment);
+  if (equipment) step.equipment = equipment;
   return step;
 }
 

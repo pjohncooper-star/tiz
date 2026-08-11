@@ -21,6 +21,7 @@ import {
   type WorkoutNode,
 } from "@/lib/workout/workout-tree";
 import { walkFitStepManifest } from "@/lib/workout/fit-step-manifest";
+import { formatFitStepNotes } from "@/lib/workout/fit-step-notes";
 
 type FitStepMessage = Record<string, unknown>;
 
@@ -231,7 +232,8 @@ function emitLeaf(
 
   applyLeafTarget(msg, step.target, step, discipline, thresholds);
 
-  if (step.notes) msg.notes = step.notes;
+  const notes = formatFitStepNotes(step, thresholds);
+  if (notes) msg.notes = notes;
   return msg;
 }
 
