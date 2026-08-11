@@ -7,6 +7,14 @@ import { recordedActivityWhere } from "@/lib/import/classify";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { markFolderWorkoutCompleted } from "@/lib/workout/workout-folder-library";
 import { inngest } from "@/inngest/client";
+import { parseWorkoutTree, serializeWorkoutTree } from "@/lib/workout/workout-tree";
+import {
+  freezeRelativeTargetsInTree,
+  treeHasRelativeTargets,
+} from "@/lib/workout/relative-intensity";
+import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
+import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
+import type { Prisma } from "@prisma/client";
 export class SessionLinkError extends Error {
   constructor(
     message: string,
@@ -47,7 +55,13 @@ export async function linkActivityToPlannedSession(
   const [session, activity] = await Promise.all([
     db.plannedSession.findFirst({
       where: { id: sessionId, athleteId },
-      select: { id: true, discipline: true, scheduledDate: true, linkedActivityId: true },
+      select: {
+        id: true,
+        discipline: true,
+        scheduledDate: true,
+        linkedActivityId: true,
+        structuredWorkout: { select: { id: true, steps: true } },
+      },
     }),
     db.syncedActivity.findFirst({
       where: { id: activityId, athleteId, ...recordedActivityWhere },
@@ -71,6 +85,49 @@ export async function linkActivityToPlannedSession(
     throw new SessionLinkError("Activity must be on the same day as the planned session", 400);
   }
 
+  let frozenSteps: Prisma.InputJsonValue | null = null;
+  const rawSteps = session.structuredWorkout?.steps;
+  if (rawSteps != null) {
+    try {
+      const tree = parseWorkoutTree(rawSteps);
+      if (treeHasRelativeTargets(tree.nodes)) {
+        const asOf = session.scheduledDate;
+        const [athlete, paceProfile, powerProfile, hrProfile] = await Promise.all([
+          db.athlete
+            .findUnique({
+              where: { id: athleteId },
+              select: { racePaceAnchors: true },
+            })
+            .catch(() => null),
+          getThresholdProfileAtDate(
+            athleteId,
+            session.discipline === "SWIM" ? "SWIM" : "RUN",
+            "PACE",
+            asOf
+          ).catch(() => null),
+          getThresholdProfileAtDate(athleteId, "BIKE", "POWER", asOf).catch(
+            () => null
+          ),
+          getThresholdProfileAtDate(athleteId, "BIKE", "HEART_RATE", asOf).catch(
+            () => null
+          ),
+        ]);
+        const frozen = freezeRelativeTargetsInTree(tree, {
+          thresholdPaceSeconds: paceProfile?.thresholdValue ?? null,
+          racePaces: parseRacePaceAnchors(
+            (athlete as { racePaceAnchors?: unknown } | null)?.racePaceAnchors ??
+              null
+          ),
+          ftpWatts: powerProfile?.thresholdValue ?? null,
+          maxHeartRateBpm: hrProfile?.thresholdValue ?? null,
+        });
+        frozenSteps = serializeWorkoutTree(frozen) as unknown as Prisma.InputJsonValue;
+      }
+    } catch {
+      frozenSteps = null;
+    }
+  }
+
   await db.$transaction(async (tx) => {
     await tx.plannedSession.updateMany({
       where: { athleteId, linkedActivityId: activityId, NOT: { id: sessionId } },
@@ -80,6 +137,12 @@ export async function linkActivityToPlannedSession(
       where: { id: sessionId },
       data: { linkedActivityId: activityId },
     });
+    if (frozenSteps != null && session.structuredWorkout) {
+      await tx.structuredWorkout.update({
+        where: { id: session.structuredWorkout.id },
+        data: { steps: frozenSteps },
+      });
+    }
     await markFolderWorkoutCompleted(tx, sessionId);
   });
 

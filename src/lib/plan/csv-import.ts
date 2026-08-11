@@ -563,6 +563,18 @@ function targetFromDraft(
     if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
       return "value target_mode cannot include zone, target_low, or target_high";
     }
+    // Power/HR percents stay relative (resolve at display/FIT from current FTP / max HR).
+    if (signal === "power" || signal === "heart_rate") {
+      const pctParsed = parsePercentOrNumber(draft.targetRaw);
+      if (pctParsed?.kind === "percent") {
+        if (!(pctParsed.value > 0)) {
+          return signal === "power"
+            ? "power percent must be positive"
+            : "heart_rate percent must be positive";
+        }
+        return { signal, mode: "relative", pct: pctParsed.value };
+      }
+    }
     const value = parseAbsoluteTarget(
       draft.targetRaw,
       signal,
@@ -575,26 +587,37 @@ function targetFromDraft(
   }
 
   if (mode === "relative") {
-    if (signal !== "pace") {
-      return "relative target_mode is only valid with signal=pace";
-    }
-    if (discipline !== "RUN" && discipline !== "SWIM") {
-      return "relative pace targets are only valid for RUN or SWIM";
-    }
-    if (!draft.targetRaw) {
-      return "relative target_mode requires target (e.g. 10k, threshold, 95%|10k)";
-    }
     if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
       return "relative target_mode cannot include zone, target_low, or target_high";
     }
-    const parsed = parseRelativePaceToken(draft.targetRaw);
-    if (typeof parsed === "string") return parsed;
-    return {
-      signal: "pace",
-      mode: "relative",
-      ref: parsed.ref,
-      ...(parsed.pct != null ? { pct: parsed.pct } : {}),
-    };
+    if (!draft.targetRaw) {
+      return signal === "pace"
+        ? "relative target_mode requires target (e.g. 10k, threshold, 95%|10k)"
+        : "relative target_mode requires target (e.g. 130%)";
+    }
+    if (signal === "pace") {
+      if (discipline !== "RUN" && discipline !== "SWIM") {
+        return "relative pace targets are only valid for RUN or SWIM";
+      }
+      const parsed = parseRelativePaceToken(draft.targetRaw);
+      if (typeof parsed === "string") return parsed;
+      return {
+        signal: "pace",
+        mode: "relative",
+        ref: parsed.ref,
+        ...(parsed.pct != null ? { pct: parsed.pct } : {}),
+      };
+    }
+    if (signal === "power" || signal === "heart_rate") {
+      const pctParsed = parsePercentOrNumber(draft.targetRaw);
+      if (!pctParsed || pctParsed.kind !== "percent" || !(pctParsed.value > 0)) {
+        return signal === "power"
+          ? "relative power target must be a percent like 130%"
+          : "relative heart_rate target must be a percent like 80%";
+      }
+      return { signal, mode: "relative", pct: pctParsed.value };
+    }
+    return "relative target_mode is only valid with signal=pace, power, or heart_rate";
   }
 
   // range

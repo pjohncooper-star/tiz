@@ -5,6 +5,10 @@ import { parseWorkoutTree } from "@/lib/workout/steps";
 import { workoutTreeToZwo } from "@/lib/workout/export-zwo";
 import { workoutTreeToFit } from "@/lib/workout/export-fit-workout";
 import { loadFitExportThresholds } from "@/lib/workout/fit-export-profile.server";
+import {
+  formatMissingRelativeIntensity,
+  missingRelativeIntensity,
+} from "@/lib/workout/relative-intensity";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,6 +55,22 @@ export async function GET(request: Request, context: RouteContext) {
       planned.discipline,
       planned.scheduledDate
     );
+    const missing = missingRelativeIntensity(tree.nodes, {
+      thresholdPaceSeconds: thresholds.thresholdPaceSecondsPerKm ?? null,
+      racePaces: thresholds.racePaces ?? null,
+      ftpWatts: thresholds.ftpWatts ?? null,
+      maxHeartRateBpm: thresholds.maxHeartRateBpm ?? null,
+    });
+    const missingLines = formatMissingRelativeIntensity(missing);
+    if (missingLines.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Set missing intensity anchors before FIT export: ${missingLines.join("; ")}`,
+          missingAnchors: missingLines,
+        },
+        { status: 400 }
+      );
+    }
     const bytes = workoutTreeToFit(planned.title, planned.discipline, tree, thresholds);
     return new NextResponse(Buffer.from(bytes), {
       headers: {
