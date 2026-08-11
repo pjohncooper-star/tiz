@@ -16,6 +16,8 @@ type PlannedSessionStatsProps = {
   structuredSteps?: unknown;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
+  thresholdFtpWatts?: number | null;
+  powerZoneBoundaries?: number[];
   plannedTriad: PlannedMetricsTriadValues;
   completedTriad: PlannedMetricsTriadValues;
   onPlannedTriadChange: (values: PlannedMetricsTriadValues) => void;
@@ -47,6 +49,8 @@ export function PlannedSessionStats({
   structuredSteps,
   thresholdPaceSeconds,
   thresholdZoneBoundaries,
+  thresholdFtpWatts,
+  powerZoneBoundaries,
   plannedTriad,
   completedTriad,
   onPlannedTriadChange,
@@ -78,6 +82,8 @@ export function PlannedSessionStats({
         durationHintMinutes={plannedTriad.durationMinutes}
         thresholdPaceSeconds={thresholdPaceSeconds}
         thresholdZoneBoundaries={thresholdZoneBoundaries}
+        thresholdFtpWatts={thresholdFtpWatts}
+        powerZoneBoundaries={powerZoneBoundaries}
         sessionMetrics={sessionMetrics}
         completed={completed}
         editable

@@ -76,6 +76,8 @@ type PlannedSessionEditorProps = {
   workoutTree?: WorkoutTreeDocument;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
+  thresholdFtpWatts?: number | null;
+  powerZoneBoundaries?: number[];
   swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
@@ -110,6 +112,8 @@ export function PlannedSessionEditor({
   workoutTree: initialWorkoutTree,
   thresholdPaceSeconds = null,
   thresholdZoneBoundaries,
+  thresholdFtpWatts = null,
+  powerZoneBoundaries,
   swimEquipmentCatalog,
   primarySignal = null,
   inheritedPrimarySignal = null,
@@ -706,6 +710,8 @@ export function PlannedSessionEditor({
               }
               thresholdPaceSeconds={thresholdPaceSeconds}
               thresholdZoneBoundaries={thresholdZoneBoundaries}
+              thresholdFtpWatts={thresholdFtpWatts}
+              powerZoneBoundaries={powerZoneBoundaries}
               plannedTriad={plannedTriad}
               completedTriad={completedTriad}
               onPlannedTriadChange={handlePlannedTriadChange}
@@ -758,6 +764,7 @@ export function PlannedSessionEditor({
               tree={workoutTree}
               onChange={setWorkoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
               primarySignal={primarySignal}
               swimEquipment={swimEquipmentCatalog}
             />
@@ -768,6 +775,8 @@ export function PlannedSessionEditor({
               workoutTree={workoutTree}
               thresholdPaceSeconds={thresholdPaceSeconds}
               thresholdZoneBoundaries={thresholdZoneBoundaries}
+              thresholdFtpWatts={thresholdFtpWatts}
+              powerZoneBoundaries={powerZoneBoundaries}
             />
             <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
               <Button type="button" variant="secondary" onClick={handleRemoveWorkout}>
