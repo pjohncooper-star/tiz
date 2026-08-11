@@ -2,6 +2,7 @@ import type { Discipline, SignalType } from "@prisma/client";
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { formatPace } from "@/lib/units/pace";
 import { paceSecondsAtZoneMidpoint, zoneMidSpeedPct } from "@/lib/workout/zone-pace";
+import { resolveRelativePaceSeconds } from "@/lib/workout/relative-pace";
 import type {
   LeafStep,
   RampStep,
@@ -39,6 +40,7 @@ export type WorkoutProfileThresholds = {
   thresholdPaceSeconds?: number | null;
   thresholdFtpWatts?: number | null;
   thresholdHrBpm?: number | null;
+  racePaces?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
 };
 
 const METERS_PER_KM = 1000;
@@ -106,12 +108,21 @@ function paceToInvertedY(paceSeconds: number): number {
 function paceSecondsFromLeaf(
   step: LeafStep,
   discipline: Discipline,
-  thresholdPaceSeconds?: number | null
+  thresholds: WorkoutProfileThresholds
 ): number | null {
+  const t = step.target;
+  if (t.mode === "relative" && t.ref) {
+    return resolveRelativePaceSeconds(
+      { ref: t.ref, pct: t.pct, refSource: t.refSource },
+      {
+        thresholdPaceSeconds: thresholds.thresholdPaceSeconds,
+        racePaces: thresholds.racePaces,
+      }
+    );
+  }
   if (step.targetPaceSeconds != null && step.targetPaceSeconds > 0) {
     return step.targetPaceSeconds;
   }
-  const t = step.target;
   if (t.mode === "value" && t.value != null && t.value > 0 && (t.signal === "pace" || t.signal === "speed")) {
     return t.value;
   }
@@ -121,8 +132,8 @@ function paceSecondsFromLeaf(
   if (discipline === "RUN" || discipline === "SWIM") {
     const zone = targetZoneFromTarget(t);
     const threshold =
-      thresholdPaceSeconds && thresholdPaceSeconds > 0
-        ? thresholdPaceSeconds
+      thresholds.thresholdPaceSeconds && thresholds.thresholdPaceSeconds > 0
+        ? thresholds.thresholdPaceSeconds
         : FALLBACK_PACE[discipline];
     return paceSecondsAtZoneMidpoint(zone, threshold);
   }
@@ -195,7 +206,7 @@ function resolveLeafY(
       };
     }
     const pace =
-      paceSecondsFromLeaf(step, discipline, thresholds.thresholdPaceSeconds) ??
+      paceSecondsFromLeaf(step, discipline, thresholds) ??
       FALLBACK_PACE[discipline];
     const y = paceToInvertedY(pace);
     return { low: y, high: y, fill: zoneFill };
@@ -252,11 +263,11 @@ function leafDurationSeconds(step: LeafStep): number {
 function leafDistanceMeters(
   step: LeafStep,
   discipline: Discipline,
-  thresholdPaceSeconds?: number | null
+  thresholds: WorkoutProfileThresholds
 ): number {
   if (step.duration.type === "distance") return step.duration.value;
   const sec = leafDurationSeconds(step);
-  const pace = paceSecondsFromLeaf(step, discipline, thresholdPaceSeconds);
+  const pace = paceSecondsFromLeaf(step, discipline, thresholds);
   if (!sec || !pace) return 0;
   if (discipline === "SWIM") return (sec / pace) * METERS_PER_100M;
   if (discipline === "RUN") return (sec / pace) * METERS_PER_KM;
@@ -267,14 +278,14 @@ function leafXSize(
   step: LeafStep,
   lengthView: ProfileLengthView,
   discipline: Discipline,
-  thresholdPaceSeconds?: number | null
+  thresholds: WorkoutProfileThresholds
 ): number {
   if (lengthView === "distance") {
-    const meters = leafDistanceMeters(step, discipline, thresholdPaceSeconds);
+    const meters = leafDistanceMeters(step, discipline, thresholds);
     return meters > 0 ? meters : 0;
   }
   if (step.duration.type === "distance") {
-    const pace = paceSecondsFromLeaf(step, discipline, thresholdPaceSeconds);
+    const pace = paceSecondsFromLeaf(step, discipline, thresholds);
     if (!pace) return 0;
     if (discipline === "SWIM") return (step.duration.value / METERS_PER_100M) * pace;
     if (discipline === "RUN") return (step.duration.value / METERS_PER_KM) * pace;
@@ -363,7 +374,7 @@ function appendNode(
               target: { signal: "power", mode: "zone", zone: 2 },
             },
             discipline,
-            thresholds.thresholdPaceSeconds
+            thresholds
           )
         : duration;
     const sliceX = xUnit / RAMP_SLICES;
@@ -387,7 +398,7 @@ function appendNode(
     return xCursor + xUnit;
   }
 
-  const width = leafXSize(node, lengthView, discipline, thresholds.thresholdPaceSeconds);
+  const width = leafXSize(node, lengthView, discipline, thresholds);
   if (width <= 0) return xCursor;
   const { low, high, fill } = resolveLeafY(node, primarySignal, discipline, thresholds);
   segments.push({
@@ -550,7 +561,7 @@ export function collectExecutionProfileBands(
               target: { signal: "power", mode: "zone", zone: 2 },
             },
             discipline,
-            thresholds.thresholdPaceSeconds
+            thresholds
           ),
           openDuration: false,
         });
@@ -564,7 +575,7 @@ export function collectExecutionProfileBands(
         yHigh: Math.max(low, high),
         fill,
         plannedSeconds: leafDurationSeconds(node),
-        plannedDistanceM: leafDistanceMeters(node, discipline, thresholds.thresholdPaceSeconds),
+        plannedDistanceM: leafDistanceMeters(node, discipline, thresholds),
         openDuration: node.duration.type === "open",
       });
     }

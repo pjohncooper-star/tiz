@@ -243,6 +243,7 @@ export function WorkoutPoolWizardBand(props: WorkoutPoolWizardProps) {
             applyTargetSessionId={applyTargetId}
             applyTargetHasExistingWorkout={props.applyTargetHasExistingWorkout}
             onApplyToSession={props.onApplyToSession}
+            paceContext={props.paceContext}
           />
         </div>
       ) : null}

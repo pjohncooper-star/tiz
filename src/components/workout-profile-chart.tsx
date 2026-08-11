@@ -19,6 +19,7 @@ type WorkoutProfileChartProps = {
   thresholdPaceSeconds?: number | null;
   thresholdFtpWatts?: number | null;
   thresholdHrBpm?: number | null;
+  racePaces?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
   /** ~half plot height for constrained layouts (e.g. calendar Build panel). */
   compact?: boolean;
   /** Fixed short strip for the pool header graph (Build mode). */
@@ -47,6 +48,7 @@ export function WorkoutProfileChart({
   thresholdPaceSeconds = null,
   thresholdFtpWatts = null,
   thresholdHrBpm = null,
+  racePaces = null,
   compact = false,
   poolStrip = false,
 }: WorkoutProfileChartProps) {
@@ -63,6 +65,7 @@ export function WorkoutProfileChart({
           thresholdPaceSeconds,
           thresholdFtpWatts,
           thresholdHrBpm,
+          racePaces,
         },
       }),
     [
@@ -74,6 +77,7 @@ export function WorkoutProfileChart({
       thresholdPaceSeconds,
       thresholdFtpWatts,
       thresholdHrBpm,
+      racePaces,
     ]
   );
 

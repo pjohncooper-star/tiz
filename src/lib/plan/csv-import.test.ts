@@ -225,6 +225,47 @@ describe("planned sessions CSV import", () => {
     assert.equal(runStep.targetPaceSeconds, 270);
   });
 
+  it("stores relative pace refs without baking absolute seconds", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
+      "2027-07-09,RUN,Relative,1,step,warmup,time,10,pace,relative,threshold",
+      "2027-07-09,RUN,Relative,2,step,interval,time,3,pace,relative,95%|5k",
+      "2027-07-09,RUN,Relative,3,step,active,time,20,pace,relative,10k",
+    ].join("\n");
+
+    const result = parsePlannedSessionsCsv(csv, {
+      RUN: { displayUnit: "METRIC", poolSize: null },
+    });
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const nodes = result.sessions[0]!.workoutTree!.nodes;
+    assert.equal(nodes.length, 3);
+    const [wu, hard, steady] = nodes;
+    if (wu!.kind !== "step" || hard!.kind !== "step" || steady!.kind !== "step") {
+      throw new Error("expected steps");
+    }
+    assert.deepEqual(wu.target, {
+      signal: "pace",
+      mode: "relative",
+      ref: "threshold",
+    });
+    assert.deepEqual(hard.target, {
+      signal: "pace",
+      mode: "relative",
+      ref: "5k",
+      pct: 95,
+    });
+    assert.deepEqual(steady.target, {
+      signal: "pace",
+      mode: "relative",
+      ref: "10k",
+    });
+    assert.equal(wu.targetPaceSeconds, undefined);
+    assert.equal(hard.targetPaceSeconds, undefined);
+    assert.equal(steady.targetPaceSeconds, undefined);
+  });
+
   it("rejects percent power targets without FTP", () => {
     const csv = [
       "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",

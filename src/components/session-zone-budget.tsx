@@ -24,6 +24,7 @@ type SessionZoneBudgetProps = {
   thresholdZoneBoundaries?: number[];
   thresholdFtpWatts?: number | null;
   powerZoneBoundaries?: number[];
+  racePaceAnchors?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
 };
 
 export function SessionZoneBudget({
@@ -35,6 +36,7 @@ export function SessionZoneBudget({
   thresholdZoneBoundaries,
   thresholdFtpWatts = null,
   powerZoneBoundaries,
+  racePaceAnchors = null,
 }: SessionZoneBudgetProps) {
   const [data, setData] = useState<WeekTargetResponse | null>(null);
 
@@ -72,6 +74,7 @@ export function SessionZoneBudget({
         zoneBoundaries: thresholdZoneBoundaries,
         thresholdFtpWatts,
         powerZoneBoundaries,
+        racePaces: racePaceAnchors,
       })
     : {};
 

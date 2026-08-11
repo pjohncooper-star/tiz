@@ -14,12 +14,14 @@ import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-default
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
 import { SwimEquipmentSettingsPanel } from "@/components/swim-equipment-settings-panel";
+import { RacePaceAnchorsSettingsPanel } from "@/components/race-pace-anchors-settings-panel";
 import { signalLabel } from "@/lib/zones/display";
 import {
   formatRoleSignalSummary,
   parseRoleSignals,
 } from "@/lib/zones/signal-preference";
 import { parseSwimEquipmentCatalog } from "@/lib/swim/equipment-catalog";
+import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +36,14 @@ async function loadAthleteSettingsProfile(athleteId: string) {
         phaseKindZoneDefaults: true,
         zoneFocusCatalog: true,
         swimEquipmentCatalog: true,
+        racePaceAnchors: true,
         ecoLoadEnabled: true,
       },
     });
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|ecoLoadEnabled|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|racePaceAnchors|ecoLoadEnabled|column/.test(
         error.message
       )
     ) {
@@ -112,6 +115,9 @@ export default async function SettingsPage() {
   const swimEquipmentCatalog = parseSwimEquipmentCatalog(
     athlete && "swimEquipmentCatalog" in athlete ? athlete.swimEquipmentCatalog : null
   );
+  const racePaceAnchors = parseRacePaceAnchors(
+    athlete && "racePaceAnchors" in athlete ? athlete.racePaceAnchors : null
+  );
   const ecoLoadEnabled =
     athlete && "ecoLoadEnabled" in athlete
       ? Boolean(athlete.ecoLoadEnabled)
@@ -122,6 +128,9 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-semibold">Settings</h1>
       <Card title="Units">
         <DisciplineUnitsSettings initialSettings={disciplineSettings} />
+      </Card>
+      <Card title="Race paces">
+        <RacePaceAnchorsSettingsPanel initialAnchors={racePaceAnchors} />
       </Card>
       <Card title="Swim equipment">
         <SwimEquipmentSettingsPanel initialCatalog={swimEquipmentCatalog} />

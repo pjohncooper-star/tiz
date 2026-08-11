@@ -340,6 +340,25 @@ export const swimEquipmentSettingsSchema = z.object({
   swimEquipmentCatalog: swimEquipmentCatalogSchema,
 });
 
+const optionalPaceSeconds = z
+  .number()
+  .positive()
+  .nullable()
+  .optional();
+
+export const racePaceAnchorsSettingsSchema = z.object({
+  racePaceAnchors: z.object({
+    "5k": optionalPaceSeconds,
+    "10k": optionalPaceSeconds,
+    half: optionalPaceSeconds,
+    marathon: optionalPaceSeconds,
+    goal5k: optionalPaceSeconds,
+    goal10k: optionalPaceSeconds,
+    goalHalf: optionalPaceSeconds,
+    goalMarathon: optionalPaceSeconds,
+  }),
+});
+
 export const simpleRampDefaultsSchema = z.object({
   swim: simpleDisciplineRampSchema,
   bike: simpleDisciplineRampSchema,
