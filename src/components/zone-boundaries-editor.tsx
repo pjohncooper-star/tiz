@@ -2,15 +2,15 @@
 
 import { useMemo, useState } from "react";
 import type { Discipline, SignalType } from "@prisma/client";
-import { Button, Label } from "@/components/ui";
+import { Label } from "@/components/ui";
 import { NumberEditorInput } from "@/components/number-editor-input";
 import {
-  DEFAULT_ZONE_COUNT,
   boundariesToEditorValues,
   editorValuesToBoundaries,
   validateEditorValues,
   zoneBoundariesFor,
 } from "@/lib/zones/boundaries";
+import { ZONE_COUNT } from "@/lib/zones/model";
 import { formatPace } from "@/lib/units/pace";
 
 type ZoneBoundariesEditorProps = {
@@ -18,9 +18,10 @@ type ZoneBoundariesEditorProps = {
   signalType: SignalType;
   thresholdValue: number;
   zoneBoundaries: number[];
-  zoneCount?: number;
   displayUnit?: "METRIC" | "IMPERIAL";
-  onSave: (boundaries: number[]) => Promise<void> | void;
+  /** Called whenever cutoffs change and pass local validation. */
+  onChange: (boundaries: number[]) => void;
+  disabled?: boolean;
 };
 
 function cutoffLabel(signalType: SignalType, index: number): string {
@@ -63,47 +64,36 @@ export function ZoneBoundariesEditor({
   signalType,
   thresholdValue,
   zoneBoundaries,
-  zoneCount = DEFAULT_ZONE_COUNT,
   displayUnit = "METRIC",
-  onSave,
+  onChange,
+  disabled,
 }: ZoneBoundariesEditorProps) {
-  const [editorValues, setEditorValues] = useState(() =>
-    boundariesToEditorValues(signalType, zoneBoundaries)
-  );
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const storedPreview = useMemo(
-    () => editorValuesToBoundaries(signalType, editorValues),
-    [editorValues, signalType]
+  const editorValues = useMemo(
+    () => boundariesToEditorValues(signalType, zoneBoundaries),
+    [signalType, zoneBoundaries]
   );
 
-  function setValueAt(index: number, value: number) {
-    const next = [...editorValues];
-    next[index] = value;
-    setEditorValues(next);
-    setError("");
-  }
-
-  function resetDefaults() {
-    const defaults = zoneBoundariesFor(discipline, signalType);
-    setEditorValues(boundariesToEditorValues(signalType, defaults));
-    setError("");
-  }
-
-  async function save() {
-    const validation = validateEditorValues(signalType, editorValues, zoneCount);
+  function commitValues(next: number[]) {
+    const validation = validateEditorValues(signalType, next, ZONE_COUNT);
     if (validation) {
       setError(validation);
       return;
     }
-    const boundaries = editorValuesToBoundaries(signalType, editorValues);
-    setSaving(true);
-    try {
-      await onSave(boundaries);
-    } finally {
-      setSaving(false);
-    }
+    setError("");
+    onChange(editorValuesToBoundaries(signalType, next));
+  }
+
+  function setValueAt(index: number, value: number) {
+    const next = [...editorValues];
+    next[index] = value;
+    commitValues(next);
+  }
+
+  function resetDefaults() {
+    commitValues(
+      boundariesToEditorValues(signalType, zoneBoundariesFor(discipline, signalType))
+    );
   }
 
   return (
@@ -117,8 +107,9 @@ export function ZoneBoundariesEditor({
         </Label>
         <button
           type="button"
-          className="text-xs text-sky-600 hover:underline"
+          className="text-xs text-sky-600 hover:underline disabled:opacity-50"
           onClick={resetDefaults}
+          disabled={disabled}
         >
           Reset to defaults
         </button>
@@ -148,7 +139,7 @@ export function ZoneBoundariesEditor({
                 signalType,
                 discipline,
                 thresholdValue,
-                storedPreview[index] ?? value,
+                editorValues[index] ?? value,
                 displayUnit
               )}
             </span>
@@ -156,9 +147,6 @@ export function ZoneBoundariesEditor({
         ))}
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button type="button" variant="secondary" disabled={saving} onClick={() => void save()}>
-        {saving ? "Saving…" : "Save zone boundaries"}
-      </Button>
     </div>
   );
 }
