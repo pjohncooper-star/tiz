@@ -1,4 +1,5 @@
 import type { Discipline } from "@prisma/client";
+import { clampZone, type ZoneNumber } from "@/lib/zones/model";
 
 /** Garmin FIT custom targets use targetValue=0; watts/bpm use field offsets. */
 export const POWER_WATTS_OFFSET = 1000;
@@ -11,16 +12,36 @@ export type FitExportThresholds = {
   thresholdPaceSecondsPerKm?: number;
 };
 
+/**
+ * Garmin target intensity per zone, as a percentage of FTP / max HR.
+ *
+ * These are the floor of each zone rather than its midpoint, and they are fixed
+ * rather than derived from the athlete's own cutoffs. Deriving them would change
+ * the intensity every exported workout asks for, so it is deliberately left alone
+ * here.
+ */
+const PERCENT_FTP_BY_ZONE: Record<ZoneNumber, number> = {
+  1: 50,
+  2: 65,
+  3: 75,
+  4: 90,
+  5: 105,
+};
+
+const PERCENT_MAX_HR_BY_ZONE: Record<ZoneNumber, number> = {
+  1: 60,
+  2: 70,
+  3: 80,
+  4: 88,
+  5: 95,
+};
+
 export function zoneToPercentFtp(zone: number): number {
-  const map = [50, 65, 75, 90, 105, 120, 135];
-  const idx = Math.max(0, Math.min(6, Math.round(zone) - 1));
-  return map[idx];
+  return PERCENT_FTP_BY_ZONE[clampZone(zone)];
 }
 
 export function zoneToPercentMaxHr(zone: number): number {
-  const map = [60, 70, 80, 88, 95, 102, 110];
-  const idx = Math.max(0, Math.min(6, Math.round(zone) - 1));
-  return map[idx];
+  return PERCENT_MAX_HR_BY_ZONE[clampZone(zone)];
 }
 
 export function encodeFitPowerPercent(percentFtp: number): number {

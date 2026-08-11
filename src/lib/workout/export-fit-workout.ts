@@ -21,6 +21,7 @@ import {
   type WorkoutNode,
 } from "@/lib/workout/workout-tree";
 import { walkFitStepManifest } from "@/lib/workout/fit-step-manifest";
+import { clampZone, isAuthoredZoneIndex } from "@/lib/zones/model";
 
 type FitStepMessage = Record<string, unknown>;
 
@@ -126,15 +127,13 @@ function applyLeafTarget(
       const lowZone = Math.round(target.low);
       const highZone = Math.round(target.high);
       if (
-        lowZone >= 1 &&
-        lowZone <= 7 &&
-        highZone >= 1 &&
-        highZone <= 7 &&
+        isAuthoredZoneIndex(lowZone) &&
+        isAuthoredZoneIndex(highZone) &&
         lowZone === target.low &&
         highZone === target.high
       ) {
-        const lowEnc = zoneToSpeedEncoded(lowZone, discipline, thresholds);
-        const highEnc = zoneToSpeedEncoded(highZone, discipline, thresholds);
+        const lowEnc = zoneToSpeedEncoded(clampZone(lowZone), discipline, thresholds);
+        const highEnc = zoneToSpeedEncoded(clampZone(highZone), discipline, thresholds);
         applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh", lowEnc, highEnc);
       } else {
         const lowMps = paceSecondsToMps(target.high, discipline);
@@ -155,14 +154,15 @@ function applyLeafTarget(
     const highZone = Math.round(target.high);
     if (
       target.signal === "power" &&
-      lowZone >= 1 &&
-      lowZone <= 7 &&
-      highZone >= 1 &&
-      highZone <= 7 &&
+      isAuthoredZoneIndex(lowZone) &&
+      isAuthoredZoneIndex(highZone) &&
       lowZone === target.low &&
       highZone === target.high
     ) {
-      const { low, high } = encodeZoneRangeAsPower(lowZone, highZone);
+      const { low, high } = encodeZoneRangeAsPower(
+        clampZone(lowZone),
+        clampZone(highZone)
+      );
       applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh", low, high);
       return;
     }

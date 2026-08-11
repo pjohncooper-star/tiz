@@ -10,8 +10,7 @@ import {
   type ZoneBoundaries,
 } from "@/lib/plan/season/zone-split-boundaries";
 import type { ZoneSplitPercents } from "@/lib/plan/season/zone-split-types";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
+import { ZONES } from "@/lib/zones/model";
 
 const HANDLE_LABELS = [
   "Boundary between Z1 and Z2",

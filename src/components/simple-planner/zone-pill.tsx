@@ -1,43 +1,16 @@
 import { NumberEditorInput } from "@/components/number-editor-input";
-
-const ZONE_COLORS: Record<number, { pill: string; dot: string; input: string }> = {
-  1: {
-    pill: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200",
-    dot: "bg-sky-500",
-    input: "placeholder:text-sky-400/70 dark:placeholder:text-sky-300/50",
-  },
-  2: {
-    pill: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200",
-    dot: "bg-green-500",
-    input: "placeholder:text-green-400/70 dark:placeholder:text-green-300/50",
-  },
-  3: {
-    pill: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200",
-    dot: "bg-yellow-500",
-    input: "placeholder:text-yellow-600/70 dark:placeholder:text-yellow-300/50",
-  },
-  4: {
-    pill: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200",
-    dot: "bg-orange-500",
-    input: "placeholder:text-orange-400/70 dark:placeholder:text-orange-300/50",
-  },
-  5: {
-    pill: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200",
-    dot: "bg-red-500",
-    input: "placeholder:text-red-400/70 dark:placeholder:text-red-300/50",
-  },
-};
+import { ZONE_PILL_COLORS, clampZone } from "@/lib/zones/model";
 
 export function zonePillClass(zone: number): string {
-  return ZONE_COLORS[zone]?.pill ?? "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200";
+  return ZONE_PILL_COLORS[clampZone(zone)].pill;
 }
 
 export function zoneDotClass(zone: number): string {
-  return ZONE_COLORS[zone]?.dot ?? "bg-zinc-400";
+  return ZONE_PILL_COLORS[clampZone(zone)].dot;
 }
 
 function zoneInputClass(zone: number): string {
-  return ZONE_COLORS[zone]?.input ?? "";
+  return ZONE_PILL_COLORS[clampZone(zone)].input;
 }
 
 const PILL_INPUT =

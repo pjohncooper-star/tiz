@@ -3,6 +3,7 @@ import { parseDateKey } from "@/lib/dates";
 import { defaultSessionTitle, type PlanDiscipline } from "@/lib/plan/session";
 import { inferSessionRole } from "@/lib/plan/session-role";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
+import { ZONE_COUNT } from "@/lib/zones/model";
 import {
   buildDisciplineSettings,
   swimDisplayUnit,
@@ -373,7 +374,9 @@ function parseStepDraft(
   let zone: number | null = null;
   if (zoneRaw) {
     zone = parsePositiveInt(zoneRaw);
-    if (zone == null || zone > 7) return "zone must be an integer 1–7";
+    if (zone == null || zone > ZONE_COUNT) {
+      return `zone must be an integer 1–${ZONE_COUNT}`;
+    }
   }
 
   const signalRaw = cell(record, "signal").toLowerCase();

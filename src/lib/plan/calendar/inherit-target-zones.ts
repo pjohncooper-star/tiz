@@ -2,8 +2,7 @@ import type { Discipline, SessionRole } from "@prisma/client";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { zoneKey } from "@/lib/workout/steps";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
+import { ZONES } from "@/lib/zones/model";
 
 /** Share of session minutes by zone for each role (sums to 1). */
 const ROLE_ZONE_SHARE: Record<SessionRole, Partial<Record<number, number>>> = {

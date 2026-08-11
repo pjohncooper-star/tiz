@@ -25,11 +25,11 @@ import {
 } from "@/lib/plan/season/zone-focus-catalog";
 import type { Discipline } from "@prisma/client";
 import {
-  DEFAULT_ZONE_COUNT,
   validateZoneBoundaries,
   zoneBoundariesFor,
 } from "@/lib/zones/boundaries";
 import { parseZoneBoundaries } from "@/lib/zones/thresholds";
+import { ZONE_COUNT } from "@/lib/zones/model";
 
 const settingsSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
@@ -42,7 +42,8 @@ const thresholdSchema = z.object({
   discipline: z.enum(["BIKE", "RUN", "SWIM"]),
   signalType: z.enum(["POWER", "HEART_RATE", "PACE"]),
   thresholdValue: z.number().positive(),
-  zoneCount: z.number().int().min(3).max(7).optional(),
+  // Zones are a fixed app-wide model; the column stays for stored rows.
+  zoneCount: z.literal(ZONE_COUNT).optional(),
   zoneBoundaries: z.array(z.number()).optional(),
   resetZones: z.boolean().optional(),
   effectiveDate: z.string(),
@@ -78,7 +79,16 @@ export async function GET() {
   ]);
   return NextResponse.json({
     settings,
-    thresholds,
+    // Normalize stored profiles so editors always see the canonical zone model,
+    // rather than legacy cutoff arrays the save path would now reject.
+    thresholds: thresholds.map((profile) => ({
+      ...profile,
+      zoneCount: ZONE_COUNT,
+      zoneBoundaries: parseZoneBoundaries(
+        profile.zoneBoundaries,
+        profile.discipline
+      ),
+    })),
     signalPreferences,
     onboardingStep: athlete?.onboardingStep,
     ecoLoadEnabled:
@@ -301,7 +311,7 @@ export async function PUT(req: Request) {
         },
       });
 
-      const zoneCount = data.zoneCount ?? existing?.zoneCount ?? DEFAULT_ZONE_COUNT;
+      const zoneCount = ZONE_COUNT;
       let zoneBoundaries: number[];
       if (data.resetZones) {
         zoneBoundaries = zoneBoundariesFor(data.discipline, data.signalType);

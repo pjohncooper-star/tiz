@@ -17,9 +17,7 @@ import {
   zoneKey,
   type ZoneMinutes,
 } from "@/lib/workout/steps";
-import { DEFAULT_ZONE_COUNT } from "@/lib/zones/boundaries";
-
-const ZONES = [1, 2, 3, 4, 5] as const;
+import { ZONES, ZONE_COUNT, clampZone } from "@/lib/zones/model";
 
 export type SessionZoneRollup = {
   zones: ZoneMinutes;
@@ -28,19 +26,24 @@ export type SessionZoneRollup = {
   durationMinutes: number;
 };
 
-/** Fold zones above Week TiZ's Z5 into Z5 so minutes are not dropped. */
+/**
+ * Key raw zone minutes by discipline, clamping into the canonical zone range.
+ *
+ * Zones are authored and scored as Z1–Z5, but activities scored before the zone
+ * count was unified can still hold Z6/Z7 rows; clamping keeps those minutes
+ * rather than dropping them.
+ */
 function disciplineZoneMinutes(
   discipline: Discipline,
   rawZones: ZoneMinutes,
-  maxZone: number = DEFAULT_ZONE_COUNT
+  maxZone: number = ZONE_COUNT
 ): ZoneMinutes {
   const zones: ZoneMinutes = {};
   for (const [zone, minutes] of Object.entries(rawZones)) {
     if (minutes > 0) {
       const z = Number(zone);
       if (!Number.isFinite(z) || z < 1) continue;
-      const displayZone = Math.min(Math.round(z), maxZone);
-      const key = zoneKey(discipline, displayZone);
+      const key = zoneKey(discipline, Math.min(clampZone(z), maxZone));
       zones[key] = (zones[key] ?? 0) + minutes;
     }
   }

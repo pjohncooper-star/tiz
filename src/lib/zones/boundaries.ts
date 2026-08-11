@@ -1,6 +1,8 @@
 import type { Discipline, SignalType } from "@prisma/client";
+import { ZONE_COUNT, ZONE_CUTOFF_COUNT } from "@/lib/zones/model";
 
-export const DEFAULT_ZONE_COUNT = 5;
+/** @deprecated Prefer ZONE_COUNT from @/lib/zones/model. */
+export const DEFAULT_ZONE_COUNT = ZONE_COUNT;
 
 /**
  * Zone cutoffs as % of threshold intensity (higher = harder).
@@ -39,19 +41,28 @@ export function speedBoundariesFromPaceTops(paceTops: number[]): number[] {
  */
 export const DEFAULT_ZONE_BOUNDARIES_BY_KEY: Record<ZoneBoundaryKey, number[]> = {
   "BIKE:POWER": [55, 75, 90, 105],
-  "BIKE:HEART_RATE": [68, 83, 94, 100, 106],
+  "BIKE:HEART_RATE": [68, 83, 94, 100],
   "BIKE:PACE": [75, 90, 99, 105],
   "RUN:POWER": [55, 75, 90, 105],
-  "RUN:HEART_RATE": [68, 83, 94, 100, 106],
+  "RUN:HEART_RATE": [68, 83, 94, 100],
   // Cutoffs: 78 / 89 / 95 / 102 → Z2 ends ~88, Z3 ends ~94, Z4 straddles threshold
   "RUN:PACE": [78, 89, 95, 102],
   "SWIM:POWER": [55, 75, 90, 105],
-  "SWIM:HEART_RATE": [68, 83, 94, 100, 106],
+  "SWIM:HEART_RATE": [68, 83, 94, 100],
   "SWIM:PACE": [75, 90, 99, 105],
   "STRENGTH:POWER": [55, 75, 90, 105],
-  "STRENGTH:HEART_RATE": [68, 83, 94, 100, 106],
+  "STRENGTH:HEART_RATE": [68, 83, 94, 100],
   "STRENGTH:PACE": [75, 90, 99, 105],
 };
+
+/**
+ * HR profiles used to carry a fifth cutoff (a "soft Z5 cap"). It never had an
+ * effect: samples above it scored as zone 6, which activity scoring then clamped
+ * back into Z5, and the zone-range display never read past cutoff four. The only
+ * place it surfaced was the boundaries editor, which rendered it as an editable
+ * "Z5 / Z6" field that did nothing.
+ */
+const LEGACY_HEART_RATE_CAP = [68, 83, 94, 100, 106];
 
 /**
  * Prior default speed-% arrays → current defaults.
@@ -74,29 +85,42 @@ const LEGACY_PACE_SPEED_DEFAULTS: Array<{
   { from: [93.5, 98, 102, 106.4], to: [75, 90, 99, 105], discipline: "SWIM" },
 ];
 
-export function coalesceLegacyPaceBoundaries(
+function matches(boundaries: number[], candidate: number[]): boolean {
+  return (
+    boundaries.length === candidate.length &&
+    boundaries.every((b, i) => Math.abs(b - candidate[i]!) < 0.06)
+  );
+}
+
+/**
+ * Upgrade stored boundary arrays to the current model on read.
+ *
+ * Two kinds of drift are repaired: pace profiles saved under earlier default sets
+ * (which were inverted or interim), and any array with more than
+ * {@link ZONE_CUTOFF_COUNT} cutoffs. Extra cutoffs are dropped from the top, which
+ * merges everything above the fourth cutoff into Z5 — the same result scoring and
+ * rollups already produced by clamping, just resolved once at parse time.
+ */
+export function coalesceLegacyZoneBoundaries(
   boundaries: number[],
   discipline?: Discipline
 ): number[] {
   for (const { from, to, discipline: onlyFor } of LEGACY_PACE_SPEED_DEFAULTS) {
     if (onlyFor != null && discipline != null && onlyFor !== discipline) continue;
     if (onlyFor != null && discipline == null) continue;
-    if (
-      boundaries.length === from.length &&
-      boundaries.every((b, i) => Math.abs(b - from[i]!) < 0.06)
-    ) {
+    if (matches(boundaries, from)) {
       return [...to];
     }
   }
   // Discipline-unknown parse path: still upgrade unambiguous pre-fix RUN tops.
-  if (discipline == null) {
-    const runLegacy = [77.5, 87.7, 94.3, 100];
-    if (
-      boundaries.length === runLegacy.length &&
-      boundaries.every((b, i) => Math.abs(b - runLegacy[i]!) < 0.06)
-    ) {
-      return [78, 89, 95, 102];
-    }
+  if (discipline == null && matches(boundaries, [77.5, 87.7, 94.3, 100])) {
+    return [78, 89, 95, 102];
+  }
+  if (matches(boundaries, LEGACY_HEART_RATE_CAP)) {
+    return LEGACY_HEART_RATE_CAP.slice(0, ZONE_CUTOFF_COUNT);
+  }
+  if (boundaries.length > ZONE_CUTOFF_COUNT) {
+    return boundaries.slice(0, ZONE_CUTOFF_COUNT);
   }
   return boundaries;
 }
@@ -129,17 +153,13 @@ export function zoneBoundariesForSignal(signalType: SignalType): number[] {
 
 export function validateZoneBoundaries(
   boundaries: number[],
-  zoneCount: number = DEFAULT_ZONE_COUNT
+  zoneCount: number = ZONE_COUNT
 ): string | null {
   if (!Array.isArray(boundaries) || boundaries.length === 0) {
     return "Zone boundaries are required";
   }
-  // Allow zoneCount - 1 (preferred) or zoneCount (legacy profiles with a soft Z5 cap).
-  if (
-    boundaries.length !== zoneCount - 1 &&
-    boundaries.length !== zoneCount
-  ) {
-    return `Expected ${zoneCount - 1} or ${zoneCount} zone boundaries`;
+  if (boundaries.length !== zoneCount - 1) {
+    return `Expected ${zoneCount - 1} zone boundaries`;
   }
   for (const b of boundaries) {
     if (typeof b !== "number" || !Number.isFinite(b) || b <= 0) {
@@ -177,11 +197,11 @@ export function editorValuesToBoundaries(
 export function validateEditorValues(
   signalType: SignalType,
   editorValues: number[],
-  zoneCount: number = DEFAULT_ZONE_COUNT
+  zoneCount: number = ZONE_COUNT
 ): string | null {
   void signalType;
-  if (editorValues.length !== zoneCount - 1 && editorValues.length !== zoneCount) {
-    return `Expected ${zoneCount - 1} or ${zoneCount} cutoffs`;
+  if (editorValues.length !== zoneCount - 1) {
+    return `Expected ${zoneCount - 1} cutoffs`;
   }
   for (const v of editorValues) {
     if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) {

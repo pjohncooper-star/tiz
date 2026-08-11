@@ -7,15 +7,19 @@ import {
   type WorkoutNode,
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
+import { clampZone, type ZoneNumber } from "@/lib/zones/model";
+
+/** Zwift target power per zone, as a fraction of FTP. Mirrors the FIT export ladder. */
+const ZWO_FRACTION_BY_ZONE: Record<ZoneNumber, number> = {
+  1: 0.5,
+  2: 0.65,
+  3: 0.75,
+  4: 0.9,
+  5: 1.05,
+};
 
 function zoneToZwoFraction(zone: number): number {
-  if (zone <= 1) return 0.5;
-  if (zone === 2) return 0.65;
-  if (zone === 3) return 0.75;
-  if (zone === 4) return 0.9;
-  if (zone === 5) return 1.05;
-  if (zone === 6) return 1.2;
-  return 1.35;
+  return ZWO_FRACTION_BY_ZONE[clampZone(zone)];
 }
 
 function escapeXml(value: string): string {

@@ -3,6 +3,7 @@ import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { enrichDistanceFlatStep, type DistanceDurationOptions } from "@/lib/workout/distance-duration";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import { paceSecondsAtZoneMidpoint } from "@/lib/workout/zone-pace";
+import { clampZone, isAuthoredZoneIndex } from "@/lib/zones/model";
 import type {
   FlatPlanningStep,
   LeafStep,
@@ -39,7 +40,7 @@ function parseTarget(raw: unknown): StepTarget {
         ? signal
         : "pace",
     mode: mode === "range" || mode === "value" ? mode : "zone",
-    ...(Number.isInteger(zone) && zone >= 1 && zone <= 7 ? { zone } : {}),
+    ...(isAuthoredZoneIndex(zone) ? { zone: clampZone(zone) } : {}),
     ...(Number.isFinite(low) ? { low } : {}),
     ...(Number.isFinite(high) ? { high } : {}),
     ...(Number.isFinite(value) ? { value } : {}),

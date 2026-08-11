@@ -10,6 +10,7 @@ import {
 } from "@/lib/workout/swim-interval-set";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
 import { zoneFromPowerWatts } from "@/lib/zones/assign-zone";
+import { ZONE_COUNT, clampZone, isAuthoredZoneIndex } from "@/lib/zones/model";
 
 export type FlattenPlanningOptions = DistanceDurationOptions;
 
@@ -136,7 +137,7 @@ function parseTarget(raw: unknown): StepTarget {
         ? signal
         : "power",
     mode: mode === "range" || mode === "value" ? mode : "zone",
-    ...(Number.isInteger(zone) && zone >= 1 && zone <= 7 ? { zone } : {}),
+    ...(isAuthoredZoneIndex(zone) ? { zone: clampZone(zone) } : {}),
     ...(Number.isFinite(low) ? { low } : {}),
     ...(Number.isFinite(high) ? { high } : {}),
     ...(Number.isFinite(value) ? { value } : {}),
@@ -198,7 +199,7 @@ function parseLeafStep(raw: Record<string, unknown>): LeafStep | null {
       target: {
         signal: "power",
         mode: "zone",
-        zone: Number.isInteger(zone) && zone >= 1 && zone <= 7 ? zone : 2,
+        zone: isAuthoredZoneIndex(zone) ? clampZone(zone) : 2,
       },
       ...(typeof raw.notes === "string" ? { notes: raw.notes } : {}),
     };
@@ -312,16 +313,18 @@ function parseLegacyFlatSteps(raw: unknown): WorkoutStep[] {
     if (
       !Number.isFinite(durationMinutes) ||
       durationMinutes <= 0 ||
-      !Number.isInteger(targetZone) ||
-      targetZone < 1 ||
-      targetZone > 7
+      !isAuthoredZoneIndex(targetZone)
     ) {
       continue;
     }
     if (type !== "steady" && type !== "warmup" && type !== "cooldown" && type !== "rest") {
       continue;
     }
-    const step: WorkoutStep = { type, durationMinutes, targetZone };
+    const step: WorkoutStep = {
+      type,
+      durationMinutes,
+      targetZone: clampZone(targetZone),
+    };
     const distanceMeters = Number(item.distanceMeters);
     const targetSpeedMps = Number(item.targetSpeedMps);
     const targetPaceSeconds = Number(item.targetPaceSeconds);
@@ -340,14 +343,7 @@ export function serializeWorkoutTree(doc: WorkoutTreeDocument): WorkoutTreeDocum
 }
 
 function isZoneIndexRange(low: number, high: number): boolean {
-  return (
-    Number.isInteger(low) &&
-    Number.isInteger(high) &&
-    low >= 1 &&
-    low <= 7 &&
-    high >= 1 &&
-    high <= 7
-  );
+  return isAuthoredZoneIndex(low) && isAuthoredZoneIndex(high);
 }
 
 export type TargetZoneOptions = Pick<
@@ -358,13 +354,12 @@ export type TargetZoneOptions = Pick<
 /**
  * Resolve a planning zone index from a step target.
  * Absolute power watts are mapped via FTP — never treated as zone numbers.
- * When `zoneCount` is set (Week TiZ uses 5), zones above that are folded down.
  */
 export function targetZoneFromTarget(
   target: StepTarget,
   options: TargetZoneOptions = {}
 ): number {
-  const maxZone = options.zoneCount ?? 7;
+  const maxZone = options.zoneCount ?? ZONE_COUNT;
   const clamp = (zone: number) => Math.max(1, Math.min(maxZone, zone));
 
   if (target.mode === "zone" && target.zone) {
@@ -386,14 +381,18 @@ export function targetZoneFromTarget(
   if (target.mode === "range" && target.low != null && target.high != null) {
     return clamp(Math.round((target.low + target.high) / 2));
   }
-  // Zone-like numeric values only (do not clamp watts/pace seconds into 1–7).
-  if (target.value != null && target.value >= 1 && target.value <= 7) {
+  // Zone-like numeric values only (do not clamp watts/pace seconds into the zone range).
+  if (target.value != null && isAuthoredZoneIndex(Math.round(target.value))) {
     return clamp(Math.round(target.value));
   }
   return 2;
 }
 
-export function rampMidpointZone(low: number, high: number, maxZone = 7): number {
+export function rampMidpointZone(
+  low: number,
+  high: number,
+  maxZone = ZONE_COUNT
+): number {
   return Math.max(1, Math.min(maxZone, Math.round((low + high) / 2)));
 }
 
@@ -416,14 +415,7 @@ function paceSecondsFromLeafTarget(step: LeafStep): number | undefined {
   if (t.mode === "range" && t.low != null && t.high != null) {
     const low = t.low;
     const high = t.high;
-    const isZoneRange =
-      Number.isInteger(low) &&
-      Number.isInteger(high) &&
-      low >= 1 &&
-      low <= 7 &&
-      high >= 1 &&
-      high <= 7;
-    if (!isZoneRange) return (low + high) / 2;
+    if (!isZoneIndexRange(low, high)) return (low + high) / 2;
   }
   return undefined;
 }
@@ -494,7 +486,7 @@ function rampToFlatPlanningSteps(
   step: RampStep,
   options: FlattenPlanningOptions = {}
 ): FlatPlanningStep[] {
-  const maxZone = options.zoneCount ?? 7;
+  const maxZone = options.zoneCount ?? ZONE_COUNT;
   let zone: number;
   if (step.target.lowZone != null && step.target.highZone != null) {
     zone = rampMidpointZone(step.target.lowZone, step.target.highZone, maxZone);

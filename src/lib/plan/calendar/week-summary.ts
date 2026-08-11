@@ -8,6 +8,7 @@ import {
   swimDisplayUnit,
 } from "@/lib/units/discipline-settings";
 import { formatSessionDistance } from "@/lib/workout/metrics";
+import { ZONES } from "@/lib/zones/model";
 import { formatZoneMinutes, zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 
 const SUMMARY_DISCIPLINES: Discipline[] = ["BIKE", "RUN", "SWIM", "STRENGTH"];
@@ -282,7 +283,7 @@ export function formatTotalDistanceSummary(
 }
 
 export function combinedZoneTotals(zoneMinutes: ZoneMinutes): number[] {
-  return [1, 2, 3, 4, 5].map((zone) =>
+  return ZONES.map((zone) =>
     ENDURANCE_DISCIPLINES.reduce(
       (sum, discipline) => sum + (zoneMinutes[zoneKey(discipline, zone)] ?? 0),
       0
@@ -294,7 +295,7 @@ export function sportZoneTotals(
   discipline: Discipline,
   zoneMinutes: ZoneMinutes
 ): number[] {
-  return [1, 2, 3, 4, 5].map((zone) => zoneMinutes[zoneKey(discipline, zone)] ?? 0);
+  return ZONES.map((zone) => zoneMinutes[zoneKey(discipline, zone)] ?? 0);
 }
 
 export function maxZoneBarMinutes(...zoneLists: number[][]): number {

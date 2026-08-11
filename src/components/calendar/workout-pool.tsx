@@ -39,18 +39,11 @@ import { formatSessionDistance } from "@/lib/workout/metrics";
 import { WorkoutProfileMiniChart } from "@/components/workout-profile-mini-chart";
 import { SessionRoleBadge } from "@/components/calendar/session-role-badge";
 import { sessionRoleForChip } from "@/lib/plan/calendar/session-role-for-chip";
+import { ZONES, zoneBarColor } from "@/lib/zones/model";
 
-const TIZ_ZONES = [1, 2, 3, 4, 5] as const;
+const TIZ_ZONES = ZONES;
 const TIZ_DISCIPLINES: TargetDiscipline[] = ["SWIM", "BIKE", "RUN"];
 const LONG_TIZ_DISCIPLINES = ["BIKE", "RUN"] as const;
-
-const ZONE_BAR_COLORS: Record<number, string> = {
-  1: "bg-sky-200 dark:bg-sky-900",
-  2: "bg-sky-400 dark:bg-sky-700",
-  3: "bg-amber-400 dark:bg-amber-700",
-  4: "bg-orange-500 dark:bg-orange-700",
-  5: "bg-red-500 dark:bg-red-700",
-};
 
 function zoneArrayHasTarget(zones: number[]): boolean {
   return zones.some((minutes) => minutes > 0);
@@ -88,7 +81,7 @@ function ZoneProgressRows({
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
               <div
-                className={`h-full rounded-full ${ZONE_BAR_COLORS[zone] ?? "bg-sky-500"}`}
+                className={`h-full rounded-full ${zoneBarColor(zone)}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
