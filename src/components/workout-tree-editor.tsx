@@ -100,7 +100,10 @@ type WorkoutTreeEditorProps = {
 };
 
 type TargetView = "zone" | "pace_power" | "heart_rate";
-type LengthView = "duration" | "distance";
+/** Chart x-axis only — does not rewrite step durations. */
+type ChartLengthView = "duration" | "distance";
+/** Per-step length kind (matches StepDuration.type). */
+type StepLengthKind = "time" | "distance" | "open";
 
 function withOptionalNotes<T extends { notes?: string }>(
   node: T,
@@ -232,10 +235,66 @@ function inferTargetView(
   return "zone";
 }
 
-function inferLengthView(nodes: WorkoutNode[]): LengthView {
+/** Prefer duration axis unless every leaf is distance-only. */
+function inferChartLengthView(nodes: WorkoutNode[]): ChartLengthView {
   const leaves = collectLeaves(nodes);
-  if (leaves.some((l) => l.duration.type === "distance")) return "distance";
+  if (leaves.length > 0 && leaves.every((l) => l.duration.type === "distance")) {
+    return "distance";
+  }
   return "duration";
+}
+
+function stepLengthKind(duration: StepDuration): StepLengthKind {
+  if (duration.type === "distance") return "distance";
+  if (duration.type === "open") return "open";
+  return "time";
+}
+
+function applyStepLengthKind(step: LeafStep, kind: StepLengthKind): LeafStep {
+  if (kind === "distance") {
+    if (step.duration.type === "distance") return step;
+    const meters =
+      step.distanceMeters != null && step.distanceMeters > 0
+        ? step.distanceMeters
+        : 1000;
+    return {
+      ...step,
+      duration: { type: "distance", value: meters },
+      distanceMeters: meters,
+    };
+  }
+  if (kind === "open") {
+    if (step.duration.type === "open") return step;
+    const estimate =
+      step.duration.type === "time" && step.duration.value > 0
+        ? step.duration.value
+        : undefined;
+    return {
+      ...step,
+      duration: {
+        type: "open",
+        ...(estimate != null ? { estimateSeconds: estimate } : {}),
+      },
+    };
+  }
+  if (step.duration.type === "time") return step;
+  if (step.duration.type === "open") {
+    return {
+      ...step,
+      duration: {
+        type: "time",
+        value:
+          step.duration.estimateSeconds != null && step.duration.estimateSeconds > 0
+            ? step.duration.estimateSeconds
+            : 600,
+      },
+    };
+  }
+  return {
+    ...step,
+    duration: { type: "time", value: 600 },
+    distanceMeters: step.duration.value,
+  };
 }
 
 function updateAtPath(
@@ -322,24 +381,6 @@ function applyTargetView(
     };
   }
   return step;
-}
-
-function applyLengthView(step: LeafStep, view: LengthView): LeafStep {
-  if (view === "distance") {
-    if (step.duration.type === "distance") return step;
-    return {
-      ...step,
-      duration: {
-        type: "distance",
-        value: step.distanceMeters ?? 1000,
-      },
-    };
-  }
-  if (step.duration.type === "time" || step.duration.type === "open") return step;
-  return {
-    ...step,
-    duration: { type: "time", value: 600 },
-  };
 }
 
 function supportsLapEnd(discipline: Discipline): boolean {
@@ -577,20 +618,18 @@ function PaceEditorInput({
 
 function StepDurationInput({
   duration,
-  lengthView,
   discipline,
   displayUnit,
   poolSize,
   onChange,
 }: {
   duration: StepDuration;
-  lengthView: LengthView;
   discipline: Discipline;
   displayUnit: DisplayUnit;
   poolSize: PoolSize | null;
   onChange: (duration: StepDuration) => void;
 }) {
-  if (lengthView === "distance") {
+  if (duration.type === "distance") {
     const planDiscipline = discipline as PlanDiscipline;
     const swimPool = planDiscipline === "SWIM" ? poolSizeForSwimStep(poolSize) : null;
     const distanceLabel =
@@ -602,7 +641,7 @@ function StepDurationInput({
           ? "Distance (m)"
           : "Distance (mi)";
 
-    const meters = duration.type === "distance" ? duration.value : 1000;
+    const meters = duration.value;
     const displayValue =
       planDiscipline === "SWIM" && swimPool === "SCY"
         ? Math.round(meters * 1.09361)
@@ -631,14 +670,13 @@ function StepDurationInput({
     );
   }
 
-  const lapEnd = duration.type === "open";
-  if (lapEnd) {
+  if (duration.type === "open") {
     return (
       <DurationEditorInput
         label="Est. duration"
         optional
         placeholder="Optional"
-        seconds={duration.type === "open" ? duration.estimateSeconds : undefined}
+        seconds={duration.estimateSeconds}
         onCommit={(sec) =>
           onChange({
             type: "open",
@@ -652,11 +690,36 @@ function StepDurationInput({
   return (
     <DurationEditorInput
       label="Duration"
-      seconds={duration.type === "time" ? duration.value : 600}
+      seconds={duration.value}
       onCommit={(sec) => {
         if (sec) onChange({ type: "time", value: sec });
       }}
     />
+  );
+}
+
+function StepLengthSelect({
+  value,
+  discipline,
+  onChange,
+}: {
+  value: StepLengthKind;
+  discipline: Discipline;
+  onChange: (kind: StepLengthKind) => void;
+}) {
+  const showLap = supportsLapEnd(discipline) || value === "open";
+  return (
+    <div className="shrink-0 w-[6.5rem]">
+      <Label>Length</Label>
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value as StepLengthKind)}
+      >
+        <option value="time">Duration</option>
+        <option value="distance">Distance</option>
+        {showLap ? <option value="open">Lap end</option> : null}
+      </Select>
+    </div>
   );
 }
 
@@ -771,38 +834,6 @@ function disableRangeTarget(
       ? Math.round((t.low + t.high) / 2)
       : (step.targetPaceSeconds ?? 300);
   return { target: { signal: "pace", mode: "value" }, targetPaceSeconds: mid };
-}
-
-function LapEndToggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="shrink-0">
-      <Label>Lap end</Label>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label="End step on lap button"
-        onClick={() => onChange(!checked)}
-        className={`relative mt-1 block h-7 w-12 rounded-full transition-colors ${
-          checked
-            ? "bg-sky-600"
-            : "bg-zinc-300 dark:bg-zinc-600"
-        }`}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-            checked ? "translate-x-5" : "translate-x-0"
-          }`}
-        />
-      </button>
-    </div>
-  );
 }
 
 function targetFieldLabel(
@@ -1109,7 +1140,6 @@ function NodeEditor({
   displayUnit,
   poolSize,
   targetView,
-  lengthView,
   primaryTargetSignal,
   path,
   siblingCount,
@@ -1122,7 +1152,6 @@ function NodeEditor({
   displayUnit: DisplayUnit;
   poolSize: PoolSize | null;
   targetView: TargetView;
-  lengthView: LengthView;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
   path: number[];
   siblingCount: number;
@@ -1162,8 +1191,6 @@ function NodeEditor({
 
   if (node.kind === "step") {
     const step = node;
-    const showLap = supportsLapEnd(discipline) && lengthView === "duration";
-    const lapEnd = step.duration.type === "open";
 
     return (
       <DraggableNodeShell path={path} dimmed={dimmed}>
@@ -1220,39 +1247,37 @@ function NodeEditor({
               )
             }
           />
+          <StepLengthSelect
+            value={stepLengthKind(step.duration)}
+            discipline={discipline}
+            onChange={(kind) =>
+              onTreeChange((nodes) =>
+                updateAtPath(nodes, path, (n) =>
+                  n.kind === "step" ? applyStepLengthKind(n, kind) : n
+                )
+              )
+            }
+          />
           <div className="w-[7rem] shrink-0">
             <StepDurationInput
               duration={step.duration}
-              lengthView={lengthView}
               discipline={discipline}
               displayUnit={displayUnit}
               poolSize={poolSize}
               onChange={(duration) =>
                 onTreeChange((nodes) =>
-                  updateAtPath(nodes, path, (n) => (n.kind === "step" ? { ...n, duration } : n))
+                  updateAtPath(nodes, path, (n) => {
+                    if (n.kind !== "step") return n;
+                    const next: LeafStep = { ...n, duration };
+                    if (duration.type === "distance") {
+                      next.distanceMeters = duration.value;
+                    }
+                    return next;
+                  })
                 )
               }
             />
           </div>
-          {showLap && (
-            <LapEndToggle
-              checked={lapEnd}
-              onChange={(checked) =>
-                onTreeChange((nodes) =>
-                  updateAtPath(nodes, path, (n) =>
-                    n.kind === "step"
-                      ? {
-                          ...n,
-                          duration: checked
-                            ? { type: "open" }
-                            : { type: "time", value: 600 },
-                        }
-                      : n
-                  )
-                )
-              }
-            />
-          )}
           <Button
             type="button"
             variant="secondary"
@@ -1614,7 +1639,6 @@ function NodeEditor({
           displayUnit={displayUnit}
           poolSize={poolSize}
           targetView={targetView}
-          lengthView={lengthView}
           primaryTargetSignal={primaryTargetSignal}
           swimEquipment={swimEquipment}
           activeDragPath={activeDragPath}
@@ -1633,7 +1657,7 @@ function NodeEditor({
                       children: [
                         ...node.children,
                         applyTargetView(
-                          applyLengthView(defaultLeafStep(), lengthView),
+                          defaultLeafStep(),
                           targetView,
                           discipline,
                           primaryTargetSignal
@@ -1660,7 +1684,6 @@ function WorkoutNodeList({
   displayUnit,
   poolSize,
   targetView,
-  lengthView,
   primaryTargetSignal,
   swimEquipment,
   activeDragPath,
@@ -1672,7 +1695,6 @@ function WorkoutNodeList({
   displayUnit: DisplayUnit;
   poolSize: PoolSize | null;
   targetView: TargetView;
-  lengthView: LengthView;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
   swimEquipment: SwimEquipmentCatalog;
   activeDragPath: number[] | null;
@@ -1693,7 +1715,6 @@ function WorkoutNodeList({
               displayUnit={displayUnit}
               poolSize={poolSize}
               targetView={targetView}
-              lengthView={lengthView}
               primaryTargetSignal={primaryTargetSignal}
               swimEquipment={swimEquipment}
               path={path}
@@ -1758,7 +1779,9 @@ export function WorkoutTreeEditor({
   const [targetView, setTargetViewState] = useState<TargetView>(() =>
     inferTargetView(tree.nodes, discipline, primarySignal)
   );
-  const lengthView = useMemo(() => inferLengthView(tree.nodes), [tree.nodes]);
+  const [chartLengthView, setChartLengthView] = useState<ChartLengthView>(() =>
+    inferChartLengthView(tree.nodes)
+  );
 
   useEffect(() => {
     setTargetViewState(inferTargetView(tree.nodes, discipline, primarySignal));
@@ -1792,16 +1815,9 @@ export function WorkoutTreeEditor({
     });
   }
 
-  function setLengthView(view: LengthView) {
-    onChange({
-      version: 2,
-      nodes: mapLeaves(tree.nodes, (step) => applyLengthView(step, view)),
-    });
-  }
-
   function newLeafStep(): LeafStep {
     return applyTargetView(
-      applyLengthView(defaultLeafStep(), lengthView),
+      defaultLeafStep(),
       targetView,
       discipline,
       primaryTargetSignal
@@ -1836,13 +1852,13 @@ export function WorkoutTreeEditor({
           onChange={setTargetView}
         />
         <SegmentedControl
-          label="Step length"
-          value={lengthView}
+          label="Chart axis"
+          value={chartLengthView}
           options={[
             { value: "duration", label: "Duration" },
             { value: "distance", label: "Distance" },
           ]}
-          onChange={setLengthView}
+          onChange={setChartLengthView}
         />
       </div>
 
@@ -1895,7 +1911,6 @@ export function WorkoutTreeEditor({
       displayUnit={displayUnit}
       poolSize={poolSize}
       targetView={targetView}
-      lengthView={lengthView}
       primaryTargetSignal={primaryTargetSignal}
       swimEquipment={swimEquipment}
       activeDragPath={activeDragPath}
@@ -1907,7 +1922,7 @@ export function WorkoutTreeEditor({
     <WorkoutProfileChart
       nodes={tree.nodes}
       discipline={discipline}
-      lengthView={lengthView}
+      lengthView={chartOnly ? inferChartLengthView(tree.nodes) : chartLengthView}
       primarySignal={primarySignal}
       displayUnit={displayUnit}
       thresholdPaceSeconds={thresholdPaceSeconds}
@@ -1943,13 +1958,13 @@ export function WorkoutTreeEditor({
           onChange={setTargetView}
         />
         <SegmentedControl
-          label="Step length"
-          value={lengthView}
+          label="Chart axis"
+          value={chartLengthView}
           options={[
             { value: "duration", label: "Duration" },
             { value: "distance", label: "Distance" },
           ]}
-          onChange={setLengthView}
+          onChange={setChartLengthView}
         />
       </div>
 
