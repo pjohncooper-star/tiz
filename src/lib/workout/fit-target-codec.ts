@@ -11,6 +11,8 @@ export type FitExportThresholds = {
   thresholdPaceSecondsPerKm?: number;
   /** Used to resolve swim equipment ids → labels in FIT step notes. */
   swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;
+  /** Race-pace anchors for relative pace step targets. */
+  racePaces?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
 };
 
 export function zoneToPercentFtp(zone: number): number {

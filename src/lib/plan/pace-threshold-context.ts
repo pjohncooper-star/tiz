@@ -4,6 +4,10 @@ import { parseZoneBoundaries } from "@/lib/zones/thresholds";
 import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { DEFAULT_ZONE_COUNT } from "@/lib/zones/boundaries";
 import type { FlattenPlanningOptions } from "@/lib/workout/workout-tree";
+import {
+  parseRacePaceAnchors,
+  type RacePaceAnchors,
+} from "@/lib/workout/relative-pace";
 
 export type DisciplinePaceContext = {
   thresholdPaceSeconds: number | null;
@@ -15,26 +19,41 @@ export type DisciplinePaceContext = {
 
 export type PaceThresholdContext = Partial<
   Record<"RUN" | "SWIM" | "BIKE", DisciplinePaceContext>
->;
+> & {
+  /** Athlete race-pace anchors for relative pace step targets. */
+  racePaces?: RacePaceAnchors | null;
+};
 
 /** Latest PACE thresholds (+ BIKE POWER FTP) for distance / TiZ estimates. */
 export async function loadPaceThresholdContext(
   athleteId: string,
   asOf: Date = new Date()
 ): Promise<PaceThresholdContext> {
-  const profiles = await db.thresholdProfile.findMany({
-    where: {
-      athleteId,
-      OR: [
-        { signalType: "PACE", discipline: { in: ["RUN", "SWIM", "BIKE"] } },
-        { signalType: "POWER", discipline: "BIKE" },
-      ],
-      effectiveDate: { lte: asOf },
-    },
-    orderBy: { effectiveDate: "desc" },
-  });
+  const [profiles, athlete] = await Promise.all([
+    db.thresholdProfile.findMany({
+      where: {
+        athleteId,
+        OR: [
+          { signalType: "PACE", discipline: { in: ["RUN", "SWIM", "BIKE"] } },
+          { signalType: "POWER", discipline: "BIKE" },
+        ],
+        effectiveDate: { lte: asOf },
+      },
+      orderBy: { effectiveDate: "desc" },
+    }),
+    db.athlete
+      .findUnique({
+        where: { id: athleteId },
+        select: { racePaceAnchors: true },
+      })
+      .catch(() => null),
+  ]);
 
-  const out: PaceThresholdContext = {};
+  const out: PaceThresholdContext = {
+    racePaces: parseRacePaceAnchors(
+      (athlete as { racePaceAnchors?: unknown } | null)?.racePaceAnchors ?? null
+    ),
+  };
   for (const discipline of ["RUN", "SWIM", "BIKE"] as const) {
     const profile = profiles.find(
       (p) => p.discipline === discipline && p.signalType === "PACE"
@@ -101,6 +120,7 @@ export function flattenOptionsForDiscipline(
       thresholdPaceSeconds: ctx?.thresholdPaceSeconds ?? null,
       zoneBoundaries: ctx?.zoneBoundaries ?? zoneBoundariesFor(discipline, "PACE"),
       zoneCount: DEFAULT_ZONE_COUNT,
+      racePaces: paceContext?.racePaces ?? null,
     };
   }
   if (discipline === "BIKE") {

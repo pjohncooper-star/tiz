@@ -52,3 +52,33 @@ export function zoneFromPowerWatts(
   const zone = assignZoneFromPercent(pct, boundaries, "POWER");
   return Math.min(Math.max(zone, 1), zoneCount);
 }
+
+export type PaceZoneOptions = {
+  thresholdPaceSeconds?: number | null;
+  zoneBoundaries?: number[];
+  discipline?: "RUN" | "SWIM" | null;
+  /** Clamp to this many zones (Week TiZ uses 1–5). */
+  zoneCount?: number;
+};
+
+/**
+ * Map absolute pace (sec/km or sec/100m) to a pace zone via % of threshold speed.
+ */
+export function zoneFromPaceSeconds(
+  paceSeconds: number,
+  options: PaceZoneOptions = {}
+): number {
+  if (!(paceSeconds > 0)) return 2;
+  const threshold =
+    options.thresholdPaceSeconds != null && options.thresholdPaceSeconds > 0
+      ? options.thresholdPaceSeconds
+      : null;
+  if (threshold == null) return 2;
+  const discipline = options.discipline === "SWIM" ? "SWIM" : "RUN";
+  const boundaries =
+    options.zoneBoundaries ?? zoneBoundariesFor(discipline, "PACE");
+  const zoneCount = options.zoneCount ?? boundaries.length + 1;
+  const pct = (threshold / paceSeconds) * 100;
+  const zone = assignZoneFromPercent(pct, boundaries, "PACE");
+  return Math.min(Math.max(zone, 1), zoneCount);
+}

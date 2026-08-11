@@ -35,6 +35,7 @@ import {
   parseSwimEquipmentCatalog,
   type SwimEquipmentCatalog,
 } from "@/lib/swim/equipment-catalog";
+import { parseRacePaceAnchors, type RacePaceAnchors } from "@/lib/workout/relative-pace";
 
 const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
 
@@ -83,6 +84,7 @@ export type WorkoutDetailViewModel = {
   /** Bike FTP for absolute watt → TiZ mapping (BIKE only). */
   thresholdFtpWatts: number | null;
   powerZoneBoundaries: number[] | undefined;
+  racePaceAnchors: RacePaceAnchors;
   swimEquipmentCatalog: SwimEquipmentCatalog;
   primarySignal: SignalType | null;
   /** Effective primary ignoring per-session override (for Default label). */
@@ -267,6 +269,7 @@ export async function loadWorkoutDetail(
   let thresholdZoneBoundaries: number[] | undefined;
   let thresholdFtpWatts: number | null = null;
   let powerZoneBoundaries: number[] | undefined;
+  let racePaceAnchors: RacePaceAnchors = {};
 
   if (plannedSession.discipline === "RUN" || plannedSession.discipline === "SWIM") {
     const paceProfile = await getThresholdProfileAtDate(
@@ -283,6 +286,17 @@ export async function loadWorkoutDetail(
         paceProfile.zoneBoundaries,
         plannedSession.discipline
       );
+    }
+    try {
+      const athlete = await db.athlete.findUnique({
+        where: { id: athleteId },
+        select: { racePaceAnchors: true },
+      });
+      racePaceAnchors = parseRacePaceAnchors(
+        (athlete as { racePaceAnchors?: unknown } | null)?.racePaceAnchors ?? null
+      );
+    } catch {
+      racePaceAnchors = {};
     }
   } else if (plannedSession.discipline === "BIKE") {
     const powerProfile = await getThresholdProfileAtDate(
@@ -415,6 +429,7 @@ export async function loadWorkoutDetail(
     thresholdZoneBoundaries,
     thresholdFtpWatts,
     powerZoneBoundaries,
+    racePaceAnchors,
     swimEquipmentCatalog,
     primarySignal,
     inheritedPrimarySignal,

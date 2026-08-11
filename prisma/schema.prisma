@@ -297,6 +297,12 @@ model Athlete {
   phaseKindZoneDefaults Json?
   /** Editable swim gear list for workout step equipment pickers. */
   swimEquipmentCatalog       Json?
+  /**
+   * Run/swim race-pace anchors (canonical sec/km or sec/100m).
+   * Keys: 5k, 10k, half, marathon, goal5k, goal10k, goalHalf, goalMarathon.
+   * Used to resolve relative pace targets at display/FIT time.
+   */
+  racePaceAnchors            Json?
   /** When false, ECO load is still computed but never shown in UI or signaling. */
   ecoLoadEnabled             Boolean              @default(false)
   createdAt                  DateTime             @default(now())

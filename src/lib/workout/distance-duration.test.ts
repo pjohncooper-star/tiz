@@ -74,6 +74,28 @@ describe("distance step TiZ", () => {
     assert.ok(rollup.durationMinutes > 0);
   });
 
+  it("resolves relative pace targets into zone minutes via anchors", () => {
+    const tree = {
+      version: 2 as const,
+      nodes: [
+        {
+          kind: "step" as const,
+          intensity: "interval" as const,
+          duration: { type: "time" as const, value: 600 },
+          target: { signal: "pace" as const, mode: "relative" as const, ref: "5k" as const },
+        },
+      ],
+    };
+    const zones = rollupTreeToZoneMinutes(tree, {
+      discipline: "RUN",
+      thresholdPaceSeconds: threshold,
+      zoneBoundaries: boundaries,
+      racePaces: { "5k": 270 },
+    });
+    // 270s vs 300s threshold ≈ 111% speed → Z5
+    assert.equal(zones["5"], 10);
+  });
+
   it("leaves time-based steps unchanged", () => {
     const leaf: LeafStep = {
       kind: "step",
