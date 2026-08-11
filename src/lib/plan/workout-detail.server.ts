@@ -80,6 +80,9 @@ export type WorkoutDetailViewModel = {
   structuredSteps: unknown;
   thresholdPaceSeconds: number | null;
   thresholdZoneBoundaries: number[] | undefined;
+  /** Bike FTP for absolute watt → TiZ mapping (BIKE only). */
+  thresholdFtpWatts: number | null;
+  powerZoneBoundaries: number[] | undefined;
   swimEquipmentCatalog: SwimEquipmentCatalog;
   primarySignal: SignalType | null;
   /** Effective primary ignoring per-session override (for Default label). */
@@ -262,6 +265,8 @@ export async function loadWorkoutDetail(
 
   let thresholdPaceSeconds: number | null = null;
   let thresholdZoneBoundaries: number[] | undefined;
+  let thresholdFtpWatts: number | null = null;
+  let powerZoneBoundaries: number[] | undefined;
 
   if (plannedSession.discipline === "RUN" || plannedSession.discipline === "SWIM") {
     const paceProfile = await getThresholdProfileAtDate(
@@ -278,6 +283,22 @@ export async function loadWorkoutDetail(
         paceProfile.zoneBoundaries,
         plannedSession.discipline
       );
+    }
+  } else if (plannedSession.discipline === "BIKE") {
+    const powerProfile = await getThresholdProfileAtDate(
+      athleteId,
+      "BIKE",
+      "POWER",
+      plannedSession.scheduledDate
+    );
+    if (powerProfile) {
+      thresholdFtpWatts =
+        powerProfile.thresholdValue > 0 ? powerProfile.thresholdValue : null;
+      try {
+        powerZoneBoundaries = parseZoneBoundaries(powerProfile.zoneBoundaries);
+      } catch {
+        powerZoneBoundaries = undefined;
+      }
     }
   }
 
@@ -392,6 +413,8 @@ export async function loadWorkoutDetail(
     structuredSteps,
     thresholdPaceSeconds,
     thresholdZoneBoundaries,
+    thresholdFtpWatts,
+    powerZoneBoundaries,
     swimEquipmentCatalog,
     primarySignal,
     inheritedPrimarySignal,

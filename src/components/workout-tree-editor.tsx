@@ -87,6 +87,7 @@ type WorkoutTreeEditorProps = {
   tree: WorkoutTreeDocument;
   onChange: (tree: WorkoutTreeDocument) => void;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
   primarySignal?: SignalType | null;
   /** Swim equipment options; defaults to the seeded catalog when omitted. */
   swimEquipment?: SwimEquipmentCatalog;
@@ -1715,6 +1716,7 @@ export function WorkoutTreeEditor({
   tree,
   onChange,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   primarySignal = null,
   swimEquipment: swimEquipmentProp,
   compact = false,
@@ -1909,6 +1911,7 @@ export function WorkoutTreeEditor({
       primarySignal={primarySignal}
       displayUnit={displayUnit}
       thresholdPaceSeconds={thresholdPaceSeconds}
+      thresholdFtpWatts={thresholdFtpWatts}
       compact={compact && !chartOnly}
       poolStrip={chartOnly}
     />

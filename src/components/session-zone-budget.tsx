@@ -22,6 +22,8 @@ type SessionZoneBudgetProps = {
   workoutTree: WorkoutTreeDocument | null;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
+  thresholdFtpWatts?: number | null;
+  powerZoneBoundaries?: number[];
 };
 
 export function SessionZoneBudget({
@@ -31,6 +33,8 @@ export function SessionZoneBudget({
   workoutTree,
   thresholdPaceSeconds = null,
   thresholdZoneBoundaries,
+  thresholdFtpWatts = null,
+  powerZoneBoundaries,
 }: SessionZoneBudgetProps) {
   const [data, setData] = useState<WeekTargetResponse | null>(null);
 
@@ -66,6 +70,8 @@ export function SessionZoneBudget({
         discipline: discipline === "RUN" || discipline === "SWIM" ? discipline : undefined,
         thresholdPaceSeconds,
         zoneBoundaries: thresholdZoneBoundaries,
+        thresholdFtpWatts,
+        powerZoneBoundaries,
       })
     : {};
 

@@ -39,6 +39,8 @@ export type SessionComparisonSummaryProps = {
   durationHintMinutes?: number | null;
   thresholdPaceSeconds?: number | null;
   thresholdZoneBoundaries?: number[];
+  thresholdFtpWatts?: number | null;
+  powerZoneBoundaries?: number[];
   editable?: boolean;
   poolSize?: PoolSize | null;
   plannedTriad?: PlannedMetricsTriadValues;
@@ -113,6 +115,8 @@ export function SessionComparisonSummary({
   durationHintMinutes,
   thresholdPaceSeconds,
   thresholdZoneBoundaries,
+  thresholdFtpWatts,
+  powerZoneBoundaries,
   editable = false,
   poolSize = null,
   plannedTriad,
@@ -143,6 +147,8 @@ export function SessionComparisonSummary({
         steps,
         thresholdPaceSeconds,
         zoneBoundaries: thresholdZoneBoundaries,
+        thresholdFtpWatts,
+        powerZoneBoundaries,
       }),
     [
       discipline,
@@ -155,6 +161,8 @@ export function SessionComparisonSummary({
       steps,
       thresholdPaceSeconds,
       thresholdZoneBoundaries,
+      thresholdFtpWatts,
+      powerZoneBoundaries,
     ]
   );
 
