@@ -79,7 +79,16 @@ export async function GET() {
   ]);
   return NextResponse.json({
     settings,
-    thresholds,
+    // Normalize stored profiles so editors always see the canonical zone model,
+    // rather than legacy cutoff arrays the save path would now reject.
+    thresholds: thresholds.map((profile) => ({
+      ...profile,
+      zoneCount: ZONE_COUNT,
+      zoneBoundaries: parseZoneBoundaries(
+        profile.zoneBoundaries,
+        profile.discipline
+      ),
+    })),
     signalPreferences,
     onboardingStep: athlete?.onboardingStep,
     ecoLoadEnabled:
