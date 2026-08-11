@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { TrainingPlanCsvSettings } from "@/components/training-plan-csv-settings";
 import { DisciplineUnitsSettings } from "@/components/discipline-units-settings";
 import { EcoLoadSettingsPanel } from "@/components/eco-load-settings-panel";
 import { SelfEvalSettingsPanel } from "@/components/self-eval-settings-panel";
 import { WorkoutShadingSettingsPanel } from "@/components/workout-shading-settings";
 import { Card } from "@/components/ui";
+import { ThresholdsEditor } from "@/components/thresholds/thresholds-editor";
 import { requireAthlete } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { buildWorkoutShadingSettings, parseWorkoutShadingTarget } from "@/lib/plan/workout-shading";
@@ -13,11 +13,7 @@ import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import { parsePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { ZoneFocusSettingsPanel } from "@/components/zone-focus-settings-panel";
-import { signalLabel } from "@/lib/zones/display";
-import {
-  formatRoleSignalSummary,
-  parseRoleSignals,
-} from "@/lib/zones/signal-preference";
+import { loadThresholdsEditorData } from "@/lib/thresholds/load-editor-data.server";
 
 export const dynamic = "force-dynamic";
 
@@ -75,10 +71,11 @@ async function loadAthleteSettingsProfile(athleteId: string) {
 export default async function SettingsPage() {
   const session = await requireAthlete();
   const athleteId = session.user.athleteId!;
-  const [connection, settings, athlete] = await Promise.all([
+  const [connection, settings, athlete, thresholdsData] = await Promise.all([
     db.stravaConnection.findUnique({ where: { athleteId } }),
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
     loadAthleteSettingsProfile(athleteId),
+    loadThresholdsEditorData(athleteId),
   ]);
 
   const disciplineSettings = buildDisciplineSettings(
@@ -117,6 +114,17 @@ export default async function SettingsPage() {
       <Card title="Units">
         <DisciplineUnitsSettings initialSettings={disciplineSettings} />
       </Card>
+      <Card title="Intensity zones & thresholds">
+        <ThresholdsEditor
+          initialData={thresholdsData}
+          historyHref="/settings/thresholds/history"
+        />
+      </Card>
+      <Card title="Zone focus (time distribution)">
+        <ZoneFocusSettingsPanel
+          initialSettings={{ zoneFocusCatalog, phaseKindZoneDefaults }}
+        />
+      </Card>
       <Card title="Training plans & CSV">
         <div id="calendar-import">
           <TrainingPlanCsvSettings />
@@ -145,49 +153,6 @@ export default async function SettingsPage() {
             Connect Strava
           </a>
         )}
-      </Card>
-      <Card title="Zone focus">
-        <ZoneFocusSettingsPanel
-          initialSettings={{ zoneFocusCatalog, phaseKindZoneDefaults }}
-        />
-      </Card>
-      <Card title="Thresholds & TiZ">
-        <ul className="space-y-2 text-sm">
-          {settings
-            .filter((s) => s.discipline === "BIKE" || s.discipline === "RUN" || s.discipline === "SWIM")
-            .map((s) => {
-              const roleSummary =
-                s.discipline === "BIKE" || s.discipline === "RUN"
-                  ? formatRoleSignalSummary(
-                      s.primarySignal,
-                      parseRoleSignals(
-                        "roleSignals" in s ? s.roleSignals : null
-                      ),
-                      signalLabel
-                    )
-                  : null;
-              return (
-              <li key={s.discipline}>
-                <span className="font-medium">{s.discipline}</span>
-                <span className="text-zinc-500">
-                  {" "}
-                  — default TiZ (no structured workout):{" "}
-                  {signalLabel(s.primarySignal)}
-                  {s.fallbackSignal ? ` (fallback: ${signalLabel(s.fallbackSignal)})` : ""}
-                  {roleSummary ? ` · by role: ${roleSummary}` : ""}
-                </span>
-              </li>
-              );
-            })}
-        </ul>
-        <div className="mt-3 flex flex-wrap gap-3 text-sm">
-          <Link href="/onboarding/thresholds" className="text-sky-600 hover:underline">
-            Edit current thresholds & zone boundaries
-          </Link>
-          <Link href="/onboarding/threshold-history" className="text-sky-600 hover:underline">
-            Threshold & primary metric history
-          </Link>
-        </div>
       </Card>
     </main>
   );
