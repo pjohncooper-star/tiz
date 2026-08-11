@@ -101,6 +101,8 @@ function calendarSession(
   return {
     id: overrides.id,
     scheduledDate: overrides.scheduledDate ?? "2026-06-16",
+    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
+    daySortOrder: overrides.daySortOrder ?? 0,
     discipline: overrides.discipline ?? "BIKE",
     title: overrides.title ?? "Ride",
     totalMinutes: overrides.totalMinutes ?? 60,

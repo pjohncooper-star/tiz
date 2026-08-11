@@ -59,6 +59,8 @@ export type WorkoutDetailViewModel = {
   returnHref: string;
   scheduledDateKey: string;
   sessionId: string;
+  /** Minutes from midnight; null = untimed. */
+  scheduledTimeMinutes: number | null;
   discipline: Discipline;
   title: string;
   notes: string;
@@ -406,6 +408,11 @@ export async function loadWorkoutDetail(
     returnHref,
     scheduledDateKey: formatDateKey(plannedSession.scheduledDate),
     sessionId: plannedSession.id,
+    scheduledTimeMinutes:
+      "scheduledTimeMinutes" in plannedSession
+        ? ((plannedSession as { scheduledTimeMinutes?: number | null })
+            .scheduledTimeMinutes ?? null)
+        : null,
     discipline: plannedSession.discipline,
     title: plannedSession.title,
     notes: plannedSession.notes ?? "",

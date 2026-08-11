@@ -18,6 +18,8 @@ function baseSession(
   return {
     id: "s1",
     scheduledDate: "2026-07-01",
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline: "SWIM",
     title: "Swim",
     totalMinutes: 45,
@@ -45,7 +47,10 @@ function baseSession(
     tizSignalOverride: null,
     poolSlotKind: null,
     ...overrides,
+    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
+    daySortOrder: overrides.daySortOrder ?? 0,
   };
+
 }
 
 const linkedActivity = {

@@ -36,6 +36,8 @@ function session(
   return {
     id: `${discipline}-${source}-${Math.random()}`,
     scheduledDate: "2026-07-07",
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline,
     title: "Session",
     totalMinutes: 45,

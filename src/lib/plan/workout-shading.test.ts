@@ -34,6 +34,8 @@ function session(
   return {
     id: "session-1",
     scheduledDate: format(new Date(), "yyyy-MM-dd"),
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline: "RUN",
     title: "Easy run",
     totalMinutes: 60,
@@ -61,7 +63,10 @@ function session(
     tizSignalOverride: null,
     poolSlotKind: null,
     ...overrides,
+    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
+    daySortOrder: overrides.daySortOrder ?? 0,
   };
+
 }
 
 describe("isWorkoutShadingEligible", () => {

@@ -96,6 +96,8 @@ function session(
   return {
     id: `session-${Math.random()}`,
     scheduledDate: "2026-07-07",
+    scheduledTimeMinutes: null,
+    daySortOrder: 0,
     discipline,
     title: "Session",
     totalMinutes: 60,
@@ -123,7 +125,10 @@ function session(
     tizSignalOverride: null,
     poolSlotKind: "ENDURANCE",
     ...overrides,
+    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
+    daySortOrder: overrides.daySortOrder ?? 0,
   };
+
 }
 
 describe("spread-easy-tiz", () => {

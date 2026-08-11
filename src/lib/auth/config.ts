@@ -15,6 +15,8 @@ export const authConfig = {
         "/api/webhooks/strava",
         "/api/strava/callback",
         "/api/inngest",
+        // Token-authenticated calendar subscription (validated in the route).
+        "/api/plan/calendar/feed.ics",
       ];
       if (publicPaths.some((p) => pathname.startsWith(p))) return true;
       return !!auth?.user;
