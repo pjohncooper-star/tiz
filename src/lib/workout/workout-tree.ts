@@ -12,6 +12,7 @@ import { normalizeSwimEquipmentIds } from "@/lib/swim/equipment-catalog";
 import { resolveRelativePaceSeconds } from "@/lib/workout/relative-pace";
 import type { WorkoutStep, WorkoutStepType, ZoneMinutes } from "@/lib/workout/workout-types";
 import { zoneFromPaceSeconds, zoneFromPowerWatts } from "@/lib/zones/assign-zone";
+import { resolveRelativePercentTarget } from "@/lib/workout/relative-intensity";
 
 export type FlattenPlanningOptions = DistanceDurationOptions;
 
@@ -419,6 +420,12 @@ export function targetZoneFromTarget(
   }
 
   if (target.signal === "power") {
+    if (target.mode === "relative") {
+      const watts = resolveRelativePercentTarget(target, {
+        ftpWatts: options.thresholdFtpWatts,
+      });
+      if (watts != null) return zoneFromPowerWatts(watts, options);
+    }
     if (target.mode === "value" && target.value != null) {
       return zoneFromPowerWatts(target.value, options);
     }

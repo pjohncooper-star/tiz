@@ -187,8 +187,8 @@ describe("planned sessions CSV import", () => {
     const hard = inner.children[0]!;
     const easy = inner.children[1]!;
     if (hard.kind !== "step" || easy.kind !== "step") throw new Error("expected steps");
-    assert.deepEqual(hard.target, { signal: "power", mode: "value", value: 260 });
-    assert.deepEqual(easy.target, { signal: "power", mode: "value", value: 40 });
+    assert.deepEqual(hard.target, { signal: "power", mode: "relative", pct: 130 });
+    assert.deepEqual(easy.target, { signal: "power", mode: "relative", pct: 20 });
     assert.deepEqual(hard.duration, { type: "time", value: 30 });
     assert.deepEqual(easy.duration, { type: "time", value: 30 });
 
@@ -266,15 +266,17 @@ describe("planned sessions CSV import", () => {
     assert.equal(steady.targetPaceSeconds, undefined);
   });
 
-  it("rejects percent power targets without FTP", () => {
+  it("stores power percent as relative without requiring FTP at import", () => {
     const csv = [
       "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
-      "2026-08-04,BIKE,Bad,1,step,interval,time,1,power,value,130%",
+      "2026-08-04,BIKE,VO2,1,step,interval,time,1,power,value,130%",
     ].join("\n");
     const result = parsePlannedSessionsCsv(csv);
-    assert.equal(result.ok, false);
-    if (result.ok) return;
-    assert.ok(result.errors.some((e) => /bike FTP/i.test(e.message)));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const step = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(step.target, { signal: "power", mode: "relative", pct: 130 });
   });
 
   it("rejects step nesting deeper than three id segments", () => {

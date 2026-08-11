@@ -22,11 +22,14 @@ const stepDurationSchema = z.discriminatedUnion("type", [
 
 const stepTargetSchema = z.object({
   signal: z.enum(["power", "heart_rate", "pace", "speed", "open"]),
-  mode: z.enum(["zone", "range", "value"]),
+  mode: z.enum(["zone", "range", "value", "relative"]),
   zone: z.number().int().min(1).max(7).optional(),
   low: z.number().optional(),
   high: z.number().optional(),
   value: z.number().optional(),
+  ref: z.enum(["threshold", "5k", "10k", "half", "marathon"]).optional(),
+  pct: z.number().positive().optional(),
+  refSource: z.enum(["fitness", "goal"]).optional(),
 });
 
 const rampTargetSchema = z.object({

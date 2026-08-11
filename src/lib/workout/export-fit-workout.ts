@@ -221,6 +221,26 @@ function applyLeafTarget(
       const encoded = encodeFitSpeedMps(mps);
       applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh", encoded, encoded);
     }
+    return;
+  }
+
+  if (target.mode === "relative" && target.pct != null && target.pct > 0) {
+    if (target.signal === "power") {
+      const encoded = encodeFitPowerPercent(target.pct);
+      applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh", encoded, encoded);
+      return;
+    }
+    if (target.signal === "heart_rate") {
+      const encoded = encodeFitHeartRatePercent(target.pct);
+      applyCustomRange(
+        msg,
+        "heartRate",
+        "customTargetHeartRateLow",
+        "customTargetHeartRateHigh",
+        encoded,
+        encoded
+      );
+    }
   }
 }
 

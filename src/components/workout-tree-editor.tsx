@@ -1080,8 +1080,9 @@ function StepTargetField({
     if (relativeMode && step.target.ref) {
       const ref = step.target.ref;
       const pct = step.target.pct ?? 100;
+      const refSource = step.target.refSource ?? "fitness";
       const resolved = resolveRelativePaceSeconds(
-        { ref, pct: step.target.pct, refSource: step.target.refSource },
+        { ref, pct: step.target.pct, refSource },
         { thresholdPaceSeconds, racePaces }
       );
       const resolvedLabel =
@@ -1090,7 +1091,21 @@ function StepTargetField({
           : "set race paces in Settings";
       return (
         <div className="min-w-0 space-y-1">
-          <Label>{label} (relative)</Label>
+          <div className="flex items-center justify-between gap-1">
+            <Label>{label} (relative)</Label>
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({
+                  target: { signal: "pace", mode: "value" },
+                  targetPaceSeconds: resolved ?? step.targetPaceSeconds ?? 300,
+                })
+              }
+            >
+              Absolute
+            </button>
+          </div>
           <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
             <Select
               value={ref}
@@ -1102,9 +1117,7 @@ function StepTargetField({
                     mode: "relative",
                     ref: next,
                     ...(pct !== 100 ? { pct } : {}),
-                    ...(step.target.refSource
-                      ? { refSource: step.target.refSource }
-                      : {}),
+                    ...(next !== "threshold" ? { refSource } : {}),
                   },
                   targetPaceSeconds: undefined,
                 });
@@ -1130,20 +1143,40 @@ function StepTargetField({
                     mode: "relative",
                     ref,
                     ...(v !== 100 ? { pct: v } : {}),
-                    ...(step.target.refSource
-                      ? { refSource: step.target.refSource }
-                      : {}),
+                    ...(ref !== "threshold" ? { refSource } : {}),
                   },
                   targetPaceSeconds: undefined,
                 });
               }}
             />
           </div>
+          {ref !== "threshold" ? (
+            <Select
+              value={refSource}
+              aria-label="Fitness or goal race pace"
+              onChange={(e) => {
+                const next = e.target.value as "fitness" | "goal";
+                onChange({
+                  target: {
+                    signal: "pace",
+                    mode: "relative",
+                    ref,
+                    ...(pct !== 100 ? { pct } : {}),
+                    refSource: next,
+                  },
+                  targetPaceSeconds: undefined,
+                });
+              }}
+            >
+              <option value="fitness">Fitness pace</option>
+              <option value="goal">Goal pace</option>
+            </Select>
+          ) : null}
           <p className="truncate text-[11px] text-zinc-500">
             {formatRelativePaceLabel({
               ref,
               pct: step.target.pct,
-              refSource: step.target.refSource,
+              refSource,
             })}
             {" → "}
             {resolvedLabel}
@@ -1189,20 +1222,38 @@ function StepTargetField({
       );
     }
     return (
-      <PaceEditorInput
-        seconds={step.targetPaceSeconds}
-        discipline={planDiscipline}
-        displayUnit={displayUnit}
-        poolSize={poolSize}
-        label={label}
-        placeholder="5:00"
-        onCommit={(pace) =>
-          onChange({
-            target: { signal: "pace", mode: "value" },
-            targetPaceSeconds: pace,
-          })
-        }
-      />
+      <div className="min-w-0 space-y-1">
+        <PaceEditorInput
+          seconds={step.targetPaceSeconds}
+          discipline={planDiscipline}
+          displayUnit={displayUnit}
+          poolSize={poolSize}
+          label={label}
+          placeholder="5:00"
+          onCommit={(pace) =>
+            onChange({
+              target: { signal: "pace", mode: "value" },
+              targetPaceSeconds: pace,
+            })
+          }
+        />
+        <button
+          type="button"
+          className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+          onClick={() =>
+            onChange({
+              target: {
+                signal: "pace",
+                mode: "relative",
+                ref: "threshold",
+              },
+              targetPaceSeconds: undefined,
+            })
+          }
+        >
+          Use relative pace…
+        </button>
+      </div>
     );
   }
 

@@ -3,6 +3,7 @@ import { zoneBoundariesFor } from "@/lib/thresholds/zones";
 import { formatPace } from "@/lib/units/pace";
 import { paceSecondsAtZoneMidpoint, zoneMidSpeedPct } from "@/lib/workout/zone-pace";
 import { resolveRelativePaceSeconds } from "@/lib/workout/relative-pace";
+import { resolveRelativePercentTarget } from "@/lib/workout/relative-intensity";
 import type {
   LeafStep,
   RampStep,
@@ -190,6 +191,12 @@ function resolveLeafY(
     }
     if (t.mode === "value" && t.value != null && t.signal === "power") {
       return { low: t.value, high: t.value, fill: baseFill };
+    }
+    if (t.mode === "relative" && t.signal === "power") {
+      const watts = resolveRelativePercentTarget(t, {
+        ftpWatts: thresholds.thresholdFtpWatts ?? ftp,
+      });
+      if (watts != null) return { low: watts, high: watts, fill: baseFill };
     }
     const watts = wattsAtZoneMidpoint(zone, ftp);
     return { low: watts, high: watts, fill: zoneFill };
