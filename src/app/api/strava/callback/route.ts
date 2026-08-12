@@ -10,11 +10,19 @@ import {
 } from "@/lib/strava/oauth-state";
 import { syncRecentActivities } from "@/lib/strava/sync";
 
+/** Keep the settings sub-page the athlete started from, tagged with the outcome. */
+function settingsReturnUrl(returnTo: string, status: string, base: string) {
+  const url = new URL(returnTo, base);
+  url.searchParams.set("strava", status);
+  return url;
+}
+
 function errorRedirect(req: Request, returnTo: string) {
-  const path = returnTo.startsWith("/settings")
-    ? "/settings?strava=error"
-    : "/onboarding/strava?error=1";
-  return NextResponse.redirect(new URL(path, getAppUrl(req)));
+  const base = getAppUrl(req);
+  if (returnTo.startsWith("/settings")) {
+    return NextResponse.redirect(settingsReturnUrl(returnTo, "error", base));
+  }
+  return NextResponse.redirect(new URL("/onboarding/strava?error=1", base));
 }
 
 export async function GET(req: Request) {
@@ -60,11 +68,12 @@ export async function GET(req: Request) {
       await advanceOnboardingTo(athleteId, "COMPLETE");
     }
 
-    const successPath = oauthState.returnTo.startsWith("/settings")
-      ? "/settings?strava=connected"
-      : oauthState.returnTo;
+    const base = getAppUrl(req);
+    const successUrl = oauthState.returnTo.startsWith("/settings")
+      ? settingsReturnUrl(oauthState.returnTo, "connected", base)
+      : new URL(oauthState.returnTo, base);
 
-    return NextResponse.redirect(new URL(successPath, getAppUrl(req)));
+    return NextResponse.redirect(successUrl);
   } catch {
     return errorRedirect(req, oauthState.returnTo);
   }
