@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { parseDateKey } from "@/lib/dates";
+import type { Discipline, SessionRole } from "@prisma/client";
+import { formatDateKey, parseDateKey } from "@/lib/dates";
 import { requestTodayKey } from "@/lib/timezone";
 import {
   MAX_PLANNED_SESSION_CSV_BYTES,
@@ -18,11 +19,19 @@ import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import {
   buildTrainingPlanDraft,
   deepCopyWorkoutSteps,
+  recomputeTrainingPlanAggregates,
   resolveApplyWindow,
   schedulePlanSessions,
   TRAINING_PLAN_GAP_BLOCK_DAYS,
+  TRAINING_PLAN_GAP_WARN_DAYS,
+  MAX_TRAINING_PLAN_SESSIONS,
   type ApplyAnchorMode,
 } from "@/lib/plan/training-plan";
+import {
+  parseWorkoutTree,
+  serializeWorkoutTree,
+  type WorkoutTreeDocument,
+} from "@/lib/workout/workout-tree";
 import {
   collectRelativePaceRequirements,
   formatMissingRelativeIntensity,
@@ -30,7 +39,6 @@ import {
   type RelativePaceRequirement,
 } from "@/lib/workout/relative-intensity";
 import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
-import { parseWorkoutTree } from "@/lib/workout/workout-tree";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
 
 export class TrainingPlanError extends Error {
@@ -277,10 +285,17 @@ export type TrainingPlanDetailSession = {
   sortOrder: number;
   discipline: string;
   title: string;
+  notes: string | null;
   sessionRole: string;
   estimatedDurationMinutes: number | null;
+  distanceMeters: number | null;
+  targetSpeedMps: number | null;
+  targetPaceSeconds: number | null;
+  poolSize: string | null;
   hasStructuredWorkout: boolean;
   relativePaceLabels: string[];
+  /** Full workout tree when present (for editor). */
+  steps: WorkoutTreeDocument | null;
 };
 
 export type TrainingPlanDetail = TrainingPlanListItem & {
@@ -377,15 +392,16 @@ export async function getTrainingPlanDetail(
   const paceByKey = new Map<string, RelativePaceRequirement>();
   const sessions: TrainingPlanDetailSession[] = plan.sessions.map((s) => {
     const labels = relativeLabelsFromSteps(s.steps);
+    let stepsDoc: WorkoutTreeDocument | null = null;
     try {
       if (s.steps != null) {
-        const tree = parseWorkoutTree(s.steps);
-        for (const req of collectRelativePaceRequirements(tree.nodes)) {
+        stepsDoc = parseWorkoutTree(s.steps);
+        for (const req of collectRelativePaceRequirements(stepsDoc.nodes)) {
           paceByKey.set(`${req.refSource}:${req.ref}`, req);
         }
       }
     } catch {
-      /* ignore */
+      stepsDoc = null;
     }
     return {
       id: s.id,
@@ -393,10 +409,16 @@ export async function getTrainingPlanDetail(
       sortOrder: s.sortOrder,
       discipline: s.discipline,
       title: s.title,
+      notes: s.notes,
       sessionRole: s.sessionRole,
       estimatedDurationMinutes: s.estimatedDurationMinutes,
-      hasStructuredWorkout: s.steps != null,
+      distanceMeters: s.distanceMeters,
+      targetSpeedMps: s.targetSpeedMps,
+      targetPaceSeconds: s.targetPaceSeconds,
+      poolSize: s.poolSize,
+      hasStructuredWorkout: stepsDoc != null && stepsDoc.nodes.length > 0,
       relativePaceLabels: labels,
+      steps: stepsDoc,
     };
   });
 
@@ -418,7 +440,8 @@ export async function getTrainingPlanDetail(
 export async function renameTrainingPlan(
   athleteId: string,
   planId: string,
-  name: string
+  name: string,
+  description?: string | null
 ): Promise<TrainingPlanListItem> {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -437,7 +460,12 @@ export async function renameTrainingPlan(
   try {
     const updated = await db.trainingPlan.update({
       where: { id: planId },
-      data: { name: trimmed },
+      data: {
+        name: trimmed,
+        ...(description !== undefined
+          ? { description: description?.trim() || null }
+          : {}),
+      },
       select: {
         id: true,
         name: true,
@@ -470,6 +498,435 @@ export async function renameTrainingPlan(
     }
     throw e;
   }
+}
+
+async function requireOwnedPlan(athleteId: string, planId: string) {
+  const plan = await db.trainingPlan.findFirst({
+    where: { id: planId, athleteId },
+    select: { id: true },
+  });
+  if (!plan) {
+    throw new TrainingPlanError("Training plan not found", 404);
+  }
+  return plan;
+}
+
+async function syncPlanAggregates(
+  tx: Prisma.TransactionClient,
+  planId: string
+): Promise<{ sessionCount: number; durationDays: number }> {
+  const rows = await tx.trainingPlanSession.findMany({
+    where: { trainingPlanId: planId },
+    select: { dayOffset: true },
+  });
+  const aggregates = recomputeTrainingPlanAggregates(rows);
+  await tx.trainingPlan.update({
+    where: { id: planId },
+    data: {
+      sessionCount: aggregates.sessionCount,
+      durationDays: aggregates.durationDays,
+    },
+  });
+  return aggregates;
+}
+
+export type TrainingPlanSessionInput = {
+  dayOffset: number;
+  sortOrder?: number;
+  discipline: Discipline;
+  title: string;
+  notes?: string | null;
+  sessionRole?: SessionRole;
+  estimatedDurationMinutes?: number | null;
+  distanceMeters?: number | null;
+  targetSpeedMps?: number | null;
+  targetPaceSeconds?: number | null;
+  poolSize?: PoolSize | null;
+  steps?: unknown | null;
+};
+
+function normalizeStepsInput(steps: unknown | null): WorkoutTreeDocument | null {
+  if (steps == null) return null;
+  try {
+    const tree = parseWorkoutTree(steps);
+    if (tree.nodes.length === 0) return null;
+    return serializeWorkoutTree(tree);
+  } catch (e) {
+    throw new TrainingPlanError(
+      e instanceof Error ? e.message : "Invalid workout steps",
+      400
+    );
+  }
+}
+
+export async function createTrainingPlanSession(
+  athleteId: string,
+  planId: string,
+  input: TrainingPlanSessionInput
+): Promise<TrainingPlanDetailSession> {
+  await requireOwnedPlan(athleteId, planId);
+  const title = input.title.trim();
+  if (!title) {
+    throw new TrainingPlanError("Session title is required", 400);
+  }
+  if (!(Number.isInteger(input.dayOffset) && input.dayOffset >= 0)) {
+    throw new TrainingPlanError("dayOffset must be a non-negative integer", 400);
+  }
+
+  const count = await db.trainingPlanSession.count({ where: { trainingPlanId: planId } });
+  if (count >= MAX_TRAINING_PLAN_SESSIONS) {
+    throw new TrainingPlanError(
+      `Training plan may have at most ${MAX_TRAINING_PLAN_SESSIONS} sessions`,
+      400
+    );
+  }
+
+  const sameDay = await db.trainingPlanSession.count({
+    where: { trainingPlanId: planId, dayOffset: input.dayOffset },
+  });
+  const sortOrder = input.sortOrder ?? sameDay;
+  const steps = normalizeStepsInput(input.steps ?? null);
+
+  const created = await db.$transaction(async (tx) => {
+    const row = await tx.trainingPlanSession.create({
+      data: {
+        trainingPlanId: planId,
+        dayOffset: input.dayOffset,
+        sortOrder,
+        discipline: input.discipline,
+        title,
+        notes: input.notes?.trim() || null,
+        sessionRole: input.sessionRole ?? "MODERATE",
+        estimatedDurationMinutes: input.estimatedDurationMinutes ?? null,
+        distanceMeters: input.distanceMeters ?? null,
+        targetSpeedMps: input.targetSpeedMps ?? null,
+        targetPaceSeconds: input.targetPaceSeconds ?? null,
+        poolSize: input.poolSize ?? null,
+        steps: steps as unknown as Prisma.InputJsonValue | undefined,
+      },
+    });
+    await syncPlanAggregates(tx, planId);
+    return row;
+  });
+
+  const stepsDoc = created.steps != null ? parseWorkoutTree(created.steps) : null;
+  return {
+    id: created.id,
+    dayOffset: created.dayOffset,
+    sortOrder: created.sortOrder,
+    discipline: created.discipline,
+    title: created.title,
+    notes: created.notes,
+    sessionRole: created.sessionRole,
+    estimatedDurationMinutes: created.estimatedDurationMinutes,
+    distanceMeters: created.distanceMeters,
+    targetSpeedMps: created.targetSpeedMps,
+    targetPaceSeconds: created.targetPaceSeconds,
+    poolSize: created.poolSize,
+    hasStructuredWorkout: stepsDoc != null && stepsDoc.nodes.length > 0,
+    relativePaceLabels: relativeLabelsFromSteps(created.steps),
+    steps: stepsDoc,
+  };
+}
+
+export async function updateTrainingPlanSession(
+  athleteId: string,
+  planId: string,
+  sessionId: string,
+  input: Partial<TrainingPlanSessionInput>
+): Promise<TrainingPlanDetailSession> {
+  await requireOwnedPlan(athleteId, planId);
+  const existing = await db.trainingPlanSession.findFirst({
+    where: { id: sessionId, trainingPlanId: planId },
+  });
+  if (!existing) {
+    throw new TrainingPlanError("Plan session not found", 404);
+  }
+
+  if (input.dayOffset != null && !(Number.isInteger(input.dayOffset) && input.dayOffset >= 0)) {
+    throw new TrainingPlanError("dayOffset must be a non-negative integer", 400);
+  }
+  if (input.title != null && !input.title.trim()) {
+    throw new TrainingPlanError("Session title is required", 400);
+  }
+
+  const stepsProvided = Object.prototype.hasOwnProperty.call(input, "steps");
+  const steps = stepsProvided ? normalizeStepsInput(input.steps ?? null) : undefined;
+
+  const updated = await db.$transaction(async (tx) => {
+    const row = await tx.trainingPlanSession.update({
+      where: { id: sessionId },
+      data: {
+        ...(input.dayOffset != null ? { dayOffset: input.dayOffset } : {}),
+        ...(input.sortOrder != null ? { sortOrder: input.sortOrder } : {}),
+        ...(input.discipline != null ? { discipline: input.discipline } : {}),
+        ...(input.title != null ? { title: input.title.trim() } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes?.trim() || null } : {}),
+        ...(input.sessionRole != null ? { sessionRole: input.sessionRole } : {}),
+        ...(input.estimatedDurationMinutes !== undefined
+          ? { estimatedDurationMinutes: input.estimatedDurationMinutes }
+          : {}),
+        ...(input.distanceMeters !== undefined
+          ? { distanceMeters: input.distanceMeters }
+          : {}),
+        ...(input.targetSpeedMps !== undefined
+          ? { targetSpeedMps: input.targetSpeedMps }
+          : {}),
+        ...(input.targetPaceSeconds !== undefined
+          ? { targetPaceSeconds: input.targetPaceSeconds }
+          : {}),
+        ...(input.poolSize !== undefined ? { poolSize: input.poolSize } : {}),
+        ...(stepsProvided
+          ? { steps: (steps as unknown as Prisma.InputJsonValue) ?? null }
+          : {}),
+      },
+    });
+    await syncPlanAggregates(tx, planId);
+    return row;
+  });
+
+  const stepsDoc = updated.steps != null ? parseWorkoutTree(updated.steps) : null;
+  return {
+    id: updated.id,
+    dayOffset: updated.dayOffset,
+    sortOrder: updated.sortOrder,
+    discipline: updated.discipline,
+    title: updated.title,
+    notes: updated.notes,
+    sessionRole: updated.sessionRole,
+    estimatedDurationMinutes: updated.estimatedDurationMinutes,
+    distanceMeters: updated.distanceMeters,
+    targetSpeedMps: updated.targetSpeedMps,
+    targetPaceSeconds: updated.targetPaceSeconds,
+    poolSize: updated.poolSize,
+    hasStructuredWorkout: stepsDoc != null && stepsDoc.nodes.length > 0,
+    relativePaceLabels: relativeLabelsFromSteps(updated.steps),
+    steps: stepsDoc,
+  };
+}
+
+export async function deleteTrainingPlanSession(
+  athleteId: string,
+  planId: string,
+  sessionId: string
+): Promise<{ sessionCount: number; durationDays: number }> {
+  await requireOwnedPlan(athleteId, planId);
+  const existing = await db.trainingPlanSession.findFirst({
+    where: { id: sessionId, trainingPlanId: planId },
+    select: { id: true },
+  });
+  if (!existing) {
+    throw new TrainingPlanError("Plan session not found", 404);
+  }
+
+  const remainingBefore = await db.trainingPlanSession.count({
+    where: { trainingPlanId: planId },
+  });
+  if (remainingBefore <= 1) {
+    throw new TrainingPlanError(
+      "A training plan must keep at least one session",
+      400
+    );
+  }
+
+  return db.$transaction(async (tx) => {
+    await tx.trainingPlanSession.delete({ where: { id: sessionId } });
+    return syncPlanAggregates(tx, planId);
+  });
+}
+
+export async function reorderTrainingPlanSessions(
+  athleteId: string,
+  planId: string,
+  order: Array<{ id: string; dayOffset: number; sortOrder: number }>
+): Promise<TrainingPlanDetail> {
+  await requireOwnedPlan(athleteId, planId);
+  if (order.length === 0) {
+    throw new TrainingPlanError("order is required", 400);
+  }
+  for (const row of order) {
+    if (!(Number.isInteger(row.dayOffset) && row.dayOffset >= 0)) {
+      throw new TrainingPlanError("dayOffset must be a non-negative integer", 400);
+    }
+  }
+
+  await db.$transaction(async (tx) => {
+    const existing = await tx.trainingPlanSession.findMany({
+      where: { trainingPlanId: planId },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((s) => s.id));
+    for (const row of order) {
+      if (!existingIds.has(row.id)) {
+        throw new TrainingPlanError("Unknown plan session in reorder", 400);
+      }
+    }
+    for (const row of order) {
+      await tx.trainingPlanSession.update({
+        where: { id: row.id },
+        data: { dayOffset: row.dayOffset, sortOrder: row.sortOrder },
+      });
+    }
+    await syncPlanAggregates(tx, planId);
+  });
+
+  return getTrainingPlanDetail(athleteId, planId);
+}
+
+export async function createTrainingPlanFromCalendar(
+  athleteId: string,
+  input: {
+    name: string;
+    description?: string | null;
+    startDate: string;
+    endDate: string;
+    disciplines?: Discipline[];
+    confirmLargeGaps?: boolean;
+  }
+): Promise<TrainingPlanListItem & { gapWarning: boolean; maxGapDays: number }> {
+  const name = input.name.trim();
+  if (!name) {
+    throw new TrainingPlanError("Plan name is required", 400);
+  }
+  if (name.length > 120) {
+    throw new TrainingPlanError("Plan name is too long (max 120 characters)", 400);
+  }
+  if (input.endDate < input.startDate) {
+    throw new TrainingPlanError("endDate must be on or after startDate", 400);
+  }
+
+  const rangeStart = parseDateKey(input.startDate);
+  const rangeEnd = parseDateKey(input.endDate);
+  const sessions = await db.plannedSession.findMany({
+    where: {
+      athleteId,
+      scheduledDate: { gte: rangeStart, lte: rangeEnd },
+      ...(input.disciplines && input.disciplines.length > 0
+        ? { discipline: { in: input.disciplines } }
+        : {}),
+    },
+    include: { structuredWorkout: { select: { steps: true } } },
+    orderBy: [{ scheduledDate: "asc" }, { daySortOrder: "asc" }, { title: "asc" }],
+  });
+
+  if (sessions.length === 0) {
+    throw new TrainingPlanError("No calendar sessions in that range", 400);
+  }
+
+  const imports = sessions.map((s) => {
+    const key = formatDateKey(s.scheduledDate);
+    let workoutTree: WorkoutTreeDocument | null = null;
+    if (s.structuredWorkout?.steps != null) {
+      try {
+        const tree = parseWorkoutTree(s.structuredWorkout.steps);
+        workoutTree = tree.nodes.length > 0 ? serializeWorkoutTree(tree) : null;
+      } catch {
+        workoutTree = null;
+      }
+    }
+    return {
+      scheduledDate: s.scheduledDate,
+      scheduledDateKey: key,
+      discipline: s.discipline,
+      title: s.title,
+      notes: s.notes,
+      estimatedDurationMinutes: s.estimatedDurationMinutes,
+      distanceMeters: s.distanceMeters,
+      targetSpeedMps: s.targetSpeedMps,
+      targetPaceSeconds: s.targetPaceSeconds,
+      poolSize: s.poolSize as PoolSize | null,
+      sessionRole: s.sessionRole,
+      zoneAllocationMissing: s.zoneAllocationMissing,
+      workoutTree,
+    };
+  });
+
+  let draft;
+  try {
+    draft = buildTrainingPlanDraft(imports);
+  } catch (e) {
+    throw new TrainingPlanError(
+      e instanceof Error ? e.message : "Could not build plan from calendar",
+      400
+    );
+  }
+
+  if (draft.gapBlocked) {
+    throw new TrainingPlanError(
+      `Gap between sessions is ${draft.maxGapDays} days (max ${TRAINING_PLAN_GAP_BLOCK_DAYS}). Narrow the date range.`,
+      400,
+      { code: "GAP_BLOCKED" }
+    );
+  }
+  if (draft.gapWarning && !input.confirmLargeGaps) {
+    throw new TrainingPlanError(
+      `Largest gap is ${draft.maxGapDays} days (>${TRAINING_PLAN_GAP_WARN_DAYS}). Confirm to continue.`,
+      400,
+      { code: "GAP_WARNING" }
+    );
+  }
+
+  const existing = await db.trainingPlan.findFirst({
+    where: { athleteId, name },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new TrainingPlanError(`A training plan named "${name}" already exists`, 409, {
+      code: "NAME_TAKEN",
+    });
+  }
+
+  const created = await db.trainingPlan.create({
+    data: {
+      athleteId,
+      name,
+      description: input.description?.trim() || null,
+      durationDays: draft.durationDays,
+      sessionCount: draft.sessionCount,
+      anchorWeekday: draft.anchorWeekday,
+      sessions: {
+        create: draft.sessions.map((s) => ({
+          dayOffset: s.dayOffset,
+          sortOrder: s.sortOrder,
+          discipline: s.discipline,
+          title: s.title,
+          notes: s.notes,
+          sessionRole: s.sessionRole,
+          estimatedDurationMinutes: s.estimatedDurationMinutes,
+          distanceMeters: s.distanceMeters,
+          targetSpeedMps: s.targetSpeedMps,
+          targetPaceSeconds: s.targetPaceSeconds,
+          poolSize: s.poolSize,
+          steps: s.steps
+            ? (deepCopyWorkoutSteps(s.steps) as unknown as Prisma.InputJsonValue)
+            : undefined,
+        })),
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      durationDays: true,
+      sessionCount: true,
+      anchorWeekday: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  return {
+    id: created.id,
+    name: created.name,
+    description: created.description,
+    durationDays: created.durationDays,
+    sessionCount: created.sessionCount,
+    anchorWeekday: created.anchorWeekday,
+    createdAt: created.createdAt.toISOString(),
+    updatedAt: created.updatedAt.toISOString(),
+    gapWarning: draft.gapWarning,
+    maxGapDays: draft.maxGapDays,
+  };
 }
 
 /** Remove future calendar sessions that were applied from this plan (from today onward). */
@@ -711,6 +1168,7 @@ export async function applyTrainingPlan(
           zoneAllocationMissing,
           source: "PLAN",
           trainingPlanId: planId,
+          trainingPlanSessionId: planSession.id,
         },
       });
 

@@ -746,6 +746,12 @@ export function SimplePlannerView({
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
+            href="/plan/training-plans"
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Training plans
+          </Link>
+          <Link
             href="/plan/seasons"
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >

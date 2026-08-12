@@ -24,7 +24,9 @@ import { CalendarSessionCard } from "@/components/calendar/calendar-session-card
 import { DraggableActivityCard } from "@/components/calendar/calendar-activity-card";
 import { ApplyTemplateDialog } from "@/components/calendar/apply-template-dialog";
 import { WorkoutUploadButton } from "@/components/workout-upload-button";
+import { CreateTrainingPlanFromCalendarDialog } from "@/components/create-training-plan-from-calendar-dialog";
 import type { CalendarRangeData } from "@/components/calendar/types";
+import { addDaysToDateKey } from "@/lib/dates";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import { totalZoneMinutes } from "@/lib/workout/steps";
@@ -194,6 +196,7 @@ export function PlanningCalendar({
   const [applyOpen, setApplyOpen] = useState(false);
   const [applyWeekStart, setApplyWeekStart] = useState(currentWeekStart);
   const [applyHasSessions, setApplyHasSessions] = useState(false);
+  const [saveAsPlanOpen, setSaveAsPlanOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [focusedWeekStart, setFocusedWeekStart] = useState(
@@ -1905,6 +1908,19 @@ export function PlanningCalendar({
               <Button type="button" className="shrink-0" onClick={() => void openApplyDialog()}>
                 Apply template
               </Button>
+              <Button
+                type="button"
+                className="shrink-0"
+                variant="secondary"
+                onClick={() => setSaveAsPlanOpen(true)}
+              >
+                Save week as plan
+              </Button>
+              <Link href="/plan/training-plans" className="shrink-0">
+                <Button type="button" variant="secondary">
+                  Training plans
+                </Button>
+              </Link>
               <Link href="/calendar/template" className="shrink-0">
                 <Button type="button" variant="secondary">
                   Edit weekly template
@@ -2023,6 +2039,15 @@ export function PlanningCalendar({
         onClose={() => setApplyOpen(false)}
         onApplied={handleTemplateApplied}
       />
+
+      {saveAsPlanOpen ? (
+        <CreateTrainingPlanFromCalendarDialog
+          initialStartDate={focusedWeekStart}
+          initialEndDate={addDaysToDateKey(focusedWeekStart, 6)}
+          onClose={() => setSaveAsPlanOpen(false)}
+          onCreated={() => setSaveAsPlanOpen(false)}
+        />
+      ) : null}
 
       <SessionRolePickerDialog
         open={pendingRolePick != null}

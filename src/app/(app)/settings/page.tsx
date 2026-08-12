@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { TrainingPlanCsvSettings } from "@/components/training-plan-csv-settings";
 import { CalendarFeedSettings } from "@/components/calendar-feed-settings";
 import { DisciplineUnitsSettings } from "@/components/discipline-units-settings";
 import { EcoLoadSettingsPanel } from "@/components/eco-load-settings-panel";
@@ -164,8 +163,17 @@ export default async function SettingsPage() {
         <SwimEquipmentSettingsPanel initialCatalog={swimEquipmentCatalog} />
       </Card>
       <Card title="Training plans & CSV">
-        <div id="calendar-import">
-          <TrainingPlanCsvSettings />
+        <div id="calendar-import" className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+          <p>
+            Import CSV packs, edit library sessions and structured workouts, apply onto the
+            calendar, or save a calendar range as a new plan.
+          </p>
+          <Link
+            href="/plan/training-plans"
+            className="inline-block font-medium text-sky-600 hover:text-sky-800 dark:text-sky-400"
+          >
+            Open training plans →
+          </Link>
         </div>
       </Card>
       <Card title="Workout shading">

@@ -3,11 +3,17 @@ import { describe, it } from "node:test";
 import type { ParsedPlannedSessionImport } from "@/lib/plan/csv-import";
 import {
   buildTrainingPlanDraft,
+  deepCopyWorkoutSteps,
+  recomputeTrainingPlanAggregates,
   resolveApplyWindow,
   schedulePlanSessions,
   weekdayFromDateKey,
 } from "@/lib/plan/training-plan";
 import { parseDateKey } from "@/lib/dates";
+import {
+  WORKOUT_TREE_VERSION,
+  type WorkoutTreeDocument,
+} from "@/lib/workout/workout-tree";
 
 function session(
   dateKey: string,
@@ -173,5 +179,81 @@ describe("schedulePlanSessions", () => {
       scheduled.map((s) => s.scheduledDateKey),
       ["2026-08-15", "2026-08-20"]
     );
+  });
+});
+
+describe("recomputeTrainingPlanAggregates", () => {
+  it("uses max dayOffset + 1 for duration", () => {
+    assert.deepEqual(
+      recomputeTrainingPlanAggregates([
+        { dayOffset: 0 },
+        { dayOffset: 2 },
+        { dayOffset: 9 },
+      ]),
+      { sessionCount: 3, durationDays: 10 }
+    );
+  });
+
+  it("allows sparse single-session packs", () => {
+    assert.deepEqual(recomputeTrainingPlanAggregates([{ dayOffset: 5 }]), {
+      sessionCount: 1,
+      durationDays: 6,
+    });
+  });
+});
+
+describe("from-calendar intensity copy", () => {
+  it("preserves relative and absolute trees through draft + deepCopy", () => {
+    const relativeTree: WorkoutTreeDocument = {
+      version: WORKOUT_TREE_VERSION,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "active",
+          duration: { type: "time", value: 600 },
+          target: {
+            signal: "pace",
+            mode: "relative",
+            ref: "10k",
+            pct: 95,
+            refSource: "fitness",
+          },
+        },
+      ],
+    };
+    const absoluteTree: WorkoutTreeDocument = {
+      version: WORKOUT_TREE_VERSION,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "active",
+          duration: { type: "time", value: 600 },
+          target: {
+            signal: "pace",
+            mode: "value",
+            value: 270,
+          },
+          targetPaceSeconds: 270,
+        },
+      ],
+    };
+
+    const draft = buildTrainingPlanDraft([
+      session("2026-08-03", { title: "Rel", workoutTree: relativeTree }),
+      session("2026-08-04", { title: "Abs", workoutTree: absoluteTree }),
+    ]);
+
+    const relCopy = deepCopyWorkoutSteps(draft.sessions[0]!.steps);
+    const absCopy = deepCopyWorkoutSteps(draft.sessions[1]!.steps);
+    assert.equal(relCopy?.nodes[0]?.kind, "step");
+    if (relCopy?.nodes[0]?.kind === "step") {
+      assert.equal(relCopy.nodes[0].target.mode, "relative");
+      assert.equal(relCopy.nodes[0].target.ref, "10k");
+    }
+    assert.equal(absCopy?.nodes[0]?.kind, "step");
+    if (absCopy?.nodes[0]?.kind === "step") {
+      assert.equal(absCopy.nodes[0].target.mode, "value");
+      assert.equal(absCopy.nodes[0].target.value, 270);
+    }
   });
 });

@@ -6,12 +6,25 @@ import {
 import type { PoolSize } from "@/lib/units/discipline-settings";
 import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
 import { serializeWorkoutTree } from "@/lib/workout/workout-tree";
-import type { ParsedPlannedSessionImport } from "@/lib/plan/csv-import";
-
 export const MAX_TRAINING_PLAN_DURATION_DAYS = 26 * 7; // 182
 export const MAX_TRAINING_PLAN_SESSIONS = 500;
 export const TRAINING_PLAN_GAP_WARN_DAYS = 21;
 export const TRAINING_PLAN_GAP_BLOCK_DAYS = 90;
+
+/** Absolute-dated sessions used to build a relative library pack (CSV or calendar). */
+export type TrainingPlanDraftSessionInput = {
+  scheduledDateKey: string;
+  discipline: Discipline;
+  title: string;
+  notes: string | null;
+  sessionRole: SessionRole;
+  estimatedDurationMinutes: number | null;
+  distanceMeters: number | null;
+  targetSpeedMps: number | null;
+  targetPaceSeconds: number | null;
+  poolSize: PoolSize | null;
+  workoutTree: WorkoutTreeDocument | null;
+};
 
 const WEEKDAY_FROM_UTC_DAY: Weekday[] = [
   "SUN",
@@ -83,7 +96,7 @@ export function weekdayFromDateKey(dateKey: string): Weekday {
  * First session calendar day is offset 0; rest days are gaps (no rows).
  */
 export function buildTrainingPlanDraft(
-  sessions: ParsedPlannedSessionImport[]
+  sessions: TrainingPlanDraftSessionInput[]
 ): TrainingPlanDraft {
   if (sessions.length === 0) {
     throw new Error("Training plan requires at least one session");
@@ -225,4 +238,19 @@ export function deepCopyWorkoutSteps(
 ): WorkoutTreeDocument | null {
   if (steps == null) return null;
   return JSON.parse(JSON.stringify(steps)) as WorkoutTreeDocument;
+}
+
+/** Recompute library pack aggregates after session CRUD (sparse plans allowed). */
+export function recomputeTrainingPlanAggregates(
+  sessions: Array<{ dayOffset: number }>
+): { sessionCount: number; durationDays: number } {
+  const sessionCount = sessions.length;
+  if (sessionCount === 0) {
+    return { sessionCount: 0, durationDays: 1 };
+  }
+  let maxOffset = 0;
+  for (const s of sessions) {
+    if (s.dayOffset > maxOffset) maxOffset = s.dayOffset;
+  }
+  return { sessionCount, durationDays: maxOffset + 1 };
 }
