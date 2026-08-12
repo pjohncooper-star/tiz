@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 export type SidebarNavItem = {
   href: string;
   label: string;
+  /** When false, Next.js will not scroll to top on navigation (calendar manages its own land). */
+  scroll?: boolean;
 };
 
 function isActive(pathname: string, href: string): boolean {
@@ -32,6 +34,7 @@ export function AppSidebarNav({
           <Link
             key={item.href}
             href={item.href}
+            scroll={item.scroll}
             onClick={onNavigate}
             className={`rounded-md px-3 py-2 text-sm font-medium transition ${
               active

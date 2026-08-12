@@ -1012,18 +1012,9 @@ export function PlanningCalendar({
     const targetWeek = initialScrollWeekStart ?? currentWeekStart;
     const offset = readStickyOffsetPx(false);
 
-    const finish = () => {
-      requestAnimationFrame(() => {
-        canLoadPreviousRef.current = true;
-      });
-    };
-
-    // Narrow layout stacks days vertically — land on today (or Monday of ?week=).
-    if (stackedDays) {
-      const landDate = initialScrollWeekStart ? initialScrollWeekStart : todayKey;
-      void scrollToDateAsync(landDate, "auto").finally(finish);
-      return;
-    }
+    // Lock focus so a post-navigation scroll reset cannot pin "Jump to" on the
+    // first loaded week (current − CONTEXT_WEEKS) before we re-land.
+    setFocusedWeek(targetWeek, { lockMs: 2000 });
 
     const scrollToTarget = () => {
       const byWeek = document.querySelector(`[data-week-start="${targetWeek}"]`);
@@ -1039,6 +1030,30 @@ export function PlanningCalendar({
       }
     };
 
+    // App Router may scroll to top after the first layout pass; re-land before
+    // enabling infinite "load previous" (which would otherwise pin May).
+    const finish = () => {
+      requestAnimationFrame(() => {
+        if (stackedDays) {
+          const landDate = initialScrollWeekStart ? initialScrollWeekStart : todayKey;
+          void scrollToDateAsync(landDate, "auto");
+        } else {
+          scrollToTarget();
+        }
+        requestAnimationFrame(() => {
+          if (!stackedDays) scrollToTarget();
+          canLoadPreviousRef.current = true;
+        });
+      });
+    };
+
+    // Narrow layout stacks days vertically — land on today (or Monday of ?week=).
+    if (stackedDays) {
+      const landDate = initialScrollWeekStart ? initialScrollWeekStart : todayKey;
+      void scrollToDateAsync(landDate, "auto").finally(finish);
+      return;
+    }
+
     if (initialScrollWeekStart && !sortedWeeks.includes(initialScrollWeekStart)) {
       void scrollToWeekAsync(initialScrollWeekStart, "auto").finally(finish);
       return;
@@ -1052,6 +1067,7 @@ export function PlanningCalendar({
     readStickyOffsetPx,
     scrollToDateAsync,
     scrollToWeekAsync,
+    setFocusedWeek,
     sortedWeeks,
   ]);
 

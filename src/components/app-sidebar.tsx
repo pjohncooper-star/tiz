@@ -29,7 +29,7 @@ export async function AppSidebar() {
 
   const items: SidebarNavItem[] = [{ href: "/dashboard", label: "Dashboard" }];
   if (calendarEnabled) {
-    items.push({ href: "/calendar", label: "Calendar" });
+    items.push({ href: "/calendar", label: "Calendar", scroll: false });
   }
   if (planBuilderEnabled) {
     items.push({ href: "/plan", label: "Plan" });
