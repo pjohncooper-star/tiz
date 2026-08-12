@@ -1,21 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { CalendarCsvImportSettings } from "@/components/calendar-csv-import-settings";
-import { TrainingPlansLibrarySettings } from "@/components/training-plans-settings";
+import Link from "next/link";
 
+/** @deprecated Thin redirect card — full UI lives on /plan/training-plans. */
 export function TrainingPlanCsvSettings() {
-  const [libraryKey, setLibraryKey] = useState(0);
-
   return (
-    <div className="space-y-8">
-      <CalendarCsvImportSettings onPlanSaved={() => setLibraryKey((k) => k + 1)} />
-      <div className="border-t border-zinc-200 pt-6 dark:border-zinc-800">
-        <h3 className="mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-          Training plan library
-        </h3>
-        <TrainingPlansLibrarySettings refreshKey={libraryKey} />
-      </div>
+    <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+      <p>
+        Manage CSV import, library editing, and apply from the Training plans page.
+      </p>
+      <Link
+        href="/plan/training-plans"
+        className="inline-block font-medium text-sky-600 hover:text-sky-800 dark:text-sky-400"
+      >
+        Open training plans →
+      </Link>
     </div>
   );
 }

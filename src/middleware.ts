@@ -46,7 +46,9 @@ function isWorkoutLibraryPath(pathname: string): boolean {
     pathname.startsWith("/plan/workouts/") ||
     pathname.startsWith("/api/plan/workout-folders") ||
     pathname === "/plan/components" ||
-    pathname.startsWith("/plan/components/")
+    pathname.startsWith("/plan/components/") ||
+    pathname === "/plan/training-plans" ||
+    pathname.startsWith("/plan/training-plans/")
   );
 }
 

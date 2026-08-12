@@ -30,12 +30,23 @@ heart_rate,value,80%
 
 Do **not** set `zone` / `target_low` / `target_high` with `relative` pace. Absolute paces still use `target_mode=value` and `target=4:30`.
 
-## Plan library (Settings)
+## Plan library (`/plan/training-plans`)
 
-- **Browse** — preview plan sessions and relative pace refs; rename the plan.
-- **Apply** — shows session list in the window plus a checklist of missing race-pace / FTP / max-HR anchors.
+Dedicated pages (not Settings) for reusable session packs:
+
+- **List** — CSV import, create from a calendar date range, apply, clear future, delete.
+- **Editor** (`/plan/training-plans/[id]`) — edit session metadata and structured workout trees (`WorkoutTreeEditor`).
+- **Apply** — copies library sessions onto the calendar; preview lists sessions plus missing race-pace / FTP / max-HR anchors.
 - **Clear future** — removes calendar sessions from this plan from today onward (past stays).
 - **Delete** — removes the library plan; applied calendar sessions stay (untagged).
+
+Settings keeps only a thin link into Training plans.
+
+### Intensity on copy / no auto-sync
+
+- Trees are copied **as stored**: relative targets stay relative; absolute / frozen steps stay absolute.
+- Calendar edits never rewrite the library unless you explicitly **create a plan from a calendar range** (or a later explicit “sync this session” action).
+- Apply stamps `PlannedSession.trainingPlanSessionId` for future adherence analytics (UI not built yet).
 
 ## Mid-plan updates
 

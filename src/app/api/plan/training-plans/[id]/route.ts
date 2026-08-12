@@ -11,8 +11,9 @@ import {
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const renameBodySchema = z.object({
+const patchBodySchema = z.object({
   name: z.string().min(1).max(120),
+  description: z.string().max(2000).nullable().optional(),
 });
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -50,13 +51,18 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const parsed = renameBodySchema.safeParse(body);
+  const parsed = patchBodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
   try {
-    const plan = await renameTrainingPlan(athleteId, id, parsed.data.name);
+    const plan = await renameTrainingPlan(
+      athleteId,
+      id,
+      parsed.data.name,
+      parsed.data.description
+    );
     return NextResponse.json({ plan });
   } catch (e) {
     if (e instanceof TrainingPlanError) {
