@@ -1,7 +1,11 @@
 import { AppSidebarClient } from "@/components/app-sidebar-client";
 import type { SidebarNavItem } from "@/components/app-sidebar-nav";
 import { auth, signOut } from "@/lib/auth";
-import { isPlanBuilderEnabled, isPlanningCalendarEnabled } from "@/lib/features";
+import {
+  isPlanBuilderEnabled,
+  isPlanningCalendarEnabled,
+  isSessionPlanningEnabled,
+} from "@/lib/features";
 
 function SignOutFooter() {
   return (
@@ -26,13 +30,17 @@ export async function AppSidebar() {
   const session = await auth();
   const planBuilderEnabled = isPlanBuilderEnabled();
   const calendarEnabled = isPlanningCalendarEnabled();
+  const sessionPlanningEnabled = isSessionPlanningEnabled();
 
   const items: SidebarNavItem[] = [{ href: "/dashboard", label: "Dashboard" }];
   if (calendarEnabled) {
     items.push({ href: "/calendar", label: "Calendar", scroll: false });
   }
   if (planBuilderEnabled) {
-    items.push({ href: "/plan", label: "Plan" });
+    items.push({ href: "/plan", label: "Seasons" });
+  }
+  if (sessionPlanningEnabled) {
+    items.push({ href: "/library", label: "Workouts" });
   }
   items.push({ href: "/onboarding/day-flags", label: "Workout Signaling" });
   items.push({ href: "/settings", label: "Settings" });

@@ -1932,7 +1932,7 @@ export function PlanningCalendar({
               >
                 Save week as plan
               </Button>
-              <Link href="/plan/training-plans" className="shrink-0">
+              <Link href="/library/training-plans" className="shrink-0">
                 <Button type="button" variant="secondary">
                   Training plans
                 </Button>

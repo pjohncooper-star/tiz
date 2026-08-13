@@ -1,6 +1,10 @@
 ﻿import { format, parseISO } from "date-fns";
 import { normalizeWeekStart } from "@/lib/dates";
-import { isPlanBuilderEnabled, isPlanningCalendarEnabled } from "@/lib/features";
+import {
+  isPlanBuilderEnabled,
+  isPlanningCalendarEnabled,
+  isSessionPlanningEnabled,
+} from "@/lib/features";
 
 function returnPathname(path: string): string {
   return path.split("?")[0] ?? path;
@@ -12,6 +16,8 @@ function isAllowedWorkoutReturnPath(path: string): boolean {
     pathname === "/dashboard" ||
     pathname === "/calendar" ||
     pathname.startsWith("/calendar/") ||
+    pathname === "/library" ||
+    pathname.startsWith("/library/") ||
     pathname === "/plan" ||
     pathname.startsWith("/plan/")
   );
@@ -29,10 +35,12 @@ export function workoutReturnHrefFromStartTime(startTime: string): string {
 export function resolveWorkoutReturnHref(returnTo?: string | null): string {
   const calendar = isPlanningCalendarEnabled();
   const planBuilder = isPlanBuilderEnabled();
+  const sessions = isSessionPlanningEnabled();
 
   if (returnTo && isAllowedWorkoutReturnPath(returnTo)) {
     const pathname = returnPathname(returnTo);
     if (pathname.startsWith("/calendar") && calendar) return returnTo;
+    if (pathname.startsWith("/library") && sessions) return returnTo;
     if (pathname.startsWith("/plan") && planBuilder) return returnTo;
     if (pathname === "/dashboard") return "/dashboard";
   }
@@ -45,6 +53,7 @@ export function resolveWorkoutReturnHref(returnTo?: string | null): string {
 export function workoutReturnLabel(returnHref: string): string {
   const pathname = returnPathname(returnHref);
   if (pathname.startsWith("/calendar")) return "calendar";
+  if (pathname.startsWith("/library")) return "workouts";
   if (pathname.startsWith("/plan")) return "plan";
   return "dashboard";
 }

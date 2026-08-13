@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
+import { trainingPlanHref } from "@/lib/plan/library-href";
 
 type CreateTrainingPlanFromCalendarDialogProps = {
   initialStartDate?: string;
@@ -62,7 +63,7 @@ export function CreateTrainingPlanFromCalendarDialog({
     const planId = data.plan?.id as string | undefined;
     if (planId) {
       onCreated?.(planId);
-      router.push(`/plan/training-plans/${planId}`);
+      router.push(trainingPlanHref(planId));
       router.refresh();
       return;
     }

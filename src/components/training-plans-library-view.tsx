@@ -9,6 +9,7 @@ import {
 import { CalendarCsvImportSettings } from "@/components/calendar-csv-import-settings";
 import { CreateTrainingPlanFromCalendarDialog } from "@/components/create-training-plan-from-calendar-dialog";
 import { Button } from "@/components/ui";
+import { trainingPlanHref } from "@/lib/plan/library-href";
 
 type PlanListItem = ApplyTrainingPlanListItem;
 
@@ -130,7 +131,7 @@ export function TrainingPlansLibraryView() {
             >
               <div>
                 <Link
-                  href={`/plan/training-plans/${plan.id}`}
+                  href={trainingPlanHref(plan.id)}
                   className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-400"
                 >
                   {plan.name}
@@ -141,7 +142,7 @@ export function TrainingPlansLibraryView() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Link href={`/plan/training-plans/${plan.id}`}>
+                <Link href={trainingPlanHref(plan.id)}>
                   <Button type="button" variant="secondary">
                     Edit
                   </Button>
