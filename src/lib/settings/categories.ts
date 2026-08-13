@@ -23,7 +23,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     href: "/settings/training",
     label: "Training & planning",
     description: "Defaults applied when building seasons and training plans.",
-    contents: ["Zone focus", "Training load (ECO)", "Training plans & CSV"],
+    contents: ["Zone focus", "Training load (ECO)"],
   },
   {
     href: "/settings/workouts",

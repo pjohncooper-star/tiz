@@ -37,11 +37,26 @@ describe("resolveWorkoutReturnHref", () => {
   it("falls back to dashboard for unknown paths", () => {
     assert.equal(resolveWorkoutReturnHref("/settings"), "/dashboard");
   });
+
+  it("allows library return paths when session planning is enabled", () => {
+    const prev = process.env.FEATURE_PLANNING_CALENDAR;
+    process.env.FEATURE_PLANNING_CALENDAR = "true";
+    try {
+      assert.equal(resolveWorkoutReturnHref("/library"), "/library");
+    } finally {
+      if (prev === undefined) delete process.env.FEATURE_PLANNING_CALENDAR;
+      else process.env.FEATURE_PLANNING_CALENDAR = prev;
+    }
+  });
 });
 
 describe("workoutReturnLabel", () => {
   it("labels calendar paths", () => {
     assert.equal(workoutReturnLabel("/calendar?week=2026-03-09"), "calendar");
+  });
+
+  it("labels library paths", () => {
+    assert.equal(workoutReturnLabel("/library"), "workouts");
   });
 
   it("labels plan paths", () => {

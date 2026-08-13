@@ -1,13 +1,22 @@
-﻿export function libraryHref(options?: { folderId?: string }): string {
-  const base = "/plan/library";
-  if (!options?.folderId) return base;
-  return `${base}?folder=${encodeURIComponent(options.folderId)}`;
+﻿const LIBRARY_BASE = "/library";
+
+export function libraryHref(options?: { folderId?: string }): string {
+  if (!options?.folderId) return LIBRARY_BASE;
+  return `${LIBRARY_BASE}?folder=${encodeURIComponent(options.folderId)}`;
 }
 
 export function libraryTemplateHref(folderId: string, templateId: string): string {
-  return `/plan/library/${folderId}/${templateId}`;
+  return `${LIBRARY_BASE}/${folderId}/${templateId}`;
 }
 
 export function libraryNewTemplateHref(folderId: string): string {
-  return `/plan/library/${folderId}/new`;
+  return `${LIBRARY_BASE}/${folderId}/new`;
+}
+
+export function trainingPlansHref(): string {
+  return `${LIBRARY_BASE}/training-plans`;
+}
+
+export function trainingPlanHref(id: string): string {
+  return `${LIBRARY_BASE}/training-plans/${id}`;
 }

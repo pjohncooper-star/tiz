@@ -40,6 +40,8 @@ function isTrainingSearchApiPath(pathname: string): boolean {
 
 function isWorkoutLibraryPath(pathname: string): boolean {
   return (
+    pathname === "/library" ||
+    pathname.startsWith("/library/") ||
     pathname === "/plan/library" ||
     pathname.startsWith("/plan/library/") ||
     pathname === "/plan/workouts" ||
