@@ -36,6 +36,7 @@ const updateSchema = z
     tags: workoutTagsSchema.optional(),
     scheduledTimeMinutes: scheduledTimeMinutesSchema.optional(),
     daySortOrder: z.number().int().min(0).max(10_000).optional(),
+    estimatedDurationMinutes: z.number().int().positive().nullable().optional(),
     targetZones: z.record(z.string(), z.number().nonnegative()).nullable().optional(),
     sessionRole: sessionRoleSchema.optional(),
     tizSignalOverride: tizSignalOverrideSchema.optional(),
@@ -101,6 +102,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     tags: tagsInput,
     scheduledTimeMinutes: scheduledTimeMinutesInput,
     daySortOrder: daySortOrderInput,
+    estimatedDurationMinutes,
     targetZones,
     sessionRole,
     tizSignalOverride,
@@ -275,6 +277,14 @@ export async function PATCH(request: Request, context: RouteContext) {
             : {}),
         ...(targetZones !== undefined
           ? { targetZones: targetZones === null ? Prisma.JsonNull : targetZones }
+          : {}),
+        ...(estimatedDurationMinutes !== undefined
+          ? {
+              estimatedDurationMinutes:
+                estimatedDurationMinutes == null
+                  ? null
+                  : nullableMetric(estimatedDurationMinutes) ?? null,
+            }
           : {}),
         ...(clearCompletedOverrides
           ? {

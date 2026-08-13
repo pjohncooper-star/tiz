@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { resolveActivityNumericMetrics } from "@/lib/activity/summary";
 import { calendarDateFromDb } from "@/lib/dates";
 import type { NormalizedStreams } from "@/lib/zones/compute";
-import { sessionPlannedZoneRollup } from "@/lib/plan/rollup";
+import { resolvePlannedDurationMinutes, sessionPlannedZoneRollup } from "@/lib/plan/rollup";
 import type { PaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import { hasSessionCompletionOverride } from "@/lib/plan/session-completion";
 import {
@@ -215,13 +215,13 @@ export function serializePlannedSessions(
       structuredSteps: structuredRaw,
       paceContext,
     });
-    const raceMinutes = s.estimatedDurationMinutes ?? 0;
-    const resolvedPlannedMinutes =
-      raceMinutes > 0
-        ? raceMinutes
-        : rollup.durationMinutes > 0
-          ? rollup.durationMinutes
-          : rollup.totalMinutes;
+    const resolvedPlannedMinutes = resolvePlannedDurationMinutes({
+      discipline: s.discipline,
+      estimatedDurationMinutes: s.estimatedDurationMinutes,
+      targetZones: s.targetZones,
+      structuredSteps: structuredRaw,
+      paceContext,
+    });
     const metrics = resolveSessionMetrics(
       {
         distanceMeters: s.distanceMeters,

@@ -26,7 +26,7 @@ import {
 } from "@/lib/workout/workout-tree";
 import { derivePlannedMetricsFromPlanningSteps } from "@/lib/workout/planned-metrics-from-steps";
 import type { PlannedMetricsTriadValues } from "@/lib/plan/planned-metrics-triad";
-import { sessionBudgetRollup } from "@/lib/plan/rollup";
+import { resolvePlannedDurationMinutes } from "@/lib/plan/rollup";
 import { buildSessionTargetZones, hasTargetZones } from "@/lib/plan/session-target-zones";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
 import type { Discipline, SessionRole, SignalType } from "@prisma/client";
@@ -71,6 +71,7 @@ type PlannedSessionEditorProps = {
   targetPaceSeconds: number | null;
   poolSize: PoolSize | null;
   targetZones: unknown;
+  estimatedDurationMinutes?: number | null;
   hasStructuredWorkout: boolean;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   completed: CompletedSessionSnapshot;
@@ -109,6 +110,7 @@ export function PlannedSessionEditor({
   targetPaceSeconds: initialTargetPaceSeconds,
   poolSize: initialPoolSize,
   targetZones: initialTargetZones,
+  estimatedDurationMinutes: initialEstimatedDurationMinutes = null,
   hasStructuredWorkout: initialHasStructuredWorkout,
   disciplineSettings,
   completed,
@@ -134,7 +136,12 @@ export function PlannedSessionEditor({
 }: PlannedSessionEditorProps) {
   const router = useRouter();
   const returnLabel = sessionReturnLabel(returnHref);
-  const initialBudget = sessionBudgetRollup(initialDiscipline, initialTargetZones);
+  const initialDurationMinutes = resolvePlannedDurationMinutes({
+    discipline: initialDiscipline,
+    estimatedDurationMinutes: initialEstimatedDurationMinutes,
+    targetZones: initialTargetZones,
+    structuredSteps: initialWorkoutTree,
+  });
   const [scheduledDate, setScheduledDate] = useState(initialDate);
   const [scheduledTimeInput, setScheduledTimeInput] = useState(
     () => formatScheduledTimeMinutes(initialScheduledTimeMinutes) ?? ""
@@ -167,8 +174,7 @@ export function PlannedSessionEditor({
   );
   const [metricsFromSteps, setMetricsFromSteps] = useState(initialHasStructuredWorkout);
   const [plannedTriad, setPlannedTriad] = useState<PlannedMetricsTriadValues>(() => ({
-    durationMinutes:
-      initialBudget.durationMinutes > 0 ? initialBudget.durationMinutes : null,
+    durationMinutes: initialDurationMinutes > 0 ? initialDurationMinutes : null,
     distanceMeters: initialDistanceMeters,
     targetSpeedMps: initialTargetSpeedMps,
     targetPaceSeconds: initialTargetPaceSeconds,
@@ -200,7 +206,7 @@ export function PlannedSessionEditor({
     const durationMinutes = totalTreeDurationMinutes(workoutTree.nodes);
     if (discipline === "BIKE") {
       setPlannedTriad((prev) => ({
-        durationMinutes,
+        durationMinutes: durationMinutes > 0 ? durationMinutes : prev.durationMinutes,
         distanceMeters: prev.distanceMeters,
         targetSpeedMps: prev.targetSpeedMps,
         targetPaceSeconds: null,
@@ -321,8 +327,15 @@ export function PlannedSessionEditor({
     targetSpeedMps: number | null;
     targetPaceSeconds: number | null;
     poolSize: PoolSize | null;
+    estimatedDurationMinutes?: number | null;
+    structuredWorkout?: { steps: unknown } | null;
   }) {
-    const budget = sessionBudgetRollup(saved.discipline, saved.targetZones);
+    const durationMinutes = resolvePlannedDurationMinutes({
+      discipline: saved.discipline,
+      estimatedDurationMinutes: saved.estimatedDurationMinutes,
+      targetZones: saved.targetZones,
+      structuredSteps: saved.structuredWorkout?.steps,
+    });
     const nextZones = zoneMinuteValuesFromRecord(parseTargetZones(saved.targetZones));
     setZoneMinutes(nextZones);
     setDistanceMeters(saved.distanceMeters);
@@ -332,7 +345,7 @@ export function PlannedSessionEditor({
       setPoolSize(saved.poolSize);
     }
     setPlannedTriad({
-      durationMinutes: budget.durationMinutes > 0 ? budget.durationMinutes : null,
+      durationMinutes: durationMinutes > 0 ? durationMinutes : null,
       distanceMeters: saved.distanceMeters,
       targetSpeedMps: saved.discipline === "BIKE" ? saved.targetSpeedMps : null,
       targetPaceSeconds: saved.discipline === "BIKE" ? null : saved.targetPaceSeconds,
@@ -367,6 +380,10 @@ export function PlannedSessionEditor({
       targetSpeedMps: discipline === "BIKE" ? plannedTriad.targetSpeedMps : null,
       targetPaceSeconds: discipline === "BIKE" ? null : plannedTriad.targetPaceSeconds,
       poolSize: discipline === "SWIM" ? poolSize : null,
+      estimatedDurationMinutes:
+        plannedTriad.durationMinutes != null && plannedTriad.durationMinutes > 0
+          ? Math.round(plannedTriad.durationMinutes)
+          : null,
     };
 
     if (discipline !== "STRENGTH") {
@@ -440,6 +457,8 @@ export function PlannedSessionEditor({
           targetSpeedMps: number | null;
           targetPaceSeconds: number | null;
           poolSize: PoolSize | null;
+          estimatedDurationMinutes?: number | null;
+          structuredWorkout?: { steps: unknown } | null;
         };
       };
       if (data.session) {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  resolvePlannedDurationMinutes,
   rollupSessions,
   sessionBudgetRollup,
   sessionPlannedZoneRollup,
@@ -170,6 +171,43 @@ describe("workoutZoneRollup", () => {
     assert.equal(rollup.zones["BIKE-1"], 5);
     assert.equal(rollup.durationMinutes, 10);
     assert.equal(rollup.totalMinutes, 10);
+  });
+});
+
+describe("resolvePlannedDurationMinutes", () => {
+  it("prefers estimatedDurationMinutes over zones and workout steps", () => {
+    assert.equal(
+      resolvePlannedDurationMinutes({
+        discipline: "BIKE",
+        estimatedDurationMinutes: 120,
+        targetZones: { "2": 60 },
+        structuredSteps: tempoWorkout,
+      }),
+      120
+    );
+  });
+
+  it("uses zone budget when estimated duration is missing", () => {
+    assert.equal(
+      resolvePlannedDurationMinutes({
+        discipline: "BIKE",
+        estimatedDurationMinutes: null,
+        targetZones: { "2": 45, "3": 15 },
+      }),
+      60
+    );
+  });
+
+  it("uses structured workout duration when estimated and zones are empty", () => {
+    assert.equal(
+      resolvePlannedDurationMinutes({
+        discipline: "BIKE",
+        estimatedDurationMinutes: null,
+        targetZones: null,
+        structuredSteps: tempoWorkout,
+      }),
+      30
+    );
   });
 });
 

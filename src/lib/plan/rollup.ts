@@ -154,6 +154,27 @@ export function sessionPlannedZoneRollup(
   );
 }
 
+/**
+ * Planned duration shown on the calendar and session details:
+ * estimatedDurationMinutes, else structured-workout / zone rollup.
+ */
+export function resolvePlannedDurationMinutes(input: {
+  discipline: Discipline;
+  estimatedDurationMinutes?: number | null;
+  targetZones?: unknown;
+  structuredSteps?: unknown;
+  paceContext?: PaceThresholdContext | null;
+}): number {
+  const estimated = input.estimatedDurationMinutes ?? 0;
+  if (estimated > 0) return estimated;
+  const rollup = sessionPlannedZoneRollup(input.discipline, {
+    targetZones: input.targetZones,
+    structuredSteps: input.structuredSteps,
+    paceContext: input.paceContext,
+  });
+  return rollup.durationMinutes > 0 ? rollup.durationMinutes : rollup.totalMinutes;
+}
+
 /** @deprecated Use sessionPlannedZoneRollup instead. */
 export function sessionZoneRollup(
   discipline: Discipline,
