@@ -254,3 +254,89 @@ export function recomputeTrainingPlanAggregates(
   }
   return { sessionCount, durationDays: maxOffset + 1 };
 }
+
+/** Monday-first column order for the training-plan week grid. */
+export const WEEKDAYS_MON_FIRST: Weekday[] = [
+  "MON",
+  "TUE",
+  "WED",
+  "THU",
+  "FRI",
+  "SAT",
+  "SUN",
+];
+
+export function weekdayIndexMonFirst(weekday: Weekday | string): number {
+  const idx = WEEKDAYS_MON_FIRST.indexOf(weekday as Weekday);
+  return idx >= 0 ? idx : 0;
+}
+
+export function trainingPlanCellForDayOffset(
+  anchorWeekday: Weekday | string,
+  dayOffset: number
+): { week: number; col: number } {
+  const index = weekdayIndexMonFirst(anchorWeekday) + dayOffset;
+  return { week: Math.floor(index / 7), col: index % 7 };
+}
+
+/** Inverse of trainingPlanCellForDayOffset. Null when the cell is before dayOffset 0. */
+export function trainingPlanDayOffsetForCell(
+  anchorWeekday: Weekday | string,
+  week: number,
+  col: number
+): number | null {
+  const dayOffset = week * 7 + col - weekdayIndexMonFirst(anchorWeekday);
+  return dayOffset >= 0 ? dayOffset : null;
+}
+
+export function trainingPlanWeekCount(
+  anchorWeekday: Weekday | string,
+  durationDays: number,
+  maxDayOffset = -1
+): number {
+  const span = Math.max(durationDays, maxDayOffset + 1, 1);
+  return trainingPlanCellForDayOffset(anchorWeekday, span - 1).week + 1;
+}
+
+export type TrainingPlanGridCell<T> = {
+  week: number;
+  col: number;
+  dayOffset: number | null;
+  sessions: T[];
+};
+
+export function buildTrainingPlanWeekGrid<
+  T extends { dayOffset: number; sortOrder: number },
+>(
+  anchorWeekday: Weekday | string,
+  durationDays: number,
+  sessions: T[]
+): TrainingPlanGridCell<T>[][] {
+  const maxOffset = sessions.reduce((m, s) => Math.max(m, s.dayOffset), -1);
+  const weeks = trainingPlanWeekCount(anchorWeekday, durationDays, maxOffset);
+  const byOffset = new Map<number, T[]>();
+  for (const session of sessions) {
+    const list = byOffset.get(session.dayOffset) ?? [];
+    list.push(session);
+    byOffset.set(session.dayOffset, list);
+  }
+  for (const list of byOffset.values()) {
+    list.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  const rows: TrainingPlanGridCell<T>[][] = [];
+  for (let week = 0; week < weeks; week++) {
+    const row: TrainingPlanGridCell<T>[] = [];
+    for (let col = 0; col < 7; col++) {
+      const dayOffset = trainingPlanDayOffsetForCell(anchorWeekday, week, col);
+      row.push({
+        week,
+        col,
+        dayOffset,
+        sessions: dayOffset == null ? [] : (byOffset.get(dayOffset) ?? []),
+      });
+    }
+    rows.push(row);
+  }
+  return rows;
+}

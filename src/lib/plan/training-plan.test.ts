@@ -3,11 +3,16 @@ import { describe, it } from "node:test";
 import type { ParsedPlannedSessionImport } from "@/lib/plan/csv-import";
 import {
   buildTrainingPlanDraft,
+  buildTrainingPlanWeekGrid,
   deepCopyWorkoutSteps,
   recomputeTrainingPlanAggregates,
   resolveApplyWindow,
   schedulePlanSessions,
+  trainingPlanCellForDayOffset,
+  trainingPlanDayOffsetForCell,
+  trainingPlanWeekCount,
   weekdayFromDateKey,
+  weekdayIndexMonFirst,
 } from "@/lib/plan/training-plan";
 import { parseDateKey } from "@/lib/dates";
 import {
@@ -199,6 +204,54 @@ describe("recomputeTrainingPlanAggregates", () => {
       sessionCount: 1,
       durationDays: 6,
     });
+  });
+});
+
+describe("training plan week grid mapping", () => {
+  it("indexes weekdays Monday-first", () => {
+    assert.equal(weekdayIndexMonFirst("MON"), 0);
+    assert.equal(weekdayIndexMonFirst("TUE"), 1);
+    assert.equal(weekdayIndexMonFirst("SUN"), 6);
+  });
+
+  it("places dayOffset 0 on the Tuesday column when the plan starts Tuesday", () => {
+    assert.deepEqual(trainingPlanCellForDayOffset("TUE", 0), { week: 0, col: 1 });
+    assert.deepEqual(trainingPlanCellForDayOffset("TUE", 5), { week: 0, col: 6 });
+    assert.deepEqual(trainingPlanCellForDayOffset("TUE", 6), { week: 1, col: 0 });
+  });
+
+  it("places Monday-start offset 0 in the first cell", () => {
+    assert.deepEqual(trainingPlanCellForDayOffset("MON", 0), { week: 0, col: 0 });
+    assert.deepEqual(trainingPlanCellForDayOffset("MON", 7), { week: 1, col: 0 });
+  });
+
+  it("returns null for cells before the plan start", () => {
+    assert.equal(trainingPlanDayOffsetForCell("TUE", 0, 0), null);
+    assert.equal(trainingPlanDayOffsetForCell("TUE", 0, 1), 0);
+    assert.equal(trainingPlanDayOffsetForCell("TUE", 1, 0), 6);
+  });
+
+  it("covers duration spanning into a second week when starting Tuesday", () => {
+    assert.equal(trainingPlanWeekCount("TUE", 10), 2);
+    assert.equal(trainingPlanWeekCount("MON", 7), 1);
+    assert.equal(trainingPlanWeekCount("MON", 8), 2);
+  });
+
+  it("stacks same-day sessions and leaves pre-start Monday empty", () => {
+    const rows = buildTrainingPlanWeekGrid("TUE", 8, [
+      { id: "a", dayOffset: 0, sortOrder: 1, title: "Second" },
+      { id: "b", dayOffset: 0, sortOrder: 0, title: "First" },
+      { id: "c", dayOffset: 6, sortOrder: 0, title: "Next Mon" },
+    ]);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]![0]!.dayOffset, null);
+    assert.equal(rows[0]![0]!.sessions.length, 0);
+    assert.deepEqual(
+      rows[0]![1]!.sessions.map((s) => s.id),
+      ["b", "a"]
+    );
+    assert.equal(rows[1]![0]!.dayOffset, 6);
+    assert.equal(rows[1]![0]!.sessions[0]!.id, "c");
   });
 });
 
