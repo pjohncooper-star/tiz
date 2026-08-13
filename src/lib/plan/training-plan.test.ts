@@ -7,7 +7,9 @@ import {
   deepCopyWorkoutSteps,
   recomputeTrainingPlanAggregates,
   resolveApplyWindow,
+  resolveApplyWindowWithPauses,
   schedulePlanSessions,
+  schedulePlanSessionsWithPauses,
   trainingPlanCellForDayOffset,
   trainingPlanDayOffsetForCell,
   trainingPlanWeekCount,
@@ -183,6 +185,101 @@ describe("schedulePlanSessions", () => {
     assert.deepEqual(
       scheduled.map((s) => s.scheduledDateKey),
       ["2026-08-15", "2026-08-20"]
+    );
+  });
+});
+
+describe("resolveApplyWindowWithPauses", () => {
+  it("end-anchors an 8-week plan plus one pause week so the race date stays put", () => {
+    const window = resolveApplyWindowWithPauses({
+      durationDays: 56,
+      anchorMode: "end",
+      date: "2026-09-27",
+      todayKey: "2026-01-01",
+      pausedWeeks: [{ weekStartDate: "2026-08-24", weekCount: 1 }],
+    });
+    assert.equal(window.appliedDurationDays, 63);
+    assert.equal(window.startDate, "2026-07-27");
+    assert.equal(window.endDate, "2026-09-27");
+    assert.deepEqual(window.pausedMondays, ["2026-08-24"]);
+    assert.equal(window.truncated, false);
+  });
+
+  it("start-anchors by sliding the end later", () => {
+    const window = resolveApplyWindowWithPauses({
+      durationDays: 56,
+      anchorMode: "start",
+      date: "2026-08-03",
+      todayKey: "2026-01-01",
+      pausedWeeks: [{ weekStartDate: "2026-08-24", weekCount: 1 }],
+    });
+    assert.equal(window.startDate, "2026-08-03");
+    assert.equal(window.endDate, "2026-10-04");
+    assert.deepEqual(window.pausedMondays, ["2026-08-24"]);
+  });
+
+  it("drops pause weeks that fall outside the resolved window", () => {
+    const window = resolveApplyWindowWithPauses({
+      durationDays: 14,
+      anchorMode: "end",
+      date: "2026-09-27",
+      todayKey: "2026-01-01",
+      pausedWeeks: [{ weekStartDate: "2026-01-05", weekCount: 1 }],
+    });
+    assert.equal(window.appliedDurationDays, 14);
+    assert.deepEqual(window.pausedMondays, []);
+  });
+});
+
+describe("schedulePlanSessionsWithPauses", () => {
+  it("skips the paused week and keeps weekday alignment", () => {
+    const window = resolveApplyWindowWithPauses({
+      durationDays: 56,
+      anchorMode: "end",
+      date: "2026-09-27",
+      todayKey: "2026-01-01",
+      pausedWeeks: [{ weekStartDate: "2026-08-24", weekCount: 1 }],
+    });
+    const scheduled = schedulePlanSessionsWithPauses(
+      [
+        { dayOffset: 0, sortOrder: 0 },
+        { dayOffset: 1, sortOrder: 0 },
+        { dayOffset: 21, sortOrder: 0 },
+        { dayOffset: 28, sortOrder: 0 },
+        { dayOffset: 55, sortOrder: 0 },
+      ],
+      window,
+      window.pausedMondays
+    );
+    assert.deepEqual(
+      scheduled.map((s) => s.scheduledDateKey),
+      ["2026-07-27", "2026-07-28", "2026-08-17", "2026-08-31", "2026-09-27"]
+    );
+  });
+
+  it("places no sessions on a paused week", () => {
+    const window = resolveApplyWindowWithPauses({
+      durationDays: 14,
+      anchorMode: "start",
+      date: "2026-08-03",
+      todayKey: "2026-01-01",
+      pausedWeeks: [{ weekStartDate: "2026-08-10", weekCount: 1 }],
+    });
+    const scheduled = schedulePlanSessionsWithPauses(
+      [
+        { dayOffset: 0, sortOrder: 0 },
+        { dayOffset: 7, sortOrder: 0 },
+      ],
+      window,
+      window.pausedMondays
+    );
+    assert.equal(scheduled[0]!.scheduledDateKey, "2026-08-03");
+    assert.equal(scheduled[1]!.scheduledDateKey, "2026-08-17");
+    assert.ok(
+      scheduled.every(
+        (s) =>
+          s.scheduledDateKey < "2026-08-10" || s.scheduledDateKey > "2026-08-16"
+      )
     );
   });
 });

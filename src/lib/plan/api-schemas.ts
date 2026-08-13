@@ -477,5 +477,22 @@ export const updateSimpleSeasonSchema = z
     testWeekFlags: z.array(z.boolean()).optional(),
     restWeekTemplateId: z.string().nullable().optional(),
     testWeekTemplateId: z.string().nullable().optional(),
+    trainingPlanAttachment: z
+      .object({
+        trainingPlanId: z.string().min(1),
+        anchorMode: z.enum(["start", "end"]),
+        anchorDate: z.string().regex(DATE_KEY),
+        goalEventId: z.string().nullable().optional(),
+        pausedWeeks: z
+          .array(
+            z.object({
+              weekStartDate: z.string().regex(DATE_KEY),
+              weekCount: z.number().int().min(1).max(8),
+            })
+          )
+          .optional(),
+      })
+      .nullable()
+      .optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

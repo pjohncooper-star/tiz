@@ -549,6 +549,7 @@ model SeasonPlan {
   goalEvents        GoalEvent[]    @relation("SeasonGoalEvents")
   restWeekTemplate  WeeklyScheduleTemplate? @relation("PlanRestTemplate", fields: [restWeekTemplateId], references: [id], onDelete: SetNull)
   testWeekTemplate  WeeklyScheduleTemplate? @relation("PlanTestTemplate", fields: [testWeekTemplateId], references: [id], onDelete: SetNull)
+  trainingPlanAttachments SeasonTrainingPlanAttachment[]
 
   @@index([athleteId, startDate])
   @@index([athleteId, status])
@@ -580,6 +581,7 @@ model GoalEvent {
   primaryForSeason SeasonPlan?       @relation("PrimaryGoalEvent")
   plannedSession   PlannedSession?   @relation("GoalEventPrimarySession", fields: [plannedSessionId], references: [id], onDelete: SetNull)
   calendarSessions PlannedSession[]  @relation("GoalEventCalendarSessions")
+  trainingPlanAttachments SeasonTrainingPlanAttachment[]
 
   @@index([athleteId, date])
   @@index([seasonPlanId])
@@ -719,6 +721,7 @@ model TrainingPlan {
   athlete           Athlete               @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   sessions          TrainingPlanSession[]
   appliedSessions   PlannedSession[]
+  seasonAttachments SeasonTrainingPlanAttachment[]
 
   @@unique([athleteId, name])
   @@index([athleteId, updatedAt])
@@ -747,6 +750,35 @@ model TrainingPlanSession {
   appliedSessions  PlannedSession[]
 
   @@index([trainingPlanId, dayOffset, sortOrder])
+}
+
+/**
+ * Season-owned attachment of a library training plan.
+ * Pause weeks are calendar Mondays (holiday / vacation / work trip), not mutations of the pack.
+ */
+model SeasonTrainingPlanAttachment {
+  id             String   @id @default(cuid())
+  seasonPlanId   String
+  trainingPlanId String
+  /** "start" | "end" */
+  anchorMode     String
+  anchorDate     DateTime @db.Date
+  goalEventId    String?
+  /** `[{ weekStartDate: "yyyy-MM-dd", weekCount: number }]` */
+  pausedWeeks    Json
+  startDate      DateTime @db.Date
+  endDate        DateTime @db.Date
+  truncateOffset Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  seasonPlan   SeasonPlan   @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
+  trainingPlan TrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
+  goalEvent    GoalEvent?   @relation(fields: [goalEventId], references: [id], onDelete: SetNull)
+
+  @@index([seasonPlanId])
+  @@index([trainingPlanId])
+  @@index([goalEventId])
 }
 
 model PlannedSession {

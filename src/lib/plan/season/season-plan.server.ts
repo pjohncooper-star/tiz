@@ -25,6 +25,14 @@ const seasonPlanDetailInclude = {
   },
   weeks: { orderBy: { weekIndex: "asc" as const } },
   goalEvents: true,
+  trainingPlanAttachments: {
+    include: {
+      trainingPlan: {
+        select: { name: true, durationDays: true, sessionCount: true },
+      },
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
 };
 
 export async function listSeasonPlansForAthlete(athleteId: string) {

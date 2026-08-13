@@ -604,6 +604,16 @@ function WeekCells({
         >
           {expanded ? "▼" : "▶"} {week.weekIndex + 1}
         </button>
+        {week.planCoverage === "attached" ? (
+          <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-medium uppercase tracking-wide text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+            Plan
+          </span>
+        ) : null}
+        {week.planCoverage === "paused" ? (
+          <span className="ml-1 rounded bg-zinc-100 px-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            Paused
+          </span>
+        ) : null}
       </td>
       <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">
         {formatWeekDateRange(week.weekStartDate)}

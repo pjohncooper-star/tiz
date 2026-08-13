@@ -74,6 +74,11 @@ import {
   resolveLongWeekFlagsForSeason,
 } from "./long-session-schedule";
 import { resolveTestWeekFlagsForSeason } from "@/lib/plan/calendar/week-template-resolution";
+import {
+  serializeTrainingPlanAttachment,
+  syncSeasonTrainingPlanAttachment,
+  type SeasonTrainingPlanAttachmentWrite,
+} from "@/lib/plan/season/season-training-plan.server";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
@@ -183,6 +188,7 @@ export type UpdateSimpleSeasonInput = {
   testWeekFlags?: boolean[] | null;
   restWeekTemplateId?: string | null;
   testWeekTemplateId?: string | null;
+  trainingPlanAttachment?: SeasonTrainingPlanAttachmentWrite;
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -988,8 +994,9 @@ export async function updateSimpleSeasonPlan(
     planningMode: defaultPlanningMode,
   }));
 
+  const catalog = await loadAthleteZoneFocusCatalog(athleteId);
+
   if (input.recalculate) {
-    const catalog = await loadAthleteZoneFocusCatalog(athleteId);
     weeks = recalculateWeeks(
       weeks,
       zonePhaseSpans,
@@ -1170,6 +1177,41 @@ export async function updateSimpleSeasonPlan(
       await removeGoalEvents(tx, input.removedGoalEvents);
     }
 
+    const existingAttachment = existing.trainingPlanAttachments[0] ?? null;
+    await syncSeasonTrainingPlanAttachment({
+      tx,
+      athleteId,
+      seasonPlanId,
+      existing: existingAttachment
+        ? {
+            startDate: existingAttachment.startDate,
+            endDate: existingAttachment.endDate,
+            truncateOffset: existingAttachment.truncateOffset,
+            trainingPlanId: existingAttachment.trainingPlanId,
+            anchorMode: existingAttachment.anchorMode,
+            anchorDate: existingAttachment.anchorDate,
+            goalEventId: existingAttachment.goalEventId,
+            pausedWeeks: existingAttachment.pausedWeeks,
+          }
+        : null,
+      write: input.trainingPlanAttachment,
+      goalEvents: (
+        await tx.goalEvent.findMany({
+          where: { seasonPlanId },
+          select: { id: true, date: true },
+        })
+      ),
+      seasonStart: bounds.startDate,
+      weeks: weeks.map((week) => ({
+        ...week,
+        weekStartDate: formatDateKey(
+          weekStartDateForIndex(bounds.startDate, week.weekIndex)
+        ),
+      })),
+      zonePhaseSpans,
+      catalog,
+    });
+
     return getSeasonPlanById(athleteId, seasonPlanId, tx);
   });
 }
@@ -1316,6 +1358,9 @@ export function serializeSimpleSeasonPlan(
           disciplines: plan.primaryGoalEvent.disciplines,
           priority: plan.primaryGoalEvent.priority,
         }
+      : null,
+    trainingPlanAttachment: plan.trainingPlanAttachments[0]
+      ? serializeTrainingPlanAttachment(plan.trainingPlanAttachments[0])
       : null,
   };
 }

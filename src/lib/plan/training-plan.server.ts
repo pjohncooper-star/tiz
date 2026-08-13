@@ -20,13 +20,18 @@ import {
   buildTrainingPlanDraft,
   deepCopyWorkoutSteps,
   recomputeTrainingPlanAggregates,
-  resolveApplyWindow,
-  schedulePlanSessions,
+  resolveApplyWindowWithPauses,
+  schedulePlanSessionsWithPauses,
   TRAINING_PLAN_GAP_BLOCK_DAYS,
   TRAINING_PLAN_GAP_WARN_DAYS,
   MAX_TRAINING_PLAN_SESSIONS,
   type ApplyAnchorMode,
+  type PausedWeek,
 } from "@/lib/plan/training-plan";
+import {
+  slotKindFromSessionRole,
+  targetZonesForPlanSession,
+} from "@/lib/plan/season/training-plan-overlay";
 import {
   parseWorkoutTree,
   serializeWorkoutTree,
@@ -961,6 +966,7 @@ export async function previewTrainingPlanApply(
     anchorMode: ApplyAnchorMode;
     date: string;
     todayKey?: string;
+    pausedWeeks?: PausedWeek[];
   }
 ): Promise<ApplyPreview> {
   const plan = await db.trainingPlan.findFirst({
@@ -978,11 +984,12 @@ export async function previewTrainingPlanApply(
   const todayKey = input.todayKey ?? (await requestTodayKey());
   let window;
   try {
-    window = resolveApplyWindow({
+    window = resolveApplyWindowWithPauses({
       durationDays: plan.durationDays,
       anchorMode: input.anchorMode,
       date: input.date,
       todayKey,
+      pausedWeeks: input.pausedWeeks ?? [],
     });
   } catch (e) {
     throw new TrainingPlanError(
@@ -991,7 +998,11 @@ export async function previewTrainingPlanApply(
     );
   }
 
-  const scheduled = schedulePlanSessions(plan.sessions, window);
+  const scheduled = schedulePlanSessionsWithPauses(
+    plan.sessions,
+    window,
+    window.pausedMondays
+  );
   const rangeStart = parseDateKey(window.startDate);
   const rangeEnd = parseDateKey(window.endDate);
   const relativeCtx = await loadAthleteRelativeContext(athleteId);
@@ -1082,6 +1093,10 @@ export async function applyTrainingPlan(
     date: string;
     mode: ApplyMode;
     todayKey?: string;
+    pausedWeeks?: PausedWeek[];
+    tx?: Prisma.TransactionClient;
+    /** Extra dates to clear on replace (previous attachment window). */
+    replaceRange?: { startDate: string; endDate: string };
   }
 ): Promise<{
   created: number;
@@ -1093,9 +1108,11 @@ export async function applyTrainingPlan(
     anchorMode: input.anchorMode,
     date: input.date,
     todayKey: input.todayKey,
+    pausedWeeks: input.pausedWeeks,
   });
 
-  const plan = await db.trainingPlan.findFirst({
+  const client = input.tx ?? db;
+  const plan = await client.trainingPlan.findFirst({
     where: { id: planId, athleteId },
     include: {
       sessions: {
@@ -1108,16 +1125,29 @@ export async function applyTrainingPlan(
   }
 
   const todayKey = input.todayKey ?? (await requestTodayKey());
-  const window = resolveApplyWindow({
+  const window = resolveApplyWindowWithPauses({
     durationDays: plan.durationDays,
     anchorMode: input.anchorMode,
     date: input.date,
     todayKey,
+    pausedWeeks: input.pausedWeeks ?? [],
   });
 
-  const scheduled = schedulePlanSessions(plan.sessions, window);
-  const rangeStart = parseDateKey(window.startDate);
-  const rangeEnd = parseDateKey(window.endDate);
+  const scheduled = schedulePlanSessionsWithPauses(
+    plan.sessions,
+    window,
+    window.pausedMondays
+  );
+  const rangeStart = parseDateKey(
+    input.replaceRange && input.replaceRange.startDate < window.startDate
+      ? input.replaceRange.startDate
+      : window.startDate
+  );
+  const rangeEnd = parseDateKey(
+    input.replaceRange && input.replaceRange.endDate > window.endDate
+      ? input.replaceRange.endDate
+      : window.endDate
+  );
 
   const sessionByKey = new Map(
     plan.sessions.map((s) => [`${s.dayOffset}:${s.sortOrder}`, s])
@@ -1126,7 +1156,7 @@ export async function applyTrainingPlan(
   let removed = 0;
   let structured = 0;
 
-  await db.$transaction(async (tx) => {
+  const run = async (tx: Prisma.TransactionClient) => {
     if (input.mode === "replace") {
       const deleted = await tx.plannedSession.deleteMany({
         where: {
@@ -1145,9 +1175,17 @@ export async function applyTrainingPlan(
       if (!planSession) continue;
 
       const stepsCopy = deepCopyWorkoutSteps(planSession.steps);
+      const overlaySession = {
+        scheduledDateKey: slot.scheduledDateKey,
+        discipline: planSession.discipline,
+        sessionRole: planSession.sessionRole,
+        estimatedDurationMinutes: planSession.estimatedDurationMinutes,
+        steps: stepsCopy,
+      };
+      const targetZones = targetZonesForPlanSession(overlaySession);
       const zoneAllocationMissing = computeZoneAllocationMissing(
         planSession.discipline,
-        null,
+        targetZones,
         planSession.estimatedDurationMinutes,
         stepsCopy
       );
@@ -1165,10 +1203,15 @@ export async function applyTrainingPlan(
           targetSpeedMps: planSession.targetSpeedMps,
           targetPaceSeconds: planSession.targetPaceSeconds,
           poolSize: planSession.poolSize,
+          targetZones:
+            targetZones == null
+              ? undefined
+              : (targetZones as Prisma.InputJsonValue),
           zoneAllocationMissing,
           source: "PLAN",
           trainingPlanId: planId,
           trainingPlanSessionId: planSession.id,
+          poolSlotKind: slotKindFromSessionRole(planSession.sessionRole),
         },
       });
 
@@ -1184,7 +1227,13 @@ export async function applyTrainingPlan(
         structured += 1;
       }
     }
-  });
+  };
+
+  if (input.tx) {
+    await run(input.tx);
+  } else {
+    await db.$transaction(run);
+  }
 
   return {
     created: scheduled.length,

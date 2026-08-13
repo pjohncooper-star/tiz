@@ -21,7 +21,12 @@ import {
 import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
 import { resolveTestWeekFlagsForSeason } from "@/lib/plan/calendar/week-template-resolution";
 import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planner-timeline";
+import { SimplePlannerTrainingPlanPane } from "@/components/simple-planner/simple-planner-training-plan-pane";
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
+import {
+  previewAttachedPlanWeeks,
+  type AttachedPlanSessionDraft,
+} from "@/lib/plan/season/preview-attached-plan";
 import {
   emptyRace,
   DEFAULT_PHASE_SESSIONS,
@@ -95,6 +100,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
       ...week,
       zoneMinutes: week.zoneMinutes ?? {},
     })),
+    trainingPlanAttachment: season.trainingPlanAttachment ?? null,
   };
 
   const preview = previewPhaseAwareVolumes({
@@ -150,6 +156,7 @@ function volumePreviewSignature(season: SimpleSeason): string {
 type PlannerSectionId =
   | "season"
   | "races"
+  | "trainingPlan"
   | "phases"
   | "seasonDefaults"
   | "weeklyVolume";
@@ -157,6 +164,7 @@ type PlannerSectionId =
 const DEFAULT_SECTION_EXPANDED: Record<PlannerSectionId, boolean> = {
   season: true,
   races: true,
+  trainingPlan: true,
   phases: true,
   seasonDefaults: false,
   weeklyVolume: true,
@@ -188,6 +196,12 @@ function revertSection(
         ...draft,
         primaryGoalEvent: baseline.primaryGoalEvent,
         goalEvents: baseline.goalEvents,
+      };
+    case "trainingPlan":
+      return {
+        ...draft,
+        trainingPlanAttachment: baseline.trainingPlanAttachment,
+        weeks: baseline.weeks,
       };
     case "seasonDefaults":
       return {
@@ -365,6 +379,12 @@ export function SimplePlannerView({
   const lastVolumeSignatureRef = useRef<string | null>(null);
   const seasonRef = useRef(season);
   seasonRef.current = season;
+  const [libraryPlans, setLibraryPlans] = useState<
+    Array<{ id: string; name: string; durationDays: number; sessionCount: number }>
+  >([]);
+  const [attachedPlanSessions, setAttachedPlanSessions] = useState<
+    AttachedPlanSessionDraft[]
+  >([]);
 
   const volumeSignature = season ? volumePreviewSignature(season) : null;
 
@@ -445,6 +465,44 @@ export function SimplePlannerView({
     })();
   }, []);
 
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/plan/training-plans");
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        plans?: Array<{
+          id: string;
+          name: string;
+          durationDays: number;
+          sessionCount: number;
+        }>;
+      };
+      setLibraryPlans(data.plans ?? []);
+    })();
+  }, []);
+
+  const attachedPlanId = season?.trainingPlanAttachment?.trainingPlanId ?? null;
+
+  useEffect(() => {
+    if (!attachedPlanId) {
+      setAttachedPlanSessions([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch(`/api/plan/training-plans/${attachedPlanId}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        plan?: { sessions?: AttachedPlanSessionDraft[] };
+      };
+      if (cancelled) return;
+      setAttachedPlanSessions(data.plan?.sessions ?? []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attachedPlanId]);
+
   const racesByPriority = useMemo(() => {
     if (!season) {
       return { a: emptyRace("A"), b: [] as SimpleGoalEvent[], c: [] as SimpleGoalEvent[] };
@@ -459,6 +517,20 @@ export function SimplePlannerView({
       c: season.goalEvents.filter((event) => event.priority === "C"),
     };
   }, [season]);
+
+  const attachedPlanPreview = useMemo(() => {
+    if (!season?.trainingPlanAttachment) {
+      return { weeks: season?.weeks ?? [], window: null };
+    }
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    return previewAttachedPlanWeeks(
+      season.weeks,
+      season.trainingPlanAttachment,
+      attachedPlanSessions,
+      todayKey
+    );
+  }, [season, attachedPlanSessions]);
 
   async function saveSeason(
     payload: Record<string, unknown>,
@@ -536,6 +608,20 @@ export function SimplePlannerView({
               date,
               disciplines,
             })),
+          ...extra,
+        };
+      case "trainingPlan":
+        return {
+          trainingPlanAttachment: season.trainingPlanAttachment
+            ? {
+                trainingPlanId: season.trainingPlanAttachment.trainingPlanId,
+                anchorMode: season.trainingPlanAttachment.anchorMode,
+                anchorDate: season.trainingPlanAttachment.anchorDate,
+                goalEventId: season.trainingPlanAttachment.goalEventId,
+                pausedWeeks: season.trainingPlanAttachment.pausedWeeks,
+              }
+            : null,
+          recalculate: true,
           ...extra,
         };
       case "seasonDefaults":
@@ -635,7 +721,7 @@ export function SimplePlannerView({
 
   function serializeWeeksForSave(weeks: SimpleSeason["weeks"]) {
     return weeks.map(
-      ({ weekStartDate: _d, totalHours: _t, ...week }) => week
+      ({ weekStartDate: _d, totalHours: _t, planCoverage: _p, ...week }) => week
     );
   }
 
@@ -676,6 +762,15 @@ export function SimplePlannerView({
           date,
           disciplines,
         })),
+      trainingPlanAttachment: season.trainingPlanAttachment
+        ? {
+            trainingPlanId: season.trainingPlanAttachment.trainingPlanId,
+            anchorMode: season.trainingPlanAttachment.anchorMode,
+            anchorDate: season.trainingPlanAttachment.anchorDate,
+            goalEventId: season.trainingPlanAttachment.goalEventId,
+            pausedWeeks: season.trainingPlanAttachment.pausedWeeks,
+          }
+        : null,
       ...extra,
     };
   }
@@ -772,12 +867,13 @@ export function SimplePlannerView({
       <SimplePlannerTimeline
         sticky
         seasonStart={season.startDate}
-        weeks={season.weeks}
+        weeks={attachedPlanPreview.weeks}
         phases={season.phases}
         goalEvents={season.goalEvents}
         primaryGoalEvent={season.primaryGoalEvent}
         selectedWeekIndex={selectedWeekIndex}
         onSelectWeek={handleSelectWeek}
+        planWindow={attachedPlanPreview.window}
         previewHint={
           volumePreviewDirty
             ? "Live preview — Save & recalculate to persist volume"
@@ -789,7 +885,7 @@ export function SimplePlannerView({
         <Card title="Fitness / fatigue (season TiZ → ECO)">
           <FitnessFatigueChart
             seasonId={season.id}
-            draftWeeks={season.weeks.map((week) => ({
+            draftWeeks={attachedPlanPreview.weeks.map((week) => ({
               weekStartDate: week.weekStartDate,
               zoneMinutes: week.zoneMinutes,
               isRestWeek: week.isRestWeek,
@@ -909,6 +1005,25 @@ export function SimplePlannerView({
               ],
             });
           }}
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Training plan"
+        expanded={expandedSections.trainingPlan}
+        onToggle={() => toggleSection("trainingPlan")}
+        actions={sectionActions("trainingPlan", "Save & apply")}
+      >
+        <SimplePlannerTrainingPlanPane
+          attachment={season.trainingPlanAttachment ?? null}
+          plans={libraryPlans}
+          goalEvents={season.goalEvents}
+          weeks={season.weeks}
+          selectedWeekIndex={selectedWeekIndex}
+          previewWindow={attachedPlanPreview.window}
+          onChange={(trainingPlanAttachment) =>
+            setSeason({ ...season, trainingPlanAttachment })
+          }
         />
       </CollapsibleSection>
 
@@ -1038,14 +1153,26 @@ export function SimplePlannerView({
           </Button>
         </div>
         <SimplePlannerWeekTable
-          weeks={season.weeks}
+          weeks={attachedPlanPreview.weeks}
           phases={season.phases}
           testWeekFlags={season.testWeekFlags ?? []}
           onTestWeekFlagsChange={(testWeekFlags) => setSeason({ ...season, testWeekFlags })}
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={handleSelectPhase}
           highlightedWeekIndex={selectedWeekIndex}
-          onWeeksChange={(weeks) => setSeason({ ...season, weeks })}
+          onWeeksChange={(nextWeeks) => {
+            const nextByIndex = new Map(
+              nextWeeks.map((week) => [week.weekIndex, week])
+            );
+            setSeason({
+              ...season,
+              weeks: season.weeks.map((week) => {
+                const next = nextByIndex.get(week.weekIndex);
+                if (!next) return week;
+                return { ...week, isRestWeek: next.isRestWeek };
+              }),
+            });
+          }}
           onPhasesChange={(phases) => setSeason({ ...season, phases })}
         />
       </CollapsibleSection>

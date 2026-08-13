@@ -326,6 +326,32 @@ export async function materializeSeasonTemplates(
   let weeksSkipped = 0;
 
   await db.$transaction(async (tx) => {
+    const phaseStart = plan.weeks.find(
+      (week) => week.weekIndex === targetSpan.startWeekIndex
+    );
+    const phaseEnd = plan.weeks.find(
+      (week) => week.weekIndex === targetSpan.endWeekIndex
+    );
+    const planSessionKeys = new Set<string>();
+    if (phaseStart && phaseEnd) {
+      const planRows = await tx.plannedSession.findMany({
+        where: {
+          athleteId,
+          source: "PLAN",
+          scheduledDate: {
+            gte: phaseStart.weekStartDate,
+            lte: parseDateKey(
+              format(addDays(phaseEnd.weekStartDate, 6), "yyyy-MM-dd")
+            ),
+          },
+        },
+        select: { scheduledDate: true, discipline: true },
+      });
+      for (const row of planRows) {
+        planSessionKeys.add(`${formatDateKey(row.scheduledDate)}:${row.discipline}`);
+      }
+    }
+
     for (const weekPlan of weekPlans) {
       if (weekPlan.sessions.length === 0) continue;
 
@@ -356,6 +382,8 @@ export async function materializeSeasonTemplates(
       }
 
       for (const session of weekPlan.sessions) {
+        const collisionKey = `${session.scheduledDateKey}:${session.discipline}`;
+        if (planSessionKeys.has(collisionKey)) continue;
         const targetZones =
           !session.suppressTiz &&
           session.durationMinutes &&

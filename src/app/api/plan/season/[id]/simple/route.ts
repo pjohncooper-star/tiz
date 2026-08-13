@@ -11,6 +11,7 @@ import {
 } from "@/lib/plan/season/simple-planner.server";
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
+import { TrainingPlanError } from "@/lib/plan/training-plan.server";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -92,6 +93,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       testWeekFlags: data.testWeekFlags,
       restWeekTemplateId: data.restWeekTemplateId,
       testWeekTemplateId: data.testWeekTemplateId,
+      trainingPlanAttachment: data.trainingPlanAttachment,
     });
 
     if (!plan) {
@@ -102,7 +104,12 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update season";
-    const status = message.includes("not found") ? 404 : 409;
+    const status =
+      err instanceof TrainingPlanError
+        ? err.status
+        : message.includes("not found")
+          ? 404
+          : 409;
     return NextResponse.json({ error: message }, { status });
   }
 }

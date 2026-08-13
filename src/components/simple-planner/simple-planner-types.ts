@@ -90,6 +90,8 @@ export type SimplePhase = {
   runStepHours?: number | null;
 };
 
+export type PlanWeekCoverage = "attached" | "paused";
+
 export type SimpleWeek = {
   weekIndex: number;
   weekStartDate: string;
@@ -104,6 +106,7 @@ export type SimpleWeek = {
   longRideMinutes?: number;
   longRunMinutes?: number;
   longSessionZoneMinutes?: ZoneMinutes;
+  planCoverage?: PlanWeekCoverage | null;
 };
 
 export type SimpleSeason = {
@@ -126,6 +129,23 @@ export type SimpleSeason = {
   testWeekFlags?: boolean[];
   restWeekTemplateId?: string | null;
   testWeekTemplateId?: string | null;
+  trainingPlanAttachment?: SimpleTrainingPlanAttachment | null;
+};
+
+export type SimpleTrainingPlanAttachment = {
+  id?: string;
+  trainingPlanId: string;
+  trainingPlanName: string;
+  durationDays: number;
+  sessionCount: number;
+  anchorMode: "start" | "end";
+  anchorDate: string;
+  goalEventId: string | null;
+  pausedWeeks: Array<{ weekStartDate: string; weekCount: number }>;
+  startDate: string | null;
+  endDate: string | null;
+  truncateOffset?: number;
+  truncated?: boolean;
 };
 
 export type { PoolSlotKind, WeekSlotBudgets };

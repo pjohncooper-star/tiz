@@ -2,6 +2,7 @@ import type { Discipline, SessionRole, Weekday } from "@prisma/client";
 import {
   addDaysToDateKey,
   daysBetweenDateKeys,
+  mondayWeekStartKey,
 } from "@/lib/dates";
 import type { PoolSize } from "@/lib/units/discipline-settings";
 import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
@@ -84,6 +85,17 @@ export type ScheduledPlanSession = {
   scheduledDateKey: string;
   dayOffset: number;
   sortOrder: number;
+};
+
+/** Calendar week(s) to skip when mapping a plan onto dates (holiday / vacation / trip). */
+export type PausedWeek = {
+  weekStartDate: string;
+  weekCount: number;
+};
+
+export type ApplyWindowWithPausesResult = ApplyWindowResult & {
+  pausedMondays: string[];
+  planDurationDays: number;
 };
 
 export function weekdayFromDateKey(dateKey: string): Weekday {
@@ -230,6 +242,135 @@ export function schedulePlanSessions(
         window.startDate,
         s.dayOffset - window.truncateOffset
       ),
+    }));
+}
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export function parsePausedWeeks(raw: unknown): PausedWeek[] {
+  if (!Array.isArray(raw)) return [];
+  const out: PausedWeek[] = [];
+  for (const row of raw) {
+    if (typeof row === "string" && DATE_KEY_RE.test(row)) {
+      out.push({ weekStartDate: mondayWeekStartKey(row), weekCount: 1 });
+      continue;
+    }
+    if (!row || typeof row !== "object") continue;
+    const rec = row as Record<string, unknown>;
+    const start =
+      typeof rec.weekStartDate === "string" ? rec.weekStartDate : null;
+    if (!start || !DATE_KEY_RE.test(start)) continue;
+    const count = Number(rec.weekCount ?? 1);
+    if (!Number.isInteger(count) || count < 1) continue;
+    out.push({ weekStartDate: mondayWeekStartKey(start), weekCount: count });
+  }
+  return out;
+}
+
+/** Expand pause rows into unique Monday keys, sorted. */
+export function expandPausedWeekStarts(pausedWeeks: PausedWeek[]): string[] {
+  const mondays = new Set<string>();
+  for (const pause of pausedWeeks) {
+    const start = mondayWeekStartKey(pause.weekStartDate);
+    for (let i = 0; i < pause.weekCount; i++) {
+      mondays.add(addDaysToDateKey(start, i * 7));
+    }
+  }
+  return [...mondays].sort();
+}
+
+function pauseFullyInsideWindow(
+  monday: string,
+  window: ApplyWindowResult
+): boolean {
+  const sunday = addDaysToDateKey(monday, 6);
+  return monday >= window.startDate && sunday <= window.endDate;
+}
+
+/**
+ * Expand plan duration by paused weeks, then resolve the apply window.
+ * End-anchor keeps the end date; start slides earlier. Pauses outside the
+ * resolved window are dropped.
+ */
+export function resolveApplyWindowWithPauses(input: {
+  durationDays: number;
+  anchorMode: ApplyAnchorMode;
+  date: string;
+  todayKey: string;
+  pausedWeeks?: PausedWeek[];
+}): ApplyWindowWithPausesResult {
+  const planDurationDays = input.durationDays;
+  if (planDurationDays < 1) {
+    throw new Error("durationDays must be >= 1");
+  }
+
+  let pausedMondays = expandPausedWeekStarts(input.pausedWeeks ?? []);
+  for (let i = 0; i < 8; i++) {
+    const expandedDays = planDurationDays + pausedMondays.length * 7;
+    if (expandedDays > MAX_TRAINING_PLAN_DURATION_DAYS) {
+      throw new Error(
+        `Training plan may span at most ${MAX_TRAINING_PLAN_DURATION_DAYS} days (26 weeks) after pause weeks`
+      );
+    }
+    const window = resolveApplyWindow({
+      durationDays: expandedDays,
+      anchorMode: input.anchorMode,
+      date: input.date,
+      todayKey: input.todayKey,
+    });
+    const inside = pausedMondays.filter((monday) =>
+      pauseFullyInsideWindow(monday, window)
+    );
+    if (inside.length === pausedMondays.length) {
+      return { ...window, pausedMondays: inside, planDurationDays };
+    }
+    pausedMondays = inside;
+  }
+
+  const window = resolveApplyWindow({
+    durationDays: planDurationDays + pausedMondays.length * 7,
+    anchorMode: input.anchorMode,
+    date: input.date,
+    todayKey: input.todayKey,
+  });
+  return { ...window, pausedMondays, planDurationDays };
+}
+
+/**
+ * Map plan sessions onto dates, skipping paused Monday–Sunday weeks.
+ * Day-of-week alignment is preserved because pauses are full weeks.
+ */
+export function schedulePlanSessionsWithPauses(
+  sessions: Array<{ dayOffset: number; sortOrder: number }>,
+  window: ApplyWindowResult,
+  pausedMondays: string[] = []
+): ScheduledPlanSession[] {
+  if (pausedMondays.length === 0) {
+    return schedulePlanSessions(sessions, window);
+  }
+
+  const paused = new Set(pausedMondays);
+  const offsetToDate = new Map<number, string>();
+  let date = window.startDate;
+  let offset = window.truncateOffset;
+
+  while (date <= window.endDate) {
+    const monday = mondayWeekStartKey(date);
+    if (paused.has(monday)) {
+      date = addDaysToDateKey(date, 1);
+      continue;
+    }
+    offsetToDate.set(offset, date);
+    offset += 1;
+    date = addDaysToDateKey(date, 1);
+  }
+
+  return sessions
+    .filter((s) => offsetToDate.has(s.dayOffset))
+    .map((s) => ({
+      dayOffset: s.dayOffset,
+      sortOrder: s.sortOrder,
+      scheduledDateKey: offsetToDate.get(s.dayOffset)!,
     }));
 }
 

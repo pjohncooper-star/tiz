@@ -2,14 +2,20 @@
 
 import { format, parseISO } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
-import { parseDateKey } from "@/lib/dates";
+import { addDaysToDateKey, mondayWeekStartKey, parseDateKey } from "@/lib/dates";
 import {
   buildRaceMarkersFromGoalEvents,
   goalEventsForRaceMarkers,
 } from "@/lib/plan/season/preview-race-markers";
 import { monthTicksForWeeks } from "@/lib/plan/season/season-dates";
 import { isAssignedPhase, phaseForWeekIndex } from "@/lib/plan/season/phase-span-utils";
-import type { SimpleGoalEvent, SimplePhase, SimpleWeek } from "./simple-planner-types";
+import type { ApplyWindowWithPausesResult } from "@/lib/plan/training-plan";
+import type {
+  PlanWeekCoverage,
+  SimpleGoalEvent,
+  SimplePhase,
+  SimpleWeek,
+} from "./simple-planner-types";
 
 const DISCIPLINE_COLORS = {
   swim: "#38bdf8",
@@ -32,6 +38,7 @@ type SimplePlannerTimelineProps = {
   onSelectWeek: (weekIndex: number) => void;
   sticky?: boolean;
   previewHint?: string | null;
+  planWindow?: ApplyWindowWithPausesResult | null;
 };
 
 function readCollapsedDefault(): boolean {
@@ -56,6 +63,7 @@ export function SimplePlannerTimeline({
   onSelectWeek,
   sticky = false,
   previewHint = null,
+  planWindow = null,
 }: SimplePlannerTimelineProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [focus, setFocus] = useState<FocusMode>("all");
@@ -103,6 +111,10 @@ export function SimplePlannerTimeline({
   );
 
   const assignedPhases = useMemo(() => phases.filter(isAssignedPhase), [phases]);
+  const planSegments = useMemo(
+    () => planCoverageSegments(weeks, planWindow),
+    [planWindow, weeks]
+  );
 
   const chart = (
     <div className="space-y-2">
@@ -226,6 +238,9 @@ export function SimplePlannerTimeline({
               <LegendSwatch color={DISCIPLINE_COLORS.swim} label="Swim" />
               <LegendSwatch color={DISCIPLINE_COLORS.bike} label="Bike" />
               <LegendSwatch color={DISCIPLINE_COLORS.run} label="Run" />
+              {planSegments.length > 0 ? (
+                <LegendSwatch color="#7c3aed" label="Book plan" />
+              ) : null}
             </div>
           )}
 
@@ -264,6 +279,35 @@ export function SimplePlannerTimeline({
               );
             })}
           </div>
+
+          {planSegments.length > 0 && (
+            <div className="relative h-3">
+              {planSegments.map((segment) => {
+                const widthPct =
+                  ((segment.endWeekIndex - segment.startWeekIndex + 1) / displayWeeks) *
+                  100;
+                const leftPct = (segment.startWeekIndex / displayWeeks) * 100;
+                const paused = segment.kind === "paused";
+                return (
+                  <div
+                    key={`${segment.kind}-${segment.startWeekIndex}`}
+                    className={`absolute top-0 h-3 overflow-hidden rounded-sm ${
+                      paused ? "border border-dashed border-violet-400" : ""
+                    }`}
+                    style={{
+                      left: `${leftPct}%`,
+                      width: `${widthPct}%`,
+                      backgroundColor: paused ? "transparent" : "#7c3aed",
+                      backgroundImage: paused
+                        ? "repeating-linear-gradient(135deg, rgba(124,58,237,0.22) 0 4px, transparent 4px 8px)"
+                        : undefined,
+                    }}
+                    title={paused ? "Plan paused" : "Book plan"}
+                  />
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -368,6 +412,49 @@ function CollapsedSparkline({
   );
 }
 
+function planCoverageSegments(
+  weeks: SimpleWeek[],
+  planWindow: ApplyWindowWithPausesResult | null
+): Array<{ startWeekIndex: number; endWeekIndex: number; kind: PlanWeekCoverage }> {
+  const coverageByIndex = new Map<number, PlanWeekCoverage>();
+  for (const week of weeks) {
+    if (week.planCoverage === "attached" || week.planCoverage === "paused") {
+      coverageByIndex.set(week.weekIndex, week.planCoverage);
+    }
+  }
+  if (coverageByIndex.size === 0 && planWindow) {
+    const paused = new Set(planWindow.pausedMondays);
+    for (const week of weeks) {
+      const monday = mondayWeekStartKey(week.weekStartDate);
+      const weekEnd = addDaysToDateKey(monday, 6);
+      if (monday > planWindow.endDate || weekEnd < planWindow.startDate) continue;
+      coverageByIndex.set(week.weekIndex, paused.has(monday) ? "paused" : "attached");
+    }
+  }
+
+  const segments: Array<{
+    startWeekIndex: number;
+    endWeekIndex: number;
+    kind: PlanWeekCoverage;
+  }> = [];
+  const ordered = [...weeks].sort((a, b) => a.weekIndex - b.weekIndex);
+  for (const week of ordered) {
+    const kind = coverageByIndex.get(week.weekIndex);
+    if (!kind) continue;
+    const last = segments[segments.length - 1];
+    if (last && last.kind === kind && last.endWeekIndex === week.weekIndex - 1) {
+      last.endWeekIndex = week.weekIndex;
+    } else {
+      segments.push({
+        startWeekIndex: week.weekIndex,
+        endWeekIndex: week.weekIndex,
+        kind,
+      });
+    }
+  }
+  return segments;
+}
+
 function weekTooltip(week: SimpleWeek, delta: number | null): string {
   const parts = [
     `W${week.weekIndex + 1}: ${week.totalHours}h total`,
@@ -378,6 +465,8 @@ function weekTooltip(week: SimpleWeek, delta: number | null): string {
     parts.push(`Δ ${sign}${delta.toFixed(2)}h vs prior`);
   }
   if (week.isRestWeek) parts.push("Rest week");
+  if (week.planCoverage === "attached") parts.push("Book plan");
+  if (week.planCoverage === "paused") parts.push("Plan paused");
   return parts.join("\n");
 }
 
