@@ -18,6 +18,7 @@ import {
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema, swimEquipmentSettingsSchema, racePaceAnchorsSettingsSchema } from "@/lib/plan/api-schemas";
+import { signalPreferenceSchema } from "@/lib/settings/api-schemas";
 import { serializePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import {
   serializeZoneFocusCatalog,
@@ -57,18 +58,6 @@ const thresholdSchema = z.object({
   isEstimated: z.boolean(),
 });
 
-const roleSignalValue = z.enum(["POWER", "HEART_RATE", "PACE"]);
-const roleSignalsSchema = z
-  .record(z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]), roleSignalValue)
-  .optional();
-
-const signalPreferenceSchema = z.object({
-  discipline: z.enum(["BIKE", "RUN", "SWIM"]),
-  primarySignal: z.enum(["POWER", "HEART_RATE", "PACE"]),
-  effectiveDate: z.string(),
-  /** Sparse role overrides. Omit to keep existing; pass {} to clear. */
-  roleSignals: roleSignalsSchema,
-});
 
 export async function GET() {
   const session = await auth();
