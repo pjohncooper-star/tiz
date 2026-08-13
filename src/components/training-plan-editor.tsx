@@ -392,24 +392,48 @@ export function TrainingPlanEditor({
         </p>
       ) : null}
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Sessions</h2>
-          <Button type="button" variant="secondary" onClick={() => void addSession()}>
-            Add after last day
-          </Button>
-        </div>
-        <TrainingPlanWeekGrid
-          anchorWeekday={initialPlan.anchorWeekday}
-          durationDays={planMeta.durationDays}
-          sessions={sessions}
-          selectedId={selectedId}
-          onSelectSession={selectSession}
-          onAddSession={(dayOffset) => void addSession(dayOffset)}
-        />
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(14rem,18rem)_1fr]">
+        <aside className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Sessions</h2>
+            <Button type="button" variant="secondary" onClick={() => void addSession()}>
+              Add
+            </Button>
+          </div>
+          <ul className="divide-y divide-zinc-200 border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {sessions.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => selectSession(s.id)}
+                  className={`w-full px-3 py-2 text-left text-sm ${
+                    s.id === selectedId
+                      ? "bg-sky-50 dark:bg-sky-950/40"
+                      : "hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                  }`}
+                >
+                  <span className="font-medium">
+                    Day {s.dayOffset + 1} · {s.discipline}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-zinc-500">
+                    {s.title}
+                    {s.hasStructuredWorkout ? " · structured" : " · skeleton"}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </aside>
 
-      <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-4">
+          <TrainingPlanWeekGrid
+            anchorWeekday={initialPlan.anchorWeekday}
+            durationDays={planMeta.durationDays}
+            sessions={sessions}
+            selectedId={selectedId}
+            onSelectSession={selectSession}
+            onAddSession={(dayOffset) => void addSession(dayOffset)}
+          />
           {!selected ? (
             <p className="text-sm text-zinc-500">Select a session to edit.</p>
           ) : (
@@ -537,6 +561,7 @@ export function TrainingPlanEditor({
             </>
           )}
         </div>
+      </div>
 
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
