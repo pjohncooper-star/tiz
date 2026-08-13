@@ -72,7 +72,6 @@ import {
   type PaceRef,
   type RacePaceAnchors,
 } from "@/lib/workout/relative-pace";
-import { formatPace } from "@/lib/units/pace";
 import {
   moveWorkoutNode,
   getNodeAtPath,
@@ -1087,7 +1086,7 @@ function StepTargetField({
       );
       const resolvedLabel =
         resolved != null
-          ? formatPace(resolved, planDiscipline === "SWIM" ? "100m" : "km")
+          ? stepPaceCanonicalToInput(resolved, planDiscipline, displayUnit, poolSize)
           : "set race paces in Settings";
       return (
         <div className="min-w-0 space-y-1">
