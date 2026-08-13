@@ -47,6 +47,7 @@ export default async function WorkoutDetailPage({
         targetPaceSeconds={viewModel.targetPaceSeconds}
         poolSize={viewModel.poolSize}
         targetZones={viewModel.targetZones}
+        estimatedDurationMinutes={viewModel.estimatedDurationMinutes}
         hasStructuredWorkout={viewModel.hasStructuredWorkout}
         disciplineSettings={viewModel.disciplineSettings}
         completed={viewModel.completed}

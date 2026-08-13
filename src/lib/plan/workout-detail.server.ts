@@ -71,6 +71,7 @@ export type WorkoutDetailViewModel = {
   targetPaceSeconds: number | null;
   poolSize: import("@/lib/units/discipline-settings").PoolSize | null;
   targetZones: unknown;
+  estimatedDurationMinutes: number | null;
   hasStructuredWorkout: boolean;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   displayUnit: DisplayUnit;
@@ -374,7 +375,9 @@ export async function loadWorkoutDetail(
     plannedSession.distanceMeters != null ||
     plannedSession.targetSpeedMps != null ||
     plannedSession.targetPaceSeconds != null ||
-    plannedSession.targetZones != null;
+    plannedSession.targetZones != null ||
+    (plannedSession.estimatedDurationMinutes != null &&
+      plannedSession.estimatedDurationMinutes > 0);
 
   const mode = detectWorkoutDetailMode({
     hasCompleted,
@@ -422,6 +425,7 @@ export async function loadWorkoutDetail(
     targetPaceSeconds: plannedSession.targetPaceSeconds,
     poolSize: plannedSession.poolSize,
     targetZones: plannedSession.targetZones,
+    estimatedDurationMinutes: plannedSession.estimatedDurationMinutes ?? null,
     hasStructuredWorkout: !!plannedSession.structuredWorkout,
     disciplineSettings,
     displayUnit,
