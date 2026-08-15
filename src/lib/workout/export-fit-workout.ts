@@ -23,6 +23,7 @@ import {
 import { walkFitStepManifest } from "@/lib/workout/fit-step-manifest";
 import { formatFitStepNotes } from "@/lib/workout/fit-step-notes";
 import { resolveRelativePaceSeconds } from "@/lib/workout/relative-pace";
+import { resolveRelativePercentTarget } from "@/lib/workout/relative-intensity";
 
 type FitStepMessage = Record<string, unknown>;
 
@@ -231,15 +232,21 @@ function applyLeafTarget(
       return;
     }
     if (target.signal === "heart_rate") {
-      const encoded = encodeFitHeartRatePercent(target.pct);
-      applyCustomRange(
-        msg,
-        "heartRate",
-        "customTargetHeartRateLow",
-        "customTargetHeartRateHigh",
-        encoded,
-        encoded
-      );
+      const bpm = resolveRelativePercentTarget(target, {
+        lthrBpm: thresholds.lthrBpm ?? null,
+        maxHeartRateBpm: thresholds.maxHeartRateBpm ?? null,
+      });
+      if (bpm != null && bpm > 0) {
+        const encoded = encodeFitHeartRate(bpm, thresholds);
+        applyCustomRange(
+          msg,
+          "heartRate",
+          "customTargetHeartRateLow",
+          "customTargetHeartRateHigh",
+          encoded,
+          encoded
+        );
+      }
     }
   }
 }

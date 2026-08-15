@@ -163,7 +163,6 @@ Several scripts in `scripts/` are not wired into `package.json` but are useful w
 - **No Strava disconnect in the UI** — requires removing the connection row.
 - **Strava updates and deletes are ignored** — only new-activity webhooks are handled, so TiZ silently diverges from Strava after an edit.
 - **Duplicate activities outside the fuzzy-match window** — requires `user:dedup-activities`.
-- **Percent-of-heart-rate targets resolve against LTHR, not max heart rate**, and an export error message names a "max heart rate" setting that does not exist.
 - **Activity dates fall back to UTC** when a file carries no offset, so sessions can land on a neighbouring day.
 - **Bulk import is only linked during onboarding** — afterwards athletes need the direct `/onboarding/import` URL.
 - **Stuck imports** — `check-import.mjs`, `finish-import.mjs`, and `reset-import.mjs` are the tools.

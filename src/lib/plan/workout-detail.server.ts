@@ -36,6 +36,7 @@ import {
   type SwimEquipmentCatalog,
 } from "@/lib/swim/equipment-catalog";
 import { parseRacePaceAnchors, type RacePaceAnchors } from "@/lib/workout/relative-pace";
+import { loadRelativeHrAnchors } from "@/lib/workout/relative-hr-context.server";
 
 const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
 
@@ -88,6 +89,8 @@ export type WorkoutDetailViewModel = {
   thresholdFtpWatts: number | null;
   powerZoneBoundaries: number[] | undefined;
   racePaceAnchors: RacePaceAnchors;
+  lthrBpm: number | null;
+  maxHeartRateBpm: number | null;
   swimEquipmentCatalog: SwimEquipmentCatalog;
   primarySignal: SignalType | null;
   /** Effective primary ignoring per-session override (for Default label). */
@@ -273,6 +276,11 @@ export async function loadWorkoutDetail(
   let thresholdFtpWatts: number | null = null;
   let powerZoneBoundaries: number[] | undefined;
   let racePaceAnchors: RacePaceAnchors = {};
+  const hrAnchors = await loadRelativeHrAnchors(
+    athleteId,
+    plannedSession.discipline,
+    plannedSession.scheduledDate
+  );
 
   if (plannedSession.discipline === "RUN" || plannedSession.discipline === "SWIM") {
     const paceProfile = await getThresholdProfileAtDate(
@@ -441,6 +449,8 @@ export async function loadWorkoutDetail(
     thresholdFtpWatts,
     powerZoneBoundaries,
     racePaceAnchors,
+    lthrBpm: hrAnchors.lthrBpm,
+    maxHeartRateBpm: hrAnchors.maxHeartRateBpm,
     swimEquipmentCatalog,
     primarySignal,
     inheritedPrimarySignal,

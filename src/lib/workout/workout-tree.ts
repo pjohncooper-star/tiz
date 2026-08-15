@@ -43,10 +43,11 @@ export type StepTarget = {
   high?: number;
   value?: number;
   /**
-   * Relative pace anchor when mode is "relative" (run/swim).
-   * See `@/lib/workout/relative-pace` — resolve at display/FIT, do not bake.
+   * Relative anchor when mode is "relative".
+   * Pace: threshold / 5k / 10k / half / marathon.
+   * Heart rate: lthr (default) or max.
    */
-  ref?: import("@/lib/workout/relative-pace").PaceRef;
+  ref?: import("@/lib/workout/relative-pace").PaceRef | "lthr" | "max";
   /** Percent of anchor speed (100 = exact). */
   pct?: number;
   refSource?: import("@/lib/workout/relative-pace").PaceRefSource;
@@ -155,7 +156,9 @@ function parseTarget(raw: unknown): StepTarget {
     refRaw === "5k" ||
     refRaw === "10k" ||
     refRaw === "half" ||
-    refRaw === "marathon"
+    refRaw === "marathon" ||
+    refRaw === "lthr" ||
+    refRaw === "max"
       ? refRaw
       : undefined;
   return {
@@ -400,6 +403,8 @@ export type TargetZoneOptions = Pick<
   | "zoneBoundaries"
   | "discipline"
   | "racePaces"
+  | "lthrBpm"
+  | "maxHeartRateBpm"
 >;
 
 /**
@@ -438,7 +443,12 @@ export function targetZoneFromTarget(
   }
 
   if (target.signal === "pace") {
-    if (target.mode === "relative" && target.ref) {
+    if (
+      target.mode === "relative" &&
+      target.ref &&
+      target.ref !== "lthr" &&
+      target.ref !== "max"
+    ) {
       const resolved = resolveRelativePaceSeconds(
         { ref: target.ref, pct: target.pct, refSource: target.refSource },
         {
@@ -490,7 +500,7 @@ function paceSecondsFromLeafTarget(
   options: FlattenPlanningOptions = {}
 ): number | undefined {
   const t = step.target;
-  if (t.mode === "relative" && t.ref) {
+  if (t.mode === "relative" && t.ref && t.ref !== "lthr" && t.ref !== "max") {
     const resolved = resolveRelativePaceSeconds(
       { ref: t.ref, pct: t.pct, refSource: t.refSource },
       {

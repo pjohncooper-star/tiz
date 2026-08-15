@@ -17,6 +17,18 @@ import type {
   WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
 
+export const HR_REFS = ["lthr", "max"] as const;
+export type HrRef = (typeof HR_REFS)[number];
+
+export function isHrRef(raw: string): raw is HrRef {
+  return (HR_REFS as readonly string[]).includes(raw);
+}
+
+/** Bare / omitted HR ref stays LTHR so existing `80%` plans do not retarget. */
+export function hrRefFromTarget(target: Pick<StepTarget, "ref">): HrRef {
+  return target.ref === "max" ? "max" : "lthr";
+}
+
 export type RelativePaceRequirement = {
   ref: PaceRef;
   refSource: PaceRefSource;
@@ -30,11 +42,14 @@ export type MissingRelativeIntensity = {
   needsFtp: boolean;
   /** True when any relative HR step needs max HR. */
   needsMaxHr: boolean;
+  /** True when any relative HR step needs LTHR. */
+  needsLthr: boolean;
 };
 
 export type RelativeThresholdContext = RelativePaceContext & {
   ftpWatts?: number | null;
   maxHeartRateBpm?: number | null;
+  lthrBpm?: number | null;
 };
 
 function walkLeaves(
@@ -109,6 +124,7 @@ export function collectRelativePaceRequirements(
   walkLeaves(nodes, (step) => {
     const t = step.target;
     if (t.mode !== "relative" || t.signal !== "pace" || !t.ref) return;
+    if (t.ref === "lthr" || t.ref === "max") return;
     const refSource: PaceRefSource = t.refSource ?? "fitness";
     const req: RelativePaceRequirement = {
       ref: t.ref,
@@ -131,6 +147,7 @@ export function isRelativePaceResolved(
   if (target.mode !== "relative" || target.signal !== "pace" || !target.ref) {
     return true;
   }
+  if (target.ref === "lthr" || target.ref === "max") return true;
   return (
     resolveRelativePaceSeconds(
       { ref: target.ref, pct: target.pct, refSource: target.refSource },
@@ -146,6 +163,7 @@ export function missingRelativeIntensity(
   const pace: RelativePaceRequirement[] = [];
   let needsFtp = false;
   let needsMaxHr = false;
+  let needsLthr = false;
 
   for (const req of collectRelativePaceRequirements(nodes)) {
     const resolved = resolveRelativePaceSeconds(
@@ -163,12 +181,17 @@ export function missingRelativeIntensity(
       if (ftp == null || !(ftp > 0)) needsFtp = true;
     }
     if (t.signal === "heart_rate") {
-      const maxHr = ctx.maxHeartRateBpm;
-      if (maxHr == null || !(maxHr > 0)) needsMaxHr = true;
+      if (hrRefFromTarget(t) === "max") {
+        const maxHr = ctx.maxHeartRateBpm;
+        if (maxHr == null || !(maxHr > 0)) needsMaxHr = true;
+      } else {
+        const lthr = ctx.lthrBpm;
+        if (lthr == null || !(lthr > 0)) needsLthr = true;
+      }
     }
   });
 
-  return { pace, needsFtp, needsMaxHr };
+  return { pace, needsFtp, needsMaxHr, needsLthr };
 }
 
 export function formatMissingRelativeIntensity(
@@ -187,6 +210,9 @@ export function formatMissingRelativeIntensity(
   if (missing.needsFtp) {
     lines.push("Set bike FTP (Settings → Thresholds)");
   }
+  if (missing.needsLthr) {
+    lines.push("Set LTHR (Settings → Thresholds)");
+  }
   if (missing.needsMaxHr) {
     lines.push("Set max heart rate (Settings → Thresholds)");
   }
@@ -194,10 +220,56 @@ export function formatMissingRelativeIntensity(
   return [...new Set(lines)];
 }
 
-/** Resolve relative power (% FTP) or HR (% max) to absolute watts/bpm. */
+export function parseRelativeHrToken(
+  raw: string
+): { pct: number; ref?: HrRef } | string {
+  const trimmed = raw.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!trimmed) return "relative heart_rate target must be a percent like 80% or 80%|max";
+
+  const pipe = trimmed.match(/^(\d+(?:\.\d+)?)\s*%?\s*[|]\s*([a-z0-9]+)$/);
+  if (pipe) {
+    const pct = Number(pipe[1]);
+    const ref = pipe[2]!;
+    if (!isHrRef(ref)) {
+      return `unknown heart-rate ref "${ref}" (use lthr or max)`;
+    }
+    if (!(pct > 0)) return "heart_rate percent must be positive";
+    return { pct, ref };
+  }
+
+  const ofMatch = trimmed.match(/^(\d+(?:\.\d+)?)\s*%\s*(?:of\s+)?([a-z0-9]+)$/);
+  if (ofMatch) {
+    const pct = Number(ofMatch[1]);
+    const ref = ofMatch[2]!;
+    if (!isHrRef(ref)) {
+      return `unknown heart-rate ref "${ref}" (use lthr or max)`;
+    }
+    if (!(pct > 0)) return "heart_rate percent must be positive";
+    return { pct, ref };
+  }
+
+  const bare = trimmed.match(/^(\d+(?:\.\d+)?)\s*%$/);
+  if (bare) {
+    const pct = Number(bare[1]);
+    if (!(pct > 0)) return "heart_rate percent must be positive";
+    return { pct };
+  }
+
+  return "relative heart_rate target must be a percent like 80%, 80%|lthr, or 80%|max";
+}
+
+export function formatRelativeHrLabel(
+  target: Pick<StepTarget, "pct" | "ref">
+): string {
+  const pct =
+    target.pct != null && target.pct > 0 ? `${target.pct}%` : "100%";
+  return hrRefFromTarget(target) === "max" ? `${pct} max HR` : `${pct} LTHR`;
+}
+
+/** Resolve relative power (% FTP) or HR (% LTHR or % max) to absolute watts/bpm. */
 export function resolveRelativePercentTarget(
-  target: Pick<StepTarget, "signal" | "mode" | "pct" | "value">,
-  ctx: Pick<RelativeThresholdContext, "ftpWatts" | "maxHeartRateBpm">
+  target: Pick<StepTarget, "signal" | "mode" | "pct" | "value" | "ref">,
+  ctx: Pick<RelativeThresholdContext, "ftpWatts" | "maxHeartRateBpm" | "lthrBpm">
 ): number | null {
   if (target.mode !== "relative") return null;
   const pct = target.pct != null && target.pct > 0 ? target.pct : null;
@@ -208,9 +280,10 @@ export function resolveRelativePercentTarget(
     return Math.round((ftp * pct) / 100);
   }
   if (target.signal === "heart_rate") {
-    const maxHr = ctx.maxHeartRateBpm;
-    if (maxHr == null || !(maxHr > 0)) return null;
-    return Math.round((maxHr * pct) / 100);
+    const anchor =
+      hrRefFromTarget(target) === "max" ? ctx.maxHeartRateBpm : ctx.lthrBpm;
+    if (anchor == null || !(anchor > 0)) return null;
+    return Math.round((anchor * pct) / 100);
   }
   return null;
 }
@@ -222,7 +295,7 @@ function freezeLeafTarget(
   const t = step.target;
   if (t.mode !== "relative") return step;
 
-  if (t.signal === "pace" && t.ref) {
+  if (t.signal === "pace" && t.ref && t.ref !== "lthr" && t.ref !== "max") {
     const pace = resolveRelativePaceSeconds(
       { ref: t.ref, pct: t.pct, refSource: t.refSource },
       ctx

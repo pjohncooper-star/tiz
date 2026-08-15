@@ -4,10 +4,12 @@ import {
   collectRelativePaceRequirements,
   freezeRelativeTargetsInTree,
   formatMissingRelativeIntensity,
+  formatRelativeHrLabel,
   missingRelativeIntensity,
+  parseRelativeHrToken,
   resolveRelativePercentTarget,
 } from "@/lib/workout/relative-intensity";
-import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
+import { parseWorkoutTree, type WorkoutTreeDocument } from "@/lib/workout/workout-tree";
 
 const relativeTree: WorkoutTreeDocument = {
   version: 2,
@@ -73,7 +75,7 @@ describe("relative intensity helpers", () => {
     assert.equal(steps[2]!.target.value, 325);
   });
 
-  it("resolves relative percent of FTP / max HR", () => {
+  it("resolves relative percent of FTP / LTHR / max HR", () => {
     assert.equal(
       resolveRelativePercentTarget(
         { signal: "power", mode: "relative", pct: 130 },
@@ -84,9 +86,30 @@ describe("relative intensity helpers", () => {
     assert.equal(
       resolveRelativePercentTarget(
         { signal: "heart_rate", mode: "relative", pct: 80 },
-        { maxHeartRateBpm: 190 }
+        { lthrBpm: 165, maxHeartRateBpm: 190 }
+      ),
+      132
+    );
+    assert.equal(
+      resolveRelativePercentTarget(
+        { signal: "heart_rate", mode: "relative", pct: 80, ref: "lthr" },
+        { lthrBpm: 165, maxHeartRateBpm: 190 }
+      ),
+      132
+    );
+    assert.equal(
+      resolveRelativePercentTarget(
+        { signal: "heart_rate", mode: "relative", pct: 80, ref: "max" },
+        { lthrBpm: 165, maxHeartRateBpm: 190 }
       ),
       152
+    );
+    assert.equal(
+      resolveRelativePercentTarget(
+        { signal: "heart_rate", mode: "relative", pct: 80 },
+        { maxHeartRateBpm: 190 }
+      ),
+      null
     );
     assert.equal(
       resolveRelativePercentTarget(
@@ -95,5 +118,101 @@ describe("relative intensity helpers", () => {
       ),
       null
     );
+  });
+
+  it("reports the missing HR anchor, not the other one", () => {
+    const lthrTree: WorkoutTreeDocument = {
+      version: 2,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "active",
+          duration: { type: "time", value: 600 },
+          target: { signal: "heart_rate", mode: "relative", pct: 80 },
+        },
+      ],
+    };
+    const maxTree: WorkoutTreeDocument = {
+      version: 2,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "active",
+          duration: { type: "time", value: 600 },
+          target: { signal: "heart_rate", mode: "relative", pct: 80, ref: "max" },
+        },
+      ],
+    };
+
+    const missingLthr = missingRelativeIntensity(lthrTree.nodes, {
+      maxHeartRateBpm: 190,
+    });
+    assert.equal(missingLthr.needsLthr, true);
+    assert.equal(missingLthr.needsMaxHr, false);
+    assert.ok(
+      formatMissingRelativeIntensity(missingLthr).some((l) => /LTHR/i.test(l))
+    );
+    assert.ok(
+      !formatMissingRelativeIntensity(missingLthr).some((l) => /max heart rate/i.test(l))
+    );
+
+    const missingMax = missingRelativeIntensity(maxTree.nodes, {
+      lthrBpm: 165,
+    });
+    assert.equal(missingMax.needsLthr, false);
+    assert.equal(missingMax.needsMaxHr, true);
+    assert.ok(
+      formatMissingRelativeIntensity(missingMax).some((l) => /max heart rate/i.test(l))
+    );
+    assert.ok(
+      !formatMissingRelativeIntensity(missingMax).some((l) => /LTHR/i.test(l))
+    );
+  });
+
+  it("parses relative HR tokens and keeps bare percent as LTHR", () => {
+    assert.deepEqual(parseRelativeHrToken("80%"), { pct: 80 });
+    assert.deepEqual(parseRelativeHrToken("80%|lthr"), { pct: 80, ref: "lthr" });
+    assert.deepEqual(parseRelativeHrToken("80% of lthr"), { pct: 80, ref: "lthr" });
+    assert.deepEqual(parseRelativeHrToken("80%|max"), { pct: 80, ref: "max" });
+    assert.deepEqual(parseRelativeHrToken("80% of max"), { pct: 80, ref: "max" });
+    assert.equal(typeof parseRelativeHrToken("80%|ftp"), "string");
+    assert.equal(formatRelativeHrLabel({ pct: 80 }), "80% LTHR");
+    assert.equal(formatRelativeHrLabel({ pct: 80, ref: "max" }), "80% max HR");
+  });
+
+  it("keeps ref max on heart-rate relative steps when parsing a workout tree", () => {
+    const tree = parseWorkoutTree({
+      version: 2,
+      nodes: [
+        {
+          kind: "step",
+          intensity: "active",
+          duration: { type: "time", value: 600 },
+          target: { signal: "heart_rate", mode: "relative", pct: 80, ref: "max" },
+        },
+        {
+          kind: "step",
+          intensity: "active",
+          duration: { type: "time", value: 600 },
+          target: { signal: "heart_rate", mode: "relative", pct: 75, ref: "lthr" },
+        },
+      ],
+    });
+    const [maxStep, lthrStep] = tree.nodes;
+    if (maxStep?.kind !== "step" || lthrStep?.kind !== "step") {
+      throw new Error("expected steps");
+    }
+    assert.deepEqual(maxStep.target, {
+      signal: "heart_rate",
+      mode: "relative",
+      pct: 80,
+      ref: "max",
+    });
+    assert.deepEqual(lthrStep.target, {
+      signal: "heart_rate",
+      mode: "relative",
+      pct: 75,
+      ref: "lthr",
+    });
   });
 });

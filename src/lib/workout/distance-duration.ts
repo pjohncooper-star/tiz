@@ -25,6 +25,10 @@ export type DistanceDurationOptions = {
   zoneCount?: number;
   /** Race-pace anchors for relative pace targets (sec/km or sec/100m). */
   racePaces?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
+  /** Sport LTHR for relative HR (% of LTHR) targets. */
+  lthrBpm?: number | null;
+  /** Athlete max HR for relative HR (% of max) targets. */
+  maxHeartRateBpm?: number | null;
 };
 
 export function effectiveThresholdPaceSeconds(

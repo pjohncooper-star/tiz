@@ -45,6 +45,10 @@ import {
 } from "@/lib/workout/relative-intensity";
 import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
+import {
+  loadAthleteMaxHeartRateBpm,
+  loadDisciplineLthrBpm,
+} from "@/lib/workout/relative-hr-context.server";
 
 export class TrainingPlanError extends Error {
   status: number;
@@ -282,6 +286,7 @@ export type ApplyPreview = {
   missingAnchors: string[];
   needsFtp: boolean;
   needsMaxHr: boolean;
+  needsLthr: boolean;
 };
 
 export type TrainingPlanDetailSession = {
@@ -317,24 +322,30 @@ async function loadAthleteRelativeContext(
   racePaces: ReturnType<typeof parseRacePaceAnchors>;
   ftpWatts: number | null;
   maxHeartRateBpm: number | null;
+  bikeLthrBpm: number | null;
+  runLthrBpm: number | null;
+  swimLthrBpm: number | null;
 }> {
   const asOf = new Date();
-  const [athlete, runPace, swimPace, bikePower, maxHr] = await Promise.all([
-    db.athlete
-      .findUnique({
-        where: { id: athleteId },
-        select: { racePaceAnchors: true },
-      })
-      .catch(() => null),
-    getThresholdProfileAtDate(athleteId, "RUN", "PACE", asOf).catch(() => null),
-    getThresholdProfileAtDate(athleteId, "SWIM", "PACE", asOf).catch(() => null),
-    getThresholdProfileAtDate(athleteId, "BIKE", "POWER", asOf).catch(() => null),
-    getThresholdProfileAtDate(athleteId, "BIKE", "HEART_RATE", asOf).catch(() => null),
-  ]);
+  const [athlete, runPace, swimPace, bikePower, maxHeartRateBpm, bikeLthr, runLthr, swimLthr] =
+    await Promise.all([
+      db.athlete
+        .findUnique({
+          where: { id: athleteId },
+          select: { racePaceAnchors: true },
+        })
+        .catch(() => null),
+      getThresholdProfileAtDate(athleteId, "RUN", "PACE", asOf).catch(() => null),
+      getThresholdProfileAtDate(athleteId, "SWIM", "PACE", asOf).catch(() => null),
+      getThresholdProfileAtDate(athleteId, "BIKE", "POWER", asOf).catch(() => null),
+      loadAthleteMaxHeartRateBpm(athleteId),
+      loadDisciplineLthrBpm(athleteId, "BIKE", asOf),
+      loadDisciplineLthrBpm(athleteId, "RUN", asOf),
+      loadDisciplineLthrBpm(athleteId, "SWIM", asOf),
+    ]);
 
   const runThreshold = runPace?.thresholdValue ?? null;
   const swimThreshold = swimPace?.thresholdValue ?? null;
-  // Prefer run threshold for mixed plans; swim-only plans still get swim threshold via session discipline later.
   const thresholdPaceSeconds =
     runThreshold != null && runThreshold > 0
       ? runThreshold
@@ -351,11 +362,20 @@ async function loadAthleteRelativeContext(
       bikePower?.thresholdValue != null && bikePower.thresholdValue > 0
         ? bikePower.thresholdValue
         : null,
-    maxHeartRateBpm:
-      maxHr?.thresholdValue != null && maxHr.thresholdValue > 0
-        ? maxHr.thresholdValue
-        : null,
+    maxHeartRateBpm,
+    bikeLthrBpm: bikeLthr,
+    runLthrBpm: runLthr,
+    swimLthrBpm: swimLthr,
   };
+}
+
+function lthrForDiscipline(
+  ctx: Awaited<ReturnType<typeof loadAthleteRelativeContext>>,
+  discipline: string
+): number | null {
+  if (discipline === "BIKE") return ctx.bikeLthrBpm;
+  if (discipline === "SWIM") return ctx.swimLthrBpm;
+  return ctx.runLthrBpm;
 }
 
 function relativeLabelsFromSteps(steps: unknown): string[] {
@@ -1022,6 +1042,7 @@ export async function previewTrainingPlanApply(
   const paceByKey = new Map<string, RelativePaceRequirement>();
   let needsFtp = false;
   let needsMaxHr = false;
+  let needsLthr = false;
   const missingPaceByKey = new Map<string, RelativePaceRequirement>();
   const previewSessions: ApplyPreviewSession[] = [];
 
@@ -1036,12 +1057,16 @@ export async function previewTrainingPlanApply(
         for (const req of collectRelativePaceRequirements(tree.nodes)) {
           paceByKey.set(`${req.refSource}:${req.ref}`, req);
         }
-        const miss = missingRelativeIntensity(tree.nodes, relativeCtx);
+        const miss = missingRelativeIntensity(tree.nodes, {
+          ...relativeCtx,
+          lthrBpm: lthrForDiscipline(relativeCtx, planSession.discipline),
+        });
         for (const req of miss.pace) {
           missingPaceByKey.set(`${req.refSource}:${req.ref}`, req);
         }
         if (miss.needsFtp) needsFtp = true;
         if (miss.needsMaxHr) needsMaxHr = true;
+        if (miss.needsLthr) needsLthr = true;
       } catch {
         /* ignore malformed trees */
       }
@@ -1064,6 +1089,7 @@ export async function previewTrainingPlanApply(
     pace: [...missingPaceByKey.values()],
     needsFtp,
     needsMaxHr,
+    needsLthr,
   });
 
   return {
@@ -1082,6 +1108,7 @@ export async function previewTrainingPlanApply(
     missingAnchors,
     needsFtp,
     needsMaxHr,
+    needsLthr,
   };
 }
 

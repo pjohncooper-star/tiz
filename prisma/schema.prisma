@@ -303,6 +303,11 @@ model Athlete {
    * Used to resolve relative pace targets at display/FIT time.
    */
   racePaceAnchors            Json?
+  /**
+   * Athlete-level max HR (bpm) for % of max workout targets and FIT encoding.
+   * Null until the athlete sets it. Distinct from per-sport LTHR thresholds.
+   */
+  maxHeartRateBpm            Int?
   /** When false, ECO load is still computed but never shown in UI or signaling. */
   ecoLoadEnabled             Boolean              @default(false)
   /**

@@ -14,6 +14,7 @@ import {
   type ParsedPlannedSessionImport,
 } from "@/lib/plan/csv-import";
 import { serializeWorkoutTree } from "@/lib/workout/workout-tree";
+import { loadAthleteMaxHeartRateBpm } from "@/lib/workout/relative-hr-context.server";
 
 export class PlannedSessionsCsvImportError extends Error {
   status: number;
@@ -44,21 +45,17 @@ async function loadDisciplineSettings(
 }
 
 export async function loadCsvImportThresholds(athleteId: string): Promise<CsvImportThresholds> {
-  const [power, heartRate] = await Promise.all([
+  const [power, maxHeartRateBpm] = await Promise.all([
     db.thresholdProfile.findFirst({
       where: { athleteId, discipline: "BIKE", signalType: "POWER" },
       orderBy: { effectiveDate: "desc" },
       select: { thresholdValue: true },
     }),
-    db.thresholdProfile.findFirst({
-      where: { athleteId, signalType: "HEART_RATE" },
-      orderBy: { effectiveDate: "desc" },
-      select: { thresholdValue: true },
-    }),
+    loadAthleteMaxHeartRateBpm(athleteId),
   ]);
   return {
     ftpWatts: power?.thresholdValue ?? null,
-    maxHeartRateBpm: heartRate?.thresholdValue ?? null,
+    maxHeartRateBpm,
   };
 }
 

@@ -14,6 +14,7 @@ import {
 } from "@/lib/workout/relative-intensity";
 import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
 import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
+import { loadRelativeHrAnchors } from "@/lib/workout/relative-hr-context.server";
 import type { Prisma } from "@prisma/client";
 export class SessionLinkError extends Error {
   constructor(
@@ -92,7 +93,7 @@ export async function linkActivityToPlannedSession(
       const tree = parseWorkoutTree(rawSteps);
       if (treeHasRelativeTargets(tree.nodes)) {
         const asOf = session.scheduledDate;
-        const [athlete, paceProfile, powerProfile, hrProfile] = await Promise.all([
+        const [athlete, paceProfile, powerProfile, hrAnchors] = await Promise.all([
           db.athlete
             .findUnique({
               where: { id: athleteId },
@@ -108,9 +109,7 @@ export async function linkActivityToPlannedSession(
           getThresholdProfileAtDate(athleteId, "BIKE", "POWER", asOf).catch(
             () => null
           ),
-          getThresholdProfileAtDate(athleteId, "BIKE", "HEART_RATE", asOf).catch(
-            () => null
-          ),
+          loadRelativeHrAnchors(athleteId, session.discipline, asOf),
         ]);
         const frozen = freezeRelativeTargetsInTree(tree, {
           thresholdPaceSeconds: paceProfile?.thresholdValue ?? null,
@@ -119,7 +118,8 @@ export async function linkActivityToPlannedSession(
               null
           ),
           ftpWatts: powerProfile?.thresholdValue ?? null,
-          maxHeartRateBpm: hrProfile?.thresholdValue ?? null,
+          maxHeartRateBpm: hrAnchors.maxHeartRateBpm,
+          lthrBpm: hrAnchors.lthrBpm,
         });
         frozenSteps = serializeWorkoutTree(frozen) as unknown as Prisma.InputJsonValue;
       }

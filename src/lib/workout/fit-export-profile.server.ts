@@ -4,6 +4,7 @@ import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
 import type { FitExportThresholds } from "@/lib/workout/fit-target-codec";
 import { parseSwimEquipmentCatalog } from "@/lib/swim/equipment-catalog";
 import { parseRacePaceAnchors } from "@/lib/workout/relative-pace";
+import { loadRelativeHrAnchors } from "@/lib/workout/relative-hr-context.server";
 
 export async function loadFitExportThresholds(
   athleteId: string,
@@ -19,15 +20,13 @@ export async function loadFitExportThresholds(
     }
   }
 
-  const hr = await getThresholdProfileAtDate(
+  const { lthrBpm, maxHeartRateBpm } = await loadRelativeHrAnchors(
     athleteId,
     discipline,
-    "HEART_RATE",
     at
   );
-  if (hr?.thresholdValue && hr.thresholdValue > 0) {
-    thresholds.maxHeartRateBpm = hr.thresholdValue;
-  }
+  if (lthrBpm != null) thresholds.lthrBpm = lthrBpm;
+  if (maxHeartRateBpm != null) thresholds.maxHeartRateBpm = maxHeartRateBpm;
 
   if (discipline === "RUN" || discipline === "SWIM") {
     const pace = await getThresholdProfileAtDate(

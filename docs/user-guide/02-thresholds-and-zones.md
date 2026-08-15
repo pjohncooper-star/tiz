@@ -25,8 +25,11 @@ Zones are always defined **relative to a threshold**, as a percentage. That is w
 | Run | Heart rate | **RUN LTHR (bpm)** | 170 bpm |
 | Swim | Pace | **SWIM (min/100m)** or **SWIM (min/100yd)** | 2:00 /100 m |
 
+Above the per-sport rows there is a single athlete-level **Max heart rate (bpm)** field. It is optional and is used only when a workout step targets a percent of max HR (`80%|max`). Leave it empty if you do not use those prescriptions. It does **not** change TiZ zone boundaries.
+
 - **FTP** — functional threshold power, the power you could hold for roughly an hour.
-- **LTHR** — lactate threshold heart rate, not max heart rate.
+- **LTHR** — lactate threshold heart rate, not max heart rate. Workout steps written as a bare `80%` heart-rate target resolve against this value.
+- **Max heart rate** — one number for the athlete, not per sport. Used only for `% of max` workout targets.
 - **Run threshold pace** — roughly your one-hour race pace; close to a 15K–half marathon pace for most runners.
 - **Swim threshold pace** — your critical swim speed (CSS), the per-100 pace you could hold for a long continuous swim.
 

@@ -4,6 +4,7 @@ import type { Discipline, SignalType } from "@prisma/client";
 import { RoleSignalOverridesEditor } from "@/components/role-signal-overrides-editor";
 import { ZoneBoundariesEditor } from "@/components/zone-boundaries-editor";
 import { Button, Card, Input, Label, SegmentedControl } from "@/components/ui";
+import { NumberEditorInput } from "@/components/number-editor-input";
 import {
   parseThresholdPaceInput,
   paceInputLabel,
@@ -109,6 +110,8 @@ export function ThresholdsEditor({
   const [preferenceError, setPreferenceError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [maxHeartRateBpm, setMaxHeartRateBpm] = useState<number | null>(null);
+  const [maxHrError, setMaxHrError] = useState("");
 
   useEffect(() => {
     fetch("/api/settings")
@@ -173,8 +176,31 @@ export function ThresholdsEditor({
         });
         setPaceInputs(inputs);
         setThresholds(list);
+        setMaxHeartRateBpm(
+          typeof d.maxHeartRateBpm === "number" && d.maxHeartRateBpm > 0
+            ? d.maxHeartRateBpm
+            : null
+        );
       });
   }, []);
+
+  async function saveMaxHeartRate(value: number | null) {
+    setMaxHrError("");
+    const res = await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "max-heart-rate",
+        data: { maxHeartRateBpm: value },
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setMaxHrError(body.error ?? "Failed to save max heart rate");
+      return;
+    }
+    setMaxHeartRateBpm(value);
+  }
 
   async function saveThreshold(
     t: Threshold,
@@ -380,6 +406,22 @@ export function ThresholdsEditor({
   return (
     <Card title={title}>
       <p className="mb-4 text-sm text-zinc-500">{THRESHOLDS_INTRO}</p>
+      <div className="mb-6 space-y-1">
+        <NumberEditorInput
+          label="Max heart rate (bpm)"
+          value={maxHeartRateBpm}
+          min={80}
+          max={250}
+          nullable
+          onCommit={(v) => void saveMaxHeartRate(v)}
+        />
+        <p className="text-xs text-zinc-500">
+          Used only for % of max workout targets. TiZ zones still use LTHR.
+        </p>
+        {maxHrError ? (
+          <p className="text-sm text-red-600">{maxHrError}</p>
+        ) : null}
+      </div>
       <div className="space-y-6">
         {thresholdsByDiscipline.map(({ discipline, rows }) => {
           const disciplinePrimary =

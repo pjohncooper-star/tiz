@@ -30,6 +30,7 @@ import {
   type WorkoutTreeDocument,
 } from "@/lib/workout/workout-tree";
 import { parseRelativePaceToken } from "@/lib/workout/relative-pace";
+import { parseRelativeHrToken } from "@/lib/workout/relative-intensity";
 
 export const PLANNED_SESSIONS_CSV_HEADERS = [
   "date",
@@ -120,7 +121,7 @@ export type CsvImportRowError = {
 export type CsvImportThresholds = {
   /** Bike FTP in watts — required to resolve power targets like `130%`. */
   ftpWatts?: number | null;
-  /** Max HR in bpm — required to resolve HR targets like `80%`. */
+  /** Athlete max HR in bpm — only required for `80%|max` targets. */
   maxHeartRateBpm?: number | null;
 };
 
@@ -508,11 +509,7 @@ function parseAbsoluteTarget(
       }
       return Math.round((ftp * parsed.value) / 100);
     }
-    const maxHr = thresholds.maxHeartRateBpm;
-    if (maxHr == null || !(maxHr > 0)) {
-      return "heart_rate percent targets require athlete max heart rate";
-    }
-    return Math.round((maxHr * parsed.value) / 100);
+    return "heart_rate range targets must be bpm, not percent";
   }
 
   return Math.round(parsed.value);
@@ -563,16 +560,27 @@ function targetFromDraft(
     if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
       return "value target_mode cannot include zone, target_low, or target_high";
     }
-    // Power/HR percents stay relative (resolve at display/FIT from current FTP / max HR).
+    // Power/HR percents stay relative (resolve at display/FIT from current FTP / LTHR / max HR).
     if (signal === "power" || signal === "heart_rate") {
-      const pctParsed = parsePercentOrNumber(draft.targetRaw);
-      if (pctParsed?.kind === "percent") {
-        if (!(pctParsed.value > 0)) {
-          return signal === "power"
-            ? "power percent must be positive"
-            : "heart_rate percent must be positive";
+      if (signal === "heart_rate") {
+        const hrParsed = parseRelativeHrToken(draft.targetRaw);
+        if (typeof hrParsed !== "string") {
+          return {
+            signal,
+            mode: "relative",
+            pct: hrParsed.pct,
+            ...(hrParsed.ref ? { ref: hrParsed.ref } : {}),
+          };
         }
-        return { signal, mode: "relative", pct: pctParsed.value };
+        if (draft.targetRaw.includes("%")) return hrParsed;
+      } else {
+        const pctParsed = parsePercentOrNumber(draft.targetRaw);
+        if (pctParsed?.kind === "percent") {
+          if (!(pctParsed.value > 0)) {
+            return "power percent must be positive";
+          }
+          return { signal, mode: "relative", pct: pctParsed.value };
+        }
       }
     }
     const value = parseAbsoluteTarget(
@@ -609,11 +617,19 @@ function targetFromDraft(
       };
     }
     if (signal === "power" || signal === "heart_rate") {
+      if (signal === "heart_rate") {
+        const hrParsed = parseRelativeHrToken(draft.targetRaw);
+        if (typeof hrParsed === "string") return hrParsed;
+        return {
+          signal,
+          mode: "relative",
+          pct: hrParsed.pct,
+          ...(hrParsed.ref ? { ref: hrParsed.ref } : {}),
+        };
+      }
       const pctParsed = parsePercentOrNumber(draft.targetRaw);
       if (!pctParsed || pctParsed.kind !== "percent" || !(pctParsed.value > 0)) {
-        return signal === "power"
-          ? "relative power target must be a percent like 130%"
-          : "relative heart_rate target must be a percent like 80%";
+        return "relative power target must be a percent like 130%";
       }
       return { signal, mode: "relative", pct: pctParsed.value };
     }

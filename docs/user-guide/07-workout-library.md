@@ -121,13 +121,13 @@ What you can prescribe depends on the target mode:
 
 **Zone mode** — a dropdown from **Zone 1** to **Zone 7**, or a **Zone range** with two dropdowns. (Zones 6 and 7 exist for workout prescriptions above the five TiZ zones.)
 
-**Heart rate mode** — **HR zone 1** to **HR zone 5**, or a range.
+**Heart rate mode** — **HR zone 1** to **HR zone 5**, or a range. There is also a **Use relative HR…** link for a percent of LTHR or max HR.
 
 **Power mode (bike)** — absolute **Power (W)**, or a low/high watt range.
 
 **Pace mode (run and swim)** — an absolute pace in your display unit (**Pace (min/km)**, **(min/mi)**, **(min/100m)**, **(min/100yd)**), or a range with **Fast** and **Slow** fields. There is also a **Use relative pace…** link, which is the more interesting option.
 
-**Not available in the visual editor:** RPE as a step target (RPE exists only in post-workout self-evaluation), and percent-of-FTP or percent-of-max-HR typed targets (those work through CSV import — see [below](#csv-import)).
+**Not available in the visual editor:** RPE as a step target (RPE exists only in post-workout self-evaluation), and percent-of-FTP typed targets (those work through CSV import — see [below](#csv-import)).
 
 ### Relative pace targets
 
@@ -146,6 +146,21 @@ Percentages are of **speed**, so 95% is slightly *slower* than the anchor and 10
 Why bother: relative targets track your fitness. Run a faster 10k, update **Settings → Thresholds & paces → 10k pace**, and every upcoming workout that referenced 10k pace retargets itself — no re-applying plans, no editing sessions. And once a session is linked to a completed activity, its relative targets are **frozen** to the absolute values that were in effect, so your history doesn't get rewritten every time you get fitter.
 
 Set the anchors in **Settings → Thresholds & paces**. If a goal pace is empty, the fitness pace is used instead.
+
+### Relative heart-rate targets
+
+Instead of an HR zone, a step can target a percent of **LTHR** or **max HR**. Press **Use relative HR…** and set:
+
+| Control | Options |
+| --- | --- |
+| Anchor | **LTHR** (the sport's heart-rate threshold) or **Max HR** (the athlete-level setting) |
+| Percent | Percent of that anchor |
+
+A preview line shows what it resolves to right now, for example `80% LTHR → 132` or `80% max HR → 152`. **Absolute** switches back to HR zones.
+
+Bare `80%` in CSV is the same as LTHR, so existing imported plans do not jump ~20 bpm when you fill in max HR. Use `80%|max` or pick **Max HR** in the editor for coaching-style percent-of-max prescriptions.
+
+Set **Max heart rate** and each sport's **LTHR** in **Settings → Thresholds & paces**. TiZ zones still use LTHR only.
 
 ### How targets become real numbers
 
@@ -170,7 +185,7 @@ So: attach the workout to a calendar session ([chapter 6](./06-planning-calendar
 | **FIT** | A Garmin workout. Supports zones, absolute and range paces, power, heart rate, ramps, repeats, and swim sets. Relative targets are resolved to absolute values at export time. |
 | **ZWO** | A Zwift workout. Time-based steps mapped to power fractions; simpler than FIT, and swim-specific features don't translate. |
 
-If FIT export needs a threshold you haven't set, it refuses and names what's missing: "Set missing intensity anchors before FIT export: …". Fill in the FTP, threshold pace, or race pace it asks for. One of these messages asks for a "max heart rate", which is not a field the app has — see [chapter 13](./13-known-limitations.md#percent-of-heart-rate-targets-resolve-against-lthr).
+If FIT export needs a threshold you haven't set, it refuses and names what's missing: "Set missing intensity anchors before FIT export: …". Fill in the named FTP, threshold pace, race pace, LTHR, or max heart rate.
 
 **Step notes on the device** are your note text plus any swim equipment, joined as `{notes} · Equipment: Fins, Paddles`. Useful for the things a target can't express: "relaxed hands", "aim for even splits", "stop if the hamstring talks".
 
@@ -271,6 +286,7 @@ pace,relative,10k
 pace,relative,95%|5k
 power,value,130%
 heart_rate,value,80%
+heart_rate,value,80%|max
 ```
 
 | Token | Meaning |
@@ -279,7 +295,8 @@ heart_rate,value,80%
 | `5k`, `10k`, `half`, `marathon` | Race-pace anchors |
 | `95%\|10k`, or `95% of 10k` | 95% of that anchor's speed |
 | `130%` with `signal=power` | 130% of FTP, stored relative and resolved live |
-| `80%` with `signal=heart_rate` | 80% of your **heart-rate threshold (LTHR)**, despite the documentation elsewhere calling it percent of max heart rate — see [chapter 13](./13-known-limitations.md#percent-of-heart-rate-targets-resolve-against-lthr) |
+| `80%` or `80%\|lthr` with `signal=heart_rate` | 80% of that sport's **LTHR** |
+| `80%\|max` or `80% of max` with `signal=heart_rate` | 80% of athlete **max heart rate** |
 | `4:30` with `target_mode=value` | An absolute pace |
 
 Do not combine a `relative` pace with `zone`, `target_low`, or `target_high` columns.

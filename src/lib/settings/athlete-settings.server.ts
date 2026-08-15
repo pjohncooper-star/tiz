@@ -17,6 +17,7 @@ export async function loadAthleteSettingsProfile(athleteId: string) {
         zoneFocusCatalog: true,
         swimEquipmentCatalog: true,
         racePaceAnchors: true,
+        maxHeartRateBpm: true,
         ecoLoadEnabled: true,
         calendarFeedToken: true,
       },
@@ -24,7 +25,7 @@ export async function loadAthleteSettingsProfile(athleteId: string) {
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|racePaceAnchors|ecoLoadEnabled|calendarFeedToken|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|racePaceAnchors|maxHeartRateBpm|ecoLoadEnabled|calendarFeedToken|column/.test(
         error.message
       )
     ) {

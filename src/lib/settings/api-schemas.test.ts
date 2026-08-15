@@ -1,12 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { signalPreferenceSchema } from "@/lib/settings/api-schemas";
+import { maxHeartRateSchema, signalPreferenceSchema } from "@/lib/settings/api-schemas";
 
 const base = {
   discipline: "RUN" as const,
   primarySignal: "PACE" as const,
   effectiveDate: "2026-08-12",
 };
+
+describe("maxHeartRateSchema", () => {
+  it("accepts a bpm in range or null", () => {
+    assert.equal(maxHeartRateSchema.safeParse({ maxHeartRateBpm: 190 }).success, true);
+    assert.equal(maxHeartRateSchema.safeParse({ maxHeartRateBpm: null }).success, true);
+  });
+
+  it("rejects values outside 80–250", () => {
+    assert.equal(maxHeartRateSchema.safeParse({ maxHeartRateBpm: 79 }).success, false);
+    assert.equal(maxHeartRateSchema.safeParse({ maxHeartRateBpm: 251 }).success, false);
+    assert.equal(maxHeartRateSchema.safeParse({ maxHeartRateBpm: 190.5 }).success, false);
+  });
+});
 
 describe("signalPreferenceSchema", () => {
   it("accepts a preference without role overrides", () => {

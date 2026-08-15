@@ -60,6 +60,7 @@ export async function GET(request: Request, context: RouteContext) {
       racePaces: thresholds.racePaces ?? null,
       ftpWatts: thresholds.ftpWatts ?? null,
       maxHeartRateBpm: thresholds.maxHeartRateBpm ?? null,
+      lthrBpm: thresholds.lthrBpm ?? null,
     });
     const missingLines = formatMissingRelativeIntensity(missing);
     if (missingLines.length > 0) {

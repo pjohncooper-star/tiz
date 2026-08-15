@@ -18,7 +18,7 @@ import {
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema, swimEquipmentSettingsSchema, racePaceAnchorsSettingsSchema } from "@/lib/plan/api-schemas";
-import { signalPreferenceSchema } from "@/lib/settings/api-schemas";
+import { maxHeartRateSchema, signalPreferenceSchema } from "@/lib/settings/api-schemas";
 import { serializePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import {
   serializeZoneFocusCatalog,
@@ -58,7 +58,6 @@ const thresholdSchema = z.object({
   isEstimated: z.boolean(),
 });
 
-
 export async function GET() {
   const session = await auth();
   if (!session?.user?.athleteId) {
@@ -94,6 +93,10 @@ export async function GET() {
         : false,
     swimEquipmentCatalog,
     racePaceAnchors,
+    maxHeartRateBpm:
+      athlete && "maxHeartRateBpm" in athlete
+        ? ((athlete as { maxHeartRateBpm?: number | null }).maxHeartRateBpm ?? null)
+        : null,
   });
 }
 
@@ -598,6 +601,27 @@ export async function PUT(req: Request) {
               ? error.message
               : "Could not save race pace settings";
       return NextResponse.json({ error: message }, { status: 500 });
+    }
+  }
+
+  if (body.type === "max-heart-rate") {
+    try {
+      const data = maxHeartRateSchema.parse(body.data);
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: { maxHeartRateBpm: data.maxHeartRateBpm },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid max heart rate"
+          : error instanceof Error && /maxHeartRateBpm|column/.test(error.message)
+            ? "Max heart rate is not available yet. Run prisma/migrations/manual_max_heart_rate.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save max heart rate";
+      return NextResponse.json({ error: message }, { status: 400 });
     }
   }
 

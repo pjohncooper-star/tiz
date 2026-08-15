@@ -8,6 +8,7 @@ export const SPEED_SCALE = 1000;
 export type FitExportThresholds = {
   ftpWatts?: number;
   maxHeartRateBpm?: number;
+  lthrBpm?: number;
   thresholdPaceSecondsPerKm?: number;
   /** Used to resolve swim equipment ids → labels in FIT step notes. */
   swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;

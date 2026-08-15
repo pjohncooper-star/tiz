@@ -51,7 +51,7 @@ Optional per-kilometre anchors: **5k pace**, **10k pace**, **Half marathon pace*
 
 > *"Set your best-guess thresholds for today. Structured workouts score TiZ from how they were built (watts, HR, or pace). The primary metric and optional role overrides apply when a session has no structured workout, and as stream fallback. Customize zone boundaries per sport and signal when needed."*
 
-FTP and LTHR for the bike, threshold pace and LTHR for the run, threshold pace for the swim; the **Primary** metric per sport; **Edit zone boundaries** to customize cutoffs; and **TiZ metric by session role** to score easy and hard days by different signals. **Save changes** commits.
+A single **Max heart rate (bpm)** at the top (used only for `% of max` workout targets); FTP and LTHR for the bike, threshold pace and LTHR for the run, threshold pace for the swim; the **Primary** metric per sport; **Edit zone boundaries** to customize cutoffs; and **TiZ metric by session role** to score easy and hard days by different signals. **Save changes** commits. TiZ zones still use LTHR, not max HR.
 
 ### Threshold & primary metric history
 

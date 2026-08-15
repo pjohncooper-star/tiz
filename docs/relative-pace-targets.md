@@ -19,6 +19,8 @@ pace,relative,10k
 pace,relative,95%|5k
 power,value,130%
 heart_rate,value,80%
+heart_rate,value,80%|max
+heart_rate,relative,80% of lthr
 ```
 
 | `target` token | Meaning |
@@ -26,7 +28,9 @@ heart_rate,value,80%
 | `threshold` | Current run/swim threshold pace |
 | `5k` / `10k` / `half` / `marathon` | Fitness race-pace anchors |
 | `95%\|10k` or `95% of 10k` | Percent of anchor **speed** (95 = slightly slower than 10k) |
-| `130%` (power) / `80%` (HR) | Percent of FTP / max HR — stored relative, resolved live |
+| `130%` (power) | Percent of FTP — stored relative, resolved live |
+| `80%` or `80%\|lthr` or `80% of lthr` (HR) | Percent of sport **LTHR** — stored relative, resolved live |
+| `80%\|max` or `80% of max` (HR) | Percent of athlete **max heart rate** — stored relative, resolved live |
 
 Do **not** set `zone` / `target_low` / `target_high` with `relative` pace. Absolute paces still use `target_mode=value` and `target=4:30`.
 
@@ -36,7 +40,7 @@ Dedicated pages (not Settings) for reusable session packs:
 
 - **List** — CSV import, create from a calendar date range, apply, clear future, delete.
 - **Editor** (`/plan/training-plans/[id]`) — edit session metadata and structured workout trees (`WorkoutTreeEditor`).
-- **Apply** — copies library sessions onto the calendar; preview lists sessions plus missing race-pace / FTP / max-HR anchors.
+- **Apply** — copies library sessions onto the calendar; preview lists sessions plus missing race-pace / FTP / LTHR / max-HR anchors.
 - **Clear future** — removes calendar sessions from this plan from today onward (past stays).
 - **Delete** — removes the library plan; applied calendar sessions stay (untagged).
 

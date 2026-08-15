@@ -10,16 +10,6 @@ The list is ordered by how much trouble it can cause, starting with the handful 
 
 These matter most, because nothing visibly fails — the app just tells you something that isn't quite what you think it is.
 
-### Percent-of-heart-rate targets resolve against LTHR
-
-A heart-rate target written as a percentage (`80%` with `signal=heart_rate` in CSV) is described in `docs/relative-pace-targets.md` as a percentage of **max heart rate**. It is not. The value it resolves against is the sport's **heart-rate threshold profile value** — the number the app labels **LTHR** — because the app has no max-heart-rate field at all.
-
-The difference is large. With an LTHR of 165, `80%` gives 132 bpm; 80% of a genuine max heart rate of 190 would be 152 bpm. If you transcribe a plan written in percent-of-max, every heart-rate target will come out roughly 20 bpm too low.
-
-The same confusion surfaces in an error message: FIT export can refuse with "Set max heart rate (Settings → Thresholds)", pointing at a setting that does not exist. The value it wants is the sport's LTHR.
-
-**What to do:** treat heart-rate percentages as percentages of LTHR and convert accordingly, or use heart-rate **zones** instead, which are unambiguous.
-
 ### Activity dates can land on the wrong day
 
 An activity's calendar day comes from its start time plus the UTC offset recorded in the file. When a file carries no offset, the **UTC day** is used, and parts of the dashboard and calendar group activities by UTC regardless.
@@ -100,7 +90,7 @@ These all work server-side; there is simply no control for them.
 | Limitation | Detail |
 | --- | --- |
 | RPE cannot be a step target | RPE exists only in post-workout self-evaluation. Prescribe zones or paces instead. |
-| Percent-of-FTP, percent-of-heart-rate, and open-duration targets are CSV-only | The visual step editor offers zones, absolute values, and relative *pace*; the percentage and open forms only come in through CSV import |
+| Percent-of-FTP and open-duration targets are CSV-only | The visual step editor offers zones, absolute values, relative pace, and relative HR (LTHR or max). Percent-of-FTP and open-duration steps still only come in through CSV import |
 | Export is only from a planned session | A library workout cannot be exported directly — attach it to a calendar day first |
 | ZWO export is limited | Time-based steps mapped to power fractions, no step notes, and swim-specific structure does not translate |
 | Tags apply to planned sessions, not library workouts | There is no way to tag or search the library itself; organization is by folder only |
@@ -150,7 +140,7 @@ Worth knowing if you read the rest of `docs/`, because several documents describ
 
 | Document | Status |
 | --- | --- |
-| `docs/relative-pace-targets.md` | Shipped, except that it describes heart-rate percentages as percent of max HR — see [above](#percent-of-heart-rate-targets-resolve-against-lthr) |
+| `docs/relative-pace-targets.md` | Shipped. Bare `80%` HR is LTHR; `80%\|max` is athlete max HR |
 | `docs/calendar-workout-pool-v2.md` | Partly shipped. The suggested-intervals sidebar, dragging library folders inside the pool, and the role picker on drop are not built; roles come from the slot type automatically. |
 | `docs/workout-pool-wizard-wireframe.md` | Largely shipped on wide screens, but the separate skeleton/build tabs, the role picker, and the mobile version are not |
 | `docs/plan-wizard-screen-spec.md`, `plan-wizard-implementation-plan.md`, `plan-wizard-pain-points.md` | Proposals for a planner redesign. None of it is built. |

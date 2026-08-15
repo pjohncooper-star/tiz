@@ -85,6 +85,8 @@ type PlannedSessionEditorProps = {
   thresholdFtpWatts?: number | null;
   powerZoneBoundaries?: number[];
   racePaceAnchors?: import("@/lib/workout/relative-pace").RacePaceAnchors | null;
+  lthrBpm?: number | null;
+  maxHeartRateBpm?: number | null;
   swimEquipmentCatalog?: import("@/lib/swim/equipment-catalog").SwimEquipmentCatalog;
   primarySignal?: SignalType | null;
   inheritedPrimarySignal?: SignalType | null;
@@ -124,6 +126,8 @@ export function PlannedSessionEditor({
   thresholdFtpWatts = null,
   powerZoneBoundaries,
   racePaceAnchors = null,
+  lthrBpm = null,
+  maxHeartRateBpm = null,
   swimEquipmentCatalog,
   primarySignal = null,
   inheritedPrimarySignal = null,
@@ -823,6 +827,8 @@ export function PlannedSessionEditor({
               thresholdPaceSeconds={thresholdPaceSeconds}
               thresholdFtpWatts={thresholdFtpWatts}
               racePaces={racePaceAnchors}
+              lthrBpm={lthrBpm}
+              maxHeartRateBpm={maxHeartRateBpm}
               primarySignal={primarySignal}
               swimEquipment={swimEquipmentCatalog}
             />

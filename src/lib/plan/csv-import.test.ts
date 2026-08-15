@@ -266,6 +266,38 @@ describe("planned sessions CSV import", () => {
     assert.equal(steady.targetPaceSeconds, undefined);
   });
 
+  it("stores heart-rate percents as relative LTHR or max without requiring anchors", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",
+      "2026-08-04,RUN,HR,1,step,active,time,20,heart_rate,value,80%",
+      "2026-08-05,RUN,HR max,1,step,active,time,20,heart_rate,value,80%|max",
+      "2026-08-06,RUN,HR lthr,1,step,active,time,20,heart_rate,relative,80% of lthr",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+
+    const bare = result.sessions[0]!.workoutTree!.nodes[0]!;
+    const max = result.sessions[1]!.workoutTree!.nodes[0]!;
+    const lthr = result.sessions[2]!.workoutTree!.nodes[0]!;
+    if (bare.kind !== "step" || max.kind !== "step" || lthr.kind !== "step") {
+      throw new Error("expected steps");
+    }
+    assert.deepEqual(bare.target, { signal: "heart_rate", mode: "relative", pct: 80 });
+    assert.deepEqual(max.target, {
+      signal: "heart_rate",
+      mode: "relative",
+      pct: 80,
+      ref: "max",
+    });
+    assert.deepEqual(lthr.target, {
+      signal: "heart_rate",
+      mode: "relative",
+      pct: 80,
+      ref: "lthr",
+    });
+  });
+
   it("stores power percent as relative without requiring FTP at import", () => {
     const csv = [
       "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target",

@@ -66,6 +66,12 @@ import {
 } from "@/lib/workout/workout-tree";
 import { formatSwimIntervalLabel } from "@/lib/workout/swim-interval-set";
 import {
+  formatRelativeHrLabel,
+  hrRefFromTarget,
+  resolveRelativePercentTarget,
+  type HrRef,
+} from "@/lib/workout/relative-intensity";
+import {
   formatRelativePaceLabel,
   PACE_REFS,
   resolveRelativePaceSeconds,
@@ -96,6 +102,8 @@ type WorkoutTreeEditorProps = {
   thresholdPaceSeconds?: number | null;
   thresholdFtpWatts?: number | null;
   racePaces?: RacePaceAnchors | null;
+  lthrBpm?: number | null;
+  maxHeartRateBpm?: number | null;
   primarySignal?: SignalType | null;
   /** Swim equipment options; defaults to the seeded catalog when omitted. */
   swimEquipment?: SwimEquipmentCatalog;
@@ -226,7 +234,10 @@ function inferTargetView(
     if (t.signal === "heart_rate") return "heart_rate";
     return "zone";
   }
-  if (t.mode === "relative") return "pace_power";
+  if (t.mode === "relative") {
+    if (t.signal === "heart_rate") return "heart_rate";
+    return "pace_power";
+  }
   if (t.mode === "range") {
     if (t.signal === "heart_rate") return "heart_rate";
     if (isZoneRangeTarget(t)) return "zone";
@@ -304,6 +315,18 @@ function applyTargetView(
     };
   }
   if (view === "heart_rate") {
+    if (step.target.mode === "relative" && step.target.signal === "heart_rate") {
+      const pct = step.target.pct != null && step.target.pct > 0 ? step.target.pct : 80;
+      return {
+        ...withoutPace,
+        target: {
+          signal: "heart_rate",
+          mode: "relative",
+          pct,
+          ref: hrRefFromTarget(step.target),
+        },
+      };
+    }
     return {
       ...withoutPace,
       target: {
@@ -852,6 +875,8 @@ function StepTargetField({
   primaryTargetSignal,
   thresholdPaceSeconds = null,
   racePaces = null,
+  lthrBpm = null,
+  maxHeartRateBpm = null,
   onChange,
 }: {
   step: LeafStep;
@@ -862,6 +887,8 @@ function StepTargetField({
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
   thresholdPaceSeconds?: number | null;
   racePaces?: RacePaceAnchors | null;
+  lthrBpm?: number | null;
+  maxHeartRateBpm?: number | null;
   onChange: (patch: Partial<LeafStep>) => void;
 }) {
   const planDiscipline = discipline as PlanDiscipline;
@@ -948,6 +975,82 @@ function StepTargetField({
   }
 
   if (targetView === "heart_rate") {
+    const relativeHr =
+      step.target.mode === "relative" && step.target.signal === "heart_rate";
+    if (relativeHr) {
+      const hrRef = hrRefFromTarget(step.target);
+      const pct = step.target.pct ?? 80;
+      const resolved = resolveRelativePercentTarget(
+        { signal: "heart_rate", mode: "relative", pct, ref: hrRef },
+        { lthrBpm, maxHeartRateBpm }
+      );
+      const resolvedLabel =
+        resolved != null
+          ? `${resolved} bpm`
+          : hrRef === "max"
+            ? "set max heart rate in Settings"
+            : "set LTHR in Settings";
+      return (
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <Label>Heart rate (relative)</Label>
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({
+                  target: { signal: "heart_rate", mode: "zone", zone: 2 },
+                })
+              }
+            >
+              Absolute
+            </button>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
+            <Select
+              value={hrRef}
+              onChange={(e) => {
+                const next = e.target.value as HrRef;
+                onChange({
+                  target: {
+                    signal: "heart_rate",
+                    mode: "relative",
+                    pct,
+                    ref: next,
+                  },
+                });
+              }}
+            >
+              <option value="lthr">LTHR</option>
+              <option value="max">Max HR</option>
+            </Select>
+            <NumberEditorInput
+              value={pct}
+              min={1}
+              max={200}
+              step={1}
+              ariaLabel="Percent of heart-rate anchor"
+              onCommit={(v) => {
+                if (v == null) return;
+                onChange({
+                  target: {
+                    signal: "heart_rate",
+                    mode: "relative",
+                    pct: v,
+                    ref: hrRef,
+                  },
+                });
+              }}
+            />
+          </div>
+          <p className="truncate text-[11px] text-zinc-500">
+            {formatRelativeHrLabel({ pct, ref: hrRef })}
+            {" → "}
+            {resolvedLabel}
+          </p>
+        </div>
+      );
+    }
     if (rangeMode) {
       const low = step.target.low ?? 2;
       const high = step.target.high ?? 4;
@@ -998,7 +1101,7 @@ function StepTargetField({
       );
     }
     return (
-      <div className="min-w-0">
+      <div className="min-w-0 space-y-1">
         <Label>{label}</Label>
         <Select
           value={String(step.target.zone ?? 2)}
@@ -1018,6 +1121,22 @@ function StepTargetField({
             </option>
           ))}
         </Select>
+        <button
+          type="button"
+          className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+          onClick={() =>
+            onChange({
+              target: {
+                signal: "heart_rate",
+                mode: "relative",
+                pct: 80,
+                ref: "lthr",
+              },
+            })
+          }
+        >
+          Use relative HR…
+        </button>
       </div>
     );
   }
@@ -1273,6 +1392,8 @@ function NodeEditor({
   swimEquipment,
   thresholdPaceSeconds = null,
   racePaces = null,
+  lthrBpm = null,
+  maxHeartRateBpm = null,
   onTreeChange,
 }: {
   node: WorkoutNode;
@@ -1288,6 +1409,8 @@ function NodeEditor({
   swimEquipment: SwimEquipmentCatalog;
   thresholdPaceSeconds?: number | null;
   racePaces?: RacePaceAnchors | null;
+  lthrBpm?: number | null;
+  maxHeartRateBpm?: number | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
   const dense = usePanelDensity();
@@ -1358,6 +1481,8 @@ function NodeEditor({
               primaryTargetSignal={primaryTargetSignal}
               thresholdPaceSeconds={thresholdPaceSeconds}
               racePaces={racePaces}
+              lthrBpm={lthrBpm}
+              maxHeartRateBpm={maxHeartRateBpm}
               onChange={(patch) =>
                 onTreeChange((nodes) =>
                   updateAtPath(nodes, path, (n) => (n.kind === "step" ? { ...n, ...patch } : n))
@@ -1781,6 +1906,8 @@ function NodeEditor({
           swimEquipment={swimEquipment}
           thresholdPaceSeconds={thresholdPaceSeconds}
           racePaces={racePaces}
+          lthrBpm={lthrBpm}
+          maxHeartRateBpm={maxHeartRateBpm}
           activeDragPath={activeDragPath}
           onTreeChange={onTreeChange}
         />
@@ -1829,6 +1956,8 @@ function WorkoutNodeList({
   swimEquipment,
   thresholdPaceSeconds = null,
   racePaces = null,
+  lthrBpm = null,
+  maxHeartRateBpm = null,
   activeDragPath,
   onTreeChange,
 }: {
@@ -1843,6 +1972,8 @@ function WorkoutNodeList({
   swimEquipment: SwimEquipmentCatalog;
   thresholdPaceSeconds?: number | null;
   racePaces?: RacePaceAnchors | null;
+  lthrBpm?: number | null;
+  maxHeartRateBpm?: number | null;
   activeDragPath: number[] | null;
   onTreeChange: (updater: (nodes: WorkoutNode[]) => WorkoutNode[]) => void;
 }) {
@@ -1866,6 +1997,8 @@ function WorkoutNodeList({
               swimEquipment={swimEquipment}
               thresholdPaceSeconds={thresholdPaceSeconds}
               racePaces={racePaces}
+              lthrBpm={lthrBpm}
+              maxHeartRateBpm={maxHeartRateBpm}
               path={path}
               siblingCount={nodes.length}
               activeDragPath={activeDragPath}
@@ -1888,6 +2021,8 @@ export function WorkoutTreeEditor({
   thresholdPaceSeconds = null,
   thresholdFtpWatts = null,
   racePaces = null,
+  lthrBpm = null,
+  maxHeartRateBpm = null,
   primarySignal = null,
   swimEquipment: swimEquipmentProp,
   compact = false,
@@ -1911,6 +2046,52 @@ export function WorkoutTreeEditor({
       cancelled = true;
     };
   }, [discipline, swimEquipmentProp]);
+
+  const [fetchedHr, setFetchedHr] = useState<{
+    lthrBpm: number | null;
+    maxHeartRateBpm: number | null;
+  } | null>(null);
+  useEffect(() => {
+    if (lthrBpm != null && maxHeartRateBpm != null) return;
+    let cancelled = false;
+    void fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: {
+            maxHeartRateBpm?: number | null;
+            thresholds?: Array<{
+              discipline?: string;
+              signalType?: string;
+              thresholdValue?: number;
+            }>;
+          } | null
+        ) => {
+          if (cancelled || !data) return;
+          const maxHr =
+            typeof data.maxHeartRateBpm === "number" && data.maxHeartRateBpm > 0
+              ? data.maxHeartRateBpm
+              : null;
+          const lthrRow = (data.thresholds ?? []).find(
+            (t) => t.discipline === discipline && t.signalType === "HEART_RATE"
+          );
+          const lthr =
+            typeof lthrRow?.thresholdValue === "number" && lthrRow.thresholdValue > 0
+              ? Math.round(lthrRow.thresholdValue)
+              : null;
+          setFetchedHr({ lthrBpm: lthr, maxHeartRateBpm: maxHr });
+        }
+      )
+      .catch(() => {
+        if (!cancelled) setFetchedHr({ lthrBpm: null, maxHeartRateBpm: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [discipline, lthrBpm, maxHeartRateBpm]);
+
+  const resolvedLthrBpm = lthrBpm ?? fetchedHr?.lthrBpm ?? null;
+  const resolvedMaxHeartRateBpm = maxHeartRateBpm ?? fetchedHr?.maxHeartRateBpm ?? null;
 
   const swimEquipment =
     swimEquipmentProp ?? fetchedEquipment ?? seedSwimEquipmentCatalog();
@@ -2076,6 +2257,8 @@ export function WorkoutTreeEditor({
       swimEquipment={swimEquipment}
       thresholdPaceSeconds={thresholdPaceSeconds}
       racePaces={racePaces}
+      lthrBpm={resolvedLthrBpm}
+      maxHeartRateBpm={resolvedMaxHeartRateBpm}
       activeDragPath={activeDragPath}
       onTreeChange={onTreeChange}
     />
