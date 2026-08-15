@@ -2,6 +2,10 @@
 
 Multisport training POC: time-in-zone planning, bulk historical import, Workout Signaling, Strava sync.
 
+## User guide
+
+**[docs/user-guide/](docs/user-guide/README.md)** — the full guide for athletes: onboarding, thresholds and zones, importing history, the season planner, the planning calendar, the workout library, Workout Signaling, settings, troubleshooting, and a configuration appendix.
+
 ## Setup
 
 ```bash
