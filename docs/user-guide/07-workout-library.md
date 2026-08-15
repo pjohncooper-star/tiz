@@ -170,7 +170,7 @@ So: attach the workout to a calendar session ([chapter 6](./06-planning-calendar
 | **FIT** | A Garmin workout. Supports zones, absolute and range paces, power, heart rate, ramps, repeats, and swim sets. Relative targets are resolved to absolute values at export time. |
 | **ZWO** | A Zwift workout. Time-based steps mapped to power fractions; simpler than FIT, and swim-specific features don't translate. |
 
-If FIT export needs a threshold you haven't set, it refuses and names what's missing: "Set missing intensity anchors before FIT export: …". Fill in the FTP, threshold pace, max heart rate, or race pace it asks for.
+If FIT export needs a threshold you haven't set, it refuses and names what's missing: "Set missing intensity anchors before FIT export: …". Fill in the FTP, threshold pace, or race pace it asks for. One of these messages asks for a "max heart rate", which is not a field the app has — see [chapter 13](./13-known-limitations.md#percent-of-heart-rate-targets-resolve-against-lthr).
 
 **Step notes on the device** are your note text plus any swim equipment, joined as `{notes} · Equipment: Fins, Paddles`. Useful for the things a target can't express: "relaxed hands", "aim for even splits", "stop if the hamstring talks".
 
@@ -279,7 +279,7 @@ heart_rate,value,80%
 | `5k`, `10k`, `half`, `marathon` | Race-pace anchors |
 | `95%\|10k`, or `95% of 10k` | 95% of that anchor's speed |
 | `130%` with `signal=power` | 130% of FTP, stored relative and resolved live |
-| `80%` with `signal=heart_rate` | 80% of max heart rate |
+| `80%` with `signal=heart_rate` | 80% of your **heart-rate threshold (LTHR)**, despite the documentation elsewhere calling it percent of max heart rate — see [chapter 13](./13-known-limitations.md#percent-of-heart-rate-targets-resolve-against-lthr) |
 | `4:30` with `target_mode=value` | An absolute pace |
 
 Do not combine a `relative` pace with `zone`, `target_low`, or `target_high` columns.

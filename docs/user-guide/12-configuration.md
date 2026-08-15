@@ -157,21 +157,20 @@ Several scripts in `scripts/` are not wired into `package.json` but are useful w
 
 ## Known gaps worth tracking
 
-These are behaviors athletes will ask about:
+[Chapter 13](./13-known-limitations.md) is the full list. The ones most likely to generate support requests, all of which need database or script access to resolve:
 
-- **Strava updates and deletes are ignored.** Only new-activity webhooks are handled.
-- **No Strava disconnect in the UI.** Requires database access.
-- **No self-service password reset.** Requires the `user:reset-password` script.
-- **Dashboard and calendar day grouping uses UTC** for activity dates in some places, so activities without a recorded UTC offset can land on a neighbouring day.
-- **No global activity list page.** History is browsed through the calendar and its search pane.
-- **Folder rename and move, and drag-reordering training plan sessions, exist in the API but not the UI.**
-- **The workout pool is desktop-only**, closing below 768px.
+- **No self-service password reset** — requires `user:reset-password`.
+- **No Strava disconnect in the UI** — requires removing the connection row.
+- **Strava updates and deletes are ignored** — only new-activity webhooks are handled, so TiZ silently diverges from Strava after an edit.
+- **Duplicate activities outside the fuzzy-match window** — requires `user:dedup-activities`.
+- **Percent-of-heart-rate targets resolve against LTHR, not max heart rate**, and an export error message names a "max heart rate" setting that does not exist.
+- **Activity dates fall back to UTC** when a file carries no offset, so sessions can land on a neighbouring day.
+- **Bulk import is only linked during onboarding** — afterwards athletes need the direct `/onboarding/import` URL.
+- **Stuck imports** — `check-import.mjs`, `finish-import.mjs`, and `reset-import.mjs` are the tools.
 
 ## A note on other documents in `docs/`
 
-`docs/relative-pace-targets.md` and `docs/calendar-workout-pool-v2.md` describe shipped behavior (the latter partially — its "suggested workouts" section is not built).
-
-`docs/plan-wizard-screen-spec.md`, `docs/plan-wizard-implementation-plan.md`, `docs/plan-wizard-pain-points.md`, and `docs/plan-wizard-weekly-template-strategy.md` are design documents for a proposed planner redesign. They do not describe the current app. `docs/workout-pool-wizard-wireframe.md` is largely shipped on wide screens but includes elements that are not.
+Several documents in `docs/` describe intent rather than the current app. [Chapter 13](./13-known-limitations.md#documents-that-describe-features-that-do-not-exist) lists which are shipped, which are partly shipped, and which are unbuilt proposals.
 
 This user guide describes the app as built.
 

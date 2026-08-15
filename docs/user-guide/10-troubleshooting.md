@@ -80,7 +80,7 @@
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| "Set missing intensity anchors before FIT export: …" | The workout uses a target that needs a threshold you haven't set | Set the named FTP, threshold pace, max heart rate, or race pace, then export again. |
+| "Set missing intensity anchors before FIT export: …" | The workout uses a target that needs a threshold you haven't set | Set the named FTP, threshold pace, or race pace, then export again. If it asks for a "max heart rate", set the sport's **LTHR** — that is the value it actually reads ([chapter 13](./13-known-limitations.md#percent-of-heart-rate-targets-resolve-against-lthr)). |
 | No **Export FIT** button | The session has no structured workout | Attach or build one first. Export is per session, not from the library. |
 | Relative pace shows no resolved value | The race-pace anchor it references is empty | Fill it in under **Settings → Thresholds & paces → Race paces**. |
 | A completed session kept its old pace after I got faster | Relative targets are frozen to absolute values once a session is linked to an activity | Intended, so history isn't rewritten. Upcoming sessions still follow the new anchor. |
