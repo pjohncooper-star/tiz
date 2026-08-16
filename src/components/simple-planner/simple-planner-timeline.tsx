@@ -179,6 +179,7 @@ export function SimplePlannerTimeline({
 
   useEffect(() => {
     if (!programDrag || !onMoveProgram) return;
+    const moveProgram = onMoveProgram;
     const displayCount = Math.max(weeks.length, 1);
 
     function clampedDelta(
@@ -203,7 +204,9 @@ export function SimplePlannerTimeline({
     function onPointerEnd() {
       const drag = programDragRef.current;
       setProgramDrag(null);
-      if (drag && drag.weekDelta !== 0) onMoveProgram(drag.attachmentId, drag.weekDelta);
+      if (drag && drag.weekDelta !== 0) {
+        moveProgram(drag.attachmentId, drag.weekDelta);
+      }
     }
 
     window.addEventListener("pointermove", onPointerMove);
