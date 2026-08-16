@@ -6,6 +6,7 @@ import {
   parsePausedWeeks,
   resolveApplyWindowWithPauses,
   schedulePlanSessionsWithPauses,
+  weekIsFullyPast,
   type ApplyAnchorMode,
   type PausedWeek,
 } from "@/lib/plan/training-plan";
@@ -160,6 +161,7 @@ export function overlayComputedWeeksWithPlan<T extends OverlayWeekTarget>(
   catalog?: ZoneFocusCatalog,
   options?: {
     conflicts?: PlanSessionConflict[];
+    todayKey?: string;
     ownership?: Array<{
       attachmentId: string;
       owns: ProgramDiscipline[] | null;
@@ -176,6 +178,7 @@ export function overlayComputedWeeksWithPlan<T extends OverlayWeekTarget>(
         catalog,
       }),
     conflicts: options?.conflicts,
+    todayKey: options?.todayKey,
     ownership: options?.ownership,
   });
 }
@@ -205,6 +208,7 @@ export async function syncSeasonTrainingPlanAttachments(input: {
   goalEvents: Array<{ id: string; date: Date }>;
   seasonStart: Date;
   weeks: Array<OverlayWeekTarget & { weekIndex: number }>;
+  priorWeeks?: Array<OverlayWeekTarget & { weekIndex: number }>;
   zonePhaseSpans: ZonePhaseSpan[];
   catalog?: ZoneFocusCatalog;
 }): Promise<void> {
@@ -224,16 +228,25 @@ export async function syncSeasonTrainingPlanAttachments(input: {
     writes.map((row) => row.id).filter((id): id is string => Boolean(id))
   );
   const existingById = new Map(existing.map((row) => [row.id, row]));
+  const removedRows = existing.filter((row) => !writeIds.has(row.id));
+  const todayKey =
+    removedRows.length > 0 || writes.length > 0
+      ? await requestTodayKey()
+      : "";
 
-  for (const row of existing) {
-    if (writeIds.has(row.id)) continue;
-    await tx.plannedSession.deleteMany({
-      where: {
+  if (removedRows.length > 0) {
+    const today = parseDateKey(todayKey);
+    const remainingPlanIds = new Set(writes.map((row) => row.trainingPlanId));
+    for (const row of removedRows) {
+      await deleteFuturePlanSessionsForAttachment({
+        tx,
         athleteId,
-        seasonTrainingPlanAttachmentId: row.id,
-      },
-    });
-    await tx.seasonTrainingPlanAttachment.delete({ where: { id: row.id } });
+        row,
+        today,
+        includeUnstampedFallback: !remainingPlanIds.has(row.trainingPlanId),
+      });
+      await tx.seasonTrainingPlanAttachment.delete({ where: { id: row.id } });
+    }
   }
 
   if (writes.length === 0) {
@@ -243,10 +256,16 @@ export async function syncSeasonTrainingPlanAttachments(input: {
         data: { planSessionConflicts: [] as unknown as Prisma.InputJsonValue },
       });
     }
+    await restorePastSeasonWeeks({
+      tx,
+      seasonPlanId,
+      todayKey,
+      weeks: input.weeks,
+      priorWeeks: input.priorWeeks,
+    });
     return;
   }
 
-  const todayKey = await requestTodayKey();
   const conflicts = parsePlanSessionConflicts(input.conflicts ?? []);
   const allSessions: OverlayPlanSession[] = [];
   const ownership: Array<{
@@ -319,10 +338,18 @@ export async function syncSeasonTrainingPlanAttachments(input: {
     allSessions,
     input.zonePhaseSpans,
     input.catalog,
-    { conflicts, ownership }
+    { conflicts, ownership, todayKey }
   );
 
+  const priorByStart = new Map(
+    (input.priorWeeks ?? []).map((week) => [week.weekStartDate, week])
+  );
   for (const week of overlaid) {
+    const prior =
+      todayKey && weekIsFullyPast(week.weekStartDate, todayKey)
+        ? priorByStart.get(week.weekStartDate)
+        : undefined;
+    const source = prior ?? week;
     await tx.seasonWeek.update({
       where: {
         seasonPlanId_weekIndex: {
@@ -331,14 +358,14 @@ export async function syncSeasonTrainingPlanAttachments(input: {
         },
       },
       data: {
-        swimHours: week.swimHours,
-        bikeHours: week.bikeHours,
-        runHours: week.runHours,
-        strengthHours: week.strengthHours ?? 0,
-        strengthSessions: week.strengthSessions ?? 0,
-        totalHours: week.totalHours,
-        zoneMinutes: week.zoneMinutes as Prisma.InputJsonValue,
-        slotBudgets: week.slotBudgets as Prisma.InputJsonValue,
+        swimHours: source.swimHours,
+        bikeHours: source.bikeHours,
+        runHours: source.runHours,
+        strengthHours: source.strengthHours ?? 0,
+        strengthSessions: source.strengthSessions ?? 0,
+        totalHours: source.totalHours,
+        zoneMinutes: source.zoneMinutes as Prisma.InputJsonValue,
+        slotBudgets: source.slotBudgets as Prisma.InputJsonValue,
       },
     });
   }
@@ -471,4 +498,81 @@ function attachmentWriteFromExisting(
     ownsDisciplines: parseOwnsDisciplines(row.ownsDisciplines),
     fillLeftoverTiz: parseFillLeftoverTiz(row.fillLeftoverTiz),
   };
+}
+
+async function deleteFuturePlanSessionsForAttachment(input: {
+  tx: Prisma.TransactionClient;
+  athleteId: string;
+  row: ExistingAttachmentRow;
+  today: Date;
+  includeUnstampedFallback: boolean;
+}) {
+  const { tx, athleteId, row, today, includeUnstampedFallback } = input;
+  const where: Prisma.PlannedSessionWhereInput = {
+    athleteId,
+    source: "PLAN",
+    scheduledDate: { gte: today },
+    ...(includeUnstampedFallback
+      ? {
+          OR: [
+            { seasonTrainingPlanAttachmentId: row.id },
+            {
+              seasonTrainingPlanAttachmentId: null,
+              trainingPlanId: row.trainingPlanId,
+              scheduledDate: { gte: row.startDate, lte: row.endDate },
+            },
+          ],
+        }
+      : { seasonTrainingPlanAttachmentId: row.id }),
+  };
+
+  const sessions = await tx.plannedSession.findMany({
+    where,
+    select: { id: true },
+  });
+  if (sessions.length === 0) return;
+
+  const ids = sessions.map((session) => session.id);
+  await tx.structuredWorkout.deleteMany({
+    where: { plannedSessionId: { in: ids } },
+  });
+  await tx.plannedSession.deleteMany({ where: { id: { in: ids } } });
+}
+
+async function restorePastSeasonWeeks(input: {
+  tx: Prisma.TransactionClient;
+  seasonPlanId: string;
+  todayKey: string;
+  weeks: Array<OverlayWeekTarget & { weekIndex: number }>;
+  priorWeeks?: Array<OverlayWeekTarget & { weekIndex: number }>;
+}) {
+  if (!input.todayKey || !input.priorWeeks?.length) return;
+  const priorByStart = new Map(
+    input.priorWeeks.map((week) => [week.weekStartDate, week])
+  );
+  for (const week of input.weeks) {
+    if (!week.weekStartDate || !weekIsFullyPast(week.weekStartDate, input.todayKey)) {
+      continue;
+    }
+    const prior = priorByStart.get(week.weekStartDate);
+    if (!prior) continue;
+    await input.tx.seasonWeek.update({
+      where: {
+        seasonPlanId_weekIndex: {
+          seasonPlanId: input.seasonPlanId,
+          weekIndex: week.weekIndex,
+        },
+      },
+      data: {
+        swimHours: prior.swimHours,
+        bikeHours: prior.bikeHours,
+        runHours: prior.runHours,
+        strengthHours: prior.strengthHours ?? 0,
+        strengthSessions: prior.strengthSessions ?? 0,
+        totalHours: prior.totalHours,
+        zoneMinutes: prior.zoneMinutes as Prisma.InputJsonValue,
+        slotBudgets: prior.slotBudgets as Prisma.InputJsonValue,
+      },
+    });
+  }
 }

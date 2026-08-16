@@ -597,8 +597,8 @@ export function SimplePlannerView({
       attachedPlanPreview.weeks.some((week) => week.totalHours > (season.maxWeekHours ?? 0))
   );
 
-  function attachmentWrites() {
-    return seasonAttachments.map((row) => ({
+  function attachmentWrites(rows = seasonAttachments) {
+    return rows.map((row) => ({
       id: row.id,
       trainingPlanId: row.trainingPlanId,
       anchorMode: row.anchorMode,
@@ -646,6 +646,36 @@ export function SimplePlannerView({
     setBaselineSeason(cloneSeason(normalized));
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     return true;
+  }
+
+  async function removeAttachedProgram(index: number) {
+    if (!season || saving) return;
+    const removed = seasonAttachments[index];
+    if (!removed) return;
+    const previous = season;
+    const trainingPlanAttachments = seasonAttachments.filter((_, i) => i !== index);
+    const planSessionConflicts = (season.planSessionConflicts ?? []).filter(
+      (row) => !removed.id || row.losingAttachmentId !== removed.id
+    );
+    setSeason({
+      ...season,
+      trainingPlanAttachments,
+      trainingPlanAttachment: trainingPlanAttachments[0] ?? null,
+      planSessionConflicts,
+    });
+    const ok = await saveSeason(
+      {
+        trainingPlanAttachments: attachmentWrites(trainingPlanAttachments),
+        planSessionConflicts,
+        startDate: season.startDate,
+        endDate: season.endDate,
+        recalculate: true,
+      },
+      { sectionId: "trainingPlan" }
+    );
+    if (!ok) {
+      setSeason(previous);
+    }
   }
 
   function sectionSavePayload(
@@ -1164,15 +1194,23 @@ export function SimplePlannerView({
           conflicts={season.planSessionConflicts ?? []}
           sessionsByPlanId={attachedPlanSessionsById}
           onChange={(trainingPlanAttachments) =>
-            setSeason({
-              ...season,
-              trainingPlanAttachments,
-              trainingPlanAttachment: trainingPlanAttachments[0] ?? null,
-            })
+            setSeason((current) =>
+              current
+                ? {
+                    ...current,
+                    trainingPlanAttachments,
+                    trainingPlanAttachment: trainingPlanAttachments[0] ?? null,
+                  }
+                : current
+            )
           }
           onConflictsChange={(planSessionConflicts) =>
-            setSeason({ ...season, planSessionConflicts })
+            setSeason((current) =>
+              current ? { ...current, planSessionConflicts } : current
+            )
           }
+          onRemove={(index) => void removeAttachedProgram(index)}
+          busy={saving}
           onPauseAllThisWeek={() => {
             const monday =
               selectedWeekIndex != null

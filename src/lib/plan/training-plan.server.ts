@@ -18,6 +18,7 @@ import type { PlanDiscipline } from "@/lib/plan/session";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import {
   buildTrainingPlanDraft,
+  clampRangeToToday,
   deepCopyWorkoutSteps,
   recomputeTrainingPlanAggregates,
   resolveApplyWindowWithPauses,
@@ -1167,43 +1168,61 @@ export async function applyTrainingPlan(
     window,
     window.pausedMondays
   );
-  const rangeStart = parseDateKey(
+  const unionStart =
     input.replaceRange && input.replaceRange.startDate < window.startDate
       ? input.replaceRange.startDate
-      : window.startDate
-  );
-  const rangeEnd = parseDateKey(
+      : window.startDate;
+  const unionEnd =
     input.replaceRange && input.replaceRange.endDate > window.endDate
       ? input.replaceRange.endDate
-      : window.endDate
-  );
+      : window.endDate;
+  const clearRange = clampRangeToToday(unionStart, unionEnd, todayKey);
 
   const sessionByKey = new Map(
     plan.sessions.map((s) => [`${s.dayOffset}:${s.sortOrder}`, s])
   );
 
   let removed = 0;
+  let created = 0;
   let structured = 0;
 
   const run = async (tx: Prisma.TransactionClient) => {
-    if (input.mode === "replace") {
-      const deleted = await tx.plannedSession.deleteMany({
-        where: input.seasonTrainingPlanAttachmentId
-          ? {
-              athleteId,
-              seasonTrainingPlanAttachmentId: input.seasonTrainingPlanAttachmentId,
-              scheduledDate: { gte: rangeStart, lte: rangeEnd },
-            }
-          : {
-              athleteId,
-              trainingPlanId: planId,
-              scheduledDate: { gte: rangeStart, lte: rangeEnd },
+    if (input.mode === "replace" && clearRange) {
+      const where = input.seasonTrainingPlanAttachmentId
+        ? {
+            athleteId,
+            seasonTrainingPlanAttachmentId: input.seasonTrainingPlanAttachmentId,
+            scheduledDate: {
+              gte: parseDateKey(clearRange.startDate),
+              lte: parseDateKey(clearRange.endDate),
             },
+          }
+        : {
+            athleteId,
+            trainingPlanId: planId,
+            scheduledDate: {
+              gte: parseDateKey(clearRange.startDate),
+              lte: parseDateKey(clearRange.endDate),
+            },
+          };
+      const toDelete = await tx.plannedSession.findMany({
+        where,
+        select: { id: true },
       });
-      removed = deleted.count;
+      const ids = toDelete.map((session) => session.id);
+      if (ids.length > 0) {
+        await tx.structuredWorkout.deleteMany({
+          where: { plannedSessionId: { in: ids } },
+        });
+        const deleted = await tx.plannedSession.deleteMany({
+          where: { id: { in: ids } },
+        });
+        removed = deleted.count;
+      }
     }
 
     for (const slot of scheduled) {
+      if (slot.scheduledDateKey < todayKey) continue;
       const planSession = sessionByKey.get(
         `${slot.dayOffset}:${slot.sortOrder}`
       );
@@ -1230,7 +1249,7 @@ export async function applyTrainingPlan(
         stepsCopy
       );
 
-      const created = await tx.plannedSession.create({
+      const row = await tx.plannedSession.create({
         data: {
           athleteId,
           scheduledDate: parseDateKey(slot.scheduledDateKey),
@@ -1255,12 +1274,13 @@ export async function applyTrainingPlan(
           poolSlotKind: slotKindFromSessionRole(planSession.sessionRole),
         },
       });
+      created += 1;
 
       if (stepsCopy) {
         await tx.structuredWorkout.create({
           data: {
             athleteId,
-            plannedSessionId: created.id,
+            plannedSessionId: row.id,
             discipline: planSession.discipline,
             steps: stepsCopy as unknown as Prisma.InputJsonValue,
           },
@@ -1277,7 +1297,7 @@ export async function applyTrainingPlan(
   }
 
   return {
-    created: scheduled.length,
+    created,
     removed,
     structured,
     preview,

@@ -125,6 +125,7 @@ export function previewAttachedPrograms<T extends SimpleWeek>(
 
   const overlaid = overlayPlanLoadOnWeeks(weeks, overlaySessions, {
     conflicts: options?.conflicts,
+    todayKey,
     ownership: attachments.map((attachment) => ({
       attachmentId: attachment.id ?? attachment.trainingPlanId,
       owns: parseOwnsDisciplines(attachment.ownsDisciplines),

@@ -1228,6 +1228,18 @@ export async function updateSimpleSeasonPlan(
           weekStartDateForIndex(bounds.startDate, week.weekIndex)
         ),
       })),
+      priorWeeks: existing.weeks.map((week) => ({
+        weekIndex: week.weekIndex,
+        weekStartDate: formatDateKey(week.weekStartDate),
+        swimHours: week.swimHours,
+        bikeHours: week.bikeHours,
+        runHours: week.runHours,
+        strengthHours: week.strengthHours,
+        strengthSessions: week.strengthSessions,
+        totalHours: week.totalHours,
+        zoneMinutes: parseDisciplineZoneMinutes(week.zoneMinutes),
+        slotBudgets: week.slotBudgets as never,
+      })),
       zonePhaseSpans,
       catalog,
     });

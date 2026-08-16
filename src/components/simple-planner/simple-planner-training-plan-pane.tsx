@@ -117,6 +117,8 @@ export function SimplePlannerTrainingPlanPane({
   onConflictsChange,
   onPauseAllThisWeek,
   onExtendSeason,
+  onRemove,
+  busy = false,
 }: {
   attachments: SimpleTrainingPlanAttachment[];
   plans: LibraryPlanOption[];
@@ -134,6 +136,8 @@ export function SimplePlannerTrainingPlanPane({
   onConflictsChange: (next: PlanSessionConflict[]) => void;
   onPauseAllThisWeek: () => void;
   onExtendSeason: (extension: SeasonDateExtension) => void;
+  onRemove: (index: number) => void;
+  busy?: boolean;
 }) {
   const races = useMemo(() => raceOptions(goalEvents), [goalEvents]);
   const [customAddDate, setCustomAddDate] = useState<string | null>(null);
@@ -183,13 +187,7 @@ export function SimplePlannerTrainingPlanPane({
   }
 
   function removeAt(index: number) {
-    const removed = attachments[index];
-    onChange(attachments.filter((_, i) => i !== index));
-    if (removed?.id) {
-      onConflictsChange(
-        conflicts.filter((row) => row.losingAttachmentId !== removed.id)
-      );
-    }
+    onRemove(index);
   }
 
   function pauseSelected(attachment: SimpleTrainingPlanAttachment, index: number) {
@@ -411,7 +409,12 @@ export function SimplePlannerTrainingPlanPane({
                   Edit in library
                 </Link>
               </div>
-              <Button type="button" variant="secondary" onClick={() => removeAt(index)}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={() => removeAt(index)}
+              >
                 Remove
               </Button>
             </div>

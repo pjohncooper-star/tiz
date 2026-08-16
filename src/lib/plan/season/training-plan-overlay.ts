@@ -1,5 +1,5 @@
 import type { Discipline, SessionRole } from "@prisma/client";
-import { mondayWeekStartKey } from "@/lib/dates";
+import { addDaysToDateKey, mondayWeekStartKey } from "@/lib/dates";
 import type {
   DisciplineSlotBudget,
   PoolSlotKind,
@@ -75,6 +75,8 @@ export type OverlayPlanOptions = {
   zonePercentsForWeek?: OverlayZonePercentLookup;
   conflicts?: PlanSessionConflict[];
   ownership?: AttachmentOwnership[];
+  /** Fully-past weeks (Sunday before today) keep their existing targets. */
+  todayKey?: string;
 };
 
 export function slotKindFromSessionRole(role: SessionRole): PoolSlotKind {
@@ -346,6 +348,12 @@ export function overlayPlanLoadOnWeeks<T extends OverlayWeekTarget>(
   );
 
   return weeks.map((week) => {
+    if (
+      options?.todayKey &&
+      addDaysToDateKey(week.weekStartDate, 6) < options.todayKey
+    ) {
+      return week;
+    }
     const load = loadByIndex.get(week.weekIndex);
     if (!load) {
       return {

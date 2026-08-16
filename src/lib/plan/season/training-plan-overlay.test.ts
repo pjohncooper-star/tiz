@@ -162,6 +162,40 @@ describe("overlayPlanLoadOnWeeks", () => {
     assert.equal(overlaid[1]!.runHours, 4);
   });
 
+  it("does not rewrite fully past weeks when todayKey is set", () => {
+    const past = week({
+      weekStartDate: "2026-07-27",
+      runHours: 9,
+      totalHours: 18,
+    });
+    const current = week({
+      weekIndex: 1,
+      weekStartDate: "2026-08-03",
+      runHours: 2,
+      totalHours: 11,
+    });
+    const overlaid = overlayPlanLoadOnWeeks(
+      [past, current],
+      [
+        {
+          scheduledDateKey: "2026-07-28",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 30,
+        },
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 120,
+        },
+      ],
+      { todayKey: "2026-08-03" }
+    );
+    assert.equal(overlaid[0]!.runHours, 9);
+    assert.equal(overlaid[1]!.runHours, 2);
+  });
+
   it("replaces run TiZ when plan hours exceed the season ramp", () => {
     const overlaid = overlayPlanLoadOnWeeks(
       [week({ runHours: 1, totalHours: 10 })],

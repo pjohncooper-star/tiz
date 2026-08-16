@@ -4,6 +4,7 @@ import type { ParsedPlannedSessionImport } from "@/lib/plan/csv-import";
 import {
   buildTrainingPlanDraft,
   buildTrainingPlanWeekGrid,
+  clampRangeToToday,
   deepCopyWorkoutSteps,
   recomputeTrainingPlanAggregates,
   resolveApplyWindow,
@@ -16,6 +17,7 @@ import {
   trainingPlanWeekCount,
   weekdayFromDateKey,
   weekdayIndexMonFirst,
+  weekIsFullyPast,
 } from "@/lib/plan/training-plan";
 import { parseDateKey } from "@/lib/dates";
 import {
@@ -162,6 +164,34 @@ describe("resolveApplyWindow", () => {
         }),
       /today or later/
     );
+  });
+});
+
+describe("clampRangeToToday", () => {
+  it("starts clearing at today when the window began in the past", () => {
+    assert.deepEqual(clampRangeToToday("2026-07-01", "2026-09-01", "2026-08-16"), {
+      startDate: "2026-08-16",
+      endDate: "2026-09-01",
+    });
+  });
+
+  it("returns null when the whole window is in the past", () => {
+    assert.equal(clampRangeToToday("2026-07-01", "2026-08-01", "2026-08-16"), null);
+  });
+
+  it("keeps a future window unchanged", () => {
+    assert.deepEqual(clampRangeToToday("2026-08-20", "2026-09-01", "2026-08-16"), {
+      startDate: "2026-08-20",
+      endDate: "2026-09-01",
+    });
+  });
+});
+
+describe("weekIsFullyPast", () => {
+  it("treats a week as past only after its Sunday", () => {
+    assert.equal(weekIsFullyPast("2026-08-03", "2026-08-10"), true);
+    assert.equal(weekIsFullyPast("2026-08-03", "2026-08-09"), false);
+    assert.equal(weekIsFullyPast("2026-08-03", "2026-08-03"), false);
   });
 });
 

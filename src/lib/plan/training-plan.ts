@@ -87,6 +87,21 @@ export type ScheduledPlanSession = {
   sortOrder: number;
 };
 
+/** Clamp a replace/clear window so past calendar days are not rewritten. */
+export function clampRangeToToday(
+  startDate: string,
+  endDate: string,
+  todayKey: string
+): { startDate: string; endDate: string } | null {
+  const start = startDate < todayKey ? todayKey : startDate;
+  if (endDate < start) return null;
+  return { startDate: start, endDate };
+}
+
+export function weekIsFullyPast(weekStartDate: string, todayKey: string): boolean {
+  return addDaysToDateKey(weekStartDate, 6) < todayKey;
+}
+
 /** Calendar week(s) to skip when mapping a plan onto dates (holiday / vacation / trip). */
 export type PausedWeek = {
   weekStartDate: string;
