@@ -1841,8 +1841,8 @@ export function PlanningCalendar({
           ref={toolbarRef}
           className="sticky top-12 z-30 -mx-4 border-b border-zinc-200 bg-white/95 px-4 py-2 backdrop-blur md:py-3 dark:border-zinc-800 dark:bg-zinc-950/95"
         >
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between xl:gap-3">
+            <div className="flex items-center gap-2 xl:shrink-0">
               <Button
                 type="button"
                 variant="secondary"
@@ -1881,77 +1881,79 @@ export function PlanningCalendar({
                 Search
               </Button>
             </div>
-            <div className="hidden flex-wrap items-center gap-2 md:flex">
-              <Button
-                type="button"
-                variant={searchOpen ? "primary" : "secondary"}
-                onClick={() => {
-                  setSearchOpen((open) => !open);
-                  setCalendarOpen(false);
-                }}
-              >
-                {searchOpen ? "Hide search" : "Search"}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setCalendarOpen((open) => !open);
-                  setSearchOpen(false);
-                }}
-              >
-                {calendarOpen ? "Hide calendar" : "Browse calendar"}
-              </Button>
-              <Button
-                type="button"
-                variant={poolOpen ? "primary" : "secondary"}
-                onClick={() => setPoolOpen((open) => !open)}
-              >
-                {poolOpen ? "Hide pool" : "Workout pool"}
-              </Button>
-              {poolOpen ? (
+            <div className="hidden md:flex md:flex-col md:gap-2 xl:min-w-0 xl:flex-row xl:items-center xl:justify-end xl:gap-2 xl:overflow-x-auto">
+              <div className="flex flex-wrap items-center gap-2 xl:flex-nowrap xl:shrink-0">
+                <Button
+                  type="button"
+                  variant={searchOpen ? "primary" : "secondary"}
+                  onClick={() => {
+                    setSearchOpen((open) => !open);
+                    setCalendarOpen(false);
+                  }}
+                >
+                  {searchOpen ? "Hide search" : "Search"}
+                </Button>
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={() => void goToNextUnplannedWeek()}
+                  onClick={() => {
+                    setCalendarOpen((open) => !open);
+                    setSearchOpen(false);
+                  }}
                 >
-                  Next unplanned week
+                  {calendarOpen ? "Hide calendar" : "Browse calendar"}
                 </Button>
-              ) : null}
-            </div>
-            <div className="hidden gap-2 overflow-x-auto pb-0.5 md:flex">
-              <WorkoutUploadButton onUploaded={() => void handleRefresh()} />
-              <Button type="button" className="shrink-0" onClick={() => void openApplyDialog()}>
-                Apply template
-              </Button>
-              <Button
-                type="button"
-                className="shrink-0"
-                variant="secondary"
-                onClick={() => setSaveAsPlanOpen(true)}
-              >
-                Save week as program
-              </Button>
-              <Link href="/library/training-plans" className="shrink-0">
-                <Button type="button" variant="secondary">
-                  Programs
+                <Button
+                  type="button"
+                  variant={poolOpen ? "primary" : "secondary"}
+                  onClick={() => setPoolOpen((open) => !open)}
+                >
+                  {poolOpen ? "Hide pool" : "Workout pool"}
                 </Button>
-              </Link>
-              <Link href="/calendar/template" className="shrink-0">
-                <Button type="button" variant="secondary">
-                  Edit weekly template
+                {poolOpen ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void goToNextUnplannedWeek()}
+                  >
+                    Next unplanned week
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-0.5 xl:overflow-visible xl:pb-0 xl:shrink-0">
+                <WorkoutUploadButton onUploaded={() => void handleRefresh()} />
+                <Button type="button" className="shrink-0" onClick={() => void openApplyDialog()}>
+                  Apply template
                 </Button>
-              </Link>
-              {!useWizardPool ? (
                 <Button
                   type="button"
                   className="shrink-0"
-                  variant={workoutBuilder.open ? "primary" : "secondary"}
-                  onClick={() => workoutBuilder.setOpen((v) => !v)}
+                  variant="secondary"
+                  onClick={() => setSaveAsPlanOpen(true)}
                 >
-                  Workout builder
+                  Save week as program
                 </Button>
-              ) : null}
+                <Link href="/library/training-plans" className="shrink-0">
+                  <Button type="button" variant="secondary">
+                    Programs
+                  </Button>
+                </Link>
+                <Link href="/calendar/template" className="shrink-0">
+                  <Button type="button" variant="secondary">
+                    Edit weekly template
+                  </Button>
+                </Link>
+                {!useWizardPool ? (
+                  <Button
+                    type="button"
+                    className="shrink-0"
+                    variant={workoutBuilder.open ? "primary" : "secondary"}
+                    onClick={() => workoutBuilder.setOpen((v) => !v)}
+                  >
+                    Workout builder
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
 
