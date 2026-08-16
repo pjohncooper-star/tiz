@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button, Input, Label, SegmentedControl, Select } from "@/components/ui";
 import { trainingPlanHref, trainingPlansHref } from "@/lib/plan/library-href";
-import { mondayWeekStartKey } from "@/lib/dates";
+import { addDaysToDateKey, mondayWeekStartKey } from "@/lib/dates";
 import type {
   SimpleGoalEvent,
   SimpleTrainingPlanAttachment,
@@ -58,24 +58,43 @@ function newAttachmentId(): string {
   return crypto.randomUUID();
 }
 
+function suggestedProgramStartDate(input: {
+  weeks: SimpleWeek[];
+  selectedWeekIndex: number | null;
+  attachments: SimpleTrainingPlanAttachment[];
+  windowsByAttachmentId: Record<string, { window: { endDate: string } }>;
+}): string {
+  let latestEnd: string | null = null;
+  for (const row of input.attachments) {
+    const id = row.id ?? row.trainingPlanId;
+    const end =
+      input.windowsByAttachmentId[id]?.window.endDate ?? row.endDate;
+    if (end && (!latestEnd || end > latestEnd)) latestEnd = end;
+  }
+  if (latestEnd) return addDaysToDateKey(latestEnd, 1);
+
+  const selected =
+    input.selectedWeekIndex != null
+      ? input.weeks[input.selectedWeekIndex]?.weekStartDate
+      : null;
+  if (selected) return mondayWeekStartKey(selected);
+  return input.weeks[0]?.weekStartDate ?? "";
+}
+
 function defaultAttachment(
   plan: LibraryPlanOption,
-  weeks: SimpleWeek[],
-  races: SimpleGoalEvent[],
+  startDate: string,
   owns: ProgramDiscipline[] | null
 ): SimpleTrainingPlanAttachment {
-  const bRace = races.find((event) => event.priority === "B");
-  const aRace = races.find((event) => event.priority === "A");
-  const linked = bRace ?? aRace ?? null;
   return {
     id: newAttachmentId(),
     trainingPlanId: plan.id,
     trainingPlanName: plan.name,
     durationDays: plan.durationDays,
     sessionCount: plan.sessionCount,
-    anchorMode: linked ? "end" : "start",
-    anchorDate: linked?.date ?? weeks[0]?.weekStartDate ?? "",
-    goalEventId: linked?.id ?? null,
+    anchorMode: "start",
+    anchorDate: startDate,
+    goalEventId: null,
     pausedWeeks: [],
     startDate: null,
     endDate: null,
@@ -117,6 +136,18 @@ export function SimplePlannerTrainingPlanPane({
   onExtendSeason: (extension: SeasonDateExtension) => void;
 }) {
   const races = useMemo(() => raceOptions(goalEvents), [goalEvents]);
+  const [customAddDate, setCustomAddDate] = useState<string | null>(null);
+  const suggestedAddDate = useMemo(
+    () =>
+      suggestedProgramStartDate({
+        weeks,
+        selectedWeekIndex,
+        attachments,
+        windowsByAttachmentId,
+      }),
+    [weeks, selectedWeekIndex, attachments, windowsByAttachmentId]
+  );
+  const addStartDate = customAddDate || suggestedAddDate;
   const selectedWeek = selectedWeekIndex != null ? weeks[selectedWeekIndex] : null;
   const selectedMonday = selectedWeek
     ? mondayWeekStartKey(selectedWeek.weekStartDate)
@@ -139,11 +170,12 @@ export function SimplePlannerTrainingPlanPane({
 
   function addPlan(planId: string) {
     const plan = plans.find((row) => row.id === planId);
-    if (!plan) return;
+    if (!plan || !addStartDate) return;
     onChange([
       ...attachments,
-      defaultAttachment(plan, weeks, races, mixForPlan(plan.id)),
+      defaultAttachment(plan, addStartDate, mixForPlan(plan.id)),
     ]);
+    setCustomAddDate(null);
   }
 
   function updateAt(index: number, next: SimpleTrainingPlanAttachment) {
@@ -174,6 +206,39 @@ export function SimplePlannerTrainingPlanPane({
     });
   }
 
+  const programPicker = (
+    placeholder: string,
+    options: LibraryPlanOption[]
+  ) => (
+    <div className="flex flex-wrap items-end gap-2">
+      <div className="min-w-[12rem] flex-1">
+        <Label>Program</Label>
+        <Select
+          value=""
+          onChange={(event) => {
+            if (event.target.value) addPlan(event.target.value);
+          }}
+        >
+          <option value="">{placeholder}</option>
+          {options.map((plan) => (
+            <option key={plan.id} value={plan.id}>
+              {plan.name} ({weeksLabel(plan.durationDays)}, {plan.sessionCount}{" "}
+              sessions)
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="w-44">
+        <Label>Start date</Label>
+        <Input
+          type="date"
+          value={addStartDate}
+          onChange={(event) => setCustomAddDate(event.target.value || null)}
+        />
+      </div>
+    </div>
+  );
+
   if (attachments.length === 0) {
     return (
       <div className="space-y-3">
@@ -192,21 +257,11 @@ export function SimplePlannerTrainingPlanPane({
           </p>
         ) : (
           <div>
-            <Label>Program</Label>
-            <Select
-              value=""
-              onChange={(event) => {
-                if (event.target.value) addPlan(event.target.value);
-              }}
-            >
-              <option value="">Select a program…</option>
-              {plans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name} ({weeksLabel(plan.durationDays)}, {plan.sessionCount}{" "}
-                  sessions)
-                </option>
-              ))}
-            </Select>
+            {programPicker("Select a program…", plans)}
+            <p className="mt-1 text-xs text-zinc-500">
+              The program starts on this date. Link it to a race afterward if you want
+              an end-anchor.
+            </p>
           </div>
         )}
       </div>
@@ -297,7 +352,7 @@ export function SimplePlannerTrainingPlanPane({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="space-y-3">
         <Button
           type="button"
           variant="secondary"
@@ -307,19 +362,13 @@ export function SimplePlannerTrainingPlanPane({
           Pause all programs this week
         </Button>
         {plans.length > 0 ? (
-          <Select
-            value=""
-            onChange={(event) => {
-              if (event.target.value) addPlan(event.target.value);
-            }}
-          >
-            <option value="">Add program…</option>
-            {plans.map((plan) => (
-              <option key={plan.id} value={plan.id}>
-                {plan.name}
-              </option>
-            ))}
-          </Select>
+          <div>
+            {programPicker("Add program…", plans)}
+            <p className="mt-1 text-xs text-zinc-500">
+              Defaults to the day after the last attached program. Link to a race on
+              the card if you want an end-anchor.
+            </p>
+          </div>
         ) : null}
       </div>
 
