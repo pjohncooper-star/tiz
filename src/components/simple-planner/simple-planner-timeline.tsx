@@ -1,7 +1,7 @@
 "use client";
 
 import { format, parseISO } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { addDaysToDateKey, mondayWeekStartKey, parseDateKey } from "@/lib/dates";
 import {
   buildRaceMarkersFromGoalEvents,
@@ -48,6 +48,7 @@ type SimplePlannerTimelineProps = {
   }>;
   attachments?: SimpleTrainingPlanAttachment[];
   onPauseAllThisWeek?: () => void;
+  onMoveProgram?: (attachmentId: string, weekDelta: number) => void;
 };
 
 function readCollapsedDefault(): boolean {
@@ -76,10 +77,22 @@ export function SimplePlannerTimeline({
   planWindows = [],
   attachments = [],
   onPauseAllThisWeek,
+  onMoveProgram,
 }: SimplePlannerTimelineProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [focus, setFocus] = useState<FocusMode>("all");
   const [hydrated, setHydrated] = useState(false);
+  const [programDrag, setProgramDrag] = useState<{
+    attachmentId: string;
+    originX: number;
+    weekWidth: number;
+    startWeek: number;
+    endWeek: number;
+    weekDelta: number;
+  } | null>(null);
+  const programTrackRef = useRef<HTMLDivElement>(null);
+  const programDragRef = useRef(programDrag);
+  programDragRef.current = programDrag;
 
   useEffect(() => {
     setCollapsed(readCollapsedDefault());
@@ -130,19 +143,78 @@ export function SimplePlannerTimeline({
         : planWindows.map((row) => row.attachmentId);
     if (ids.length === 0) {
       const fallback = planCoverageSegments(weeks, planWindow);
-      return fallback.length > 0 ? [{ attachmentId: "program", name: "Program", color: PROGRAM_BAR_COLORS[0]!, segments: fallback }] : [];
+      return fallback.length > 0
+        ? [{
+            attachmentId: "program",
+            name: "Program",
+            color: PROGRAM_BAR_COLORS[0]!,
+            segments: fallback,
+            startWeek: fallback[0]!.startWeekIndex,
+            endWeek: fallback[fallback.length - 1]!.endWeekIndex,
+            movable: false,
+          }]
+        : [];
     }
     return ids.map((id, index) => {
       const attachment = attachments.find((row) => (row.id ?? row.trainingPlanId) === id);
       const window = planWindows.find((row) => row.attachmentId === id)?.window ?? null;
+      const segments = planCoverageSegments(weeks, window, id);
+      const startWeek = segments.length
+        ? Math.min(...segments.map((segment) => segment.startWeekIndex))
+        : 0;
+      const endWeek = segments.length
+        ? Math.max(...segments.map((segment) => segment.endWeekIndex))
+        : 0;
       return {
         attachmentId: id,
         name: attachment?.trainingPlanName ?? "Program",
         color: PROGRAM_BAR_COLORS[index % PROGRAM_BAR_COLORS.length]!,
-        segments: planCoverageSegments(weeks, window, id),
+        segments,
+        startWeek,
+        endWeek,
+        movable: Boolean(onMoveProgram && attachment),
       };
     }).filter((row) => row.segments.length > 0);
-  }, [attachments, planWindow, planWindows, weeks]);
+  }, [attachments, onMoveProgram, planWindow, planWindows, weeks]);
+
+  useEffect(() => {
+    if (!programDrag || !onMoveProgram) return;
+    const displayCount = Math.max(weeks.length, 1);
+
+    function clampedDelta(
+      clientX: number,
+      drag: NonNullable<typeof programDragRef.current>
+    ) {
+      if (!drag) return 0;
+      const raw = Math.round((clientX - drag.originX) / drag.weekWidth);
+      const min = -drag.endWeek;
+      const max = displayCount - 1 - drag.startWeek;
+      return Math.max(min, Math.min(max, raw));
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      const drag = programDragRef.current;
+      if (!drag) return;
+      const weekDelta = clampedDelta(event.clientX, drag);
+      if (weekDelta === drag.weekDelta) return;
+      setProgramDrag({ ...drag, weekDelta });
+    }
+
+    function onPointerEnd() {
+      const drag = programDragRef.current;
+      setProgramDrag(null);
+      if (drag && drag.weekDelta !== 0) onMoveProgram(drag.attachmentId, drag.weekDelta);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerEnd);
+    window.addEventListener("pointercancel", onPointerEnd);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerEnd);
+      window.removeEventListener("pointercancel", onPointerEnd);
+    };
+  }, [onMoveProgram, programDrag?.attachmentId, weeks.length]);
 
   const chart = (
     <div className="space-y-2">
@@ -322,35 +394,84 @@ export function SimplePlannerTimeline({
             })}
           </div>
 
-          {programRows.map((row) => (
-            <div key={row.attachmentId} className="relative h-2">
-              {row.segments.map((segment) => {
-                const widthPct =
-                  ((segment.endWeekIndex - segment.startWeekIndex + 1) / displayWeeks) *
-                  100;
-                const leftPct = (segment.startWeekIndex / displayWeeks) * 100;
-                const paused = segment.kind === "paused";
+          {programRows.length > 0 ? (
+            <div
+              ref={programTrackRef}
+              className={`space-y-1 ${programDrag ? "select-none" : ""}`}
+            >
+              {programRows.map((row) => {
+                const previewDelta =
+                  programDrag?.attachmentId === row.attachmentId
+                    ? programDrag.weekDelta
+                    : 0;
                 return (
-                  <div
-                    key={`${row.attachmentId}-${segment.kind}-${segment.startWeekIndex}`}
-                    className={`absolute top-0 h-2 overflow-hidden rounded-sm ${
-                      paused ? "border border-dashed" : ""
-                    }`}
-                    style={{
-                      left: `${leftPct}%`,
-                      width: `${widthPct}%`,
-                      borderColor: paused ? row.color : undefined,
-                      backgroundColor: paused ? "transparent" : row.color,
-                      backgroundImage: paused
-                        ? `repeating-linear-gradient(135deg, ${row.color}33 0 4px, transparent 4px 8px)`
-                        : undefined,
-                    }}
-                    title={paused ? `${row.name} paused` : row.name}
-                  />
+                  <div key={row.attachmentId} className="relative h-3">
+                    {row.segments.map((segment) => {
+                      const widthPct =
+                        ((segment.endWeekIndex - segment.startWeekIndex + 1) /
+                          displayWeeks) *
+                        100;
+                      const leftPct =
+                        ((segment.startWeekIndex + previewDelta) / displayWeeks) *
+                        100;
+                      const paused = segment.kind === "paused";
+                      return (
+                        <div
+                          key={`${row.attachmentId}-${segment.kind}-${segment.startWeekIndex}`}
+                          className={`absolute top-0 h-3 overflow-hidden rounded-sm ${
+                            paused ? "border border-dashed" : ""
+                          } ${
+                            row.movable
+                              ? programDrag?.attachmentId === row.attachmentId
+                                ? "cursor-grabbing"
+                                : "cursor-grab"
+                              : ""
+                          }`}
+                          style={{
+                            left: `${leftPct}%`,
+                            width: `${widthPct}%`,
+                            touchAction: row.movable ? "none" : undefined,
+                            borderColor: paused ? row.color : undefined,
+                            backgroundColor: paused ? "transparent" : row.color,
+                            backgroundImage: paused
+                              ? `repeating-linear-gradient(135deg, ${row.color}33 0 4px, transparent 4px 8px)`
+                              : undefined,
+                          }}
+                          title={
+                            paused
+                              ? `${row.name} paused`
+                              : row.movable
+                                ? `${row.name} — drag to move (snaps to Monday)`
+                                : row.name
+                          }
+                          onPointerDown={
+                            row.movable
+                              ? (event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  const track = programTrackRef.current;
+                                  if (!track) return;
+                                  const width = track.getBoundingClientRect().width;
+                                  if (width <= 0) return;
+                                  setProgramDrag({
+                                    attachmentId: row.attachmentId,
+                                    originX: event.clientX,
+                                    weekWidth: width / displayWeeks,
+                                    startWeek: row.startWeek,
+                                    endWeek: row.endWeek,
+                                    weekDelta: 0,
+                                  });
+                                }
+                              : undefined
+                          }
+                        />
+                      );
+                    })}
+                  </div>
                 );
               })}
             </div>
-          ))}
+          ) : null}
         </>
       )}
     </div>

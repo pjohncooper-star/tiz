@@ -10,6 +10,7 @@ import {
   resolveApplyWindowWithPauses,
   schedulePlanSessions,
   schedulePlanSessionsWithPauses,
+  shiftProgramAttachmentByWeeks,
   trainingPlanCellForDayOffset,
   trainingPlanDayOffsetForCell,
   trainingPlanWeekCount,
@@ -417,5 +418,34 @@ describe("from-calendar intensity copy", () => {
       assert.equal(absCopy.nodes[0].target.mode, "value");
       assert.equal(absCopy.nodes[0].target.value, 270);
     }
+  });
+});
+
+describe("shiftProgramAttachmentByWeeks", () => {
+  it("Monday-aligns the start and shifts pauses by whole weeks", () => {
+    const next = shiftProgramAttachmentByWeeks(
+      {
+        anchorMode: "end",
+        anchorDate: "2026-09-20",
+        goalEventId: "race-1",
+        pausedWeeks: [{ weekStartDate: "2026-08-05", weekCount: 1 }],
+      },
+      2,
+      "2026-08-05"
+    );
+    assert.equal(next.anchorMode, "start");
+    assert.equal(next.anchorDate, "2026-08-17");
+    assert.equal(next.goalEventId, null);
+    assert.equal(next.pausedWeeks[0]?.weekStartDate, "2026-08-17");
+  });
+
+  it("leaves the attachment unchanged when the week delta is 0", () => {
+    const attachment = {
+      anchorMode: "start" as const,
+      anchorDate: "2026-08-05",
+      goalEventId: "race-1",
+      pausedWeeks: [] as Array<{ weekStartDate: string; weekCount: number }>,
+    };
+    assert.equal(shiftProgramAttachmentByWeeks(attachment, 0, "2026-08-05"), attachment);
   });
 });

@@ -348,6 +348,32 @@ export function seasonExtensionForWindow(
   return next.startDate || next.endDate ? next : null;
 }
 
+/** Slide an attached program by whole weeks and Monday-align its start. */
+export function shiftProgramAttachmentByWeeks<
+  T extends {
+    anchorMode: "start" | "end";
+    anchorDate: string;
+    goalEventId: string | null;
+    pausedWeeks: Array<{ weekStartDate: string; weekCount: number }>;
+  },
+>(attachment: T, weekDelta: number, windowStartDate: string): T {
+  if (weekDelta === 0 || !windowStartDate) return attachment;
+  const days = weekDelta * 7;
+  return {
+    ...attachment,
+    anchorMode: "start",
+    anchorDate: addDaysToDateKey(mondayWeekStartKey(windowStartDate), days),
+    goalEventId: null,
+    pausedWeeks: attachment.pausedWeeks.map((pause) => ({
+      ...pause,
+      weekStartDate: addDaysToDateKey(
+        mondayWeekStartKey(pause.weekStartDate),
+        days
+      ),
+    })),
+  };
+}
+
 /**
  * Map plan sessions onto dates, skipping paused Monday–Sunday weeks.
  * Day-of-week alignment is preserved because pauses are full weeks.

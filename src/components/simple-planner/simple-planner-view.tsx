@@ -28,6 +28,7 @@ import {
   type AttachedPlanSessionDraft,
 } from "@/lib/plan/season/preview-attached-plan";
 import { mondayWeekStartKey } from "@/lib/dates";
+import { shiftProgramAttachmentByWeeks } from "@/lib/plan/training-plan";
 import {
   emptyRace,
   DEFAULT_PHASE_SESSIONS,
@@ -956,6 +957,22 @@ export function SimplePlannerView({
         onSelectWeek={handleSelectWeek}
         planWindows={attachedPlanPreview.windows}
         attachments={seasonAttachments}
+        onMoveProgram={(attachmentId, weekDelta) => {
+          const windowStart = attachedPlanPreview.windows.find(
+            (row) => row.attachmentId === attachmentId
+          )?.window.startDate;
+          if (!windowStart) return;
+          const trainingPlanAttachments = seasonAttachments.map((row) =>
+            (row.id ?? row.trainingPlanId) === attachmentId
+              ? shiftProgramAttachmentByWeeks(row, weekDelta, windowStart)
+              : row
+          );
+          setSeason({
+            ...season,
+            trainingPlanAttachments,
+            trainingPlanAttachment: trainingPlanAttachments[0] ?? null,
+          });
+        }}
         onPauseAllThisWeek={() => {
           const monday =
             selectedWeekIndex != null
