@@ -33,13 +33,13 @@ export function TrainingPlansLibraryView() {
       const res = await fetch("/api/plan/training-plans");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Failed to load plans");
+        setError(typeof data.error === "string" ? data.error : "Failed to load programs");
         setPlans([]);
         return;
       }
       setPlans(Array.isArray(data.plans) ? data.plans : []);
     } catch {
-      setError("Failed to load plans");
+      setError("Failed to load programs");
       setPlans([]);
     } finally {
       setLoading(false);
@@ -53,7 +53,7 @@ export function TrainingPlansLibraryView() {
   async function handleDelete(plan: PlanListItem) {
     if (
       !window.confirm(
-        `Delete training plan “${plan.name}”? Applied calendar sessions stay on the calendar (untagged from the plan).`
+        `Delete program “${plan.name}”? Applied calendar sessions stay on the calendar (untagged from the program).`
       )
     ) {
       return;
@@ -88,7 +88,7 @@ export function TrainingPlansLibraryView() {
     const removed = typeof data.removed === "number" ? data.removed : 0;
     window.alert(
       removed === 0
-        ? "No future sessions from this plan to remove."
+        ? "No future sessions from this program to remove."
         : `Removed ${removed} future session${removed === 1 ? "" : "s"}.`
     );
     void reload();
@@ -110,17 +110,17 @@ export function TrainingPlansLibraryView() {
 
       <section className="space-y-3 border-t border-zinc-200 pt-6 dark:border-zinc-800">
         <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-          Saved plans
+          Saved programs
         </h2>
         <p className="text-sm text-zinc-500">
-          Edit library packs here. Applying copies sessions onto the calendar; calendar edits do
-          not rewrite the library unless you create a new plan from a date range.
+          Edit programs here. Applying copies sessions onto the calendar; calendar edits do
+          not rewrite the library unless you create a new program from a date range.
         </p>
         {loading ? <p className="text-sm text-zinc-500">Loading…</p> : null}
         {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
         {!loading && plans.length === 0 ? (
           <p className="text-sm text-zinc-500">
-            No training plans yet. Import a CSV or create one from the calendar.
+            No programs yet. Import a CSV or create one from the calendar.
           </p>
         ) : null}
         <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">

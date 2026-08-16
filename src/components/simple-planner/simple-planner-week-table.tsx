@@ -604,14 +604,33 @@ function WeekCells({
         >
           {expanded ? "▼" : "▶"} {week.weekIndex + 1}
         </button>
-        {week.planCoverage === "attached" ? (
+        {week.planCoverages && week.planCoverages.length > 0
+          ? week.planCoverages.map((row) => (
+              <span
+                key={row.attachmentId}
+                className={`ml-1 rounded px-1 text-[10px] font-medium uppercase tracking-wide ${
+                  row.coverage === "paused"
+                    ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                    : "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                }`}
+              >
+                {row.coverage === "paused" ? "Paused" : "Program"}
+              </span>
+            ))
+          : null}
+        {week.planCoverage === "attached" && !week.planCoverages?.length ? (
           <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-medium uppercase tracking-wide text-violet-700 dark:bg-violet-950 dark:text-violet-300">
-            Plan
+            Program
           </span>
         ) : null}
-        {week.planCoverage === "paused" ? (
+        {week.planCoverage === "paused" && !week.planCoverages?.length ? (
           <span className="ml-1 rounded bg-zinc-100 px-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
             Paused
+          </span>
+        ) : null}
+        {week.hasPlanClash ? (
+          <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium uppercase tracking-wide text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            Clash
           </span>
         ) : null}
       </td>

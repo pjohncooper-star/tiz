@@ -87,7 +87,7 @@
 | My typed number didn't take effect | Numeric fields commit on blur or Enter, not per keystroke | Click elsewhere or press Enter. |
 | I can't attach a workout to a session | Race sessions don't take structured workouts, and disciplines must match | Check both. To replace an existing workout, **Unassign** or **Edit** it first. |
 | I can't rename or move a folder | Not implemented in the UI | Create the folder you want and add workouts to it. |
-| I can't drag training-plan sessions into order | Not implemented | Edit the **Day offset** field instead. |
+| I can't drag program sessions into order | Not implemented | Edit the **Day offset** field instead. |
 
 ## Workout Signaling
 

@@ -56,7 +56,7 @@
 
 **Activity** — A recorded workout that came from a file or from Strava. What you did.
 
-**Book plan** — An attached training plan shown as a violet band on the season timeline.
+**Attached program** — A program placed on a season, shown as a violet band on the season timeline.
 
 **Component** — A reusable workout piece from a Warm-up, Main set, or Cool-down folder, dragged into the builder to assemble a workout.
 
@@ -90,7 +90,7 @@
 
 **Structured workout** — A step tree with targets, attachable to a planned session and exportable to a device.
 
-**Training plan** — A reusable multi-week set of sessions positioned by day offset, applicable to any date range or attachable to a season.
+**Program** — A reusable multi-week set of sessions positioned by day offset, applicable to any date range or attachable to a season. Same word in the library and on the season.
 
 **Weekly template** — A reusable Monday-to-Sunday layout of sports, durations, and roles. Assigned to phases, rest weeks, and test weeks; applied to individual weeks with **Apply template**.
 

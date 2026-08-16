@@ -111,11 +111,11 @@ export function buildTrainingPlanDraft(
   sessions: TrainingPlanDraftSessionInput[]
 ): TrainingPlanDraft {
   if (sessions.length === 0) {
-    throw new Error("Training plan requires at least one session");
+    throw new Error("Program requires at least one session");
   }
   if (sessions.length > MAX_TRAINING_PLAN_SESSIONS) {
     throw new Error(
-      `Training plan may have at most ${MAX_TRAINING_PLAN_SESSIONS} sessions`
+      `A program may have at most ${MAX_TRAINING_PLAN_SESSIONS} sessions`
     );
   }
 
@@ -131,7 +131,7 @@ export function buildTrainingPlanDraft(
 
   if (durationDays > MAX_TRAINING_PLAN_DURATION_DAYS) {
     throw new Error(
-      `Training plan may span at most ${MAX_TRAINING_PLAN_DURATION_DAYS} days (26 weeks)`
+      `A program may span at most ${MAX_TRAINING_PLAN_DURATION_DAYS} days (26 weeks)`
     );
   }
 
@@ -307,11 +307,6 @@ export function resolveApplyWindowWithPauses(input: {
   let pausedMondays = expandPausedWeekStarts(input.pausedWeeks ?? []);
   for (let i = 0; i < 8; i++) {
     const expandedDays = planDurationDays + pausedMondays.length * 7;
-    if (expandedDays > MAX_TRAINING_PLAN_DURATION_DAYS) {
-      throw new Error(
-        `Training plan may span at most ${MAX_TRAINING_PLAN_DURATION_DAYS} days (26 weeks) after pause weeks`
-      );
-    }
     const window = resolveApplyWindow({
       durationDays: expandedDays,
       anchorMode: input.anchorMode,
@@ -334,6 +329,23 @@ export function resolveApplyWindowWithPauses(input: {
     todayKey: input.todayKey,
   });
   return { ...window, pausedMondays, planDurationDays };
+}
+
+export type SeasonDateExtension = {
+  startDate?: string;
+  endDate?: string;
+};
+
+/** If the attached window falls outside the season, suggest new season bounds. */
+export function seasonExtensionForWindow(
+  window: { startDate: string; endDate: string },
+  seasonStart: string,
+  seasonEnd: string
+): SeasonDateExtension | null {
+  const next: SeasonDateExtension = {};
+  if (window.startDate < seasonStart) next.startDate = window.startDate;
+  if (window.endDate > seasonEnd) next.endDate = window.endDate;
+  return next.startDate || next.endDate ? next : null;
 }
 
 /**

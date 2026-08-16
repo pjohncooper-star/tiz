@@ -93,7 +93,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       testWeekFlags: data.testWeekFlags,
       restWeekTemplateId: data.restWeekTemplateId,
       testWeekTemplateId: data.testWeekTemplateId,
+      trainingPlanAttachments: data.trainingPlanAttachments,
       trainingPlanAttachment: data.trainingPlanAttachment,
+      planSessionConflicts: data.planSessionConflicts,
+      maxWeekHours: data.maxWeekHours,
     });
 
     if (!plan) {

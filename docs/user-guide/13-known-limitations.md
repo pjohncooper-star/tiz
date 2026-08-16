@@ -80,10 +80,10 @@ These all work server-side; there is simply no control for them.
 | --- | --- |
 | Rename a workout folder | Choose folder names carefully the first time |
 | Move a folder, or move a workout between folders | A misfiled workout has to be rebuilt in the right folder |
-| Drag-reorder training plan sessions | Reposition them by editing the **Day offset** field |
+| Drag-reorder program sessions | Reposition them by editing the **Day offset** field |
 | Edit a week's targets on the calendar | Targets come from the season plan only |
 | Goal times per race in the season planner | The field exists on the model and drives calendar race durations. Set a goal time when creating a race directly on the calendar instead. |
-| Plan adherence analytics | Applied sessions are stamped with their plan session, but nothing surfaces the comparison |
+| Plan adherence analytics | Applied sessions are stamped with their program session, but nothing surfaces the comparison |
 
 ## Prescription and export gaps
 
@@ -94,9 +94,9 @@ These all work server-side; there is simply no control for them.
 | Export is only from a planned session | A library workout cannot be exported directly — attach it to a calendar day first |
 | ZWO export is limited | Time-based steps mapped to power fractions, no step notes, and swim-specific structure does not translate |
 | Tags apply to planned sessions, not library workouts | There is no way to tag or search the library itself; organization is by folder only |
-| A training plan cannot start empty | Plans come from a CSV import or from capturing a calendar range; there is no blank-plan button |
-| Training plans cap at 500 sessions and 182 days | Which is 26 weeks — long enough for most blocks, not for a whole year |
-| Library and calendar do not stay in sync | Editing a plan does not change weeks already applied, and editing a calendar session does not update the library plan |
+| A program cannot start empty | Programs come from a CSV import or from capturing a calendar range; there is no blank-program button |
+| Programs cap at 500 sessions and 182 days | Which is 26 weeks — long enough for most blocks, not for a whole year |
+| Library and calendar do not stay in sync | Editing a program does not change weeks already applied, and editing a calendar session does not update the library program |
 
 ## Screen size and interaction
 

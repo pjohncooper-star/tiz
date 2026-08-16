@@ -83,7 +83,7 @@ export function CalendarCsvImportSettings({
             ? ` Note: largest gap between sessions is ${data.plan.maxGapDays} days.`
             : "";
         setMessage(
-          `Saved training plan “${data.plan.name}” (${data.plan.sessionCount} sessions, ${data.plan.durationDays} days).${gapNote}`
+          `Saved program “${data.plan.name}” (${data.plan.sessionCount} sessions, ${data.plan.durationDays} days).${gapNote}`
         );
         setPlanName("");
         onPlanSaved?.();
@@ -109,7 +109,7 @@ export function CalendarCsvImportSettings({
     <div className="space-y-3">
       <p className="text-sm text-zinc-500">
         Import sessions from CSV. Upload onto the calendar by date, or save as a reusable
-        training plan (relative dates from the first session). Leave step columns blank for
+        program (relative dates from the first session). Leave step columns blank for
         skeletons, or add step/repeat rows for structured workouts (nested repeats and
         absolute targets supported). Distances and paces use your Units settings.
       </p>
@@ -118,12 +118,12 @@ export function CalendarCsvImportSettings({
         onChange={setMode}
         options={[
           { value: "calendar", label: "Upload to calendar" },
-          { value: "plan", label: "Save as training plan" },
+          { value: "plan", label: "Save as program" },
         ]}
       />
       {mode === "plan" ? (
         <div>
-          <Label>Plan name</Label>
+          <Label>Program name</Label>
           <Input
             value={planName}
             onChange={(e) => setPlanName(e.target.value)}
@@ -160,7 +160,7 @@ export function CalendarCsvImportSettings({
           {uploading
             ? "Uploading…"
             : mode === "plan"
-              ? "Save plan from CSV"
+              ? "Save program from CSV"
               : "Upload CSV"}
         </Button>
       </div>

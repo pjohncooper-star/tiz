@@ -15,6 +15,7 @@ import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 import type { LongOffWeekPolicy } from "@prisma/client";
 import type { PoolSlotKind, WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
+import type { ProgramDiscipline } from "@/lib/plan/season/plan-session-conflicts";
 
 export const PHASE_COLORS = ["#38bdf8", "#22c55e", "#f59e0b", "#6366f1", "#ec4899", "#14b8a6"];
 
@@ -92,6 +93,11 @@ export type SimplePhase = {
 
 export type PlanWeekCoverage = "attached" | "paused";
 
+export type SimpleWeekPlanCoverage = {
+  attachmentId: string;
+  coverage: PlanWeekCoverage;
+};
+
 export type SimpleWeek = {
   weekIndex: number;
   weekStartDate: string;
@@ -99,6 +105,8 @@ export type SimpleWeek = {
   swimHours: number;
   bikeHours: number;
   runHours: number;
+  strengthHours?: number;
+  strengthSessions?: number;
   totalHours: number;
   swimDistanceMeters?: number | null;
   runDistanceMeters?: number | null;
@@ -107,6 +115,13 @@ export type SimpleWeek = {
   longRunMinutes?: number;
   longSessionZoneMinutes?: ZoneMinutes;
   planCoverage?: PlanWeekCoverage | null;
+  planCoverages?: SimpleWeekPlanCoverage[];
+  ownedDisciplines?: ProgramDiscipline[];
+  programSessionCounts?: Partial<Record<ProgramDiscipline, number>>;
+  programIntenseCounts?: Partial<Record<ProgramDiscipline, number>>;
+  programHasLongRide?: boolean;
+  programHasLongRun?: boolean;
+  hasPlanClash?: boolean;
 };
 
 export type SimpleSeason = {
@@ -118,6 +133,7 @@ export type SimpleSeason = {
   status: string;
   defaultPlanningMode?: PlanningMode;
   deLoadVolumePercent: number;
+  maxWeekHours?: number | null;
   rampDefaults: SimpleRampDefaults;
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   phases: SimplePhase[];
@@ -129,7 +145,10 @@ export type SimpleSeason = {
   testWeekFlags?: boolean[];
   restWeekTemplateId?: string | null;
   testWeekTemplateId?: string | null;
+  trainingPlanAttachments?: SimpleTrainingPlanAttachment[];
+  /** @deprecated Use trainingPlanAttachments. */
   trainingPlanAttachment?: SimpleTrainingPlanAttachment | null;
+  planSessionConflicts?: import("@/lib/plan/season/plan-session-conflicts").PlanSessionConflict[];
 };
 
 export type SimpleTrainingPlanAttachment = {
@@ -146,6 +165,8 @@ export type SimpleTrainingPlanAttachment = {
   endDate: string | null;
   truncateOffset?: number;
   truncated?: boolean;
+  ownsDisciplines?: ProgramDiscipline[] | null;
+  fillLeftoverTiz?: Partial<Record<ProgramDiscipline, boolean>>;
 };
 
 export type { PoolSlotKind, WeekSlotBudgets };

@@ -9,6 +9,8 @@ type LongWeekScheduleGridProps = {
   longRideWeekFlags: boolean[];
   longRunWeekFlags: boolean[];
   restWeekByIndex: boolean[];
+  longRideOwnedByProgram?: boolean[];
+  longRunOwnedByProgram?: boolean[];
   onLongRideWeekFlagsChange: (flags: boolean[]) => void;
   onLongRunWeekFlagsChange: (flags: boolean[]) => void;
 };
@@ -28,6 +30,8 @@ export function LongWeekScheduleGrid({
   longRideWeekFlags,
   longRunWeekFlags,
   restWeekByIndex,
+  longRideOwnedByProgram = [],
+  longRunOwnedByProgram = [],
   onLongRideWeekFlagsChange,
   onLongRunWeekFlagsChange,
 }: LongWeekScheduleGridProps) {
@@ -73,11 +77,13 @@ export function LongWeekScheduleGrid({
               {
                 label: "Long bike",
                 flags: longRideWeekFlags,
+                owned: longRideOwnedByProgram,
                 onChange: onLongRideWeekFlagsChange,
               },
               {
                 label: "Long run",
                 flags: longRunWeekFlags,
+                owned: longRunOwnedByProgram,
                 onChange: onLongRunWeekFlagsChange,
               },
             ] as const
@@ -90,15 +96,22 @@ export function LongWeekScheduleGrid({
                 {row.label}
               </th>
               {weekIndices.map((weekIndex) => {
-                const disabled = weekDisabled(weekIndex, phaseKind, restWeekByIndex);
-                const checked = disabled ? false : (row.flags[weekIndex] ?? true);
+                const owned = row.owned[weekIndex] ?? false;
+                const disabled =
+                  owned || weekDisabled(weekIndex, phaseKind, restWeekByIndex);
+                const checked = disabled && !owned ? false : (row.flags[weekIndex] ?? true);
                 return (
                   <td key={weekIndex} className="px-2 py-1 text-center">
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-zinc-300"
-                      checked={checked}
+                      checked={owned ? true : checked}
                       disabled={disabled}
+                      title={
+                        owned
+                          ? "The program already has a long this week"
+                          : undefined
+                      }
                       aria-label={`${row.label} week ${weekIndex + 1}`}
                       onChange={(event) =>
                         toggleFlag(row.flags, weekIndex, event.target.checked, row.onChange)

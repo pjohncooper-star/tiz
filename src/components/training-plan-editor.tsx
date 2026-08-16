@@ -130,7 +130,7 @@ export function TrainingPlanEditor({
   async function savePlanMeta() {
     const name = planMeta.name.trim();
     if (!name) {
-      setError("Plan name is required");
+      setError("Program name is required");
       return;
     }
     setSavingMeta(true);
@@ -146,7 +146,7 @@ export function TrainingPlanEditor({
     setSavingMeta(false);
     if (!res.ok) {
       const data = await res.json().catch(() => null);
-      setError(readApiError(data, "Could not save plan"));
+      setError(readApiError(data, "Could not save program"));
       return;
     }
     const data = await res.json();
@@ -258,10 +258,10 @@ export function TrainingPlanEditor({
   async function deleteSession() {
     if (!draft) return;
     if (sessions.length <= 1) {
-      setError("A training plan must keep at least one session");
+      setError("A program must keep at least one session");
       return;
     }
-    if (!window.confirm(`Delete “${draft.title}” from this library plan?`)) return;
+    if (!window.confirm(`Delete “${draft.title}” from this program?`)) return;
     setError(null);
     const res = await fetch(
       `/api/plan/training-plans/${initialPlan.id}/sessions/${draft.id}`,
@@ -340,7 +340,7 @@ export function TrainingPlanEditor({
         <div className="min-w-0 flex-1 space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label>Plan name</Label>
+              <Label>Program name</Label>
               <Input
                 value={planMeta.name}
                 onChange={(e) =>
@@ -374,7 +374,7 @@ export function TrainingPlanEditor({
             disabled={savingMeta}
             onClick={() => void savePlanMeta()}
           >
-            {savingMeta ? "Saving…" : "Save plan details"}
+            {savingMeta ? "Saving…" : "Save program details"}
           </Button>
           <Button type="button" variant="secondary" onClick={() => setApplyOpen(true)}>
             Apply…

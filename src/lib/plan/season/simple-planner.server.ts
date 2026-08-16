@@ -76,9 +76,11 @@ import {
 import { resolveTestWeekFlagsForSeason } from "@/lib/plan/calendar/week-template-resolution";
 import {
   serializeTrainingPlanAttachment,
-  syncSeasonTrainingPlanAttachment,
+  syncSeasonTrainingPlanAttachments,
   type SeasonTrainingPlanAttachmentWrite,
 } from "@/lib/plan/season/season-training-plan.server";
+import type { PlanSessionConflict } from "@/lib/plan/season/plan-session-conflicts";
+import { parsePlanSessionConflicts } from "@/lib/plan/season/plan-session-conflicts";
 
 function cuid(): string {
   return `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 11)}`;
@@ -188,7 +190,11 @@ export type UpdateSimpleSeasonInput = {
   testWeekFlags?: boolean[] | null;
   restWeekTemplateId?: string | null;
   testWeekTemplateId?: string | null;
-  trainingPlanAttachment?: SeasonTrainingPlanAttachmentWrite;
+  trainingPlanAttachments?: SeasonTrainingPlanAttachmentWrite[] | null;
+  /** @deprecated Use trainingPlanAttachments. */
+  trainingPlanAttachment?: SeasonTrainingPlanAttachmentWrite | null;
+  planSessionConflicts?: PlanSessionConflict[];
+  maxWeekHours?: number | null;
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -670,6 +676,8 @@ function weekCreateData(
     runSessions: 0,
     longRideMinutes: week.longRideMinutes,
     longRunMinutes: week.longRunMinutes,
+    strengthHours: 0,
+    strengthSessions: 0,
   };
 }
 
@@ -1057,6 +1065,7 @@ export async function updateSimpleSeasonPlan(
         ...(input.defaultPlanningMode != null
           ? { defaultPlanningMode: input.defaultPlanningMode }
           : {}),
+        ...(input.maxWeekHours !== undefined ? { maxWeekHours: input.maxWeekHours } : {}),
         ...(input.restWeekTemplateId !== undefined
           ? { restWeekTemplateId: input.restWeekTemplateId }
           : {}),
@@ -1177,24 +1186,35 @@ export async function updateSimpleSeasonPlan(
       await removeGoalEvents(tx, input.removedGoalEvents);
     }
 
-    const existingAttachment = existing.trainingPlanAttachments[0] ?? null;
-    await syncSeasonTrainingPlanAttachment({
+    const existingAttachments = existing.trainingPlanAttachments ?? [];
+    const writes =
+      input.trainingPlanAttachments !== undefined
+        ? input.trainingPlanAttachments
+        : input.trainingPlanAttachment !== undefined
+          ? input.trainingPlanAttachment
+            ? [input.trainingPlanAttachment]
+            : []
+          : undefined;
+    await syncSeasonTrainingPlanAttachments({
       tx,
       athleteId,
       seasonPlanId,
-      existing: existingAttachment
-        ? {
-            startDate: existingAttachment.startDate,
-            endDate: existingAttachment.endDate,
-            truncateOffset: existingAttachment.truncateOffset,
-            trainingPlanId: existingAttachment.trainingPlanId,
-            anchorMode: existingAttachment.anchorMode,
-            anchorDate: existingAttachment.anchorDate,
-            goalEventId: existingAttachment.goalEventId,
-            pausedWeeks: existingAttachment.pausedWeeks,
-          }
-        : null,
-      write: input.trainingPlanAttachment,
+      existing: existingAttachments.map((row) => ({
+        id: row.id,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        truncateOffset: row.truncateOffset,
+        trainingPlanId: row.trainingPlanId,
+        anchorMode: row.anchorMode,
+        anchorDate: row.anchorDate,
+        goalEventId: row.goalEventId,
+        pausedWeeks: row.pausedWeeks,
+        ownsDisciplines: (row as { ownsDisciplines?: unknown }).ownsDisciplines,
+        fillLeftoverTiz: (row as { fillLeftoverTiz?: unknown }).fillLeftoverTiz,
+      })),
+      writes,
+      conflicts: input.planSessionConflicts,
+      maxWeekHours: input.maxWeekHours,
       goalEvents: (
         await tx.goalEvent.findMany({
           where: { seasonPlanId },
@@ -1313,6 +1333,7 @@ export function serializeSimpleSeasonPlan(
     status: plan.status,
     defaultPlanningMode: plan.defaultPlanningMode,
     deLoadVolumePercent: plan.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
+    maxWeekHours: (plan as { maxWeekHours?: number | null }).maxWeekHours ?? null,
     rampDefaults: defaults,
     phaseKindZoneDefaults,
     restWeekTemplateId: plan.restWeekTemplateId ?? null,
@@ -1334,6 +1355,8 @@ export function serializeSimpleSeasonPlan(
       swimHours: week.swimHours,
       bikeHours: week.bikeHours,
       runHours: week.runHours,
+      strengthHours: (week as { strengthHours?: number }).strengthHours ?? 0,
+      strengthSessions: (week as { strengthSessions?: number }).strengthSessions ?? 0,
       totalHours: week.totalHours,
       swimDistanceMeters: week.swimDistanceMeters,
       runDistanceMeters: week.runDistanceMeters,
@@ -1359,9 +1382,13 @@ export function serializeSimpleSeasonPlan(
           priority: plan.primaryGoalEvent.priority,
         }
       : null,
+    trainingPlanAttachments: plan.trainingPlanAttachments.map(serializeTrainingPlanAttachment),
     trainingPlanAttachment: plan.trainingPlanAttachments[0]
       ? serializeTrainingPlanAttachment(plan.trainingPlanAttachments[0])
       : null,
+    planSessionConflicts: parsePlanSessionConflicts(
+      (plan as { planSessionConflicts?: unknown }).planSessionConflicts
+    ),
   };
 }
 

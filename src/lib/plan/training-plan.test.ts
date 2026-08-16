@@ -257,6 +257,18 @@ describe("schedulePlanSessionsWithPauses", () => {
     );
   });
 
+  it("allows pause weeks to expand the window past 26 weeks", () => {
+    const window = resolveApplyWindowWithPauses({
+      durationDays: 26 * 7,
+      anchorMode: "start",
+      date: "2026-01-05",
+      todayKey: "2026-01-01",
+      pausedWeeks: [{ weekStartDate: "2026-03-02", weekCount: 2 }],
+    });
+    assert.equal(window.appliedDurationDays, 26 * 7 + 14);
+    assert.equal(window.pausedMondays.length, 2);
+  });
+
   it("places no sessions on a paused week", () => {
     const window = resolveApplyWindowWithPauses({
       durationDays: 14,

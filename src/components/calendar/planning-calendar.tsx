@@ -1930,11 +1930,11 @@ export function PlanningCalendar({
                 variant="secondary"
                 onClick={() => setSaveAsPlanOpen(true)}
               >
-                Save week as plan
+                Save week as program
               </Button>
               <Link href="/library/training-plans" className="shrink-0">
                 <Button type="button" variant="secondary">
-                  Training plans
+                  Programs
                 </Button>
               </Link>
               <Link href="/calendar/template" className="shrink-0">

@@ -40,6 +40,7 @@ function sessionRow(
     source: "FLEXIBLE" as const,
     trainingPlanId: null,
     trainingPlanSessionId: null,
+    seasonTrainingPlanAttachmentId: null,
     multisportGroupId: null,
     sessionIndex: null,
     estimatedDurationMinutes: 45,

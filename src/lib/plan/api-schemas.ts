@@ -445,6 +445,33 @@ export const simpleWeekSchema = z.object({
   runDistanceMeters: z.number().nonnegative().nullable().optional(),
 });
 
+const PROGRAM_DISCIPLINES = ["SWIM", "BIKE", "RUN", "STRENGTH"] as const;
+
+const trainingPlanAttachmentWriteSchema = z.object({
+  id: z.string().min(1).optional(),
+  trainingPlanId: z.string().min(1),
+  anchorMode: z.enum(["start", "end"]),
+  anchorDate: z.string().regex(DATE_KEY),
+  goalEventId: z.string().nullable().optional(),
+  pausedWeeks: z
+    .array(
+      z.object({
+        weekStartDate: z.string().regex(DATE_KEY),
+        weekCount: z.number().int().min(1).max(8),
+      })
+    )
+    .optional(),
+  ownsDisciplines: z.array(z.enum(PROGRAM_DISCIPLINES)).nullable().optional(),
+  fillLeftoverTiz: z
+    .object({
+      SWIM: z.boolean().optional(),
+      BIKE: z.boolean().optional(),
+      RUN: z.boolean().optional(),
+      STRENGTH: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 export const createSimpleSeasonSchema = z.object({
   name: z.string().min(1),
   startDate: z.string().regex(DATE_KEY),
@@ -477,22 +504,21 @@ export const updateSimpleSeasonSchema = z
     testWeekFlags: z.array(z.boolean()).optional(),
     restWeekTemplateId: z.string().nullable().optional(),
     testWeekTemplateId: z.string().nullable().optional(),
-    trainingPlanAttachment: z
-      .object({
-        trainingPlanId: z.string().min(1),
-        anchorMode: z.enum(["start", "end"]),
-        anchorDate: z.string().regex(DATE_KEY),
-        goalEventId: z.string().nullable().optional(),
-        pausedWeeks: z
-          .array(
-            z.object({
-              weekStartDate: z.string().regex(DATE_KEY),
-              weekCount: z.number().int().min(1).max(8),
-            })
-          )
-          .optional(),
-      })
+    maxWeekHours: z.number().positive().nullable().optional(),
+    planSessionConflicts: z
+      .array(
+        z.object({
+          losingAttachmentId: z.string().min(1),
+          dayOffset: z.number().int().nonnegative(),
+          sortOrder: z.number().int().nonnegative(),
+          resolution: z.enum(["drop", "keep"]),
+        })
+      )
+      .optional(),
+    trainingPlanAttachments: z
+      .array(trainingPlanAttachmentWriteSchema)
       .nullable()
       .optional(),
+    trainingPlanAttachment: trainingPlanAttachmentWriteSchema.nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

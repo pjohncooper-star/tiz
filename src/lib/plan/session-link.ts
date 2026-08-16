@@ -39,12 +39,32 @@ export function resolveAutoLinkDateKey(startTime: Date, matchDateKey?: string): 
   return matchDateKey ?? format(startTime, "yyyy-MM-dd");
 }
 
-/** First candidate by ascending id (proxy for creation order). Input must be pre-filtered. */
-export function pickFirstAutoLinkCandidate<T extends { id: string }>(
-  candidates: T[]
+/** Prefer closest duration when known; otherwise first by ascending id. */
+export function pickFirstAutoLinkCandidate<T extends { id: string; estimatedDurationMinutes?: number | null }>(
+  candidates: T[],
+  activityDurationMinutes?: number | null
 ): T | null {
   if (candidates.length === 0) return null;
-  return [...candidates].sort((a, b) => a.id.localeCompare(b.id))[0] ?? null;
+  const sorted = [...candidates].sort((a, b) => a.id.localeCompare(b.id));
+  if (
+    activityDurationMinutes == null ||
+    !Number.isFinite(activityDurationMinutes) ||
+    activityDurationMinutes <= 0
+  ) {
+    return sorted[0] ?? null;
+  }
+  let best = sorted[0]!;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const candidate of sorted) {
+    const estimated = candidate.estimatedDurationMinutes;
+    if (estimated == null || estimated <= 0) continue;
+    const delta = Math.abs(estimated - activityDurationMinutes);
+    if (delta < bestDelta) {
+      best = candidate;
+      bestDelta = delta;
+    }
+  }
+  return best;
 }
 
 export async function linkActivityToPlannedSession(
@@ -197,7 +217,7 @@ export async function tryAutoLinkActivityToPlannedSession(
 
   const activity = await db.syncedActivity.findFirst({
     where: { id: activityId, athleteId, ...recordedActivityWhere },
-    select: { id: true, discipline: true, startTime: true },
+    select: { id: true, discipline: true, startTime: true, durationSeconds: true },
   });
   if (!activity) return null;
 
@@ -213,10 +233,13 @@ export async function tryAutoLinkActivityToPlannedSession(
       scheduledDate: parseDateKey(dateKey),
     },
     orderBy: { id: "asc" },
-    select: { id: true },
+    select: { id: true, estimatedDurationMinutes: true },
   });
 
-  const candidate = pickFirstAutoLinkCandidate(candidates);
+  const candidate = pickFirstAutoLinkCandidate(
+    candidates,
+    activity.durationSeconds > 0 ? activity.durationSeconds / 60 : null
+  );
   if (!candidate) return null;
 
   return linkActivityToPlannedSession(athleteId, candidate.id, activityId, {

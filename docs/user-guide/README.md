@@ -21,7 +21,7 @@ If you are new, work through the guide in order. The first three chapters are se
 | [4. Dashboard and workout analysis](./04-dashboard-and-analysis.md) | Reviewing what you did — charts, zone tables, self-evaluation |
 | [5. The season planner](./05-season-planner.md) | Building a season: races, phases, volume, TiZ targets |
 | [6. The planning calendar](./06-planning-calendar.md) | Scheduling weeks, the workout pool, linking activities, device export |
-| [7. Workout library and training plans](./07-workout-library.md) | Building structured workouts and reusable multi-week plans |
+| [7. Workout library and programs](./07-workout-library.md) | Building structured workouts and reusable multi-week programs |
 | [8. Workout Signaling](./08-workout-signaling.md) | Finding load patterns behind your good and bad days |
 | [9. Settings reference](./09-settings.md) | Changing units, zone focus library, self-eval fields, integrations |
 | [10. Troubleshooting](./10-troubleshooting.md) | Something isn't working |
@@ -48,7 +48,7 @@ The left sidebar is the whole app:
 | **Dashboard** | Yesterday/today/tomorrow, the fitness/fatigue chart, and "At a glance" analytics |
 | **Calendar** | The planning calendar — scrollable weeks of planned sessions and completed activities |
 | **Seasons** | The season planner |
-| **Workouts** | The workout library (structured workouts in folders) and training plans |
+| **Workouts** | The workout library (structured workouts in folders) and programs |
 | **Workout Signaling** | Day flags and load-pattern insights |
 | **Settings** | Units, thresholds, planning defaults, workout options, integrations |
 | **Sign out** | At the bottom of the sidebar |

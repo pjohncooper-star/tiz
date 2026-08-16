@@ -115,10 +115,10 @@ export function RacePaceAnchorsSettingsPanel({
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">
-        Fitness race paces resolve CSV / plan targets like <code>10k</code> or{" "}
+        Fitness race paces resolve CSV / program targets like <code>10k</code> or{" "}
         <code>95%|5k</code>. Update these after a race or time trial — upcoming
         calendar workouts that use relative pace retarget automatically (no need to
-        re-apply the plan). Values are min/km.
+        re-apply the program). Values are min/km.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         {FITNESS_FIELDS.map(({ key, label }) => (

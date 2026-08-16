@@ -135,10 +135,10 @@ export async function createTrainingPlanFromCsv(
 ): Promise<TrainingPlanListItem & { gapWarning: boolean; maxGapDays: number }> {
   const name = input.name.trim();
   if (!name) {
-    throw new TrainingPlanError("Plan name is required", 400);
+    throw new TrainingPlanError("Program name is required", 400);
   }
   if (name.length > 120) {
-    throw new TrainingPlanError("Plan name is too long (max 120 characters)", 400);
+    throw new TrainingPlanError("Program name is too long (max 120 characters)", 400);
   }
 
   const byteLength = new TextEncoder().encode(input.csvText).byteLength;
@@ -184,7 +184,7 @@ export async function createTrainingPlanFromCsv(
   });
   if (existing) {
     throw new TrainingPlanError(
-      `A training plan named "${name}" already exists`,
+      `A program named "${name}" already exists`,
       409,
       { code: "NAME_TAKEN" }
     );
@@ -252,7 +252,7 @@ export async function deleteTrainingPlan(
     select: { id: true },
   });
   if (!plan) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
   await db.trainingPlan.delete({ where: { id: planId } });
 }
@@ -401,7 +401,7 @@ export async function getTrainingPlanDetail(
     },
   });
   if (!plan) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
 
   const todayKey = await requestTodayKey();
@@ -470,17 +470,17 @@ export async function renameTrainingPlan(
 ): Promise<TrainingPlanListItem> {
   const trimmed = name.trim();
   if (!trimmed) {
-    throw new TrainingPlanError("Plan name is required", 400);
+    throw new TrainingPlanError("Program name is required", 400);
   }
   if (trimmed.length > 120) {
-    throw new TrainingPlanError("Plan name is too long (max 120 characters)", 400);
+    throw new TrainingPlanError("Program name is too long (max 120 characters)", 400);
   }
   const existing = await db.trainingPlan.findFirst({
     where: { id: planId, athleteId },
     select: { id: true },
   });
   if (!existing) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
   try {
     const updated = await db.trainingPlan.update({
@@ -519,7 +519,7 @@ export async function renameTrainingPlan(
       "code" in e &&
       (e as { code?: string }).code === "P2002"
     ) {
-      throw new TrainingPlanError("A plan with that name already exists", 409);
+      throw new TrainingPlanError("A program with that name already exists", 409);
     }
     throw e;
   }
@@ -531,7 +531,7 @@ async function requireOwnedPlan(athleteId: string, planId: string) {
     select: { id: true },
   });
   if (!plan) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
   return plan;
 }
@@ -601,7 +601,7 @@ export async function createTrainingPlanSession(
   const count = await db.trainingPlanSession.count({ where: { trainingPlanId: planId } });
   if (count >= MAX_TRAINING_PLAN_SESSIONS) {
     throw new TrainingPlanError(
-      `Training plan may have at most ${MAX_TRAINING_PLAN_SESSIONS} sessions`,
+      `A program may have at most ${MAX_TRAINING_PLAN_SESSIONS} sessions`,
       400
     );
   }
@@ -665,7 +665,7 @@ export async function updateTrainingPlanSession(
     where: { id: sessionId, trainingPlanId: planId },
   });
   if (!existing) {
-    throw new TrainingPlanError("Plan session not found", 404);
+    throw new TrainingPlanError("Program session not found", 404);
   }
 
   if (input.dayOffset != null && !(Number.isInteger(input.dayOffset) && input.dayOffset >= 0)) {
@@ -741,7 +741,7 @@ export async function deleteTrainingPlanSession(
     select: { id: true },
   });
   if (!existing) {
-    throw new TrainingPlanError("Plan session not found", 404);
+    throw new TrainingPlanError("Program session not found", 404);
   }
 
   const remainingBefore = await db.trainingPlanSession.count({
@@ -749,7 +749,7 @@ export async function deleteTrainingPlanSession(
   });
   if (remainingBefore <= 1) {
     throw new TrainingPlanError(
-      "A training plan must keep at least one session",
+      "A program must keep at least one session",
       400
     );
   }
@@ -783,7 +783,7 @@ export async function reorderTrainingPlanSessions(
     const existingIds = new Set(existing.map((s) => s.id));
     for (const row of order) {
       if (!existingIds.has(row.id)) {
-        throw new TrainingPlanError("Unknown plan session in reorder", 400);
+        throw new TrainingPlanError("Unknown program session in reorder", 400);
       }
     }
     for (const row of order) {
@@ -811,10 +811,10 @@ export async function createTrainingPlanFromCalendar(
 ): Promise<TrainingPlanListItem & { gapWarning: boolean; maxGapDays: number }> {
   const name = input.name.trim();
   if (!name) {
-    throw new TrainingPlanError("Plan name is required", 400);
+    throw new TrainingPlanError("Program name is required", 400);
   }
   if (name.length > 120) {
-    throw new TrainingPlanError("Plan name is too long (max 120 characters)", 400);
+    throw new TrainingPlanError("Program name is too long (max 120 characters)", 400);
   }
   if (input.endDate < input.startDate) {
     throw new TrainingPlanError("endDate must be on or after startDate", 400);
@@ -896,7 +896,7 @@ export async function createTrainingPlanFromCalendar(
     select: { id: true },
   });
   if (existing) {
-    throw new TrainingPlanError(`A training plan named "${name}" already exists`, 409, {
+    throw new TrainingPlanError(`A program named "${name}" already exists`, 409, {
       code: "NAME_TAKEN",
     });
   }
@@ -965,7 +965,7 @@ export async function clearTrainingPlanFutureSessions(
     select: { id: true, name: true },
   });
   if (!plan) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
   const fromKey = options?.fromDateKey ?? (await requestTodayKey());
   const fromDate = parseDateKey(fromKey);
@@ -998,7 +998,7 @@ export async function previewTrainingPlanApply(
     },
   });
   if (!plan) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
 
   const todayKey = input.todayKey ?? (await requestTodayKey());
@@ -1124,6 +1124,8 @@ export async function applyTrainingPlan(
     tx?: Prisma.TransactionClient;
     /** Extra dates to clear on replace (previous attachment window). */
     replaceRange?: { startDate: string; endDate: string };
+    seasonTrainingPlanAttachmentId?: string;
+    skipSessionKeys?: Set<string>;
   }
 ): Promise<{
   created: number;
@@ -1148,7 +1150,7 @@ export async function applyTrainingPlan(
     },
   });
   if (!plan) {
-    throw new TrainingPlanError("Training plan not found", 404);
+    throw new TrainingPlanError("Program not found", 404);
   }
 
   const todayKey = input.todayKey ?? (await requestTodayKey());
@@ -1186,11 +1188,17 @@ export async function applyTrainingPlan(
   const run = async (tx: Prisma.TransactionClient) => {
     if (input.mode === "replace") {
       const deleted = await tx.plannedSession.deleteMany({
-        where: {
-          athleteId,
-          trainingPlanId: planId,
-          scheduledDate: { gte: rangeStart, lte: rangeEnd },
-        },
+        where: input.seasonTrainingPlanAttachmentId
+          ? {
+              athleteId,
+              seasonTrainingPlanAttachmentId: input.seasonTrainingPlanAttachmentId,
+              scheduledDate: { gte: rangeStart, lte: rangeEnd },
+            }
+          : {
+              athleteId,
+              trainingPlanId: planId,
+              scheduledDate: { gte: rangeStart, lte: rangeEnd },
+            },
       });
       removed = deleted.count;
     }
@@ -1200,6 +1208,11 @@ export async function applyTrainingPlan(
         `${slot.dayOffset}:${slot.sortOrder}`
       );
       if (!planSession) continue;
+      if (
+        input.skipSessionKeys?.has(`${planSession.dayOffset}:${planSession.sortOrder}`)
+      ) {
+        continue;
+      }
 
       const stepsCopy = deepCopyWorkoutSteps(planSession.steps);
       const overlaySession = {
@@ -1238,6 +1251,7 @@ export async function applyTrainingPlan(
           source: "PLAN",
           trainingPlanId: planId,
           trainingPlanSessionId: planSession.id,
+          seasonTrainingPlanAttachmentId: input.seasonTrainingPlanAttachmentId,
           poolSlotKind: slotKindFromSessionRole(planSession.sessionRole),
         },
       });

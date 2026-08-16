@@ -139,13 +139,13 @@ export function ApplyTrainingPlanDialog({
               {preview.truncated ? (
                 <p className="text-amber-800 dark:text-amber-200">
                   Truncated from the start to fit before the end date (skipped first{" "}
-                  {preview.truncateOffset} plan day
+                  {preview.truncateOffset} program day
                   {preview.truncateOffset === 1 ? "" : "s"}). Later sessions are kept.
                 </p>
               ) : null}
               {preview.hasExistingPlanSessions ? (
                 <p className="text-amber-800 dark:text-amber-200">
-                  This plan already has {preview.existingPlanSessionCount} session
+                  This program already has {preview.existingPlanSessionCount} session
                   {preview.existingPlanSessionCount === 1 ? "" : "s"} in this range.
                 </p>
               ) : null}
@@ -157,7 +157,7 @@ export function ApplyTrainingPlanDialog({
               ) : null}
               {preview.missingAnchors && preview.missingAnchors.length > 0 ? (
                 <div className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                  <p className="font-medium">Set these before the plan resolves correctly:</p>
+                  <p className="font-medium">Set these before the program resolves correctly:</p>
                   <ul className="mt-1 list-inside list-disc text-xs">
                     {preview.missingAnchors.map((line) => (
                       <li key={line}>{line}</li>
@@ -194,7 +194,7 @@ export function ApplyTrainingPlanDialog({
 
           {preview?.hasExistingPlanSessions ? (
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Existing plan sessions in range</legend>
+              <legend className="text-sm font-medium">Existing program sessions in range</legend>
               <label className="flex cursor-pointer items-start gap-2 text-sm">
                 <input
                   type="radio"
@@ -216,8 +216,8 @@ export function ApplyTrainingPlanDialog({
                   className="mt-1"
                 />
                 <span>
-                  <strong>Replace this plan’s sessions in range</strong> — remove prior
-                  sessions from this plan in the window, then apply
+                  <strong>Replace this program’s sessions in range</strong> — remove prior
+                  sessions from this program in the window, then apply
                 </span>
               </label>
             </fieldset>
@@ -235,7 +235,7 @@ export function ApplyTrainingPlanDialog({
             onClick={() => void handleApply()}
             disabled={saving || !preview || Boolean(previewError)}
           >
-            {saving ? "Applying…" : "Apply plan"}
+            {saving ? "Applying…" : "Apply program"}
           </Button>
         </div>
       </div>

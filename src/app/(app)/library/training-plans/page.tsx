@@ -9,7 +9,7 @@ export default async function TrainingPlansPage() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-500">
-        Reusable session packs for the calendar. Distinct from the workout folder library.
+        Reusable programs for the calendar. Distinct from the workout folder library.
       </p>
       <TrainingPlansLibraryView />
     </div>

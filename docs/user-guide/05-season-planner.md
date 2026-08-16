@@ -40,21 +40,21 @@ At the top is a sticky **volume timeline** — the chart you will look at most. 
 | --- | --- |
 | **Season** | Name, dates, default planning mode |
 | **Races** | Your A, B, and C races |
-| **Training plan** | Optionally attach a plan from your library |
+| **Program** | Optionally attach a program from your library |
 | **Phases** | The real work: blocks, volume, zone focus, long sessions |
 | **Season defaults** | Zone focus per phase kind, hours-vs-distance planning units |
 | **Week review** | The week-by-week table, rest and test weeks |
 
 Each section has its own **Save** and **Cancel**; **Save all** at the top saves everything. Sections that change computed volume say **Save & recalculate** instead, and the timeline shows "Live preview — Save & recalculate to persist volume" while you have unsaved edits.
 
-Also at the top: **Training plans** (to the library), **All seasons**, and, when ECO load is enabled, a **Fitness / fatigue (season TiZ → ECO)** card that projects your PMC curve from the season you are drafting.
+Also at the top: **Programs** (to the library), **All seasons**, and, when ECO load is enabled, a **Fitness / fatigue (season TiZ → ECO)** card that projects your PMC curve from the season you are drafting.
 
 ### The volume timeline
 
 One bar per week, height proportional to hours, stacked by sport — swim, bike, run. Below the bars:
 
 - A **coloured band** naming the phase each week belongs to.
-- A **violet band** for weeks covered by an attached training plan, dashed where you paused it.
+- A **violet band** for weeks covered by an attached program, dashed where you paused it.
 - **A/B/C race badges** on the weeks your races fall in.
 - Month labels along the axis.
 
@@ -74,7 +74,7 @@ Each race block is labelled **A-race**, **B-race**, or **C-race** — the conven
 
 **Add B race** and **Add C race** add more; **Remove** deletes them.
 
-Races appear on the timeline as badges (A red, B amber, C grey) and, when you save, are synced onto your **calendar** as race sessions. They are also what the **End on race** option in the training-plan section anchors to.
+Races appear on the timeline as badges (A red, B amber, C grey) and, when you save, are synced onto your **calendar** as race sessions. They are also what the **End on race** option in the Program section anchors to.
 
 **Known limitation:** goal times per race are supported in the data model and used for calendar race durations, but the Races section here has no goal-time fields. You can set a goal time when creating a race directly on the calendar instead.
 
@@ -206,7 +206,7 @@ The week-by-week table, and where you make per-week adjustments.
 | **Rest** | Mark this as a de-load week — volume drops to the rest-week percentage |
 | **Total h** | Computed total hours |
 
-Expanding a week shows each sport as `Xh · TiZ Ym (Z3 Zm)`. Badges mark weeks covered by an attached training plan (**Plan**) and weeks where you paused it (**Paused**).
+Expanding a week shows each sport as `Xh · TiZ Ym (Z3 Zm)`. Badges mark weeks covered by an attached program (**Program**) and weeks where you paused it (**Paused**).
 
 **Rest week volume** and **Save & recalculate volume** sit above the table. On desktop, phase bands in the left gutter can be dragged by their top and bottom handles to resize phases.
 
@@ -228,32 +228,34 @@ What generation does:
 - Creates planned sessions for every week in the phase from the phase's weekly template.
 - Uses your **rest week template** for rest weeks and **test week template** for test weeks (both set at the top of the Phases section).
 - Rewrites long-session slots according to the long-week checkboxes and off-week policy.
-- Avoids colliding with sessions from an attached training plan.
+- Avoids colliding with sessions from an attached program.
 - With the checkbox **off**, it replaces previously generated sessions in those weeks while leaving sessions you created by hand alone.
 
 You get a confirmation like "Created 48 sessions across 8 weeks in Base 2".
 
 The generated sessions are skeletons — the right sport, day, role, and duration, with no structured workout attached. Building the actual workouts is [chapter 6](./06-planning-calendar.md) and [chapter 7](./07-workout-library.md).
 
-## Attaching a training plan
+## Attaching programs
 
-If you are following a plan from a book or a coach, you can attach it to the season instead of, or alongside, generating from templates. Build it once in the library (see [chapter 7](./07-workout-library.md#training-plans)), then attach it here.
+You can attach several library programs to one season. Windows may overlap (a swim program beside a run program, or two copies of the same program on different dates). Build each program once in the library (see [chapter 7](./07-workout-library.md#programs)), then attach it here with **Add program**.
 
 | Control | What it does |
 | --- | --- |
-| **Training plan** | Pick a plan; the dropdown shows name, week count, and session count |
-| **Anchor** | **Start date** or **End date** |
-| **End on race** | Anchors the plan's end to one of your races |
-| **Start date** / **End date** | The anchor date, disabled when linked to a race |
-| **Pause selected week** | Skips the plan for the selected week — holidays, illness, travel |
-| **Remove** | Detaches it |
-| **Save & apply** | Persists the attachment and recalculates |
+| **Add program** | Attach another library program (same program twice is allowed) |
+| **Anchor** | **Start date** or **End date**, independently per program |
+| **End on race** | Anchors that program's end to one of your races |
+| **Owns hours / TiZ** | Sports whose week targets come from this program. Uncheck to keep season-ramp targets while still placing those sessions on the calendar |
+| **Fill leftover** | Optional: put leftover season minutes onto extra days. Off by default — the program is the target |
+| **Pause selected week** | Skips that program for the selected week — holidays, illness, travel |
+| **Pause all programs this week** | Vacation: skip every attached program that week |
+| **Remove** | Detaches that program only |
+| **Save & apply** | Persists attachments and recalculates |
 
-Attached plan weeks appear as a solid violet **Book plan** bar on the timeline; paused weeks are dashed.
+Attached program weeks appear as colored bars on the timeline (one bar per program); paused weeks are dashed. Same-day same-sport overlaps warn with **Prefer A**, **Prefer B**, or **Keep both**. Save is allowed either way.
 
-The attached plan acts as a **floor** on the season's numbers: the plan's sessions raise weekly hours, TiZ, and the session budget so that they are counted rather than double-booked. In other words, the season stops asking you to schedule work the book has already prescribed.
+For sports a program owns that week, the program **is** the hours/TiZ target — not a floor against the season ramp. Session counts follow that week of the program unless leftover-TiZ is on (or you raised hours). Checking **Rest** offers to pause attached programs too; rest by itself does not skip them.
 
-Pausing a week is the feature that makes real life workable: you skip a week without editing the plan itself, and the plan resumes where it left off.
+Pausing a week skips that program without editing the library, then resumes after the hole. End-anchored programs keep their race date.
 
 ## Managing seasons
 

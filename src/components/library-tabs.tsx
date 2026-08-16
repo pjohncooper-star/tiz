@@ -23,7 +23,7 @@ export function LibraryTabs() {
         Workouts
       </Link>
       <Link href={trainingPlansHref()} className={tabClass(plansActive)}>
-        Training Plans
+        Programs
       </Link>
     </nav>
   );

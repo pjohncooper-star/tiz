@@ -14,6 +14,7 @@ import type {
   PlanWeekCoverage,
   SimpleGoalEvent,
   SimplePhase,
+  SimpleTrainingPlanAttachment,
   SimpleWeek,
 } from "./simple-planner-types";
 
@@ -22,6 +23,8 @@ const DISCIPLINE_COLORS = {
   bike: "#f59e0b",
   run: "#22c55e",
 } as const;
+
+const PROGRAM_BAR_COLORS = ["#7c3aed", "#db2777", "#4f46e5", "#0d9488", "#e11d48"];
 
 type DisciplineKey = keyof typeof DISCIPLINE_COLORS;
 type FocusMode = "all" | DisciplineKey;
@@ -39,6 +42,12 @@ type SimplePlannerTimelineProps = {
   sticky?: boolean;
   previewHint?: string | null;
   planWindow?: ApplyWindowWithPausesResult | null;
+  planWindows?: Array<{
+    attachmentId: string;
+    window: ApplyWindowWithPausesResult;
+  }>;
+  attachments?: SimpleTrainingPlanAttachment[];
+  onPauseAllThisWeek?: () => void;
 };
 
 function readCollapsedDefault(): boolean {
@@ -64,6 +73,9 @@ export function SimplePlannerTimeline({
   sticky = false,
   previewHint = null,
   planWindow = null,
+  planWindows = [],
+  attachments = [],
+  onPauseAllThisWeek,
 }: SimplePlannerTimelineProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [focus, setFocus] = useState<FocusMode>("all");
@@ -111,10 +123,26 @@ export function SimplePlannerTimeline({
   );
 
   const assignedPhases = useMemo(() => phases.filter(isAssignedPhase), [phases]);
-  const planSegments = useMemo(
-    () => planCoverageSegments(weeks, planWindow),
-    [planWindow, weeks]
-  );
+  const programRows = useMemo(() => {
+    const ids =
+      attachments.length > 0
+        ? attachments.map((row) => row.id ?? row.trainingPlanId)
+        : planWindows.map((row) => row.attachmentId);
+    if (ids.length === 0) {
+      const fallback = planCoverageSegments(weeks, planWindow);
+      return fallback.length > 0 ? [{ attachmentId: "program", name: "Program", color: PROGRAM_BAR_COLORS[0]!, segments: fallback }] : [];
+    }
+    return ids.map((id, index) => {
+      const attachment = attachments.find((row) => (row.id ?? row.trainingPlanId) === id);
+      const window = planWindows.find((row) => row.attachmentId === id)?.window ?? null;
+      return {
+        attachmentId: id,
+        name: attachment?.trainingPlanName ?? "Program",
+        color: PROGRAM_BAR_COLORS[index % PROGRAM_BAR_COLORS.length]!,
+        segments: planCoverageSegments(weeks, window, id),
+      };
+    }).filter((row) => row.segments.length > 0);
+  }, [attachments, planWindow, planWindows, weeks]);
 
   const chart = (
     <div className="space-y-2">
@@ -157,6 +185,15 @@ export function SimplePlannerTimeline({
         {previewHint ? (
           <p className="text-[11px] text-zinc-500">{previewHint}</p>
         ) : null}
+        {onPauseAllThisWeek && selectedWeekIndex != null ? (
+          <button
+            type="button"
+            onClick={onPauseAllThisWeek}
+            className="rounded px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-950"
+          >
+            Pause all programs this week
+          </button>
+        ) : null}
       </div>
 
       {collapsed ? (
@@ -190,6 +227,9 @@ export function SimplePlannerTimeline({
                     style={{ height: "100%" }}
                     title={title}
                   >
+                    {week.hasPlanClash ? (
+                      <span className="absolute -top-1 left-1/2 z-10 h-2 w-2 -translate-x-1/2 rounded-full bg-amber-500" />
+                    ) : null}
                     {focus === "all" ? (
                       <StackedBar week={week} maxHours={maxHours} />
                     ) : (
@@ -238,8 +278,10 @@ export function SimplePlannerTimeline({
               <LegendSwatch color={DISCIPLINE_COLORS.swim} label="Swim" />
               <LegendSwatch color={DISCIPLINE_COLORS.bike} label="Bike" />
               <LegendSwatch color={DISCIPLINE_COLORS.run} label="Run" />
-              {planSegments.length > 0 ? (
-                <LegendSwatch color="#7c3aed" label="Book plan" />
+              {programRows.length > 0 ? (
+                programRows.map((row) => (
+                  <LegendSwatch key={row.attachmentId} color={row.color} label={row.name} />
+                ))
               ) : null}
             </div>
           )}
@@ -280,9 +322,9 @@ export function SimplePlannerTimeline({
             })}
           </div>
 
-          {planSegments.length > 0 && (
-            <div className="relative h-3">
-              {planSegments.map((segment) => {
+          {programRows.map((row) => (
+            <div key={row.attachmentId} className="relative h-2">
+              {row.segments.map((segment) => {
                 const widthPct =
                   ((segment.endWeekIndex - segment.startWeekIndex + 1) / displayWeeks) *
                   100;
@@ -290,24 +332,25 @@ export function SimplePlannerTimeline({
                 const paused = segment.kind === "paused";
                 return (
                   <div
-                    key={`${segment.kind}-${segment.startWeekIndex}`}
-                    className={`absolute top-0 h-3 overflow-hidden rounded-sm ${
-                      paused ? "border border-dashed border-violet-400" : ""
+                    key={`${row.attachmentId}-${segment.kind}-${segment.startWeekIndex}`}
+                    className={`absolute top-0 h-2 overflow-hidden rounded-sm ${
+                      paused ? "border border-dashed" : ""
                     }`}
                     style={{
                       left: `${leftPct}%`,
                       width: `${widthPct}%`,
-                      backgroundColor: paused ? "transparent" : "#7c3aed",
+                      borderColor: paused ? row.color : undefined,
+                      backgroundColor: paused ? "transparent" : row.color,
                       backgroundImage: paused
-                        ? "repeating-linear-gradient(135deg, rgba(124,58,237,0.22) 0 4px, transparent 4px 8px)"
+                        ? `repeating-linear-gradient(135deg, ${row.color}33 0 4px, transparent 4px 8px)`
                         : undefined,
                     }}
-                    title={paused ? "Plan paused" : "Book plan"}
+                    title={paused ? `${row.name} paused` : row.name}
                   />
                 );
               })}
             </div>
-          )}
+          ))}
         </>
       )}
     </div>
@@ -414,10 +457,16 @@ function CollapsedSparkline({
 
 function planCoverageSegments(
   weeks: SimpleWeek[],
-  planWindow: ApplyWindowWithPausesResult | null
+  planWindow: ApplyWindowWithPausesResult | null,
+  attachmentId?: string
 ): Array<{ startWeekIndex: number; endWeekIndex: number; kind: PlanWeekCoverage }> {
   const coverageByIndex = new Map<number, PlanWeekCoverage>();
   for (const week of weeks) {
+    if (attachmentId && week.planCoverages?.length) {
+      const row = week.planCoverages.find((item) => item.attachmentId === attachmentId);
+      if (row) coverageByIndex.set(week.weekIndex, row.coverage);
+      continue;
+    }
     if (week.planCoverage === "attached" || week.planCoverage === "paused") {
       coverageByIndex.set(week.weekIndex, week.planCoverage);
     }
@@ -465,8 +514,10 @@ function weekTooltip(week: SimpleWeek, delta: number | null): string {
     parts.push(`Δ ${sign}${delta.toFixed(2)}h vs prior`);
   }
   if (week.isRestWeek) parts.push("Rest week");
-  if (week.planCoverage === "attached") parts.push("Book plan");
-  if (week.planCoverage === "paused") parts.push("Plan paused");
+  if (week.planCoverage === "attached") parts.push("Program");
+  if (week.planCoverage === "paused") parts.push("Program paused");
+  if (week.hasPlanClash) parts.push("Session clash");
+  if ((week.strengthHours ?? 0) > 0) parts.push(`Strength ${week.strengthHours}h`);
   return parts.join("\n");
 }
 

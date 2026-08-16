@@ -117,12 +117,12 @@ describe("overlayPlanLoadOnWeeks", () => {
     const next = overlaid[0]!;
     assert.equal(next.runHours, 3.33);
     assert.equal(next.swimHours, 3);
-    assert.equal(next.slotBudgets?.RUN.endurance, 2);
+    assert.equal(next.slotBudgets?.RUN.endurance, 1);
     assert.equal(next.slotBudgets?.RUN.intensity, 1);
     assert.equal(next.slotBudgets?.RUN.long, 1);
   });
 
-  it("does not lower season hours when the plan is lighter", () => {
+  it("replaces season hours with the program even when the program is lighter", () => {
     const overlaid = overlayPlanLoadOnWeeks(
       [week({ runHours: 5, totalHours: 14 })],
       [
@@ -131,10 +131,13 @@ describe("overlayPlanLoadOnWeeks", () => {
           discipline: "RUN",
           sessionRole: "EASY",
           estimatedDurationMinutes: 40,
+          attachmentId: "att-1",
+          dayOffset: 0,
+          sortOrder: 0,
         },
       ]
     );
-    assert.equal(overlaid[0]!.runHours, 5);
+    assert.equal(overlaid[0]!.runHours, 0.67);
   });
 
   it("leaves paused weeks unchanged when no plan sessions land there", () => {
@@ -209,6 +212,230 @@ describe("overlayPlanLoadOnWeeks", () => {
     );
     assert.equal(overlaid[0]!.zoneMinutes[zoneKey("RUN", 1)], 12);
     assert.equal(overlaid[0]!.zoneMinutes[zoneKey("RUN", 2)], 48);
+  });
+
+  it("drives each sport from its own program and leaves others on the ramp", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week()],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "SWIM",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 60,
+          attachmentId: "swim-att",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+        {
+          scheduledDateKey: "2026-08-05",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 50,
+          attachmentId: "run-att",
+          dayOffset: 1,
+          sortOrder: 0,
+        },
+      ]
+    );
+    assert.equal(overlaid[0]!.swimHours, 1);
+    assert.equal(overlaid[0]!.runHours, 0.83);
+    assert.equal(overlaid[0]!.bikeHours, 6);
+  });
+
+  it("sums two programs on different days of the same sport", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week({ runHours: 8 })],
+      [
+        {
+          scheduledDateKey: "2026-08-03",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 60,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+        {
+          scheduledDateKey: "2026-08-06",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 45,
+          attachmentId: "b",
+          dayOffset: 3,
+          sortOrder: 0,
+        },
+      ]
+    );
+    assert.equal(overlaid[0]!.runHours, 1.75);
+    assert.equal(overlaid[0]!.programSessionCounts?.RUN, 2);
+  });
+
+  it("omits a dropped clash session from hours and slots", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week({ runHours: 1 })],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 60,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "INTENSITY",
+          estimatedDurationMinutes: 50,
+          attachmentId: "b",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+      ],
+      {
+        conflicts: [
+          {
+            losingAttachmentId: "b",
+            dayOffset: 0,
+            sortOrder: 0,
+            resolution: "drop",
+          },
+        ],
+      }
+    );
+    assert.equal(overlaid[0]!.runHours, 1);
+    assert.equal(overlaid[0]!.slotBudgets?.RUN.intensity, 0);
+    assert.equal(overlaid[0]!.programSessionCounts?.RUN, 1);
+  });
+
+  it("keeps both clash sessions when resolution is keep", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week({ runHours: 1 })],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 60,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "INTENSITY",
+          estimatedDurationMinutes: 50,
+          attachmentId: "b",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+      ]
+    );
+    assert.equal(overlaid[0]!.runHours, 1.83);
+    assert.equal(overlaid[0]!.programSessionCounts?.RUN, 2);
+  });
+
+  it("does not pad extra chips unless leftover-TiZ is on", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week()],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 40,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+      ]
+    );
+    const runSlots = overlaid[0]!.slotBudgets!.RUN;
+    assert.equal(runSlots.endurance + runSlots.intensity + runSlots.long, 1);
+  });
+
+  it("adds leftover extra chips when leftover-TiZ is on and ramp hours remain", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week({ runHours: 3 })],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 40,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+      ],
+      {
+        ownership: [
+          {
+            attachmentId: "a",
+            owns: ["RUN"],
+            fillLeftoverTiz: { RUN: true },
+          },
+        ],
+      }
+    );
+    assert.equal(overlaid[0]!.runHours, 3);
+    const runSlots = overlaid[0]!.slotBudgets!.RUN;
+    assert.ok(runSlots.endurance + runSlots.intensity + runSlots.long > 1);
+  });
+
+  it("leaves a paused program's week on the season ramp while the other still applies", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [
+        week({ weekStartDate: "2026-08-03" }),
+        week({ weekIndex: 1, weekStartDate: "2026-08-10", runHours: 4, totalHours: 13 }),
+      ],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "RUN",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 60,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+        {
+          scheduledDateKey: "2026-08-11",
+          discipline: "SWIM",
+          sessionRole: "EASY",
+          estimatedDurationMinutes: 45,
+          attachmentId: "b",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+      ]
+    );
+    assert.equal(overlaid[0]!.runHours, 1);
+    assert.equal(overlaid[1]!.swimHours, 0.75);
+    assert.equal(overlaid[1]!.runHours, 4);
+  });
+
+  it("includes strength hours in the week total", () => {
+    const overlaid = overlayPlanLoadOnWeeks(
+      [week()],
+      [
+        {
+          scheduledDateKey: "2026-08-04",
+          discipline: "STRENGTH",
+          sessionRole: "MODERATE",
+          estimatedDurationMinutes: 45,
+          attachmentId: "a",
+          dayOffset: 0,
+          sortOrder: 0,
+        },
+      ]
+    );
+    assert.equal(overlaid[0]!.strengthHours, 0.75);
+    assert.equal(overlaid[0]!.strengthSessions, 1);
+    assert.equal(overlaid[0]!.totalHours, 11.75);
   });
 });
 

@@ -1,13 +1,13 @@
 [← Guide index](./README.md)
 
-# 7. Workout library and training plans
+# 7. Workout library and programs
 
 **Workouts** in the sidebar holds two related but distinct things, on two tabs:
 
 - **Workouts** — a folder library of reusable **structured workouts**: step-by-step sessions with targets, which you attach to calendar days and export to your device.
-- **Training Plans** — reusable **multi-week plans**: a whole block of sessions positioned by day offset, which you apply to a date range or attach to a season.
+- **Programs** — reusable **multi-week programs**: a whole block of sessions positioned by day offset, which you apply to a date range or attach to a season.
 
-The rule of thumb: a workout is one session you might repeat; a training plan is a programme.
+The rule of thumb: a workout is one session you might repeat; a program is a multi-week block.
 
 Neither is your history. Completed activities live on the calendar and the dashboard.
 
@@ -189,69 +189,69 @@ If FIT export needs a threshold you haven't set, it refuses and names what's mis
 
 **Step notes on the device** are your note text plus any swim equipment, joined as `{notes} · Equipment: Fins, Paddles`. Useful for the things a target can't express: "relaxed hands", "aim for even splits", "stop if the hamstring talks".
 
-## Training plans
+## Programs
 
-> *"Reusable session packs for the calendar. Distinct from the workout folder library."*
+> *"Reusable programs for the calendar. Distinct from the workout folder library."*
 
-A training plan is a multi-week block of sessions stored by **day offset** — day 0 is the first session day, and gaps are rest days. Because it is relative, the same plan can be applied to any start date, or anchored to end on a race.
+A program is a multi-week block of sessions stored by **day offset** — day 0 is the first session day, and gaps are rest days. Because it is relative, the same program can be applied to any start date, or anchored to end on a race.
 
-This is how you get a book plan, a coach's block, or your own successful build into TiZ once and reuse it.
+This is how you get a published block, a coach's block, or your own successful build into TiZ once and reuse it.
 
 Limits: 500 sessions, 182 days (26 weeks). Gaps longer than 21 days warn you; longer than 90 days require confirmation.
 
 ### Creating one
 
-There is no blank-plan button; a plan starts from content:
+There is no blank-program button; a program starts from content:
 
 | Method | How |
 | --- | --- |
-| **Import CSV** | Choose **Save as training plan**, name it, upload the file |
-| **Create from calendar…** | Pick a date range on your calendar to capture as a plan |
+| **Import CSV** | Choose **Save as program**, name it, upload the file |
+| **Create from calendar…** | Pick a date range on your calendar to capture as a program |
 
 Either way you land in the editor, where **Add** creates further sessions.
 
-"Create from calendar" is the one to remember: after a block that worked, capture those weeks as a plan and you can run it again next year.
+"Create from calendar" is the one to remember: after a block that worked, capture those weeks as a program and you can run it again next year.
 
-### The plan list
+### The program list
 
-Each saved plan shows `{n} sessions · {n} days ({n} weeks) · starts {weekday}` and four actions:
+Each saved program shows `{n} sessions · {n} days ({n} weeks) · starts {weekday}` and four actions:
 
 | Action | Effect |
 | --- | --- |
 | **Edit** | Open the editor |
-| **Apply** | Copy the plan's sessions onto your calendar |
-| **Clear future** | Remove this plan's calendar sessions from today onward; the past is left alone |
-| **Delete** | Remove the library plan. Sessions already applied to the calendar stay. |
+| **Apply** | Copy the program's sessions onto your calendar |
+| **Clear future** | Remove this program's calendar sessions from today onward; the past is left alone |
+| **Delete** | Remove the library program. Sessions already applied to the calendar stay. |
 
-### The plan editor
+### The program editor
 
 > *"Changes here update the library only. Applied calendar sessions are separate copies."*
 
-That note matters: editing a plan does not retroactively change weeks you already applied, and editing a calendar session does not change the library plan.
+That note matters: editing a program does not retroactively change weeks you already applied, and editing a calendar session does not change the library program.
 
-At the top, **Plan name** and **Description**, with **Save plan details**, **Apply…**, and **Clear future**. A stats line shows sessions, days, the anchor weekday, and how many future sessions are currently on your calendar, plus any race-pace anchors the plan requires.
+At the top, **Program name** and **Description**, with **Save program details**, **Apply…**, and **Clear future**. A stats line shows sessions, days, the anchor weekday, and how many future sessions are currently on your calendar, plus any race-pace anchors the program requires.
 
 Three areas:
 
 - **Sessions** — a list of `Day {n} · {discipline}` entries, each marked *structured* or *skeleton*, with **Add**.
-- **Week grid** — Monday-to-Sunday columns with a coloured dot per day: blue for bike, amber for run, green for swim, grey for strength, sized by that day's volume. Click a dot to select the day's session; press **+** to add one. This is the quickest way to see whether a plan's weeks are balanced and where its hard days sit.
+- **Week grid** — Monday-to-Sunday columns with a coloured dot per day: blue for bike, amber for run, green for swim, grey for strength, sized by that day's volume. Click a dot to select the day's session; press **+** to add one. This is the quickest way to see whether a program's weeks are balanced and where its hard days sit.
 - **Session editor** — for the selected session:
 
 | Field | Notes |
 | --- | --- |
 | **Title** | Required |
 | **Discipline** | Run, Bike, Swim, Strength |
-| **Day offset (0 = first day)** | Where it sits in the plan |
+| **Day offset (0 = first day)** | Where it sits in the program |
 | **Role** | Easy, Moderate, Intensity, Long |
 | **Duration (minutes)** | May be left empty for a skeleton session |
 | **Notes** | Free text |
 | **Structured workout** | A checkbox that reveals the full step editor |
 
-Skeleton sessions carry no targets: *"Skeleton session — no step targets. Enable structured workout to edit the tree."* That's fine for plans where you decide the detail week by week.
+Skeleton sessions carry no targets: *"Skeleton session — no step targets. Enable structured workout to edit the tree."* That's fine for programs where you decide the detail week by week.
 
-**Known limitation:** sessions are repositioned by editing the **Day offset** field; there is no drag-reordering in the plan editor.
+**Known limitation:** sessions are repositioned by editing the **Day offset** field; there is no drag-reordering in the program editor.
 
-### Applying a plan
+### Applying a program
 
 **Apply…** opens a dialog:
 
@@ -259,25 +259,25 @@ Skeleton sessions carry no targets: *"Skeleton session — no step targets. Enab
 | --- | --- |
 | Anchor | **Start date** or **End date** |
 | Date | The chosen anchor date |
-| Overlap handling | **Merge**, or **Replace this plan's sessions in range** |
+| Overlap handling | **Merge**, or **Replace this program's sessions in range** |
 
 A preview shows the window, the sessions, any truncation, and any missing pace anchors before you commit.
 
-**End date** anchoring is what you use for a race: pick the race date as the end and the plan counts backwards. If the resulting start would be in the past, the plan is truncated from the front, keeping the portion that ends on your date — which is exactly what you want when you find a 16-week plan 10 weeks out.
+**End date** anchoring is what you use for a race: pick the race date as the end and the program counts backwards. If the resulting start would be in the past, the program is truncated from the front, keeping the portion that ends on your date — which is exactly what you want when you find a 16-week program 10 weeks out.
 
 Workout trees are copied **as stored**: relative targets stay relative and follow your fitness; frozen or absolute steps stay put.
 
-### Attaching a plan to a season
+### Attaching a program to a season
 
-Instead of applying a plan directly, you can attach it to a season in the season planner, which additionally makes the plan's sessions count toward the season's weekly hours, TiZ, and session budget, and lets you **pause** individual weeks. See [chapter 5](./05-season-planner.md#attaching-a-training-plan).
+Instead of applying a program directly, you can attach it to a season in the season planner, which additionally makes the program's sessions count toward the season's weekly hours, TiZ, and session budget, and lets you **pause** individual weeks. See [chapter 5](./05-season-planner.md#attaching-a-program).
 
-Use **Apply** when the plan *is* your training. Use **Attach to season** when the plan is part of a season you are also managing in TiZ.
+Use **Apply** when the program *is* your training. Use **Attach to season** when the program is part of a season you are also managing in TiZ.
 
 ## CSV import
 
-**Import CSV** on the Training Plans tab reads a spreadsheet of sessions and either uploads them straight to the calendar or saves them as a training plan. **Download template** gives you the columns; `docs/samples/week-2027-07-05.csv` is a working example.
+**Import CSV** on the Programs tab reads a spreadsheet of sessions and either uploads them straight to the calendar or saves them as a program. **Download template** gives you the columns; `docs/samples/week-2027-07-05.csv` is a working example.
 
-CSV is the most direct route for transcribing a plan from a book or a spreadsheet, and it accepts some targets the visual editor does not:
+CSV is the most direct route for transcribing a program from a spreadsheet, and it accepts some targets the visual editor does not:
 
 ```csv
 signal,target_mode,target

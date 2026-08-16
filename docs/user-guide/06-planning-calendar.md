@@ -24,8 +24,8 @@ Sticky at the top while you scroll.
 | **Next unplanned week** | Shown with the pool open; jumps to the next week with budget left |
 | **Upload** | Upload a `.fit`, `.gpx`, or `.tcx` file |
 | **Apply template** | Drop a weekly template onto a week |
-| **Save week as plan** | Capture a date range as a reusable training plan |
-| **Training plans** | Link to the training-plan library |
+| **Save week as program** | Capture a date range as a reusable program |
+| **Programs** | Link to the program library |
 | **Edit weekly template** | Link to the weekly template library |
 | **Workout builder** | Open the structured-workout builder pane |
 
@@ -98,9 +98,9 @@ This is the intended path when you have a season. See [the workout pool](#the-wo
 
 **Apply template** drops a whole week's layout at once. See [weekly templates](#weekly-templates).
 
-### From a training plan
+### From a program
 
-Apply a plan from the library, or attach one to your season. See [chapter 7](./07-workout-library.md#training-plans).
+Apply a program from the library, or attach one to your season. See [chapter 7](./07-workout-library.md#programs).
 
 ## The workout pool
 
@@ -294,8 +294,8 @@ The feed carries the next **90 days** of planned workouts. Sessions with a start
 
 ## Importing a week from CSV
 
-CSV import lives with the training plans, at **Workouts → Training Plans → Import CSV**, and can either **Upload to calendar** or **Save as training plan**. **Download template** gives you the expected columns, and `docs/samples/week-2027-07-05.csv` is a worked example. It handles dated sessions, nested step rows, roles, pool sizes, and relative pace tokens — see [chapter 7](./07-workout-library.md#csv-import).
+CSV import lives with programs, at **Workouts → Programs → Import CSV**, and can either **Upload to calendar** or **Save as program**. **Download template** gives you the expected columns, and `docs/samples/week-2027-07-05.csv` is a worked example. It handles dated sessions, nested step rows, roles, pool sizes, and relative pace tokens — see [chapter 7](./07-workout-library.md#csv-import).
 
 ---
 
-Next: [7. Workout library and training plans →](./07-workout-library.md)
+Next: [7. Workout library and programs →](./07-workout-library.md)

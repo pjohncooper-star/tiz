@@ -24,9 +24,10 @@ import { SimplePlannerTimeline } from "@/components/simple-planner/simple-planne
 import { SimplePlannerTrainingPlanPane } from "@/components/simple-planner/simple-planner-training-plan-pane";
 import { SimplePlannerWeekTable } from "@/components/simple-planner/simple-planner-week-table";
 import {
-  previewAttachedPlanWeeks,
+  previewAttachedPrograms,
   type AttachedPlanSessionDraft,
 } from "@/lib/plan/season/preview-attached-plan";
+import { mondayWeekStartKey } from "@/lib/dates";
 import {
   emptyRace,
   DEFAULT_PHASE_SESSIONS,
@@ -100,7 +101,13 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
       ...week,
       zoneMinutes: week.zoneMinutes ?? {},
     })),
-    trainingPlanAttachment: season.trainingPlanAttachment ?? null,
+    trainingPlanAttachments:
+      season.trainingPlanAttachments ??
+      (season.trainingPlanAttachment ? [season.trainingPlanAttachment] : []),
+    trainingPlanAttachment:
+      season.trainingPlanAttachments?.[0] ?? season.trainingPlanAttachment ?? null,
+    planSessionConflicts: season.planSessionConflicts ?? [],
+    maxWeekHours: season.maxWeekHours ?? null,
   };
 
   const preview = previewPhaseAwareVolumes({
@@ -190,6 +197,7 @@ function revertSection(
         weeks: baseline.weeks,
         phases: baseline.phases,
         defaultPlanningMode: baseline.defaultPlanningMode,
+        maxWeekHours: baseline.maxWeekHours,
       };
     case "races":
       return {
@@ -200,7 +208,9 @@ function revertSection(
     case "trainingPlan":
       return {
         ...draft,
+        trainingPlanAttachments: baseline.trainingPlanAttachments,
         trainingPlanAttachment: baseline.trainingPlanAttachment,
+        planSessionConflicts: baseline.planSessionConflicts,
         weeks: baseline.weeks,
       };
     case "seasonDefaults":
@@ -382,9 +392,9 @@ export function SimplePlannerView({
   const [libraryPlans, setLibraryPlans] = useState<
     Array<{ id: string; name: string; durationDays: number; sessionCount: number }>
   >([]);
-  const [attachedPlanSessions, setAttachedPlanSessions] = useState<
-    AttachedPlanSessionDraft[]
-  >([]);
+  const [attachedPlanSessionsById, setAttachedPlanSessionsById] = useState<
+    Record<string, AttachedPlanSessionDraft[]>
+  >({});
 
   const volumeSignature = season ? volumePreviewSignature(season) : null;
 
@@ -481,27 +491,37 @@ export function SimplePlannerView({
     })();
   }, []);
 
-  const attachedPlanId = season?.trainingPlanAttachment?.trainingPlanId ?? null;
+  const attachedPlanIds = (season?.trainingPlanAttachments ??
+    (season?.trainingPlanAttachment ? [season.trainingPlanAttachment] : []))
+    .map((row) => row.trainingPlanId)
+    .sort()
+    .join(",");
 
   useEffect(() => {
-    if (!attachedPlanId) {
-      setAttachedPlanSessions([]);
+    const ids = attachedPlanIds ? attachedPlanIds.split(",").filter(Boolean) : [];
+    if (ids.length === 0) {
+      setAttachedPlanSessionsById({});
       return;
     }
     let cancelled = false;
     void (async () => {
-      const res = await fetch(`/api/plan/training-plans/${attachedPlanId}`);
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        plan?: { sessions?: AttachedPlanSessionDraft[] };
-      };
+      const entries = await Promise.all(
+        ids.map(async (id) => {
+          const res = await fetch(`/api/plan/training-plans/${id}`);
+          if (!res.ok) return [id, []] as const;
+          const data = (await res.json()) as {
+            plan?: { sessions?: AttachedPlanSessionDraft[] };
+          };
+          return [id, data.plan?.sessions ?? []] as const;
+        })
+      );
       if (cancelled) return;
-      setAttachedPlanSessions(data.plan?.sessions ?? []);
+      setAttachedPlanSessionsById(Object.fromEntries(entries));
     })();
     return () => {
       cancelled = true;
     };
-  }, [attachedPlanId]);
+  }, [attachedPlanIds]);
 
   const racesByPriority = useMemo(() => {
     if (!season) {
@@ -519,18 +539,75 @@ export function SimplePlannerView({
   }, [season]);
 
   const attachedPlanPreview = useMemo(() => {
-    if (!season?.trainingPlanAttachment) {
-      return { weeks: season?.weeks ?? [], window: null };
+    const attachments = season?.trainingPlanAttachments?.length
+      ? season.trainingPlanAttachments
+      : season?.trainingPlanAttachment
+        ? [season.trainingPlanAttachment]
+        : [];
+    if (!season || attachments.length === 0) {
+      return {
+        weeks: season?.weeks ?? [],
+        windows: [] as Array<{
+          attachmentId: string;
+          window: import("@/lib/plan/training-plan").ApplyWindowWithPausesResult;
+          extension: import("@/lib/plan/training-plan").SeasonDateExtension | null;
+        }>,
+        clashes: [],
+        overlaySessions: [],
+      };
     }
     const today = new Date();
     const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    return previewAttachedPlanWeeks(
+    return previewAttachedPrograms(
       season.weeks,
-      season.trainingPlanAttachment,
-      attachedPlanSessions,
-      todayKey
+      attachments,
+      attachedPlanSessionsById,
+      todayKey,
+      {
+        conflicts: season.planSessionConflicts ?? [],
+        seasonStart: season.startDate,
+        seasonEnd: season.endDate,
+      }
     );
-  }, [season, attachedPlanSessions]);
+  }, [season, attachedPlanSessionsById]);
+
+  const seasonAttachments = season?.trainingPlanAttachments?.length
+    ? season.trainingPlanAttachments
+    : season?.trainingPlanAttachment
+      ? [season.trainingPlanAttachment]
+      : [];
+
+  const windowsByAttachmentId = useMemo(() => {
+    const out: Record<
+      string,
+      {
+        window: import("@/lib/plan/training-plan").ApplyWindowWithPausesResult;
+        extension: import("@/lib/plan/training-plan").SeasonDateExtension | null;
+      }
+    > = {};
+    for (const row of attachedPlanPreview.windows) {
+      out[row.attachmentId] = { window: row.window, extension: row.extension };
+    }
+    return out;
+  }, [attachedPlanPreview.windows]);
+
+  const maxHoursExceeded = Boolean(
+    season?.maxWeekHours &&
+      attachedPlanPreview.weeks.some((week) => week.totalHours > (season.maxWeekHours ?? 0))
+  );
+
+  function attachmentWrites() {
+    return seasonAttachments.map((row) => ({
+      id: row.id,
+      trainingPlanId: row.trainingPlanId,
+      anchorMode: row.anchorMode,
+      anchorDate: row.anchorDate,
+      goalEventId: row.goalEventId,
+      pausedWeeks: row.pausedWeeks,
+      ownsDisciplines: row.ownsDisciplines,
+      fillLeftoverTiz: row.fillLeftoverTiz,
+    }));
+  }
 
   async function saveSeason(
     payload: Record<string, unknown>,
@@ -586,6 +663,7 @@ export function SimplePlannerView({
           startDate: season.startDate,
           endDate: season.endDate,
           defaultPlanningMode: season.defaultPlanningMode,
+          maxWeekHours: season.maxWeekHours ?? null,
           recalculate: true,
           ...extra,
         };
@@ -612,15 +690,10 @@ export function SimplePlannerView({
         };
       case "trainingPlan":
         return {
-          trainingPlanAttachment: season.trainingPlanAttachment
-            ? {
-                trainingPlanId: season.trainingPlanAttachment.trainingPlanId,
-                anchorMode: season.trainingPlanAttachment.anchorMode,
-                anchorDate: season.trainingPlanAttachment.anchorDate,
-                goalEventId: season.trainingPlanAttachment.goalEventId,
-                pausedWeeks: season.trainingPlanAttachment.pausedWeeks,
-              }
-            : null,
+          trainingPlanAttachments: attachmentWrites(),
+          planSessionConflicts: season.planSessionConflicts ?? [],
+          startDate: season.startDate,
+          endDate: season.endDate,
           recalculate: true,
           ...extra,
         };
@@ -721,7 +794,21 @@ export function SimplePlannerView({
 
   function serializeWeeksForSave(weeks: SimpleSeason["weeks"]) {
     return weeks.map(
-      ({ weekStartDate: _d, totalHours: _t, planCoverage: _p, ...week }) => week
+      ({
+        weekStartDate: _d,
+        totalHours: _t,
+        planCoverage: _p,
+        planCoverages: _c,
+        ownedDisciplines: _o,
+        programSessionCounts: _s,
+        programIntenseCounts: _i,
+        programHasLongRide: _lr,
+        programHasLongRun: _ln,
+        hasPlanClash: _h,
+        strengthHours: _sh,
+        strengthSessions: _ss,
+        ...week
+      }) => week
     );
   }
 
@@ -762,15 +849,9 @@ export function SimplePlannerView({
           date,
           disciplines,
         })),
-      trainingPlanAttachment: season.trainingPlanAttachment
-        ? {
-            trainingPlanId: season.trainingPlanAttachment.trainingPlanId,
-            anchorMode: season.trainingPlanAttachment.anchorMode,
-            anchorDate: season.trainingPlanAttachment.anchorDate,
-            goalEventId: season.trainingPlanAttachment.goalEventId,
-            pausedWeeks: season.trainingPlanAttachment.pausedWeeks,
-          }
-        : null,
+      trainingPlanAttachments: attachmentWrites(),
+      planSessionConflicts: season.planSessionConflicts ?? [],
+      maxWeekHours: season.maxWeekHours ?? null,
       ...extra,
     };
   }
@@ -844,7 +925,7 @@ export function SimplePlannerView({
             href="/library/training-plans"
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
-            Training plans
+            Programs
           </Link>
           <Link
             href="/plan/seasons"
@@ -873,7 +954,29 @@ export function SimplePlannerView({
         primaryGoalEvent={season.primaryGoalEvent}
         selectedWeekIndex={selectedWeekIndex}
         onSelectWeek={handleSelectWeek}
-        planWindow={attachedPlanPreview.window}
+        planWindows={attachedPlanPreview.windows}
+        attachments={seasonAttachments}
+        onPauseAllThisWeek={() => {
+          const monday =
+            selectedWeekIndex != null
+              ? mondayWeekStartKey(season.weeks[selectedWeekIndex]?.weekStartDate ?? "")
+              : null;
+          if (!monday) return;
+          setSeason({
+            ...season,
+            trainingPlanAttachments: seasonAttachments.map((row) =>
+              row.pausedWeeks.some((pause) => pause.weekStartDate === monday)
+                ? row
+                : {
+                    ...row,
+                    pausedWeeks: [
+                      ...row.pausedWeeks,
+                      { weekStartDate: monday, weekCount: 1 },
+                    ],
+                  }
+            ),
+          });
+        }}
         previewHint={
           volumePreviewDirty
             ? "Live preview — Save & recalculate to persist volume"
@@ -981,6 +1084,25 @@ export function SimplePlannerView({
               Phases can override this per block. Modes 3–4 include the long in Sessions per week.
             </p>
           </div>
+          <div>
+            <Label>Max hours per week</Label>
+            <NumberEditorInput
+              nullable
+              integer={false}
+              min={1}
+              className="mt-1 max-w-xs"
+              value={season.maxWeekHours ?? null}
+              onCommit={(maxWeekHours) => setSeason({ ...season, maxWeekHours })}
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Optional cap. The planner warns when a week’s total exceeds it.
+            </p>
+            {maxHoursExceeded ? (
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+                At least one week is above the max hours per week ({season.maxWeekHours}).
+              </p>
+            ) : null}
+          </div>
         </div>
       </CollapsibleSection>
 
@@ -1009,20 +1131,70 @@ export function SimplePlannerView({
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Training plan"
+        title="Programs"
         expanded={expandedSections.trainingPlan}
         onToggle={() => toggleSection("trainingPlan")}
         actions={sectionActions("trainingPlan", "Save & apply")}
       >
         <SimplePlannerTrainingPlanPane
-          attachment={season.trainingPlanAttachment ?? null}
+          attachments={seasonAttachments}
           plans={libraryPlans}
           goalEvents={season.goalEvents}
           weeks={season.weeks}
           selectedWeekIndex={selectedWeekIndex}
-          previewWindow={attachedPlanPreview.window}
-          onChange={(trainingPlanAttachment) =>
-            setSeason({ ...season, trainingPlanAttachment })
+          windowsByAttachmentId={windowsByAttachmentId}
+          clashes={attachedPlanPreview.clashes}
+          conflicts={season.planSessionConflicts ?? []}
+          sessionsByPlanId={attachedPlanSessionsById}
+          onChange={(trainingPlanAttachments) =>
+            setSeason({
+              ...season,
+              trainingPlanAttachments,
+              trainingPlanAttachment: trainingPlanAttachments[0] ?? null,
+            })
+          }
+          onConflictsChange={(planSessionConflicts) =>
+            setSeason({ ...season, planSessionConflicts })
+          }
+          onPauseAllThisWeek={() => {
+            const monday =
+              selectedWeekIndex != null
+                ? mondayWeekStartKey(
+                    season.weeks[selectedWeekIndex]?.weekStartDate ?? ""
+                  )
+                : null;
+            if (!monday) return;
+            setSeason({
+              ...season,
+              trainingPlanAttachments: seasonAttachments.map((row) =>
+                row.pausedWeeks.some((pause) => pause.weekStartDate === monday)
+                  ? row
+                  : {
+                      ...row,
+                      pausedWeeks: [
+                        ...row.pausedWeeks,
+                        { weekStartDate: monday, weekCount: 1 },
+                      ],
+                    }
+              ),
+            });
+          }}
+          onExtendSeason={(extension) =>
+            setSeason((current) =>
+              current
+                ? normalizeSeason({
+                    ...current,
+                    ...applySimpleSeasonDateBounds({
+                      startDate: extension.startDate ?? current.startDate,
+                      endDate: extension.endDate ?? current.endDate,
+                      totalWeeks: current.totalWeeks,
+                      phases: current.phases,
+                      weeks: current.weeks,
+                      rampDefaults: current.rampDefaults,
+                    }),
+                  })
+                : current
+            )
           }
         />
       </CollapsibleSection>
@@ -1066,6 +1238,17 @@ export function SimplePlannerView({
             }
             onLongRunWeekFlagsChange={(longRunWeekFlags) =>
               setSeason({ ...season, longRunWeekFlags })
+            }
+            longRideOwnedByProgram={attachedPlanPreview.weeks.map(
+              (week) => Boolean(week.programHasLongRide)
+            )}
+            longRunOwnedByProgram={attachedPlanPreview.weeks.map(
+              (week) => Boolean(week.programHasLongRun)
+            )}
+            programWeekHint={
+              selectedWeekIndex != null
+                ? attachedPlanPreview.weeks[selectedWeekIndex] ?? null
+                : null
             }
           />
         </div>
@@ -1164,8 +1347,39 @@ export function SimplePlannerView({
             const nextByIndex = new Map(
               nextWeeks.map((week) => [week.weekIndex, week])
             );
+            const newlyRested = season.weeks.filter((week) => {
+              const next = nextByIndex.get(week.weekIndex);
+              return Boolean(next?.isRestWeek && !week.isRestWeek);
+            });
+            let attachments = seasonAttachments;
+            if (newlyRested.length > 0 && attachments.length > 0) {
+              const covered = newlyRested.some((week) => {
+                const preview = attachedPlanPreview.weeks[week.weekIndex];
+                return preview?.planCoverage === "attached";
+              });
+              if (
+                covered &&
+                window.confirm("Also pause attached programs this week?")
+              ) {
+                const mondays = new Set(
+                  newlyRested.map((week) => mondayWeekStartKey(week.weekStartDate))
+                );
+                attachments = attachments.map((row) => {
+                  const extra = [...mondays]
+                    .filter(
+                      (monday) =>
+                        !row.pausedWeeks.some((pause) => pause.weekStartDate === monday)
+                    )
+                    .map((monday) => ({ weekStartDate: monday, weekCount: 1 }));
+                  return extra.length
+                    ? { ...row, pausedWeeks: [...row.pausedWeeks, ...extra] }
+                    : row;
+                });
+              }
+            }
             setSeason({
               ...season,
+              trainingPlanAttachments: attachments,
               weeks: season.weeks.map((week) => {
                 const next = nextByIndex.get(week.weekIndex);
                 if (!next) return week;

@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     confirmLargeGaps: form.get("confirmLargeGaps") || undefined,
   });
   if (!meta.success) {
-    return NextResponse.json({ error: "Plan name is required" }, { status: 400 });
+    return NextResponse.json({ error: "Program name is required" }, { status: 400 });
   }
 
   let text: string;

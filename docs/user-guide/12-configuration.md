@@ -129,7 +129,7 @@ Run with `DATABASE_URL` set in the environment.
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:migrate:*` | Apply a specific idempotent manual SQL migration |
 
-The `db:migrate:*` scripts correspond to feature migrations — planning modes, phase templates, the template library, phase volume progression, training plans, workout tags, race pace anchors, session time ordering, training plan session ids, and season training-plan attachment. Apply the relevant one against production before or immediately after deploying the matching code. Each is idempotent, and `DEPLOY.md` documents what the larger ones change.
+The `db:migrate:*` scripts correspond to feature migrations — planning modes, phase templates, the template library, phase volume progression, programs, workout tags, race pace anchors, session time ordering, program session ids, and season program attachment. Apply the relevant one against production before or immediately after deploying the matching code. Each is idempotent, and `DEPLOY.md` documents what the larger ones change.
 
 ### Unlisted maintenance scripts
 

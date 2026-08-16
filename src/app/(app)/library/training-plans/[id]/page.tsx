@@ -63,9 +63,9 @@ export default async function TrainingPlanEditorPage({
         href={trainingPlansHref()}
         className="text-sm text-sky-600 hover:text-sky-800 dark:text-sky-400"
       >
-        ← Back to training plans
+        ← Back to programs
       </Link>
-      <h2 className="text-xl font-semibold">Edit training plan</h2>
+      <h2 className="text-xl font-semibold">Edit program</h2>
       <p className="text-sm text-zinc-500">
         Changes here update the library only. Applied calendar sessions are separate copies.
       </p>

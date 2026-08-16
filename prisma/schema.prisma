@@ -544,6 +544,13 @@ model SeasonPlan {
   defaultPlanningMode      PlanningMode   @default(BY_DISCIPLINE)
   primaryGoalEventId       String?        @unique
   setupComplete            Boolean        @default(false)
+  /** Athlete-set cap; planner warns when a week’s total hours exceed it. */
+  maxWeekHours             Float?
+  /**
+   * Clash resolutions for overlapping attached programs.
+   * `[{ losingAttachmentId, dayOffset, sortOrder, resolution: "drop" | "keep" }]`
+   */
+  planSessionConflicts     Json?
   createdAt                DateTime       @default(now())
   updatedAt                DateTime       @updatedAt
 
@@ -689,6 +696,8 @@ model SeasonWeek {
   swimHours        Float
   bikeHours        Float
   runHours         Float
+  strengthHours    Float    @default(0)
+  strengthSessions Int      @default(0)
   swimDistanceMeters Float?
   runDistanceMeters  Float?
   zoneMinutes      Json
@@ -771,6 +780,10 @@ model SeasonTrainingPlanAttachment {
   goalEventId    String?
   /** `[{ weekStartDate: "yyyy-MM-dd", weekCount: number }]` */
   pausedWeeks    Json
+  /** `["SWIM","BIKE","RUN","STRENGTH"]` — sports whose hours/TiZ this attachment drives. */
+  ownsDisciplines Json?
+  /** `{ SWIM?: boolean, BIKE?: boolean, RUN?: boolean, STRENGTH?: boolean }` */
+  fillLeftoverTiz Json?
   startDate      DateTime @db.Date
   endDate        DateTime @db.Date
   truncateOffset Int      @default(0)
@@ -780,6 +793,7 @@ model SeasonTrainingPlanAttachment {
   seasonPlan   SeasonPlan   @relation(fields: [seasonPlanId], references: [id], onDelete: Cascade)
   trainingPlan TrainingPlan @relation(fields: [trainingPlanId], references: [id], onDelete: Cascade)
   goalEvent    GoalEvent?   @relation(fields: [goalEventId], references: [id], onDelete: SetNull)
+  appliedSessions PlannedSession[]
 
   @@index([seasonPlanId])
   @@index([trainingPlanId])
@@ -815,6 +829,8 @@ model PlannedSession {
   trainingPlanId           String?
   /** Template session this apply row was created from (for plan analytics). */
   trainingPlanSessionId    String?
+  /** Which season attachment created this calendar row (same library program can attach twice). */
+  seasonTrainingPlanAttachmentId String?
   multisportGroupId        String?
   sessionIndex             Int?
   estimatedDurationMinutes Int?
@@ -836,6 +852,7 @@ model PlannedSession {
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingPlan         TrainingPlan?               @relation(fields: [trainingPlanId], references: [id], onDelete: SetNull)
   trainingPlanSession  TrainingPlanSession?        @relation(fields: [trainingPlanSessionId], references: [id], onDelete: SetNull)
+  seasonTrainingPlanAttachment SeasonTrainingPlanAttachment? @relation(fields: [seasonTrainingPlanAttachmentId], references: [id], onDelete: SetNull)
   weeklyTemplateItem   WeeklyScheduleTemplateItem? @relation(fields: [weeklyTemplateItemId], references: [id], onDelete: SetNull)
   goalEvent            GoalEvent?                  @relation("GoalEventCalendarSessions", fields: [goalEventId], references: [id], onDelete: SetNull)
   primaryForGoalEvent  GoalEvent?                  @relation("GoalEventPrimarySession")
@@ -848,6 +865,7 @@ model PlannedSession {
   @@index([athleteId, scheduledDate, daySortOrder])
   @@index([athleteId, trainingPlanId, scheduledDate])
   @@index([trainingPlanSessionId])
+  @@index([seasonTrainingPlanAttachmentId])
   @@index([goalEventId])
   @@index([multisportGroupId])
 }

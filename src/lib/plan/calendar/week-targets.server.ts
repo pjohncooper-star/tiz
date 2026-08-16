@@ -188,7 +188,12 @@ function buildWeekTarget(
     isRestWeek: week.isRestWeek,
     totalHours: week.totalHours,
     phase: phase ? { name: phase.name, color: phase.color } : null,
-    strengthSessionsPerWeek: phase ? phase.strengthSessionsPerWeek : 0,
+    strengthSessionsPerWeek:
+      (week.strengthSessions ?? 0) > 0 || (week.strengthHours ?? 0) > 0
+        ? week.strengthSessions ?? 0
+        : phase
+          ? phase.strengthSessionsPerWeek
+          : 0,
     planningMode,
     longRideMinutes,
     longRunMinutes,

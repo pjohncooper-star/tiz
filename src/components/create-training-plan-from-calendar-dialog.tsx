@@ -30,7 +30,7 @@ export function CreateTrainingPlanFromCalendarDialog({
   async function handleCreate(forceConfirmGaps = false) {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Plan name is required");
+      setError("Program name is required");
       return;
     }
     setSaving(true);
@@ -57,7 +57,7 @@ export function CreateTrainingPlanFromCalendarDialog({
         );
         return;
       }
-      setError(typeof data.error === "string" ? data.error : "Could not create plan");
+      setError(typeof data.error === "string" ? data.error : "Could not create program");
       return;
     }
     const planId = data.plan?.id as string | undefined;
@@ -73,14 +73,14 @@ export function CreateTrainingPlanFromCalendarDialog({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg dark:bg-zinc-900">
-        <h3 className="text-lg font-semibold">Create plan from calendar</h3>
+        <h3 className="text-lg font-semibold">Create program from calendar</h3>
         <p className="mt-1 text-sm text-zinc-500">
           Copies sessions and workouts as stored (relative targets stay relative; frozen
           absolutes stay absolute). Calendar edits will not sync back automatically.
         </p>
         <div className="mt-4 space-y-3">
           <div>
-            <Label>Plan name</Label>
+            <Label>Program name</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -112,7 +112,7 @@ export function CreateTrainingPlanFromCalendarDialog({
             disabled={saving}
             onClick={() => void handleCreate(confirmGaps)}
           >
-            {saving ? "Creating…" : confirmGaps ? "Create anyway" : "Create plan"}
+            {saving ? "Creating…" : confirmGaps ? "Create anyway" : "Create program"}
           </Button>
         </div>
       </div>

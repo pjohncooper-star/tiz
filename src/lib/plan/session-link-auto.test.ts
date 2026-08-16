@@ -127,6 +127,17 @@ describe("auto-link candidate selection", () => {
     assert.equal(pickFirstAutoLinkCandidate(candidates)?.id, "swim_first");
   });
 
+  it("picks the closer duration when two unlinked sessions remain", () => {
+    const picked = pickFirstAutoLinkCandidate(
+      [
+        { id: "easy", estimatedDurationMinutes: 40 },
+        { id: "long", estimatedDurationMinutes: 90 },
+      ],
+      88
+    );
+    assert.equal(picked?.id, "long");
+  });
+
   it("uses matchDateKey override for day filtering", () => {
     const sessions: SessionCandidate[] = [
       {

@@ -194,6 +194,19 @@ Or paste `prisma/migrations/manual_template_library.sql` into the Neon SQL edito
 
 This drops the `seasonPlanId` / `seasonPhaseId` scoping (and its indexes/FKs) from `WeeklyScheduleTemplate`, renames `kind` → `category`, and adds reference columns `SeasonPhase.weeklyTemplateId` and `SeasonPlan.restWeekTemplateId` / `testWeekTemplateId` (all `ON DELETE SET NULL`). It is idempotent and self-sufficient (works whether or not the phase-templates migration was applied).
 
+### Multiple programs per season (schema migration)
+
+Before or immediately after deploying multi-program season code, apply the idempotent SQL migration against Neon:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."   # production Neon URL
+npm run db:migrate:multi-program-seasons
+```
+
+Or paste `prisma/migrations/manual_multi_program_seasons.sql` into the Neon SQL editor.
+
+This adds `SeasonPlan.maxWeekHours` / `planSessionConflicts`, `SeasonWeek.strengthHours` / `strengthSessions`, per-attachment `ownsDisciplines` / `fillLeftoverTiz`, and `PlannedSession.seasonTrainingPlanAttachmentId`. Existing seasons keep a single attached program; clash resolutions default to keep both.
+
 ---
 
 ## Troubleshooting

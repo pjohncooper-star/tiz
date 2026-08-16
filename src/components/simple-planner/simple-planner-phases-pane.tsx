@@ -90,6 +90,9 @@ type SimplePlannerPhasesPaneProps = {
   onPhasesChange: (phases: SimplePhase[]) => void;
   onLongRideWeekFlagsChange: (flags: boolean[]) => void;
   onLongRunWeekFlagsChange: (flags: boolean[]) => void;
+  longRideOwnedByProgram?: boolean[];
+  longRunOwnedByProgram?: boolean[];
+  programWeekHint?: SimpleWeek | null;
 };
 
 export function SimplePlannerPhasesPane({
@@ -110,6 +113,9 @@ export function SimplePlannerPhasesPane({
   onPhasesChange,
   onLongRideWeekFlagsChange,
   onLongRunWeekFlagsChange,
+  longRideOwnedByProgram = [],
+  longRunOwnedByProgram = [],
+  programWeekHint = null,
 }: SimplePlannerPhasesPaneProps) {
   const selected =
     phases.find((phase) => phase.id === selectedPhaseId) ??
@@ -216,6 +222,9 @@ export function SimplePlannerPhasesPane({
             longRunWeekFlags={longRunWeekFlags}
             onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
             onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
+            longRideOwnedByProgram={longRideOwnedByProgram}
+            longRunOwnedByProgram={longRunOwnedByProgram}
+            programWeekHint={programWeekHint}
             onChange={updatePhase}
             onDelete={() => deletePhase(selected)}
           />
@@ -254,6 +263,9 @@ function PhaseDetailEditor({
   longRunWeekFlags,
   onLongRideWeekFlagsChange,
   onLongRunWeekFlagsChange,
+  longRideOwnedByProgram = [],
+  longRunOwnedByProgram = [],
+  programWeekHint = null,
   onChange,
   onDelete,
 }: {
@@ -271,6 +283,9 @@ function PhaseDetailEditor({
   longRunWeekFlags: boolean[];
   onLongRideWeekFlagsChange: (flags: boolean[]) => void;
   onLongRunWeekFlagsChange: (flags: boolean[]) => void;
+  longRideOwnedByProgram?: boolean[];
+  longRunOwnedByProgram?: boolean[];
+  programWeekHint?: SimpleWeek | null;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
 }) {
@@ -455,6 +470,28 @@ function PhaseDetailEditor({
             </div>
           ))}
         </div>
+        {programWeekHint?.programSessionCounts &&
+        Object.values(programWeekHint.programSessionCounts).some((count) => (count ?? 0) > 0) ? (
+          <p className="text-xs text-zinc-500">
+            Program this week:
+            {[
+              ["SWIM", "swim"],
+              ["BIKE", "bike"],
+              ["RUN", "run"],
+              ["STRENGTH", "strength"],
+            ]
+              .map(([key, label]) => {
+                const count =
+                  programWeekHint.programSessionCounts?.[
+                    key as "SWIM" | "BIKE" | "RUN" | "STRENGTH"
+                  ] ?? 0;
+                return count ? ` ${label} ${count}` : null;
+              })
+              .filter(Boolean)
+              .join(" ·")}
+            . Edits only add extras when leftover-TiZ/hours exist.
+          </p>
+        ) : null}
       </fieldset>
 
       <fieldset className="mt-4 space-y-2">
@@ -557,6 +594,8 @@ function PhaseDetailEditor({
               longRideWeekFlags={longRideWeekFlags}
               longRunWeekFlags={longRunWeekFlags}
               restWeekByIndex={restWeekByIndex}
+              longRideOwnedByProgram={longRideOwnedByProgram}
+              longRunOwnedByProgram={longRunOwnedByProgram}
               onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
               onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
             />
