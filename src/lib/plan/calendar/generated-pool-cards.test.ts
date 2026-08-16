@@ -45,8 +45,6 @@ function generatedSession(
     tizSignalOverride: null,
     poolSlotKind: "ENDURANCE",
     ...overrides,
-    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
-    daySortOrder: overrides.daySortOrder ?? 0,
   };
 
 }

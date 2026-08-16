@@ -6,6 +6,7 @@ import {
   mesocycleSteppedValue,
   rampMesocycles,
 } from "./mesocycle-ramp";
+import type { PhaseKind } from "@prisma/client";
 import type { ComputedMesocycle } from "./types";
 
 const mesocycles: ComputedMesocycle[] = [
@@ -27,9 +28,9 @@ const mesocycles: ComputedMesocycle[] = [
 
 describe("mesocycle-ramp", () => {
   it("filters ramp mesocycles to base and build phases", () => {
-    const kinds = ["BASE", "BASE", "BASE", "BASE", "BUILD", "BUILD", "BUILD", "BUILD"];
+    const kinds: PhaseKind[] = ["BASE", "BASE", "BASE", "BASE", "BUILD", "BUILD", "BUILD", "BUILD"];
     assert.equal(rampMesocycles(mesocycles, kinds).length, 2);
-    const withTaper = [...kinds.slice(0, 6), "TAPER", "TAPER"] as const;
+    const withTaper: PhaseKind[] = [...kinds.slice(0, 6), "TAPER", "TAPER"];
     const taperMeso: ComputedMesocycle = {
       phaseIndex: 0,
       name: "Taper I",

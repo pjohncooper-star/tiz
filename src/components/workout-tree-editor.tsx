@@ -73,6 +73,7 @@ import {
 } from "@/lib/workout/relative-intensity";
 import {
   formatRelativePaceLabel,
+  isPaceRef,
   PACE_REFS,
   resolveRelativePaceSeconds,
   type PaceRef,
@@ -1195,8 +1196,9 @@ function StepTargetField({
   }
 
   if (discipline === "RUN" || discipline === "SWIM") {
-    if (relativeMode && step.target.ref) {
-      const ref = step.target.ref;
+    const paceRef = step.target.ref;
+    if (relativeMode && paceRef && isPaceRef(paceRef)) {
+      const ref = paceRef;
       const pct = step.target.pct ?? 100;
       const refSource = step.target.refSource ?? "fitness";
       const resolved = resolveRelativePaceSeconds(

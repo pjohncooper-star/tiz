@@ -51,13 +51,6 @@ function baseWeekTarget(overrides: Partial<CalendarWeekTarget> = {}): CalendarWe
         substituteEndurance: 0,
         substituteDurationMinutes: 0,
       },
-      STRENGTH: {
-        endurance: 0,
-        intensity: 0,
-        long: 0,
-        substituteEndurance: 0,
-        substituteDurationMinutes: 0,
-      },
     },
     ...overrides,
   };
@@ -109,8 +102,6 @@ function session(
     tizSignalOverride: null,
     poolSlotKind: "ENDURANCE",
     ...overrides,
-    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
-    daySortOrder: overrides.daySortOrder ?? 0,
   };
 
 }

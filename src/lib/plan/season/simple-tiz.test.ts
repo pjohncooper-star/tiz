@@ -93,7 +93,7 @@ describe("simple-tiz", () => {
     };
 
     const clamped = clampZoneMinutesToVolume(week);
-    assert.equal(zoneMinutesBudget({ ...week, zoneMinutes: clamped }, "RUN", clamped).used, 60);
+    assert.equal(zoneMinutesBudget(week, "RUN", clamped).used, 60);
   });
 
   it("allows zone minutes below volume cap", () => {

@@ -15,7 +15,6 @@ describe("mergeActivityStreams", () => {
         data: [
           {
             elapsedSeconds: 60,
-            avgPower: 190,
             wktStepIndex: 0,
           },
         ],
@@ -39,7 +38,6 @@ describe("mergeActivityStreams", () => {
         data: [
           {
             elapsedSeconds: 120,
-            avgPower: 165,
             wktStepIndex: 1,
           },
         ],

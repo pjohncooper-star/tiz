@@ -12,7 +12,6 @@ import { defaultSimpleRampDefaults } from "./simple-ramp";
 
 function assignedPhase(overrides: Partial<SimplePhase> & Pick<SimplePhase, "name">): SimplePhase {
   return {
-    name: overrides.name,
     color: "#38bdf8",
     phaseKind: "BASE",
     startWeekIndex: overrides.startWeekIndex ?? 0,

@@ -109,9 +109,10 @@ function anchorSeconds(
  * pct is % of anchor speed: resolved = anchorSeconds * 100 / pct.
  */
 export function resolveRelativePaceSeconds(
-  target: Pick<RelativePaceTarget, "ref" | "pct" | "refSource">,
+  target: { ref?: string | null; pct?: number; refSource?: PaceRefSource },
   ctx: RelativePaceContext
 ): number | null {
+  if (!target.ref || !isPaceRef(target.ref)) return null;
   const source = target.refSource ?? "fitness";
   const anchor = anchorSeconds(target.ref, source, ctx);
   if (anchor == null) return null;
@@ -157,9 +158,12 @@ export function parseRelativePaceToken(
   return `unknown relative pace "${raw}" (use 10k, threshold, or 95%|10k)`;
 }
 
-export function formatRelativePaceLabel(
-  target: Pick<RelativePaceTarget, "ref" | "pct" | "refSource">
-): string {
+export function formatRelativePaceLabel(target: {
+  ref?: string | null;
+  pct?: number;
+  refSource?: PaceRefSource;
+}): string {
+  if (!target.ref || !isPaceRef(target.ref)) return "relative pace";
   const pct =
     target.pct != null && target.pct > 0 && target.pct !== 100
       ? `${target.pct}% `

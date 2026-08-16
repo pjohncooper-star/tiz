@@ -41,6 +41,14 @@ describe("relative pace", () => {
       resolveRelativePaceSeconds({ ref: "5k" }, { racePaces: {} }),
       null
     );
+    assert.equal(
+      resolveRelativePaceSeconds({ ref: "max" }, ctx),
+      null
+    );
+    assert.equal(
+      resolveRelativePaceSeconds({ ref: "lthr" }, ctx),
+      null
+    );
   });
 
   it("prefers goal anchors when refSource is goal", () => {

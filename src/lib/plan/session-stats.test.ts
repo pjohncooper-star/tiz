@@ -44,7 +44,11 @@ const sweetSpot3x8 = {
 
 describe("buildPlannedSessionStats bike power TiZ", () => {
   it("maps sweet-spot watts via athlete FTP instead of fallback 200W", () => {
-    const withFtp = buildPlannedSessionStats("BIKE", "METRIC", {}, {
+    const withFtp = buildPlannedSessionStats("BIKE", "METRIC", {
+      distanceMeters: null,
+      targetSpeedMps: null,
+      targetPaceSeconds: null,
+    }, {
       structuredSteps: sweetSpot3x8,
       thresholdFtpWatts: 250,
       powerZoneBoundaries: [55, 75, 90, 105],
@@ -53,7 +57,11 @@ describe("buildPlannedSessionStats bike power TiZ", () => {
     assert.equal(withFtp.zoneMinutes["BIKE-4"], 24);
     assert.equal(withFtp.zoneMinutes["BIKE-5"], undefined);
 
-    const withoutFtp = buildPlannedSessionStats("BIKE", "METRIC", {}, {
+    const withoutFtp = buildPlannedSessionStats("BIKE", "METRIC", {
+      distanceMeters: null,
+      targetSpeedMps: null,
+      targetPaceSeconds: null,
+    }, {
       structuredSteps: sweetSpot3x8,
     });
     // Without FTP, FALLBACK_FTP 200 maps 260W → Z5.

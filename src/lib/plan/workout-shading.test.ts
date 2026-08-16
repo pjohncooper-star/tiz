@@ -63,8 +63,6 @@ function session(
     tizSignalOverride: null,
     poolSlotKind: null,
     ...overrides,
-    scheduledTimeMinutes: overrides.scheduledTimeMinutes ?? null,
-    daySortOrder: overrides.daySortOrder ?? 0,
   };
 
 }
