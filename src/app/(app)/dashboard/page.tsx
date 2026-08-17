@@ -3,7 +3,6 @@ import { Card } from "@/components/ui";
 import {
   DashboardDayStrip,
   type DayStripColumn,
-  type DayStripSession,
 } from "@/components/dashboard-day-strip";
 import { DashboardGlanceCharts } from "@/components/dashboard-glance-charts";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
@@ -15,17 +14,15 @@ import {
   type CycleRangeBounds,
   type SeasonRangeBounds,
 } from "@/lib/dashboard/date-range";
+import { buildDayStripSessions } from "@/lib/dashboard/day-strip-sessions";
 import { endDateKey, formatDateKey, parseDateKey } from "@/lib/dates";
 import { requestTodayKey } from "@/lib/timezone";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
-import { sessionCompletionRollup } from "@/lib/plan/session-completion";
 import { mapActivityIdsToSessionIds } from "@/lib/plan/session-link";
-import { workoutHref, workoutHrefForResolvedActivity } from "@/lib/plan/workout-href";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
-import type { Discipline } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -139,65 +136,18 @@ export default async function DashboardPage() {
   const dateKeys = [yesterdayKey, todayKey, tomorrowKey] as const;
   const days: DayStripColumn[] = dateKeys.map((date, idx) => {
     const offset = (idx - 1) as -1 | 0 | 1;
-    const sessions: DayStripSession[] = [];
-
-    for (const p of planned.filter((s) => s.scheduledDate === date)) {
-      const completion = sessionCompletionRollup({
-        discipline: p.discipline as Discipline,
-        completedDurationMinutes: p.completedDurationMinutes,
-        completedDistanceMeters: p.completedDistanceMeters,
-        completedTargetSpeedMps: p.completedTargetSpeedMps,
-        completedTargetPaceSeconds: p.completedTargetPaceSeconds,
-        completedZones: p.completedZones,
-      });
-      const linkedMinutes =
-        p.linkedActivity != null
-          ? Math.round((p.linkedActivity.durationSeconds / 60) * 10) / 10
-          : null;
-      const completedMinutes = completion?.durationMinutes ?? linkedMinutes;
-      const isPast = date < todayKey;
-      const isDone = Boolean(p.linkedActivity) || completedMinutes != null;
-      sessions.push({
-        id: p.id,
-        kind: "planned",
-        title: p.title,
-        discipline: p.discipline,
-        scheduledDate: p.scheduledDate,
-        plannedMinutes: p.plannedMinutes > 0 ? p.plannedMinutes : p.estimatedDurationMinutes,
-        completedMinutes,
-        href: workoutHref(p.id, { returnTo: "/dashboard" }),
-        status: isDone ? "completed" : isPast ? "missed" : "planned",
-      });
-    }
-
-    for (const a of activities) {
-      const activityDate = format(new Date(a.startTime), "yyyy-MM-dd");
-      if (activityDate !== date) continue;
-      if (linkedActivityIds.has(a.id)) continue;
-      sessions.push({
-        id: a.id,
-        kind: "completed",
-        title: a.name,
-        discipline: a.legType ?? a.discipline,
-        scheduledDate: date,
-        plannedMinutes: null,
-        completedMinutes: Math.round((a.durationSeconds / 60) * 10) / 10,
-        href: workoutHrefForResolvedActivity(
-          a.id,
-          extraSessionIds.get(a.id) ?? null,
-          { returnTo: "/dashboard" }
-        ),
-        status: "unplanned",
-      });
-    }
-
-    sessions.sort((a, b) => a.title.localeCompare(b.title));
-
     return {
       date,
       label: dayLabel(offset),
       isToday: offset === 0,
-      sessions,
+      sessions: buildDayStripSessions({
+        dateKey: date,
+        todayKey,
+        planned,
+        activities,
+        linkedActivityIds,
+        extraSessionIds,
+      }),
     };
   });
 
