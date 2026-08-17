@@ -12,8 +12,11 @@ import {
   type ActivityForCurves,
   type ActivityForLongest,
   type ActivityForVolume,
+  type LongestActivity,
 } from "@/lib/dashboard/glance-metrics";
 import { parseDashboardDateParam } from "@/lib/dashboard/date-range";
+import { mapActivityIdsToSessionIds } from "@/lib/plan/session-link";
+import { workoutHrefForResolvedActivity } from "@/lib/plan/workout-href";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -87,6 +90,10 @@ export async function GET(req: Request) {
   const zoneMix = computeZoneMix(forVolume);
   const longestRun = computeLongestByDistance(forLongest, "RUN");
   const longestRide = computeLongestByDistance(forLongest, "BIKE");
+  const sessionIds = await mapActivityIdsToSessionIds(
+    athleteId,
+    [longestRun?.id, longestRide?.id].filter((id): id is string => Boolean(id))
+  );
 
   return NextResponse.json({
     from,
@@ -95,8 +102,21 @@ export async function GET(req: Request) {
     runPace,
     weeklyVolume,
     zoneMix,
-    longestRun,
-    longestRide,
+    longestRun: withSessionHref(longestRun, sessionIds),
+    longestRide: withSessionHref(longestRide, sessionIds),
     activityCount: activities.length,
   });
+}
+
+function withSessionHref(
+  activity: LongestActivity | null,
+  sessionIds: Map<string, string>
+) {
+  if (!activity) return null;
+  return {
+    ...activity,
+    href: workoutHrefForResolvedActivity(activity.id, sessionIds.get(activity.id) ?? null, {
+      returnTo: "/dashboard",
+    }),
+  };
 }

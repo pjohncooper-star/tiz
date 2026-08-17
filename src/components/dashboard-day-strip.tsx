@@ -1,17 +1,9 @@
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
+import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
+import type { DayStripSession } from "@/lib/dashboard/day-strip-sessions";
 
-export type DayStripSession = {
-  id: string;
-  kind: "planned" | "completed";
-  title: string;
-  discipline: string;
-  scheduledDate: string;
-  plannedMinutes: number | null;
-  completedMinutes: number | null;
-  href: string;
-  status: "planned" | "completed" | "missed" | "unplanned";
-};
+export type { DayStripSession };
 
 export type DayStripColumn = {
   date: string;
@@ -19,6 +11,12 @@ export type DayStripColumn = {
   isToday: boolean;
   sessions: DayStripSession[];
 };
+
+function disciplineLabel(discipline: string): string {
+  return (
+    DISCIPLINE_DISPLAY_LABELS[discipline as keyof typeof DISCIPLINE_DISPLAY_LABELS] ?? discipline
+  );
+}
 
 function formatMinutes(minutes: number | null): string | null {
   if (minutes == null || !(minutes > 0)) return null;
@@ -85,11 +83,12 @@ export function DashboardDayStrip({ days }: { days: DayStripColumn[] }) {
                   <li key={`${session.kind}-${session.id}`}>
                     <Link
                       href={session.href}
+                      prefetch={session.href.startsWith("/workouts/") ? undefined : false}
                       className={`block rounded-md border p-2 text-sm transition hover:border-sky-400 dark:hover:border-sky-600 ${statusStyles(session.status)}`}
                     >
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-950/50 dark:text-zinc-300">
-                          {session.discipline}
+                          {disciplineLabel(session.discipline)}
                         </span>
                         <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-950/50">
                           {statusLabel(session.status)}
