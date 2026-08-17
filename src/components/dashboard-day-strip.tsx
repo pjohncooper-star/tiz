@@ -85,6 +85,7 @@ export function DashboardDayStrip({ days }: { days: DayStripColumn[] }) {
                   <li key={`${session.kind}-${session.id}`}>
                     <Link
                       href={session.href}
+                      prefetch={session.href.startsWith("/workouts/") ? undefined : false}
                       className={`block rounded-md border p-2 text-sm transition hover:border-sky-400 dark:hover:border-sky-600 ${statusStyles(session.status)}`}
                     >
                       <div className="flex flex-wrap items-center gap-1.5">

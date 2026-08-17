@@ -22,7 +22,8 @@ import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/l
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import { sessionCompletionRollup } from "@/lib/plan/session-completion";
-import { activityReturnHrefFromStartTime } from "@/lib/plan/activity-return";
+import { mapActivityIdsToSessionIds } from "@/lib/plan/session-link";
+import { workoutHref, workoutHrefForResolvedActivity } from "@/lib/plan/workout-href";
 import { buildDisciplineSettings } from "@/lib/units/discipline-settings";
 import type { Discipline } from "@prisma/client";
 
@@ -130,6 +131,10 @@ export default async function DashboardPage() {
   const linkedActivityIds = new Set(
     planned.map((p) => p.linkedActivity?.id).filter((id): id is string => Boolean(id))
   );
+  const extraActivityIds = activities
+    .filter((a) => !linkedActivityIds.has(a.id))
+    .map((a) => a.id);
+  const extraSessionIds = await mapActivityIdsToSessionIds(athleteId, extraActivityIds);
 
   const dateKeys = [yesterdayKey, todayKey, tomorrowKey] as const;
   const days: DayStripColumn[] = dateKeys.map((date, idx) => {
@@ -160,7 +165,7 @@ export default async function DashboardPage() {
         scheduledDate: p.scheduledDate,
         plannedMinutes: p.plannedMinutes > 0 ? p.plannedMinutes : p.estimatedDurationMinutes,
         completedMinutes,
-        href: `/workouts/${p.id}`,
+        href: workoutHref(p.id, { returnTo: "/dashboard" }),
         status: isDone ? "completed" : isPast ? "missed" : "planned",
       });
     }
@@ -177,7 +182,11 @@ export default async function DashboardPage() {
         scheduledDate: date,
         plannedMinutes: null,
         completedMinutes: Math.round((a.durationSeconds / 60) * 10) / 10,
-        href: `/activities/${a.id}?returnTo=${encodeURIComponent(activityReturnHrefFromStartTime(a.startTime))}`,
+        href: workoutHrefForResolvedActivity(
+          a.id,
+          extraSessionIds.get(a.id) ?? null,
+          { returnTo: "/dashboard" }
+        ),
         status: "unplanned",
       });
     }
