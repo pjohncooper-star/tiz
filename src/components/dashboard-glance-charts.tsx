@@ -36,6 +36,7 @@ type LongestActivityResponse = {
   date: string;
   distanceMeters: number;
   durationSeconds: number;
+  href?: string;
 } | null;
 
 type GlanceResponse = {
@@ -92,7 +93,8 @@ function LongestActivityCard({
             {formatDurationSeconds(activity.durationSeconds)} · {activity.date}
           </p>
           <Link
-            href={`/activities/${activity.id}`}
+            href={activity.href ?? `/activities/${activity.id}`}
+            prefetch={activity.href?.startsWith("/workouts/") ? undefined : false}
             className="inline-block text-sm text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
           >
             {activity.name}

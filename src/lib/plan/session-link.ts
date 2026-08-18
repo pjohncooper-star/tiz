@@ -208,6 +208,35 @@ export async function findPlannedSessionForActivity(athleteId: string, activityI
   });
 }
 
+async function findUnlinkedAutoLinkCandidate(
+  athleteId: string,
+  activity: {
+    discipline: Discipline;
+    startTime: Date;
+    durationSeconds: number;
+  },
+  matchDateKey?: string
+): Promise<{ id: string } | null> {
+  if (!isSessionPlanningEnabled()) return null;
+
+  const dateKey = resolveAutoLinkDateKey(activity.startTime, matchDateKey);
+  const candidates = await db.plannedSession.findMany({
+    where: {
+      athleteId,
+      discipline: activity.discipline,
+      linkedActivityId: null,
+      scheduledDate: parseDateKey(dateKey),
+    },
+    orderBy: { id: "asc" },
+    select: { id: true, estimatedDurationMinutes: true },
+  });
+
+  return pickFirstAutoLinkCandidate(
+    candidates,
+    activity.durationSeconds > 0 ? activity.durationSeconds / 60 : null
+  );
+}
+
 export async function tryAutoLinkActivityToPlannedSession(
   athleteId: string,
   activityId: string,
@@ -224,27 +253,49 @@ export async function tryAutoLinkActivityToPlannedSession(
   const existing = await findPlannedSessionForActivity(athleteId, activityId);
   if (existing) return null;
 
-  const dateKey = resolveAutoLinkDateKey(activity.startTime, options?.matchDateKey);
-  const candidates = await db.plannedSession.findMany({
-    where: {
-      athleteId,
-      discipline: activity.discipline,
-      linkedActivityId: null,
-      scheduledDate: parseDateKey(dateKey),
-    },
-    orderBy: { id: "asc" },
-    select: { id: true, estimatedDurationMinutes: true },
-  });
-
-  const candidate = pickFirstAutoLinkCandidate(
-    candidates,
-    activity.durationSeconds > 0 ? activity.durationSeconds / 60 : null
+  const candidate = await findUnlinkedAutoLinkCandidate(
+    athleteId,
+    activity,
+    options?.matchDateKey
   );
   if (!candidate) return null;
 
   return linkActivityToPlannedSession(athleteId, candidate.id, activityId, {
     skipCalendarDayCheck: Boolean(options?.matchDateKey),
   });
+}
+
+/** Map recorded activities to the planned session the calendar would open, without creating sessions. */
+export async function mapActivityIdsToSessionIds(
+  athleteId: string,
+  activityIds: string[]
+): Promise<Map<string, string>> {
+  const unique = [...new Set(activityIds.filter(Boolean))];
+  const map = new Map<string, string>();
+  if (unique.length === 0 || !isSessionPlanningEnabled()) return map;
+
+  const linked = await db.plannedSession.findMany({
+    where: { athleteId, linkedActivityId: { in: unique } },
+    select: { id: true, linkedActivityId: true },
+  });
+  for (const row of linked) {
+    if (row.linkedActivityId) map.set(row.linkedActivityId, row.id);
+  }
+
+  const missing = unique.filter((id) => !map.has(id));
+  if (missing.length === 0) return map;
+
+  const activities = await db.syncedActivity.findMany({
+    where: { id: { in: missing }, athleteId, ...recordedActivityWhere },
+    select: { id: true, discipline: true, startTime: true, durationSeconds: true },
+  });
+  await Promise.all(
+    activities.map(async (activity) => {
+      const candidate = await findUnlinkedAutoLinkCandidate(athleteId, activity);
+      if (candidate) map.set(activity.id, candidate.id);
+    })
+  );
+  return map;
 }
 
 export type ResolveSessionForActivityResult = {
