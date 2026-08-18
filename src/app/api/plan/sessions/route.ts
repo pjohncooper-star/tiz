@@ -123,7 +123,6 @@ export async function POST(request: Request) {
     inferSessionRole({
       title: sessionTitle,
       discipline: resolvedDiscipline,
-      durationMinutes: nullableMetric(estimatedDurationMinutes) ?? null,
     });
 
   const tags =

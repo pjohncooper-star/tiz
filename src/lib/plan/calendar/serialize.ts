@@ -252,7 +252,6 @@ export function serializePlannedSessions(
       sessionRole: s.sessionRole,
       title: s.title,
       discipline: s.discipline,
-      durationMinutes: resolvedPlannedMinutes,
       zoneMinutes: rollup.zones,
     });
     return {

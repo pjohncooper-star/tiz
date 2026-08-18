@@ -93,7 +93,6 @@ function templateItemCreateData(items: WeeklyTemplateItemInput[]) {
       inferSessionRole({
         title: item.title.trim(),
         discipline: item.discipline,
-        durationMinutes: item.durationMinutes ?? null,
       }),
     sortOrder: item.sortOrder ?? index,
   }));
@@ -288,7 +287,6 @@ export async function applyWeeklyTemplate(
         inferSessionRole({
           title: item.title,
           discipline: item.discipline,
-          durationMinutes: item.durationMinutes,
         });
 
       await tx.plannedSession.create({

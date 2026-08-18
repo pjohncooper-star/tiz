@@ -932,7 +932,6 @@ function parseSessionFields(
     inferSessionRole({
       title,
       discipline: discipline as Discipline,
-      durationMinutes: estimatedDurationMinutes,
     });
 
   const zoneAllocationMissing = computeZoneAllocationMissing(

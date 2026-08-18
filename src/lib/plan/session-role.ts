@@ -30,12 +30,6 @@ const INTENSITY_TITLE =
 const EASY_TITLE =
   /\b(easy|recovery|rest|aerobic recovery|shake.?out|cool.?down|cooldown|spin|active recovery|junk miles)\b/i;
 
-const LONG_DURATION_MINUTES: Partial<Record<Discipline, number>> = {
-  RUN: 75,
-  BIKE: 90,
-  SWIM: 45,
-};
-
 /** % of threshold: below → easy bias; above → intensity bias. Uses discipline primary metric. */
 const EASY_PCT_MAX = 82;
 const INTENSITY_PCT_MIN = 95;
@@ -140,7 +134,6 @@ function roleFromStreamIntensity(pct: number | null, meta?: NormalizedStreams["m
 export function inferSessionRole(input: {
   title: string;
   discipline: Discipline;
-  durationMinutes?: number | null;
   zoneMinutes?: ZoneMinutes;
   /** Optional pre-zone stream heuristic (discipline primary threshold). */
   streams?: NormalizedStreams;
@@ -151,10 +144,6 @@ export function inferSessionRole(input: {
   if (LONG_TITLE.test(title)) return "LONG";
   if (INTENSITY_TITLE.test(title)) return "INTENSITY";
   if (EASY_TITLE.test(title)) return "EASY";
-
-  const duration = input.durationMinutes ?? 0;
-  const longThreshold = LONG_DURATION_MINUTES[input.discipline];
-  if (longThreshold != null && duration >= longThreshold) return "LONG";
 
   if (input.zoneMinutes) {
     const hard = hardZoneMinutes(input.zoneMinutes, input.discipline);
@@ -186,7 +175,6 @@ export function resolveDisplaySessionRole(input: {
   sessionRole: SessionRole;
   title: string;
   discipline: Discipline;
-  durationMinutes?: number | null;
   zoneMinutes?: ZoneMinutes;
   streams?: NormalizedStreams;
   primarySignal?: SignalType;

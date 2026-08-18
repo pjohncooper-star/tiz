@@ -171,7 +171,6 @@ async function resolveSessionContextForActivity(
         sessionRole: linked.sessionRole,
         title: linked.title,
         discipline: linked.discipline,
-        durationMinutes: linked.estimatedDurationMinutes,
         zoneMinutes:
           linked.targetZones && typeof linked.targetZones === "object"
             ? (linked.targetZones as Record<string, number>)
@@ -193,7 +192,6 @@ async function resolveSessionContextForActivity(
     sessionRole: inferSessionRole({
       title: activity.name,
       discipline: activity.discipline,
-      durationMinutes: Math.round(activity.durationSeconds / 60),
       streams,
       primarySignal,
       thresholdValue: threshold?.thresholdValue ?? null,

@@ -25,10 +25,10 @@ describe("session-role", () => {
     assert.equal(inferSessionRole({ title: "Shakeout jog", discipline: "RUN" }), "EASY");
   });
 
-  it("infers long from duration", () => {
+  it("does not infer long from duration", () => {
     assert.equal(
-      inferSessionRole({ title: "Bike", discipline: "BIKE", durationMinutes: 120 }),
-      "LONG"
+      inferSessionRole({ title: "Bike", discipline: "BIKE" }),
+      "MODERATE"
     );
   });
 
@@ -37,7 +37,6 @@ describe("session-role", () => {
       inferSessionRole({
         title: "Afternoon run",
         discipline: "RUN",
-        durationMinutes: 40,
         primarySignal: "HEART_RATE",
         thresholdValue: 170,
         streams: { meta: { avgHeartRate: 130 } },
@@ -48,7 +47,6 @@ describe("session-role", () => {
       inferSessionRole({
         title: "Afternoon run",
         discipline: "RUN",
-        durationMinutes: 40,
         primarySignal: "HEART_RATE",
         thresholdValue: 170,
         streams: { meta: { avgHeartRate: 165 } },
@@ -62,7 +60,6 @@ describe("session-role", () => {
       inferSessionRole({
         title: "Run",
         discipline: "RUN",
-        durationMinutes: 40,
         primarySignal: "PACE",
         thresholdValue: 300,
         streams: { meta: { workoutRpe: 25 } },
