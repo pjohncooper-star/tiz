@@ -259,11 +259,99 @@ export function parseRelativeHrToken(
 }
 
 export function formatRelativeHrLabel(
-  target: Pick<StepTarget, "pct" | "ref">
+  target: Pick<StepTarget, "pct" | "pctLow" | "pctHigh" | "ref">
 ): string {
+  if (target.pctLow != null && target.pctHigh != null) {
+    const suffix = hrRefFromTarget(target) === "max" ? "max HR" : "LTHR";
+    return `${target.pctLow}–${target.pctHigh}% ${suffix}`;
+  }
   const pct =
     target.pct != null && target.pct > 0 ? `${target.pct}%` : "100%";
   return hrRefFromTarget(target) === "max" ? `${pct} max HR` : `${pct} LTHR`;
+}
+
+export function formatRelativePowerLabel(
+  target: Pick<StepTarget, "pct" | "pctLow" | "pctHigh">,
+  ftpWatts?: number | null
+): string {
+  if (target.pctLow != null && target.pctHigh != null) {
+    const base = `${target.pctLow}–${target.pctHigh}% FTP`;
+    if (ftpWatts && ftpWatts > 0) {
+      const low = Math.round((ftpWatts * target.pctLow) / 100);
+      const high = Math.round((ftpWatts * target.pctHigh) / 100);
+      return `${base} (${low}–${high}W)`;
+    }
+    return base;
+  }
+  const pct = target.pct != null && target.pct > 0 ? target.pct : 100;
+  const base = `${pct}% FTP`;
+  if (ftpWatts && ftpWatts > 0) {
+    return `${base} (${Math.round((ftpWatts * pct) / 100)}W)`;
+  }
+  return base;
+}
+
+export function formatRelativePaceRangeLabel(
+  target: Pick<StepTarget, "pctLow" | "pctHigh" | "ref" | "refSource">,
+  ctx: RelativePaceContext,
+  formatPaceFn?: (sec: number) => string
+): string {
+  const ref = target.ref;
+  const refLabel =
+    ref === "half" ? "HM" : ref === "threshold" ? "threshold" : ref ?? "threshold";
+  const source =
+    target.refSource === "goal" && ref !== "threshold" ? " goal" : "";
+  const base = `${target.pctLow}–${target.pctHigh}% ${refLabel}${source} pace`;
+
+  if (!ref || ref === "lthr" || ref === "max") return base;
+  const anchor = resolveRelativePaceSeconds({ ref, refSource: target.refSource }, ctx);
+  if (anchor == null || !(anchor > 0) || !target.pctLow || !target.pctHigh) return base;
+  if (!formatPaceFn) return base;
+
+  const slow = (anchor * 100) / target.pctLow;
+  const fast = (anchor * 100) / target.pctHigh;
+  return `${base} (${formatPaceFn(fast)}–${formatPaceFn(slow)})`;
+}
+
+/** Resolve a relative percent range to absolute low/high values. */
+export function resolveRelativePercentRange(
+  target: Pick<StepTarget, "signal" | "mode" | "pctLow" | "pctHigh" | "ref" | "refSource">,
+  ctx: RelativeThresholdContext & RelativePaceContext
+): { low: number; high: number } | null {
+  if (target.mode !== "relative") return null;
+  if (target.pctLow == null || target.pctHigh == null) return null;
+  if (!(target.pctLow > 0) || !(target.pctHigh > 0)) return null;
+
+  if (target.signal === "power") {
+    const ftp = ctx.ftpWatts;
+    if (ftp == null || !(ftp > 0)) return null;
+    return {
+      low: Math.round((ftp * target.pctLow) / 100),
+      high: Math.round((ftp * target.pctHigh) / 100),
+    };
+  }
+  if (target.signal === "heart_rate") {
+    const anchor =
+      hrRefFromTarget(target) === "max" ? ctx.maxHeartRateBpm : ctx.lthrBpm;
+    if (anchor == null || !(anchor > 0)) return null;
+    return {
+      low: Math.round((anchor * target.pctLow) / 100),
+      high: Math.round((anchor * target.pctHigh) / 100),
+    };
+  }
+  if (target.signal === "pace" && target.ref && target.ref !== "lthr" && target.ref !== "max") {
+    const anchor = resolveRelativePaceSeconds(
+      { ref: target.ref, refSource: target.refSource },
+      ctx
+    );
+    if (anchor == null || !(anchor > 0)) return null;
+    // Higher pct = faster = fewer sec/km. low is slow end, high is fast end.
+    return {
+      low: Math.round((anchor * 100) / target.pctLow),
+      high: Math.round((anchor * 100) / target.pctHigh),
+    };
+  }
+  return null;
 }
 
 /** Resolve relative power (% FTP) or HR (% LTHR or % max) to absolute watts/bpm. */
@@ -296,6 +384,15 @@ function freezeLeafTarget(
   if (t.mode !== "relative") return step;
 
   if (t.signal === "pace" && t.ref && t.ref !== "lthr" && t.ref !== "max") {
+    if (t.pctLow != null && t.pctHigh != null) {
+      const range = resolveRelativePercentRange(t, ctx);
+      if (range == null) return step;
+      return {
+        ...step,
+        target: { signal: "pace", mode: "range", low: range.high, high: range.low },
+        targetPaceSeconds: range.high,
+      };
+    }
     const pace = resolveRelativePaceSeconds(
       { ref: t.ref, pct: t.pct, refSource: t.refSource },
       ctx
@@ -309,6 +406,14 @@ function freezeLeafTarget(
   }
 
   if (t.signal === "power" || t.signal === "heart_rate") {
+    if (t.pctLow != null && t.pctHigh != null) {
+      const range = resolveRelativePercentRange(t, ctx);
+      if (range == null) return step;
+      return {
+        ...step,
+        target: { signal: t.signal, mode: "range", low: range.low, high: range.high },
+      };
+    }
     const absolute = resolveRelativePercentTarget(t, ctx);
     if (absolute == null || !(absolute > 0)) return step;
     return {
