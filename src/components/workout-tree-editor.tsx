@@ -67,6 +67,7 @@ import {
 import { formatSwimIntervalLabel } from "@/lib/workout/swim-interval-set";
 import {
   formatRelativeHrLabel,
+  formatRelativePowerLabel,
   hrRefFromTarget,
   resolveRelativePercentTarget,
   type HrRef,
@@ -875,6 +876,7 @@ function StepTargetField({
   poolSize,
   primaryTargetSignal,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   racePaces = null,
   lthrBpm = null,
   maxHeartRateBpm = null,
@@ -887,6 +889,7 @@ function StepTargetField({
   poolSize: PoolSize | null;
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
   racePaces?: RacePaceAnchors | null;
   lthrBpm?: number | null;
   maxHeartRateBpm?: number | null;
@@ -897,8 +900,10 @@ function StepTargetField({
   const rangeMode = step.target.mode === "range";
   const relativeMode =
     step.target.mode === "relative" &&
-    step.target.signal === "pace" &&
-    !!step.target.ref;
+    (step.target.signal === "pace" ||
+      step.target.signal === "power" ||
+      step.target.signal === "heart_rate") &&
+    (!!step.target.ref || step.target.pctLow != null || step.target.pct != null);
 
   if (targetView === "zone") {
     if (rangeMode) {
@@ -980,6 +985,78 @@ function StepTargetField({
       step.target.mode === "relative" && step.target.signal === "heart_rate";
     if (relativeHr) {
       const hrRef = hrRefFromTarget(step.target);
+      const isRange = step.target.pctLow != null && step.target.pctHigh != null;
+
+      if (isRange) {
+        const pctLow = step.target.pctLow ?? 70;
+        const pctHigh = step.target.pctHigh ?? 80;
+        const anchor = hrRef === "max" ? maxHeartRateBpm : lthrBpm;
+        const resolvedLabel =
+          anchor != null && anchor > 0
+            ? `${Math.round((anchor * pctLow) / 100)}–${Math.round((anchor * pctHigh) / 100)} bpm`
+            : hrRef === "max"
+              ? "set max HR"
+              : "set LTHR";
+        return (
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center justify-between gap-1">
+              <Label>HR % range</Label>
+              <button
+                type="button"
+                className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+                onClick={() =>
+                  onChange({ target: { signal: "heart_rate", mode: "zone", zone: 2 } })
+                }
+              >
+                Absolute
+              </button>
+            </div>
+            <div className="grid grid-cols-[4rem_4rem_auto] gap-1">
+              <NumberEditorInput
+                value={pctLow}
+                min={1}
+                max={200}
+                step={1}
+                ariaLabel="Low % HR"
+                onCommit={(v) => {
+                  if (v == null) return;
+                  onChange({
+                    target: { signal: "heart_rate", mode: "relative", pctLow: v, pctHigh, ref: hrRef },
+                  });
+                }}
+              />
+              <NumberEditorInput
+                value={pctHigh}
+                min={1}
+                max={200}
+                step={1}
+                ariaLabel="High % HR"
+                onCommit={(v) => {
+                  if (v == null) return;
+                  onChange({
+                    target: { signal: "heart_rate", mode: "relative", pctLow, pctHigh: v, ref: hrRef },
+                  });
+                }}
+              />
+              <Select
+                value={hrRef}
+                onChange={(e) =>
+                  onChange({
+                    target: { signal: "heart_rate", mode: "relative", pctLow, pctHigh, ref: e.target.value as HrRef },
+                  })
+                }
+              >
+                <option value="lthr">LTHR</option>
+                <option value="max">Max HR</option>
+              </Select>
+            </div>
+            <p className="truncate text-[11px] text-zinc-500">
+              {formatRelativeHrLabel({ pctLow, pctHigh, ref: hrRef })} → {resolvedLabel}
+            </p>
+          </div>
+        );
+      }
+
       const pct = step.target.pct ?? 80;
       const resolved = resolveRelativePercentTarget(
         { signal: "heart_rate", mode: "relative", pct, ref: hrRef },
@@ -1007,7 +1084,7 @@ function StepTargetField({
               Absolute
             </button>
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
+          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_auto] gap-1">
             <Select
               value={hrRef}
               onChange={(e) => {
@@ -1043,6 +1120,17 @@ function StepTargetField({
                 });
               }}
             />
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({
+                  target: { signal: "heart_rate", mode: "relative", pctLow: pct - 5, pctHigh: pct + 5, ref: hrRef },
+                })
+              }
+            >
+              Range
+            </button>
           </div>
           <p className="truncate text-[11px] text-zinc-500">
             {formatRelativeHrLabel({ pct, ref: hrRef })}
@@ -1143,12 +1231,127 @@ function StepTargetField({
   }
 
   if (discipline === "BIKE") {
+    const relativePower =
+      step.target.mode === "relative" && step.target.signal === "power";
+    const relativePowerRange =
+      relativePower && step.target.pctLow != null && step.target.pctHigh != null;
+
+    if (relativePower) {
+      if (relativePowerRange) {
+        const pctLow = step.target.pctLow ?? 85;
+        const pctHigh = step.target.pctHigh ?? 95;
+        return (
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center justify-between gap-1">
+              <Label>% FTP range</Label>
+              <button
+                type="button"
+                className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+                onClick={() =>
+                  onChange({ target: { signal: "power", mode: "value", value: 200 } })
+                }
+              >
+                Absolute
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <NumberEditorInput
+                value={pctLow}
+                min={1}
+                max={250}
+                step={1}
+                ariaLabel="Low % FTP"
+                onCommit={(v) => {
+                  if (v == null) return;
+                  onChange({
+                    target: { signal: "power", mode: "relative", pctLow: v, pctHigh },
+                  });
+                }}
+              />
+              <NumberEditorInput
+                value={pctHigh}
+                min={1}
+                max={250}
+                step={1}
+                ariaLabel="High % FTP"
+                onCommit={(v) => {
+                  if (v == null) return;
+                  onChange({
+                    target: { signal: "power", mode: "relative", pctLow, pctHigh: v },
+                  });
+                }}
+              />
+            </div>
+            <p className="truncate text-[11px] text-zinc-500">
+              {formatRelativePowerLabel({ pctLow, pctHigh }, thresholdFtpWatts)}
+            </p>
+          </div>
+        );
+      }
+      const pct = step.target.pct ?? 90;
+      return (
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <Label>% FTP</Label>
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({ target: { signal: "power", mode: "value", value: 200 } })
+              }
+            >
+              Absolute
+            </button>
+          </div>
+          <div className="grid grid-cols-[1fr_auto] items-center gap-1">
+            <NumberEditorInput
+              value={pct}
+              min={1}
+              max={250}
+              step={1}
+              ariaLabel="% of FTP"
+              onCommit={(v) => {
+                if (v == null) return;
+                onChange({
+                  target: { signal: "power", mode: "relative", pct: v },
+                });
+              }}
+            />
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({
+                  target: { signal: "power", mode: "relative", pctLow: pct - 3, pctHigh: pct + 3 },
+                })
+              }
+            >
+              Range
+            </button>
+          </div>
+          <p className="truncate text-[11px] text-zinc-500">
+            {formatRelativePowerLabel({ pct }, thresholdFtpWatts)}
+          </p>
+        </div>
+      );
+    }
     if (rangeMode) {
       const low = step.target.low ?? 170;
       const high = step.target.high ?? 230;
       return (
         <div className="min-w-0">
-          <Label>{label} range</Label>
+          <div className="flex items-center justify-between gap-1">
+            <Label>{label} range</Label>
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({ target: { signal: "power", mode: "relative", pct: 90 } })
+              }
+            >
+              % FTP
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-1">
             <NumberEditorInput
               value={low}
@@ -1180,23 +1383,120 @@ function StepTargetField({
     }
     const watts = step.target.value ?? 200;
     return (
-      <NumberEditorInput
-        label={label}
-        value={watts}
-        min={1}
-        step={5}
-        onCommit={(v) => {
-          if (v == null) return;
-          onChange({
-            target: { signal: "power", mode: "value", value: v },
-          });
-        }}
-      />
+      <div className="min-w-0 space-y-1">
+        <NumberEditorInput
+          label={label}
+          value={watts}
+          min={1}
+          step={5}
+          onCommit={(v) => {
+            if (v == null) return;
+            onChange({
+              target: { signal: "power", mode: "value", value: v },
+            });
+          }}
+        />
+        <button
+          type="button"
+          className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+          onClick={() =>
+            onChange({ target: { signal: "power", mode: "relative", pct: 90 } })
+          }
+        >
+          Use % FTP…
+        </button>
+      </div>
     );
   }
 
   if (discipline === "RUN" || discipline === "SWIM") {
     const paceRef = step.target.ref;
+
+    if (relativeMode && paceRef && isPaceRef(paceRef) && step.target.pctLow != null && step.target.pctHigh != null) {
+      const ref = paceRef;
+      const pctLow = step.target.pctLow;
+      const pctHigh = step.target.pctHigh;
+      const refSource = step.target.refSource ?? "fitness";
+      const anchor = resolveRelativePaceSeconds(
+        { ref, refSource },
+        { thresholdPaceSeconds, racePaces }
+      );
+      let resolvedLabel = "set race paces in Settings";
+      if (anchor != null && anchor > 0) {
+        const slow = (anchor * 100) / pctLow;
+        const fast = (anchor * 100) / pctHigh;
+        const fastStr = stepPaceCanonicalToInput(fast, planDiscipline, displayUnit, poolSize);
+        const slowStr = stepPaceCanonicalToInput(slow, planDiscipline, displayUnit, poolSize);
+        resolvedLabel = `${fastStr}–${slowStr}`;
+      }
+      return (
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center justify-between gap-1">
+            <Label>{label} (% range)</Label>
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({
+                  target: { signal: "pace", mode: "relative", ref, pct: Math.round((pctLow + pctHigh) / 2), refSource },
+                  targetPaceSeconds: undefined,
+                })
+              }
+            >
+              Single %
+            </button>
+          </div>
+          <div className="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] gap-1">
+            <Select
+              value={ref}
+              onChange={(e) => {
+                const next = e.target.value as PaceRef;
+                onChange({
+                  target: { signal: "pace", mode: "relative", ref: next, pctLow, pctHigh, ...(next !== "threshold" ? { refSource } : {}) },
+                  targetPaceSeconds: undefined,
+                });
+              }}
+            >
+              {PACE_REFS.map((r) => (
+                <option key={r} value={r}>{r === "half" ? "HM" : r}</option>
+              ))}
+            </Select>
+            <NumberEditorInput
+              value={pctLow}
+              min={1}
+              max={200}
+              step={1}
+              ariaLabel="Low % speed"
+              onCommit={(v) => {
+                if (v == null) return;
+                onChange({
+                  target: { signal: "pace", mode: "relative", ref, pctLow: v, pctHigh, ...(ref !== "threshold" ? { refSource } : {}) },
+                  targetPaceSeconds: undefined,
+                });
+              }}
+            />
+            <NumberEditorInput
+              value={pctHigh}
+              min={1}
+              max={200}
+              step={1}
+              ariaLabel="High % speed"
+              onCommit={(v) => {
+                if (v == null) return;
+                onChange({
+                  target: { signal: "pace", mode: "relative", ref, pctLow, pctHigh: v, ...(ref !== "threshold" ? { refSource } : {}) },
+                  targetPaceSeconds: undefined,
+                });
+              }}
+            />
+          </div>
+          <p className="truncate text-[11px] text-zinc-500">
+            {pctLow}–{pctHigh}% {ref === "half" ? "HM" : ref} → {resolvedLabel}
+          </p>
+        </div>
+      );
+    }
+
     if (relativeMode && paceRef && isPaceRef(paceRef)) {
       const ref = paceRef;
       const pct = step.target.pct ?? 100;
@@ -1226,7 +1526,7 @@ function StepTargetField({
               Absolute
             </button>
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-1">
+          <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_auto] gap-1">
             <Select
               value={ref}
               onChange={(e) => {
@@ -1269,6 +1569,18 @@ function StepTargetField({
                 });
               }}
             />
+            <button
+              type="button"
+              className="text-[11px] text-sky-700 hover:underline dark:text-sky-300"
+              onClick={() =>
+                onChange({
+                  target: { signal: "pace", mode: "relative", ref, pctLow: (pct > 3 ? pct - 3 : 1), pctHigh: pct + 3, ...(ref !== "threshold" ? { refSource } : {}) },
+                  targetPaceSeconds: undefined,
+                })
+              }
+            >
+              Range
+            </button>
           </div>
           {ref !== "threshold" ? (
             <Select
@@ -1393,6 +1705,7 @@ function NodeEditor({
   activeDragPath,
   swimEquipment,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   racePaces = null,
   lthrBpm = null,
   maxHeartRateBpm = null,
@@ -1410,6 +1723,7 @@ function NodeEditor({
   activeDragPath: number[] | null;
   swimEquipment: SwimEquipmentCatalog;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
   racePaces?: RacePaceAnchors | null;
   lthrBpm?: number | null;
   maxHeartRateBpm?: number | null;
@@ -1482,6 +1796,7 @@ function NodeEditor({
               poolSize={poolSize}
               primaryTargetSignal={primaryTargetSignal}
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
               racePaces={racePaces}
               lthrBpm={lthrBpm}
               maxHeartRateBpm={maxHeartRateBpm}
@@ -1907,6 +2222,7 @@ function NodeEditor({
           primaryTargetSignal={primaryTargetSignal}
           swimEquipment={swimEquipment}
           thresholdPaceSeconds={thresholdPaceSeconds}
+          thresholdFtpWatts={thresholdFtpWatts}
           racePaces={racePaces}
           lthrBpm={lthrBpm}
           maxHeartRateBpm={maxHeartRateBpm}
@@ -1957,6 +2273,7 @@ function WorkoutNodeList({
   primaryTargetSignal,
   swimEquipment,
   thresholdPaceSeconds = null,
+  thresholdFtpWatts = null,
   racePaces = null,
   lthrBpm = null,
   maxHeartRateBpm = null,
@@ -1973,6 +2290,7 @@ function WorkoutNodeList({
   primaryTargetSignal: ReturnType<typeof primarySignalForDiscipline>;
   swimEquipment: SwimEquipmentCatalog;
   thresholdPaceSeconds?: number | null;
+  thresholdFtpWatts?: number | null;
   racePaces?: RacePaceAnchors | null;
   lthrBpm?: number | null;
   maxHeartRateBpm?: number | null;
@@ -1998,6 +2316,7 @@ function WorkoutNodeList({
               primaryTargetSignal={primaryTargetSignal}
               swimEquipment={swimEquipment}
               thresholdPaceSeconds={thresholdPaceSeconds}
+              thresholdFtpWatts={thresholdFtpWatts}
               racePaces={racePaces}
               lthrBpm={lthrBpm}
               maxHeartRateBpm={maxHeartRateBpm}
@@ -2258,6 +2577,7 @@ export function WorkoutTreeEditor({
       primaryTargetSignal={primaryTargetSignal}
       swimEquipment={swimEquipment}
       thresholdPaceSeconds={thresholdPaceSeconds}
+      thresholdFtpWatts={thresholdFtpWatts}
       racePaces={racePaces}
       lthrBpm={resolvedLthrBpm}
       maxHeartRateBpm={resolvedMaxHeartRateBpm}

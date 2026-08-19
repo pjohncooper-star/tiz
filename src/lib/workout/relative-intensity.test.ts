@@ -5,8 +5,10 @@ import {
   freezeRelativeTargetsInTree,
   formatMissingRelativeIntensity,
   formatRelativeHrLabel,
+  formatRelativePowerLabel,
   missingRelativeIntensity,
   parseRelativeHrToken,
+  resolveRelativePercentRange,
   resolveRelativePercentTarget,
 } from "@/lib/workout/relative-intensity";
 import { parseWorkoutTree, type WorkoutTreeDocument } from "@/lib/workout/workout-tree";
@@ -178,6 +180,75 @@ describe("relative intensity helpers", () => {
     assert.equal(typeof parseRelativeHrToken("80%|ftp"), "string");
     assert.equal(formatRelativeHrLabel({ pct: 80 }), "80% LTHR");
     assert.equal(formatRelativeHrLabel({ pct: 80, ref: "max" }), "80% max HR");
+  });
+
+  it("resolveRelativePercentRange for power", () => {
+    const result = resolveRelativePercentRange(
+      { signal: "power", mode: "relative", pctLow: 88, pctHigh: 97 },
+      { ftpWatts: 280, maxHeartRateBpm: null, lthrBpm: null, thresholdPaceSeconds: null, racePaces: {} }
+    );
+    assert.ok(result);
+    assert.equal(result.low, Math.round(280 * 88 / 100));
+    assert.equal(result.high, Math.round(280 * 97 / 100));
+  });
+
+  it("resolveRelativePercentRange for HR", () => {
+    const result = resolveRelativePercentRange(
+      { signal: "heart_rate", mode: "relative", pctLow: 70, pctHigh: 80 },
+      { ftpWatts: null, maxHeartRateBpm: 190, lthrBpm: 170, thresholdPaceSeconds: null, racePaces: {} }
+    );
+    assert.ok(result);
+    assert.equal(result.low, Math.round(170 * 70 / 100));
+    assert.equal(result.high, Math.round(170 * 80 / 100));
+  });
+
+  it("resolveRelativePercentRange for pace", () => {
+    const result = resolveRelativePercentRange(
+      { signal: "pace", mode: "relative", pctLow: 93, pctHigh: 97, ref: "threshold", refSource: "fitness" },
+      { ftpWatts: null, maxHeartRateBpm: null, lthrBpm: null, thresholdPaceSeconds: 240, racePaces: {} }
+    );
+    assert.ok(result);
+    assert.equal(result.low, Math.round(240 * 100 / 93));
+    assert.equal(result.high, Math.round(240 * 100 / 97));
+  });
+
+  it("freezes pctLow/pctHigh power range to absolute range", () => {
+    const tree: WorkoutTreeDocument = {
+      version: 2,
+      nodes: [{
+        kind: "step",
+        intensity: "active",
+        duration: { type: "time", value: 600 },
+        target: { signal: "power", mode: "relative", pctLow: 88, pctHigh: 97 },
+      }],
+    };
+    const frozen = freezeRelativeTargetsInTree(tree, {
+      ftpWatts: 280,
+      maxHeartRateBpm: null,
+      lthrBpm: null,
+      thresholdPaceSeconds: null,
+      racePaces: {},
+    });
+    const step = frozen.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.equal(step.target.mode, "range");
+    assert.equal(step.target.low, Math.round(280 * 88 / 100));
+    assert.equal(step.target.high, Math.round(280 * 97 / 100));
+  });
+
+  it("formatRelativePowerLabel shows range with resolved watts", () => {
+    assert.equal(
+      formatRelativePowerLabel({ pctLow: 88, pctHigh: 97 }, 280),
+      "88–97% FTP (246–272W)"
+    );
+    assert.equal(
+      formatRelativePowerLabel({ pct: 90 }, 280),
+      "90% FTP (252W)"
+    );
+    assert.equal(
+      formatRelativePowerLabel({ pctLow: 88, pctHigh: 97 }, null),
+      "88–97% FTP"
+    );
   });
 
   it("keeps ref max on heart-rate relative steps when parsing a workout tree", () => {

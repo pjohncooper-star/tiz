@@ -595,8 +595,54 @@ function targetFromDraft(
   }
 
   if (mode === "relative") {
-    if (draft.zone != null || draft.targetLowRaw || draft.targetHighRaw) {
-      return "relative target_mode cannot include zone, target_low, or target_high";
+    if (draft.zone != null) {
+      return "relative target_mode cannot include zone";
+    }
+    // Percent range: target_low=88%, target_high=97% (optionally with target as ref for pace)
+    if (draft.targetLowRaw && draft.targetHighRaw) {
+      const lowPct = parsePercentOrNumber(draft.targetLowRaw);
+      const highPct = parsePercentOrNumber(draft.targetHighRaw);
+      if (
+        lowPct?.kind === "percent" &&
+        highPct?.kind === "percent" &&
+        lowPct.value > 0 &&
+        highPct.value > 0
+      ) {
+        if (signal === "pace") {
+          if (discipline !== "RUN" && discipline !== "SWIM") {
+            return "relative pace targets are only valid for RUN or SWIM";
+          }
+          if (!draft.targetRaw) {
+            return "relative pace range requires target for the ref (e.g. threshold, 10k)";
+          }
+          const parsed = parseRelativePaceToken(draft.targetRaw);
+          if (typeof parsed === "string") return parsed;
+          return {
+            signal: "pace",
+            mode: "relative" as const,
+            ref: parsed.ref,
+            pctLow: lowPct.value,
+            pctHigh: highPct.value,
+          };
+        }
+        if (signal === "power") {
+          return {
+            signal,
+            mode: "relative" as const,
+            pctLow: lowPct.value,
+            pctHigh: highPct.value,
+          };
+        }
+        if (signal === "heart_rate") {
+          return {
+            signal,
+            mode: "relative" as const,
+            pctLow: lowPct.value,
+            pctHigh: highPct.value,
+          };
+        }
+      }
+      return "relative range requires target_low and target_high as percents (e.g. 88%, 97%)";
     }
     if (!draft.targetRaw) {
       return signal === "pace"
@@ -642,6 +688,22 @@ function targetFromDraft(
   }
   if (draft.zone != null || draft.targetRaw) {
     return "range target_mode cannot include zone or target";
+  }
+  // Percent range shorthand: target_low=88%, target_high=97% with range mode
+  if (signal === "power" || signal === "heart_rate") {
+    const lowPct = parsePercentOrNumber(draft.targetLowRaw);
+    const highPct = parsePercentOrNumber(draft.targetHighRaw);
+    if (lowPct?.kind === "percent" && highPct?.kind === "percent") {
+      if (!(lowPct.value > 0) || !(highPct.value > 0)) {
+        return "percent range values must be positive";
+      }
+      return {
+        signal,
+        mode: "relative" as const,
+        pctLow: lowPct.value,
+        pctHigh: highPct.value,
+      };
+    }
   }
   const low = parseAbsoluteTarget(
     draft.targetLowRaw,

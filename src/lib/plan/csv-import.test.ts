@@ -311,6 +311,79 @@ describe("planned sessions CSV import", () => {
     assert.deepEqual(step.target, { signal: "power", mode: "relative", pct: 130 });
   });
 
+  it("stores power percent range with target_mode=relative and target_low/high %", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target",
+      "2026-08-04,BIKE,SS,1,step,active,time,10,power,relative,88%,97%,",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const step = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(step.target, {
+      signal: "power",
+      mode: "relative",
+      pctLow: 88,
+      pctHigh: 97,
+    });
+  });
+
+  it("stores power percent range with target_mode=range and percent strings", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target",
+      "2026-08-04,BIKE,SS,1,step,active,time,10,power,range,88%,97%,",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const step = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(step.target, {
+      signal: "power",
+      mode: "relative",
+      pctLow: 88,
+      pctHigh: 97,
+    });
+  });
+
+  it("stores HR percent range with target_mode=relative", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target",
+      "2026-08-04,RUN,Tempo,1,step,active,time,20,heart_rate,relative,75%,85%,",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const step = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(step.target, {
+      signal: "heart_rate",
+      mode: "relative",
+      pctLow: 75,
+      pctHigh: 85,
+    });
+  });
+
+  it("stores pace percent range with ref in target column", () => {
+    const csv = [
+      "date,discipline,title,step,kind,intensity,duration_type,duration,signal,target_mode,target_low,target_high,target",
+      "2026-08-04,RUN,Tempo,1,step,active,time,20,pace,relative,93%,97%,threshold",
+    ].join("\n");
+    const result = parsePlannedSessionsCsv(csv);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    const step = result.sessions[0]!.workoutTree!.nodes[0]!;
+    if (step.kind !== "step") throw new Error("expected step");
+    assert.deepEqual(step.target, {
+      signal: "pace",
+      mode: "relative",
+      ref: "threshold",
+      pctLow: 93,
+      pctHigh: 97,
+    });
+  });
+
   it("rejects step nesting deeper than three id segments", () => {
     const csv = [
       PLANNED_SESSIONS_CSV_HEADERS.join(","),
