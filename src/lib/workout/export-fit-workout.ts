@@ -210,6 +210,25 @@ function applyLeafTarget(
   }
 
   if (target.mode === "relative" && target.ref && target.signal === "pace") {
+    if (target.pctLow != null && target.pctHigh != null) {
+      const paceCtx = {
+        thresholdPaceSeconds: thresholds.thresholdPaceSecondsPerKm,
+        racePaces: thresholds.racePaces,
+      };
+      const anchor = resolveRelativePaceSeconds(
+        { ref: target.ref, refSource: target.refSource },
+        paceCtx
+      );
+      if (anchor != null && anchor > 0) {
+        const slowPace = (anchor * 100) / target.pctLow;
+        const fastPace = (anchor * 100) / target.pctHigh;
+        const lowMps = paceSecondsToMps(slowPace, discipline);
+        const highMps = paceSecondsToMps(fastPace, discipline);
+        applyCustomRange(msg, "speed", "customTargetSpeedLow", "customTargetSpeedHigh",
+          encodeFitSpeedMps(lowMps), encodeFitSpeedMps(highMps));
+      }
+      return;
+    }
     const paceSec = resolveRelativePaceSeconds(
       { ref: target.ref, pct: target.pct, refSource: target.refSource },
       {
@@ -225,27 +244,35 @@ function applyLeafTarget(
     return;
   }
 
-  if (target.mode === "relative" && target.pct != null && target.pct > 0) {
+  if (target.mode === "relative") {
     if (target.signal === "power") {
-      const encoded = encodeFitPowerPercent(target.pct);
-      applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh", encoded, encoded);
+      if (target.pctLow != null && target.pctHigh != null) {
+        applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh",
+          encodeFitPowerPercent(target.pctLow), encodeFitPowerPercent(target.pctHigh));
+        return;
+      }
+      if (target.pct != null && target.pct > 0) {
+        const encoded = encodeFitPowerPercent(target.pct);
+        applyCustomRange(msg, "power", "customTargetPowerLow", "customTargetPowerHigh", encoded, encoded);
+      }
       return;
     }
     if (target.signal === "heart_rate") {
-      const bpm = resolveRelativePercentTarget(target, {
-        lthrBpm: thresholds.lthrBpm ?? null,
-        maxHeartRateBpm: thresholds.maxHeartRateBpm ?? null,
-      });
-      if (bpm != null && bpm > 0) {
-        const encoded = encodeFitHeartRate(bpm, thresholds);
-        applyCustomRange(
-          msg,
-          "heartRate",
-          "customTargetHeartRateLow",
-          "customTargetHeartRateHigh",
-          encoded,
-          encoded
-        );
+      if (target.pctLow != null && target.pctHigh != null) {
+        applyCustomRange(msg, "heartRate", "customTargetHeartRateLow", "customTargetHeartRateHigh",
+          encodeFitHeartRatePercent(target.pctLow), encodeFitHeartRatePercent(target.pctHigh));
+        return;
+      }
+      if (target.pct != null && target.pct > 0) {
+        const bpm = resolveRelativePercentTarget(target, {
+          lthrBpm: thresholds.lthrBpm ?? null,
+          maxHeartRateBpm: thresholds.maxHeartRateBpm ?? null,
+        });
+        if (bpm != null && bpm > 0) {
+          const encoded = encodeFitHeartRate(bpm, thresholds);
+          applyCustomRange(msg, "heartRate", "customTargetHeartRateLow", "customTargetHeartRateHigh",
+            encoded, encoded);
+        }
       }
     }
   }

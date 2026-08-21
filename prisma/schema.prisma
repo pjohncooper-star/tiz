@@ -337,6 +337,24 @@ model Athlete {
   goalEvents          GoalEvent[]
   trainingPlans       TrainingPlan[]
   workoutTags         AthleteWorkoutTag[]
+  dailyEcsCheckIns    DailyEcsCheckIn[]
+}
+
+/** End-of-day subjective load (ECS 0–5). One row per athlete calendar day. */
+model DailyEcsCheckIn {
+  id        String   @id @default(cuid())
+  athleteId String
+  date      DateTime @db.Date
+  /** Subjective Load Equivalents: 0–5 in 0.5 steps. */
+  ecs       Float
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@unique([athleteId, date])
+  @@index([athleteId, date])
 }
 
 model AthleteDisciplineSettings {

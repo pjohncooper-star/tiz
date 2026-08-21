@@ -48,8 +48,12 @@ export type StepTarget = {
    * Heart rate: lthr (default) or max.
    */
   ref?: import("@/lib/workout/relative-pace").PaceRef | "lthr" | "max";
-  /** Percent of anchor speed (100 = exact). */
+  /** Percent of anchor speed (100 = exact). Single-value relative target. */
   pct?: number;
+  /** Percent range low bound (e.g. 88 for 88% FTP). */
+  pctLow?: number;
+  /** Percent range high bound (e.g. 97 for 97% FTP). */
+  pctHigh?: number;
   refSource?: import("@/lib/workout/relative-pace").PaceRefSource;
 };
 
@@ -177,6 +181,14 @@ function parseTarget(raw: unknown): StepTarget {
     ...(resolvedMode === "relative" && ref ? { ref } : {}),
     ...(resolvedMode === "relative" && Number.isFinite(pct) && pct > 0
       ? { pct }
+      : {}),
+    ...(resolvedMode === "relative" &&
+      Number.isFinite(Number(raw.pctLow)) && Number(raw.pctLow) > 0
+      ? { pctLow: Number(raw.pctLow) }
+      : {}),
+    ...(resolvedMode === "relative" &&
+      Number.isFinite(Number(raw.pctHigh)) && Number(raw.pctHigh) > 0
+      ? { pctHigh: Number(raw.pctHigh) }
       : {}),
     ...(resolvedMode === "relative" &&
     (refSourceRaw === "fitness" || refSourceRaw === "goal")

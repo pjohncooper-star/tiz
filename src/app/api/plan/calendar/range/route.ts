@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { recordedActivityWhere } from "@/lib/import/classify";
-import { endDateKey, parseDateKey } from "@/lib/dates";
+import { endDateKey, parseDateKey, formatDateKey, calendarDateFromDb } from "@/lib/dates";
 import { serializePlannedSessions, signalPrefsFromDisciplineSettings } from "@/lib/plan/calendar/serialize";
 import { serializeCalendarActivities } from "@/lib/plan/calendar/activity-serialize";
 import { weekStartsInRange } from "@/lib/plan/calendar/template.server";
@@ -11,6 +11,7 @@ import { loadPaceThresholdContext } from "@/lib/plan/pace-threshold-context";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { PoolSize } from "@/lib/units/discipline-settings";
+import { isEcoLoadEnabledForAthlete } from "@/lib/eco/preference";
 
 const WEEK_OPTS = { weekStartsOn: 1 as const };
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -36,7 +37,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "to must be on or after from" }, { status: 400 });
   }
 
-  const [plannedSessions, activities, disciplineSettings] = await Promise.all([
+  const ecoEnabled = await isEcoLoadEnabledForAthlete(athleteId);
+
+  const [plannedSessions, activities, disciplineSettings, ecsRows] = await Promise.all([
     db.plannedSession.findMany({
       where: {
         athleteId,
@@ -79,6 +82,15 @@ export async function GET(request: Request) {
       orderBy: { startTime: "asc" },
     }),
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
+    ecoEnabled
+      ? db.dailyEcsCheckIn.findMany({
+          where: {
+            athleteId,
+            date: { gte: fromDate, lte: toDate },
+          },
+          orderBy: { date: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   const displayUnits = Object.fromEntries(
@@ -109,5 +121,10 @@ export async function GET(request: Request) {
     activities: weekActivities,
     weekStarts,
     weekTargets,
+    ecsCheckIns: ecsRows.map((row) => ({
+      date: formatDateKey(calendarDateFromDb(row.date)),
+      ecs: row.ecs,
+      note: row.note,
+    })),
   });
 }

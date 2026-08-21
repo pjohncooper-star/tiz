@@ -18,6 +18,7 @@ import type { WeekActivityGroup } from "@/components/dashboard-week-view";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
+import { CalendarEcsCheckInCard, type CalendarEcsCheckIn } from "@/components/calendar/calendar-ecs-check-in";
 import { generatedPoolCardId, isFillableGeneratedSession } from "@/lib/plan/calendar/generated-pool-cards";
 import type { PlanDiscipline } from "@/lib/plan/session";
 
@@ -40,6 +41,9 @@ type CalendarDayColumnProps = {
   onArmBuildFromSession?: (session: CalendarPlannedSession) => void;
   armedPoolCardId?: string | null;
   onUnassignWorkout?: (session: CalendarPlannedSession) => void;
+  ecoLoadEnabled?: boolean;
+  ecsCheckIn?: CalendarEcsCheckIn | null;
+  onEcsChanged?: (dateKey: string, next: CalendarEcsCheckIn | null) => void;
 };
 
 export function CalendarDayColumn({
@@ -61,6 +65,9 @@ export function CalendarDayColumn({
   onArmBuildFromSession,
   armedPoolCardId = null,
   onUnassignWorkout,
+  ecoLoadEnabled = false,
+  ecsCheckIn = null,
+  onEcsChanged,
 }: CalendarDayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: dateKey,
@@ -167,6 +174,13 @@ export function CalendarDayColumn({
         </div>
 
         <div className="flex flex-1 flex-col gap-2">
+          {ecoLoadEnabled && onEcsChanged ? (
+            <CalendarEcsCheckInCard
+              dateKey={dateKey}
+              checkIn={ecsCheckIn}
+              onChanged={(next) => onEcsChanged(dateKey, next)}
+            />
+          ) : null}
           {groupedSessions.map((item) =>
             item.kind === "multisport_race" ? (
               <CalendarPlannedRaceGroupCard key={item.groupId} group={item} />

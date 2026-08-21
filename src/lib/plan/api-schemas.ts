@@ -29,6 +29,8 @@ const stepTargetSchema = z.object({
   value: z.number().optional(),
   ref: z.enum(["threshold", "5k", "10k", "half", "marathon"]).optional(),
   pct: z.number().positive().optional(),
+  pctLow: z.number().positive().optional(),
+  pctHigh: z.number().positive().optional(),
   refSource: z.enum(["fitness", "goal"]).optional(),
 });
 
