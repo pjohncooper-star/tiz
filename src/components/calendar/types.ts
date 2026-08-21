@@ -32,11 +32,19 @@ export type CalendarWeekTarget = {
   zoneMinutes: Record<string, number>;
 };
 
+export type CalendarEcsCheckIn = {
+  date: string;
+  ecs: number;
+  note?: string | null;
+};
+
 export type CalendarRangeData = {
   sessions: CalendarPlannedSession[];
   activities: CalendarWeekActivity[];
   weekStarts: string[];
   weekTargets: CalendarWeekTarget[];
+  /** End-of-day ECS check-ins in range (empty when ECO load is off). */
+  ecsCheckIns: CalendarEcsCheckIn[];
 };
 
 export type ApplyTemplateMode = "clear_week" | "clear_template_days" | "merge";

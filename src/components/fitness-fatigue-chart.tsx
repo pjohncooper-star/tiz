@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  Bar,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -50,11 +51,13 @@ type ApiResponse = {
   note: string;
   series: FitnessFatiguePoint[];
   history?: SerializedImpulse[];
+  ecsCheckIns?: Array<{ date: string; ecs: number }>;
   error?: string;
 };
 
 type ChartRow = {
   date: string;
+  ecs: number | null;
   swimFormH: number | null;
   bikeFormH: number | null;
   runFormH: number | null;
@@ -83,7 +86,8 @@ function round1(n: number): number {
 
 function toHybridRows(
   series: FitnessFatiguePoint[],
-  splitKey: string
+  splitKey: string,
+  ecsByDate?: Map<string, number>
 ): ChartRow[] {
   return series.map((p) => {
     const isPast = p.date < splitKey;
@@ -102,9 +106,11 @@ function toHybridRows(
     const bikeH = round1(p.bike.h);
     const runG = round1(p.run.g);
     const runH = round1(p.run.h);
+    const ecs = ecsByDate?.has(p.date) ? (ecsByDate.get(p.date) ?? null) : null;
 
     return {
       date: p.date,
+      ecs,
       swimFormH: showHistory ? swimForm : null,
       bikeFormH: showHistory ? bikeForm : null,
       runFormH: showHistory ? runForm : null,
@@ -289,9 +295,14 @@ export function FitnessFatigueChart({
     const today = data?.today ?? todayKey;
     // Weekly planner: split at the Monday of the current week; daily charts split at today.
     const splitKey = useDraftWeeks ? mondayWeekStartKey(today) : today;
-    return toHybridRows(series, splitKey);
-  }, [series, data?.today, todayKey, useDraftWeeks]);
+    const ecsByDate =
+      data?.ecoEnabled && data.ecsCheckIns?.length
+        ? new Map(data.ecsCheckIns.map((c) => [c.date, c.ecs] as const))
+        : undefined;
+    return toHybridRows(series, splitKey, ecsByDate);
+  }, [series, data?.today, data?.ecoEnabled, data?.ecsCheckIns, todayKey, useDraftWeeks]);
 
+  const showEcsOverlay = Boolean(data?.ecoEnabled && data.ecsCheckIns?.some((c) => c.ecs >= 0));
   const heightClass = compact ? "h-56" : "h-72";
 
   return (
@@ -335,7 +346,7 @@ export function FitnessFatigueChart({
       ) : (
         <div className={`${heightClass} w-full`}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <ComposedChart data={rows} margin={{ top: 8, right: showEcsOverlay ? 28 : 12, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-zinc-200 dark:stroke-zinc-800" />
               <XAxis
                 dataKey="date"
@@ -343,7 +354,18 @@ export function FitnessFatigueChart({
                 minTickGap={32}
                 tickFormatter={(v: string) => v.slice(5)}
               />
-              <YAxis tick={{ fontSize: 11 }} width={40} />
+              <YAxis yAxisId="form" tick={{ fontSize: 11 }} width={40} />
+              {showEcsOverlay ? (
+                <YAxis
+                  yAxisId="ecs"
+                  orientation="right"
+                  domain={[0, 5]}
+                  ticks={[0, 1, 2, 3, 4, 5]}
+                  tick={{ fontSize: 10 }}
+                  width={28}
+                  label={{ value: "ECS", angle: 90, position: "insideRight", offset: 8, fontSize: 10 }}
+                />
+              ) : null}
               <Tooltip
                 contentStyle={tooltipStyles.contentStyle}
                 itemStyle={tooltipStyles.itemStyle}
@@ -351,34 +373,45 @@ export function FitnessFatigueChart({
                 labelFormatter={(label) => String(label)}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
+              {showEcsOverlay ? (
+                <Bar
+                  yAxisId="ecs"
+                  dataKey="ecs"
+                  name="ECS (daily)"
+                  fill="#f59e0b"
+                  fillOpacity={0.35}
+                  maxBarSize={10}
+                  isAnimationActive={false}
+                />
+              ) : null}
               {mode === "form" ? (
                 <>
-                  <Line type="monotone" dataKey="swimFormH" name="Swim" stroke="#0284c7" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="swimFormF" name="Swim (plan)" stroke="#0284c7" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
-                  <Line type="monotone" dataKey="bikeFormH" name="Bike" stroke="#ca8a04" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bikeFormF" name="Bike (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
-                  <Line type="monotone" dataKey="runFormH" name="Run" stroke="#16a34a" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="runFormF" name="Run (plan)" stroke="#16a34a" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
-                  <Line type="monotone" dataKey="combinedH" name="Combined" stroke="#18181b" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="combinedF" name="Combined (plan)" stroke="#18181b" dot={false} strokeWidth={2} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
+                  <Line yAxisId="form" type="monotone" dataKey="swimFormH" name="Swim" stroke="#0284c7" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="swimFormF" name="Swim (plan)" stroke="#0284c7" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
+                  <Line yAxisId="form" type="monotone" dataKey="bikeFormH" name="Bike" stroke="#ca8a04" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="bikeFormF" name="Bike (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
+                  <Line yAxisId="form" type="monotone" dataKey="runFormH" name="Run" stroke="#16a34a" dot={false} strokeWidth={1.75} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="runFormF" name="Run (plan)" stroke="#16a34a" dot={false} strokeWidth={1.75} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
+                  <Line yAxisId="form" type="monotone" dataKey="combinedH" name="Combined" stroke="#18181b" dot={false} strokeWidth={2} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="combinedF" name="Combined (plan)" stroke="#18181b" dot={false} strokeWidth={2} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} legendType={showForecast ? "line" : "none"} hide={!showForecast} />
                 </>
               ) : (
                 <>
-                  <Line type="monotone" dataKey="swimGH" name="Swim fitness" stroke="#0284c7" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="swimGF" name="Swim fitness (plan)" stroke="#0284c7" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
-                  <Line type="monotone" dataKey="swimHH" name="Swim fatigue" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="swimHF" name="Swim fatigue (plan)" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
-                  <Line type="monotone" dataKey="bikeGH" name="Bike fitness" stroke="#ca8a04" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bikeGF" name="Bike fitness (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
-                  <Line type="monotone" dataKey="bikeHH" name="Bike fatigue" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="bikeHF" name="Bike fatigue (plan)" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
-                  <Line type="monotone" dataKey="runGH" name="Run fitness" stroke="#16a34a" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="runGF" name="Run fitness (plan)" stroke="#16a34a" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
-                  <Line type="monotone" dataKey="runHH" name="Run fatigue" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
-                  <Line type="monotone" dataKey="runHF" name="Run fatigue (plan)" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
+                  <Line yAxisId="form" type="monotone" dataKey="swimGH" name="Swim fitness" stroke="#0284c7" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="swimGF" name="Swim fitness (plan)" stroke="#0284c7" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
+                  <Line yAxisId="form" type="monotone" dataKey="swimHH" name="Swim fatigue" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="swimHF" name="Swim fatigue (plan)" stroke="#7dd3fc" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
+                  <Line yAxisId="form" type="monotone" dataKey="bikeGH" name="Bike fitness" stroke="#ca8a04" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="bikeGF" name="Bike fitness (plan)" stroke="#ca8a04" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
+                  <Line yAxisId="form" type="monotone" dataKey="bikeHH" name="Bike fatigue" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="bikeHF" name="Bike fatigue (plan)" stroke="#fde047" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
+                  <Line yAxisId="form" type="monotone" dataKey="runGH" name="Run fitness" stroke="#16a34a" dot={false} strokeWidth={1.5} connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="runGF" name="Run fitness (plan)" stroke="#16a34a" dot={false} strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
+                  <Line yAxisId="form" type="monotone" dataKey="runHH" name="Run fatigue" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="3 2" connectNulls={false} isAnimationActive={false} />
+                  <Line yAxisId="form" type="monotone" dataKey="runHF" name="Run fatigue (plan)" stroke="#86efac" dot={false} strokeWidth={1.25} strokeDasharray="2 3" connectNulls={false} isAnimationActive={false} hide={!showForecast} legendType={showForecast ? "line" : "none"} />
                 </>
               )}
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       )}
