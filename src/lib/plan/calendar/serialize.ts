@@ -121,6 +121,21 @@ export function programOriginCaption(input: {
   return input.programOrigin === "season" ? `${name} · season` : name;
 }
 
+export function sessionSourceLabel(input: {
+  source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  trainingPlanName?: string | null;
+  programOrigin?: "season" | "library" | null;
+}): string {
+  if (input.source === "PLAN") {
+    const caption = programOriginCaption(input);
+    if (caption) return `Program · ${caption}`;
+    return input.programOrigin === "season" ? "Program · season" : "Program";
+  }
+  if (input.source === "TEMPLATE") return "Weekly template";
+  if (input.source === "RACE") return "Race";
+  return "Calendar";
+}
+
 function parseStoredStreams(raw: unknown): NormalizedStreams {
   if (!raw || typeof raw !== "object") return {};
   return raw as NormalizedStreams;

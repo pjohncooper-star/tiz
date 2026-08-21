@@ -271,7 +271,7 @@ Workout trees are copied **as stored**: relative targets stay relative and follo
 
 Instead of applying a program directly, you can attach it to a season in the season planner, which additionally makes the program's sessions count toward the season's weekly hours, TiZ, and session budget, and lets you **pause** individual weeks. See [chapter 5](./05-season-planner.md#attaching-programs).
 
-Library **Apply** and season attach are separate copies. Calendar cards label library sessions with the program name (for example **Base Build**) and season sessions with **Base Build · season**. **Clear future** and **Replace** only touch the unattached library copy; **Remove** on a season program only touches the season copy.
+Library **Apply** and season attach are separate copies. The session page **Source** field shows **Program · Base Build** for a library apply and **Program · Base Build · season** when it came through a season. **Clear future** and **Replace** only touch the unattached library copy; **Remove** on a season program only touches the season copy.
 
 If you already applied a program from the library and then attach it to a season, the season planner asks whether to **use those existing sessions**, keep both copies, or replace the unattached ones.
 

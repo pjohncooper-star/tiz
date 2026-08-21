@@ -4,6 +4,7 @@ import {
   programOriginCaption,
   programOriginForSession,
   serializePlannedSessions,
+  sessionSourceLabel,
   signalPrefsFromDisciplineSettings,
 } from "@/lib/plan/calendar/serialize";
 import { buildEnduranceDraftNodes } from "@/lib/plan/calendar/spread-easy-tiz";
@@ -206,6 +207,24 @@ describe("program origin", () => {
       programOriginCaption({ trainingPlanName: "Base Build", programOrigin: "season" }),
       "Base Build · season"
     );
+    assert.equal(
+      sessionSourceLabel({
+        source: "PLAN",
+        trainingPlanName: "Base Build",
+        programOrigin: "library",
+      }),
+      "Program · Base Build"
+    );
+    assert.equal(
+      sessionSourceLabel({
+        source: "PLAN",
+        trainingPlanName: "Base Build",
+        programOrigin: "season",
+      }),
+      "Program · Base Build · season"
+    );
+    assert.equal(sessionSourceLabel({ source: "FLEXIBLE" }), "Calendar");
+    assert.equal(sessionSourceLabel({ source: "TEMPLATE" }), "Weekly template");
   });
 
   it("serializePlannedSessions stamps origin from the plan join", () => {

@@ -52,7 +52,6 @@ Within a day cell, top to bottom: planned session cards, the inline add form whe
 | --- | --- |
 | Drag handle (⠿) | Drag to reorder within the day or move to another day |
 | Title | Click to open the session's detail page |
-| Program line | On program sessions: the program name, or **name · season** when attached through a season |
 | Time pill | Shown when the session has a start time, e.g. "7:30 AM" |
 | Sport pill | Bike / Run / Swim / Strength |
 | Role badge | **Easy**, **Intensity**, or **Long** — click to cycle; **Set role** appears for Moderate |
@@ -103,7 +102,7 @@ This is the intended path when you have a season. See [the workout pool](#the-wo
 
 Apply a program from the library, or attach one to your season. See [chapter 7](./07-workout-library.md#programs).
 
-Program sessions on the calendar show the program name under the title. Library applies are unlabeled beyond the name; season-attached copies add **· season**. **Clear future** in the library only removes unattached copies; season **Remove** only removes the season copy.
+The session page **Source** field shows whether a program copy is a library apply or attached through a season. **Clear future** in the library only removes unattached copies; season **Remove** only removes the season copy.
 
 ## The workout pool
 
@@ -212,6 +211,7 @@ Clicking a session title opens its page at `/workouts/{id}`, which combines plan
 | **Start time (optional)** | Clearing it lets you hand-order the day on the calendar |
 | **Sport** | Bike / Run / Swim / Strength |
 | **Title** | Free text |
+| **Source** | Where the session came from: calendar, weekly template, race, or a program. Program copies add **· season** when attached through a season. |
 | **Session role** | Easy / Moderate / Intensity / Long |
 | **TiZ metric** | Default, or override with power, pace, or heart rate for this session |
 | Planned metrics | Duration, distance, pace or speed |

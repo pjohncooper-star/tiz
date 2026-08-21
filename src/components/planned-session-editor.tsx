@@ -53,6 +53,8 @@ import { parseTargetZones } from "@/lib/workout/steps";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
 import { WorkoutTagsInput } from "@/components/workout-tags-input";
 import { sessionReturnLabel } from "@/lib/plan/session-return";
+import { trainingPlanHref } from "@/lib/plan/library-href";
+import { sessionSourceLabel } from "@/lib/plan/calendar/serialize";
 import {
   formatScheduledTimeMinutes,
   parseTimeInputToMinutes,
@@ -95,6 +97,9 @@ type PlannedSessionEditorProps = {
   sessionRole?: SessionRole;
   tizSignalOverride?: SignalType | null;
   sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  trainingPlanId?: string | null;
+  trainingPlanName?: string | null;
+  programOrigin?: "season" | "library" | null;
   returnHref: string;
   children?: ReactNode;
 };
@@ -135,6 +140,9 @@ export function PlannedSessionEditor({
   sessionRole: initialSessionRole = "MODERATE",
   tizSignalOverride: initialTizSignalOverride = null,
   sessionSource = "FLEXIBLE",
+  trainingPlanId = null,
+  trainingPlanName = null,
+  programOrigin = null,
   returnHref,
   children,
 }: PlannedSessionEditorProps) {
@@ -689,6 +697,32 @@ export function PlannedSessionEditor({
           <div className="sm:col-span-2">
             <Label>Title</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>Source</Label>
+            <p className="mt-1.5 text-sm text-zinc-700 dark:text-zinc-300">
+              {sessionSource === "PLAN" ? (
+                <>
+                  Program
+                  {trainingPlanName && trainingPlanId ? (
+                    <>
+                      {" · "}
+                      <Link
+                        href={trainingPlanHref(trainingPlanId)}
+                        className="text-sky-600 hover:underline dark:text-sky-400"
+                      >
+                        {trainingPlanName}
+                      </Link>
+                    </>
+                  ) : trainingPlanName ? (
+                    <> · {trainingPlanName}</>
+                  ) : null}
+                  {programOrigin === "season" ? " · season" : null}
+                </>
+              ) : (
+                sessionSourceLabel({ source: sessionSource })
+              )}
+            </p>
           </div>
           {discipline !== "STRENGTH" ? (
             <>

@@ -70,6 +70,9 @@ export default async function WorkoutDetailPage({
         sessionRole={viewModel.sessionRole}
         tizSignalOverride={viewModel.tizSignalOverride}
         sessionSource={viewModel.sessionSource}
+        trainingPlanId={viewModel.trainingPlanId}
+        trainingPlanName={viewModel.trainingPlanName}
+        programOrigin={viewModel.programOrigin}
         returnHref={viewModel.returnHref}
       >
         <WorkoutDetailAnalysis viewModel={viewModel} />

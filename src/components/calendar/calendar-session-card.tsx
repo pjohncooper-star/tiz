@@ -8,10 +8,7 @@ import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import { CalendarSessionMetricGrid } from "@/components/calendar/calendar-session-metric-grid";
 import { sessionCardClassName } from "@/lib/plan/workout-shading";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
-import {
-  programOriginCaption,
-  type CalendarPlannedSession,
-} from "@/lib/plan/calendar/serialize";
+import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import { buildSessionCardMetrics } from "@/lib/plan/calendar/session-card-summary";
 import {
   resolveSessionPoolSize,
@@ -224,11 +221,6 @@ export function CalendarSessionCard({
             className="block transition hover:opacity-90"
           >
             <p className="line-clamp-2 font-medium leading-snug pr-1">{session.title}</p>
-            {session.source === "PLAN" && programOriginCaption(session) ? (
-              <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                {programOriginCaption(session)}
-              </p>
-            ) : null}
             <div className="mt-0.5 flex flex-wrap items-center gap-1">
               {timeLabel ? (
                 <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">

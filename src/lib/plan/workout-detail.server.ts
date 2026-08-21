@@ -37,6 +37,7 @@ import {
 } from "@/lib/swim/equipment-catalog";
 import { parseRacePaceAnchors, type RacePaceAnchors } from "@/lib/workout/relative-pace";
 import { loadRelativeHrAnchors } from "@/lib/workout/relative-hr-context.server";
+import { programOriginForSession } from "@/lib/plan/calendar/serialize";
 
 const ENDURANCE_DISCIPLINES = new Set<PlanDiscipline>(["BIKE", "RUN", "SWIM"]);
 
@@ -100,6 +101,9 @@ export type WorkoutDetailViewModel = {
   sessionRole: import("@prisma/client").SessionRole;
   tizSignalOverride: SignalType | null;
   sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  trainingPlanId: string | null;
+  trainingPlanName: string | null;
+  programOrigin: "season" | "library" | null;
   workoutSource: {
     folder: { id: string; name: string; folderKind: string } | null;
     workoutTemplate: { id: string; name: string; sortOrder: number | null };
@@ -152,6 +156,7 @@ export async function loadWorkoutDetail(
             workoutTemplate: { select: { id: true, name: true, sortOrder: true } },
           },
         },
+        trainingPlan: { select: { id: true, name: true } },
       },
     }),
     db.athlete
@@ -458,6 +463,12 @@ export async function loadWorkoutDetail(
     sessionRole: plannedSession.sessionRole,
     tizSignalOverride: sessionOverride,
     sessionSource: plannedSession.source,
+    trainingPlanId: plannedSession.trainingPlanId ?? null,
+    trainingPlanName: plannedSession.trainingPlan?.name ?? null,
+    programOrigin: programOriginForSession({
+      trainingPlanId: plannedSession.trainingPlanId,
+      seasonTrainingPlanAttachmentId: plannedSession.seasonTrainingPlanAttachmentId,
+    }),
     workoutSource: plannedSession.workoutSource,
     selfEvalConfig,
     ecoLoadEnabled,
