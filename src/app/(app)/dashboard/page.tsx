@@ -71,13 +71,14 @@ export default async function DashboardPage() {
               rawStreams: true,
               discipline: true,
               legType: true,
-              zoneBreakdowns: {
-                where: { isCanonical: true },
-                select: { zone: true, minutes: true, isCanonical: true },
-              },
+            zoneBreakdowns: {
+              where: { isCanonical: true },
+              select: { zone: true, minutes: true, isCanonical: true },
             },
           },
         },
+        trainingPlan: { select: { name: true } },
+      },
         orderBy: [
           { scheduledDate: "asc" },
           { scheduledTimeMinutes: { sort: "asc", nulls: "last" } },

@@ -30,6 +30,8 @@ type ApplyPreview = {
   sessionCount: number;
   hasExistingPlanSessions: boolean;
   existingPlanSessionCount: number;
+  existingUnattachedPlanSessionCount?: number;
+  existingSeasonPlanSessionCount?: number;
   sessions?: ApplyPreviewSession[];
   requiredPaceAnchors?: { ref: string; refSource: string; label: string }[];
   missingAnchors?: string[];
@@ -145,8 +147,16 @@ export function ApplyTrainingPlanDialog({
               ) : null}
               {preview.hasExistingPlanSessions ? (
                 <p className="text-amber-800 dark:text-amber-200">
-                  This program already has {preview.existingPlanSessionCount} session
+                  This program already has {preview.existingPlanSessionCount} unattached
+                  session
                   {preview.existingPlanSessionCount === 1 ? "" : "s"} in this range.
+                </p>
+              ) : null}
+              {(preview.existingSeasonPlanSessionCount ?? 0) > 0 ? (
+                <p className="text-amber-800 dark:text-amber-200">
+                  {preview.existingSeasonPlanSessionCount} season-attached session
+                  {(preview.existingSeasonPlanSessionCount ?? 0) === 1 ? "" : "s"} in
+                  this range stay. Clear those from the season planner.
                 </p>
               ) : null}
               {preview.requiredPaceAnchors && preview.requiredPaceAnchors.length > 0 ? (
@@ -194,7 +204,7 @@ export function ApplyTrainingPlanDialog({
 
           {preview?.hasExistingPlanSessions ? (
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Existing program sessions in range</legend>
+              <legend className="text-sm font-medium">Existing unattached sessions in range</legend>
               <label className="flex cursor-pointer items-start gap-2 text-sm">
                 <input
                   type="radio"
@@ -204,7 +214,7 @@ export function ApplyTrainingPlanDialog({
                   className="mt-1"
                 />
                 <span>
-                  <strong>Merge</strong> — keep existing sessions and add another copy
+                  <strong>Merge</strong> — keep unattached sessions and add another copy
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-2 text-sm">
@@ -216,8 +226,9 @@ export function ApplyTrainingPlanDialog({
                   className="mt-1"
                 />
                 <span>
-                  <strong>Replace this program’s sessions in range</strong> — remove prior
-                  sessions from this program in the window, then apply
+                  <strong>Replace this program’s unattached sessions in range</strong>{" "}
+                  — remove prior library-applied sessions in the window, then apply.
+                  Season-attached copies stay.
                 </span>
               </label>
             </fieldset>

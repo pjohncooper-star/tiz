@@ -607,6 +607,7 @@ export function SimplePlannerView({
       pausedWeeks: row.pausedWeeks,
       ownsDisciplines: row.ownsDisciplines,
       fillLeftoverTiz: row.fillLeftoverTiz,
+      unattachedOverlapMode: row.unattachedOverlapMode,
     }));
   }
 

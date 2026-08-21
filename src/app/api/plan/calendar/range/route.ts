@@ -60,6 +60,7 @@ export async function GET(request: Request) {
             },
           },
         },
+        trainingPlan: { select: { name: true } },
       },
       orderBy: [
         { scheduledDate: "asc" },

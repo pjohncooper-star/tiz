@@ -12,6 +12,8 @@ import {
 } from "@/lib/plan/training-plan";
 import {
   applyTrainingPlan,
+  claimUnattachedPlanSessions,
+  clearUnattachedPlanSessionsInRange,
   TrainingPlanError,
 } from "@/lib/plan/training-plan.server";
 import {
@@ -40,6 +42,8 @@ export type SeasonTrainingPlanAttachmentWrite = {
   pausedWeeks?: PausedWeek[];
   ownsDisciplines?: ProgramDiscipline[] | null;
   fillLeftoverTiz?: Partial<Record<ProgramDiscipline, boolean>>;
+  /** Only used on first attach. */
+  unattachedOverlapMode?: "claim" | "keep" | "replace";
 };
 
 export type SerializedTrainingPlanAttachment = {
@@ -236,14 +240,12 @@ export async function syncSeasonTrainingPlanAttachments(input: {
 
   if (removedRows.length > 0) {
     const today = parseDateKey(todayKey);
-    const remainingPlanIds = new Set(writes.map((row) => row.trainingPlanId));
     for (const row of removedRows) {
       await deleteFuturePlanSessionsForAttachment({
         tx,
         athleteId,
         row,
         today,
-        includeUnstampedFallback: !remainingPlanIds.has(row.trainingPlanId),
       });
       await tx.seasonTrainingPlanAttachment.delete({ where: { id: row.id } });
     }
@@ -446,15 +448,38 @@ export async function syncSeasonTrainingPlanAttachments(input: {
         .map((session) => `${session.dayOffset}:${session.sortOrder}`)
     );
 
+    const overlapMode = row.previous
+      ? undefined
+      : (row.write.unattachedOverlapMode ?? "claim");
+    if (!row.previous && overlapMode === "claim") {
+      await claimUnattachedPlanSessions(tx, {
+        athleteId,
+        planId: row.write.trainingPlanId,
+        attachmentId: row.attachmentId,
+        startDate: row.window.startDate,
+        endDate: row.window.endDate,
+        todayKey,
+      });
+    } else if (!row.previous && overlapMode === "replace") {
+      await clearUnattachedPlanSessionsInRange(tx, {
+        athleteId,
+        planId: row.write.trainingPlanId,
+        startDate: row.window.startDate,
+        endDate: row.window.endDate,
+        todayKey,
+      });
+    }
+
     await applyTrainingPlan(athleteId, row.write.trainingPlanId, {
       anchorMode: row.write.anchorMode,
       date: row.anchorDate,
-      mode: "replace",
+      mode: overlapMode === "claim" ? "merge" : "replace",
       todayKey,
       pausedWeeks: row.pausedWeeks,
       tx,
       seasonTrainingPlanAttachmentId: row.attachmentId,
       skipSessionKeys: skipKeys,
+      skipExistingAttachmentSessions: overlapMode === "claim",
       replaceRange: row.previous
         ? {
             startDate: formatDateKey(row.previous.startDate),
@@ -505,29 +530,15 @@ async function deleteFuturePlanSessionsForAttachment(input: {
   athleteId: string;
   row: ExistingAttachmentRow;
   today: Date;
-  includeUnstampedFallback: boolean;
 }) {
-  const { tx, athleteId, row, today, includeUnstampedFallback } = input;
-  const where: Prisma.PlannedSessionWhereInput = {
-    athleteId,
-    source: "PLAN",
-    scheduledDate: { gte: today },
-    ...(includeUnstampedFallback
-      ? {
-          OR: [
-            { seasonTrainingPlanAttachmentId: row.id },
-            {
-              seasonTrainingPlanAttachmentId: null,
-              trainingPlanId: row.trainingPlanId,
-              scheduledDate: { gte: row.startDate, lte: row.endDate },
-            },
-          ],
-        }
-      : { seasonTrainingPlanAttachmentId: row.id }),
-  };
-
+  const { tx, athleteId, row, today } = input;
   const sessions = await tx.plannedSession.findMany({
-    where,
+    where: {
+      athleteId,
+      source: "PLAN",
+      scheduledDate: { gte: today },
+      seasonTrainingPlanAttachmentId: row.id,
+    },
     select: { id: true },
   });
   if (sessions.length === 0) return;

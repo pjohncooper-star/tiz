@@ -164,6 +164,7 @@ export default async function CalendarPage({
             },
           },
         },
+        trainingPlan: { select: { name: true } },
       },
       orderBy: [
         { scheduledDate: "asc" },

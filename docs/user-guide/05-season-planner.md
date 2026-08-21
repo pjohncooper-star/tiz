@@ -248,10 +248,12 @@ You can attach several library programs to one season. Windows may overlap (a sw
 | **Fill leftover** | Optional: put leftover season minutes onto extra days. Off by default — the program is the target |
 | **Pause selected week** | Skips that program for the selected week — holidays, illness, travel |
 | **Pause all programs this week** | Vacation: skip every attached program that week |
-| **Remove** | Detaches that program only |
+| **Remove** | Detaches that program only; future season-stamped sessions go with it. Unattached library copies of the same program stay. |
 | **Save & apply** | Persists attachments and recalculates |
 
 Attached program weeks appear as colored bars on the timeline (one bar per program); paused weeks are dashed. Same-day same-sport overlaps warn with **Prefer A**, **Prefer B**, or **Keep both**. Save is allowed either way.
+
+Calendar cards mark season-attached sessions with **· season** so you can tell them from a library apply of the same program. If you already ran the program from the library, adding it here offers to **use those existing sessions** instead of duplicating them.
 
 For sports a program owns that week, the program **is** the hours/TiZ target — not a floor against the season ramp. Session counts follow that week of the program unless leftover-TiZ is on (or you raised hours). Checking **Rest** offers to pause attached programs too; rest by itself does not skip them.
 

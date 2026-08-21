@@ -167,6 +167,7 @@ export type SimpleTrainingPlanAttachment = {
   truncated?: boolean;
   ownsDisciplines?: ProgramDiscipline[] | null;
   fillLeftoverTiz?: Partial<Record<ProgramDiscipline, boolean>>;
+  unattachedOverlapMode?: "claim" | "keep" | "replace";
 };
 
 export type { PoolSlotKind, WeekSlotBudgets };

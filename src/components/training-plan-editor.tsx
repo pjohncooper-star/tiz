@@ -294,7 +294,7 @@ export function TrainingPlanEditor({
   async function handleClearFuture() {
     if (
       !window.confirm(
-        `Remove future calendar sessions applied from “${planMeta.name}” (today onward)?`
+        `Remove this program’s unattached calendar sessions from today onward? Sessions attached through a season stay.`
       )
     ) {
       return;
@@ -363,7 +363,7 @@ export function TrainingPlanEditor({
             {planMeta.sessionCount} sessions · {planMeta.durationDays} days · starts{" "}
             {initialPlan.anchorWeekday}
             {planMeta.appliedFutureSessionCount > 0
-              ? ` · ${planMeta.appliedFutureSessionCount} future on calendar`
+              ? ` · ${planMeta.appliedFutureSessionCount} unattached future on calendar`
               : ""}
           </p>
         </div>

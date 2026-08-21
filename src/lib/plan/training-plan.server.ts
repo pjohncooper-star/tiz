@@ -69,6 +69,21 @@ export class TrainingPlanError extends Error {
   }
 }
 
+/** Library-applied PLAN rows (not stamped to a season attachment). */
+export function unattachedPlanSessionWhere(
+  athleteId: string,
+  planId: string,
+  scheduledDate?: Prisma.DateTimeFilter
+): Prisma.PlannedSessionWhereInput {
+  return {
+    athleteId,
+    source: "PLAN",
+    trainingPlanId: planId,
+    seasonTrainingPlanAttachmentId: null,
+    ...(scheduledDate ? { scheduledDate } : {}),
+  };
+}
+
 async function loadDisciplineSettings(
   athleteId: string
 ): Promise<Record<PlanDiscipline, DisciplineUnitSettings>> {
@@ -280,6 +295,8 @@ export type ApplyPreview = {
   sessionCount: number;
   existingPlanSessionCount: number;
   hasExistingPlanSessions: boolean;
+  existingUnattachedPlanSessionCount: number;
+  existingSeasonPlanSessionCount: number;
   /** Sample of scheduled sessions (first 12) for apply preview. */
   sessions: ApplyPreviewSession[];
   /** Unique relative pace refs across structured plan sessions in the window. */
@@ -408,11 +425,7 @@ export async function getTrainingPlanDetail(
   const todayKey = await requestTodayKey();
   const today = parseDateKey(todayKey);
   const appliedFutureSessionCount = await db.plannedSession.count({
-    where: {
-      athleteId,
-      trainingPlanId: planId,
-      scheduledDate: { gte: today },
-    },
+    where: unattachedPlanSessionWhere(athleteId, planId, { gte: today }),
   });
 
   const paceByKey = new Map<string, RelativePaceRequirement>();
@@ -971,11 +984,7 @@ export async function clearTrainingPlanFutureSessions(
   const fromKey = options?.fromDateKey ?? (await requestTodayKey());
   const fromDate = parseDateKey(fromKey);
   const deleted = await db.plannedSession.deleteMany({
-    where: {
-      athleteId,
-      trainingPlanId: planId,
-      scheduledDate: { gte: fromDate },
-    },
+    where: unattachedPlanSessionWhere(athleteId, planId, { gte: fromDate }),
   });
   return { removed: deleted.count };
 }
@@ -1028,13 +1037,22 @@ export async function previewTrainingPlanApply(
   const rangeEnd = parseDateKey(window.endDate);
   const relativeCtx = await loadAthleteRelativeContext(athleteId);
 
-  const existingPlanSessionCount = await db.plannedSession.count({
+  const existingUnattachedPlanSessionCount = await db.plannedSession.count({
+    where: unattachedPlanSessionWhere(athleteId, planId, {
+      gte: rangeStart,
+      lte: rangeEnd,
+    }),
+  });
+  const existingSeasonPlanSessionCount = await db.plannedSession.count({
     where: {
       athleteId,
+      source: "PLAN",
       trainingPlanId: planId,
+      seasonTrainingPlanAttachmentId: { not: null },
       scheduledDate: { gte: rangeStart, lte: rangeEnd },
     },
   });
+  const existingPlanSessionCount = existingUnattachedPlanSessionCount;
 
   const sessionByKey = new Map(
     plan.sessions.map((s) => [`${s.dayOffset}:${s.sortOrder}`, s])
@@ -1104,6 +1122,8 @@ export async function previewTrainingPlanApply(
     sessionCount: scheduled.length,
     existingPlanSessionCount,
     hasExistingPlanSessions: existingPlanSessionCount > 0,
+    existingUnattachedPlanSessionCount,
+    existingSeasonPlanSessionCount,
     sessions: previewSessions,
     requiredPaceAnchors,
     missingAnchors,
@@ -1111,6 +1131,57 @@ export async function previewTrainingPlanApply(
     needsMaxHr,
     needsLthr,
   };
+}
+
+export async function claimUnattachedPlanSessions(
+  tx: Prisma.TransactionClient,
+  input: {
+    athleteId: string;
+    planId: string;
+    attachmentId: string;
+    startDate: string;
+    endDate: string;
+    todayKey: string;
+  }
+): Promise<number> {
+  const fromKey = input.startDate < input.todayKey ? input.todayKey : input.startDate;
+  const result = await tx.plannedSession.updateMany({
+    where: unattachedPlanSessionWhere(input.athleteId, input.planId, {
+      gte: parseDateKey(fromKey),
+      lte: parseDateKey(input.endDate),
+    }),
+    data: { seasonTrainingPlanAttachmentId: input.attachmentId },
+  });
+  return result.count;
+}
+
+export async function clearUnattachedPlanSessionsInRange(
+  tx: Prisma.TransactionClient,
+  input: {
+    athleteId: string;
+    planId: string;
+    startDate: string;
+    endDate: string;
+    todayKey: string;
+  }
+): Promise<number> {
+  const fromKey = input.startDate < input.todayKey ? input.todayKey : input.startDate;
+  const toDelete = await tx.plannedSession.findMany({
+    where: unattachedPlanSessionWhere(input.athleteId, input.planId, {
+      gte: parseDateKey(fromKey),
+      lte: parseDateKey(input.endDate),
+    }),
+    select: { id: true },
+  });
+  const ids = toDelete.map((session) => session.id);
+  if (ids.length === 0) return 0;
+  await tx.structuredWorkout.deleteMany({
+    where: { plannedSessionId: { in: ids } },
+  });
+  const deleted = await tx.plannedSession.deleteMany({
+    where: { id: { in: ids } },
+  });
+  return deleted.count;
 }
 
 export async function applyTrainingPlan(
@@ -1127,6 +1198,8 @@ export async function applyTrainingPlan(
     replaceRange?: { startDate: string; endDate: string };
     seasonTrainingPlanAttachmentId?: string;
     skipSessionKeys?: Set<string>;
+    /** Skip creating slots that already exist for this attachment (claim flow). */
+    skipExistingAttachmentSessions?: boolean;
   }
 ): Promise<{
   created: number;
@@ -1197,14 +1270,10 @@ export async function applyTrainingPlan(
               lte: parseDateKey(clearRange.endDate),
             },
           }
-        : {
-            athleteId,
-            trainingPlanId: planId,
-            scheduledDate: {
-              gte: parseDateKey(clearRange.startDate),
-              lte: parseDateKey(clearRange.endDate),
-            },
-          };
+        : unattachedPlanSessionWhere(athleteId, planId, {
+            gte: parseDateKey(clearRange.startDate),
+            lte: parseDateKey(clearRange.endDate),
+          });
       const toDelete = await tx.plannedSession.findMany({
         where,
         select: { id: true },
@@ -1221,6 +1290,35 @@ export async function applyTrainingPlan(
       }
     }
 
+    const existingAttachmentSlots = new Set<string>();
+    if (
+      input.skipExistingAttachmentSessions &&
+      input.seasonTrainingPlanAttachmentId
+    ) {
+      const existingRows = await tx.plannedSession.findMany({
+        where: {
+          athleteId,
+          seasonTrainingPlanAttachmentId: input.seasonTrainingPlanAttachmentId,
+        },
+        select: {
+          scheduledDate: true,
+          trainingPlanSessionId: true,
+          discipline: true,
+          title: true,
+        },
+      });
+      for (const row of existingRows) {
+        if (row.trainingPlanSessionId) {
+          existingAttachmentSlots.add(
+            `${formatDateKey(row.scheduledDate)}:${row.trainingPlanSessionId}`
+          );
+        }
+        existingAttachmentSlots.add(
+          `${formatDateKey(row.scheduledDate)}|${row.discipline}|${row.title}`
+        );
+      }
+    }
+
     for (const slot of scheduled) {
       if (slot.scheduledDateKey < todayKey) continue;
       const planSession = sessionByKey.get(
@@ -1229,6 +1327,15 @@ export async function applyTrainingPlan(
       if (!planSession) continue;
       if (
         input.skipSessionKeys?.has(`${planSession.dayOffset}:${planSession.sortOrder}`)
+      ) {
+        continue;
+      }
+      if (
+        input.skipExistingAttachmentSessions &&
+        (existingAttachmentSlots.has(`${slot.scheduledDateKey}:${planSession.id}`) ||
+          existingAttachmentSlots.has(
+            `${slot.scheduledDateKey}|${planSession.discipline}|${planSession.title}`
+          ))
       ) {
         continue;
       }

@@ -103,6 +103,8 @@ function defaultAttachment(
   };
 }
 
+type UnattachedOverlapMode = "claim" | "keep" | "replace";
+
 export function SimplePlannerTrainingPlanPane({
   attachments,
   plans,
@@ -141,6 +143,14 @@ export function SimplePlannerTrainingPlanPane({
 }) {
   const races = useMemo(() => raceOptions(goalEvents), [goalEvents]);
   const [customAddDate, setCustomAddDate] = useState<string | null>(null);
+  const [pendingAdd, setPendingAdd] = useState<{
+    plan: LibraryPlanOption;
+    unattachedCount: number;
+    startDate: string;
+    endDate: string;
+  } | null>(null);
+  const [overlapMode, setOverlapMode] = useState<UnattachedOverlapMode>("claim");
+  const [overlapBusy, setOverlapBusy] = useState(false);
   const suggestedAddDate = useMemo(
     () =>
       suggestedProgramStartDate({
@@ -172,13 +182,62 @@ export function SimplePlannerTrainingPlanPane({
     return set.size > 0 ? [...set] : [...PROGRAM_DISCIPLINES];
   }
 
-  function addPlan(planId: string) {
+  async function addPlan(planId: string) {
     const plan = plans.find((row) => row.id === planId);
     if (!plan || !addStartDate) return;
+    setOverlapBusy(true);
+    try {
+      const params = new URLSearchParams({
+        anchorMode: "start",
+        date: addStartDate,
+      });
+      const res = await fetch(`/api/plan/training-plans/${plan.id}/apply?${params}`);
+      const data = (await res.json().catch(() => ({}))) as {
+        existingUnattachedPlanSessionCount?: number;
+        existingPlanSessionCount?: number;
+        startDate?: string;
+        endDate?: string;
+      };
+      const unattachedCount =
+        typeof data.existingUnattachedPlanSessionCount === "number"
+          ? data.existingUnattachedPlanSessionCount
+          : typeof data.existingPlanSessionCount === "number"
+            ? data.existingPlanSessionCount
+            : 0;
+      if (res.ok && unattachedCount > 0) {
+        setOverlapMode("claim");
+        setPendingAdd({
+          plan,
+          unattachedCount,
+          startDate: addStartDate,
+          endDate: data.endDate ?? "",
+        });
+        return;
+      }
+      onChange([
+        ...attachments,
+        defaultAttachment(plan, addStartDate, mixForPlan(plan.id)),
+      ]);
+      setCustomAddDate(null);
+    } finally {
+      setOverlapBusy(false);
+    }
+  }
+
+  function confirmPendingAdd() {
+    if (!pendingAdd) return;
     onChange([
       ...attachments,
-      defaultAttachment(plan, addStartDate, mixForPlan(plan.id)),
+      {
+        ...defaultAttachment(
+          pendingAdd.plan,
+          pendingAdd.startDate,
+          mixForPlan(pendingAdd.plan.id)
+        ),
+        unattachedOverlapMode: overlapMode,
+      },
     ]);
+    setPendingAdd(null);
     setCustomAddDate(null);
   }
 
@@ -214,8 +273,9 @@ export function SimplePlannerTrainingPlanPane({
         <Select
           value=""
           onChange={(event) => {
-            if (event.target.value) addPlan(event.target.value);
+            if (event.target.value) void addPlan(event.target.value);
           }}
+          disabled={overlapBusy || busy}
         >
           <option value="">{placeholder}</option>
           {options.map((plan) => (
@@ -236,6 +296,72 @@ export function SimplePlannerTrainingPlanPane({
       </div>
     </div>
   );
+
+  const overlapDialog = pendingAdd ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-4 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <h3 className="text-sm font-semibold">Unattached sessions already on the calendar</h3>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+          “{pendingAdd.plan.name}” already has {pendingAdd.unattachedCount} unattached
+          session{pendingAdd.unattachedCount === 1 ? "" : "s"}
+          {pendingAdd.endDate
+            ? ` from ${pendingAdd.startDate} to ${pendingAdd.endDate}`
+            : ""}
+          . Choose how to attach it to this season.
+        </p>
+        <fieldset className="mt-3 space-y-2">
+          <legend className="sr-only">How to handle existing sessions</legend>
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="unattached-overlap"
+              className="mt-1"
+              checked={overlapMode === "claim"}
+              onChange={() => setOverlapMode("claim")}
+            />
+            <span>
+              <strong>Use existing sessions</strong> — stamp them onto this season
+              instead of creating a second copy
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="unattached-overlap"
+              className="mt-1"
+              checked={overlapMode === "keep"}
+              onChange={() => setOverlapMode("keep")}
+            />
+            <span>
+              <strong>Keep both</strong> — leave the unattached copy and add a season
+              copy
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="unattached-overlap"
+              className="mt-1"
+              checked={overlapMode === "replace"}
+              onChange={() => setOverlapMode("replace")}
+            />
+            <span>
+              <strong>Replace unattached</strong> — remove the unattached sessions in
+              this window, then apply through the season
+            </span>
+          </label>
+        </fieldset>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={() => setPendingAdd(null)}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={confirmPendingAdd}>
+            Add program
+          </Button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   if (attachments.length === 0) {
     return (
@@ -262,6 +388,7 @@ export function SimplePlannerTrainingPlanPane({
             </p>
           </div>
         )}
+        {overlapDialog}
       </div>
     );
   }
@@ -597,6 +724,7 @@ export function SimplePlannerTrainingPlanPane({
           </div>
         );
       })}
+      {overlapDialog}
     </div>
   );
 }

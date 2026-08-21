@@ -220,7 +220,7 @@ Each saved program shows `{n} sessions · {n} days ({n} weeks) · starts {weekda
 | --- | --- |
 | **Edit** | Open the editor |
 | **Apply** | Copy the program's sessions onto your calendar |
-| **Clear future** | Remove this program's calendar sessions from today onward; the past is left alone |
+| **Clear future** | Remove this program's **unattached** calendar sessions from today onward. Sessions attached through a season stay. The past is left alone. |
 | **Delete** | Remove the library program. Sessions already applied to the calendar stay. |
 
 ### The program editor
@@ -259,7 +259,7 @@ Skeleton sessions carry no targets: *"Skeleton session — no step targets. Enab
 | --- | --- |
 | Anchor | **Start date** or **End date** |
 | Date | The chosen anchor date |
-| Overlap handling | **Merge**, or **Replace this program's sessions in range** |
+| Overlap handling | **Merge**, or **Replace this program's unattached sessions in range** (season-attached copies stay) |
 
 A preview shows the window, the sessions, any truncation, and any missing pace anchors before you commit.
 
@@ -269,7 +269,11 @@ Workout trees are copied **as stored**: relative targets stay relative and follo
 
 ### Attaching a program to a season
 
-Instead of applying a program directly, you can attach it to a season in the season planner, which additionally makes the program's sessions count toward the season's weekly hours, TiZ, and session budget, and lets you **pause** individual weeks. See [chapter 5](./05-season-planner.md#attaching-a-program).
+Instead of applying a program directly, you can attach it to a season in the season planner, which additionally makes the program's sessions count toward the season's weekly hours, TiZ, and session budget, and lets you **pause** individual weeks. See [chapter 5](./05-season-planner.md#attaching-programs).
+
+Library **Apply** and season attach are separate copies. Calendar cards label library sessions with the program name (for example **Base Build**) and season sessions with **Base Build · season**. **Clear future** and **Replace** only touch the unattached library copy; **Remove** on a season program only touches the season copy.
+
+If you already applied a program from the library and then attach it to a season, the season planner asks whether to **use those existing sessions**, keep both copies, or replace the unattached ones.
 
 Use **Apply** when the program *is* your training. Use **Attach to season** when the program is part of a season you are also managing in TiZ.
 

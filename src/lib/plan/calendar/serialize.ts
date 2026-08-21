@@ -71,6 +71,10 @@ export type CalendarPlannedSession = {
   metricsSummary: string | null;
   zoneAllocationMissing: boolean;
   source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  trainingPlanId?: string | null;
+  trainingPlanName?: string | null;
+  /** Season-attached vs library apply. Null when the session is not from a program. */
+  programOrigin?: "season" | "library" | null;
   poolSize: PoolSize | null;
   multisportGroupId: string | null;
   sessionIndex: number | null;
@@ -91,6 +95,7 @@ export type CalendarPlannedSession = {
 
 type SessionRow = PlannedSession & {
   structuredWorkout: { steps: unknown } | null;
+  trainingPlan?: { name: string } | null;
   linkedActivity?: (Pick<
     SyncedActivity,
     "id" | "name" | "startTime" | "durationSeconds" | "distanceMeters" | "rawStreams" | "discipline" | "legType"
@@ -98,6 +103,23 @@ type SessionRow = PlannedSession & {
     zoneBreakdowns: Array<{ zone: number; minutes: number; isCanonical: boolean }>;
   }) | null;
 };
+
+export function programOriginForSession(input: {
+  trainingPlanId: string | null | undefined;
+  seasonTrainingPlanAttachmentId: string | null | undefined;
+}): "season" | "library" | null {
+  if (!input.trainingPlanId) return null;
+  return input.seasonTrainingPlanAttachmentId ? "season" : "library";
+}
+
+export function programOriginCaption(input: {
+  trainingPlanName?: string | null;
+  programOrigin?: "season" | "library" | null;
+}): string | null {
+  const name = input.trainingPlanName?.trim();
+  if (!name) return null;
+  return input.programOrigin === "season" ? `${name} · season` : name;
+}
 
 function parseStoredStreams(raw: unknown): NormalizedStreams {
   if (!raw || typeof raw !== "object") return {};
@@ -254,6 +276,12 @@ export function serializePlannedSessions(
       discipline: s.discipline,
       zoneMinutes: rollup.zones,
     });
+    const trainingPlanId = s.trainingPlanId ?? null;
+    const trainingPlanName = s.trainingPlan?.name ?? null;
+    const programOrigin = programOriginForSession({
+      trainingPlanId,
+      seasonTrainingPlanAttachmentId: s.seasonTrainingPlanAttachmentId,
+    });
     return {
       id: s.id,
       scheduledDate: format(calendarDateFromDb(s.scheduledDate), "yyyy-MM-dd"),
@@ -275,6 +303,9 @@ export function serializePlannedSessions(
       metricsSummary: formatSessionMetricsSummary(metrics, s.discipline, unit),
       zoneAllocationMissing: s.zoneAllocationMissing || rollup.zoneAllocationMissing,
       source: s.source,
+      trainingPlanId,
+      trainingPlanName,
+      programOrigin,
       poolSize,
       multisportGroupId: s.multisportGroupId ?? null,
       sessionIndex: s.sessionIndex ?? null,

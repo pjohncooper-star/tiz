@@ -58,6 +58,7 @@ export async function GET(request: Request) {
             },
           },
         },
+        trainingPlan: { select: { name: true } },
       },
     }),
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),

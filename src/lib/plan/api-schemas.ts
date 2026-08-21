@@ -470,6 +470,7 @@ const trainingPlanAttachmentWriteSchema = z.object({
       STRENGTH: z.boolean().optional(),
     })
     .optional(),
+  unattachedOverlapMode: z.enum(["claim", "keep", "replace"]).optional(),
 });
 
 export const createSimpleSeasonSchema = z.object({

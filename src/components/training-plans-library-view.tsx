@@ -72,7 +72,7 @@ export function TrainingPlansLibraryView() {
   async function handleClearFuture(plan: PlanListItem) {
     if (
       !window.confirm(
-        `Remove future calendar sessions applied from “${plan.name}” (today onward)? Past sessions stay.`
+        `Remove this program’s unattached calendar sessions from today onward? Sessions attached through a season stay. Past sessions stay.`
       )
     ) {
       return;

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  programOriginCaption,
+  programOriginForSession,
   serializePlannedSessions,
   signalPrefsFromDisciplineSettings,
 } from "@/lib/plan/calendar/serialize";
@@ -17,6 +19,7 @@ function sessionRow(
   overrides: Partial<PlannedSession> & {
     structuredWorkout?: { steps: unknown } | null;
     sessionRole?: PlannedSession["sessionRole"];
+    trainingPlan?: { name: string } | null;
   } = {}
 ) {
   const nodes = buildEnduranceDraftNodes("RUN", 20, 25);
@@ -169,5 +172,69 @@ describe("serializePlannedSessions prescription-driven profile", () => {
       bike.workoutProfile!.segments.some((s) => s.yHigh === 150),
       "expected 150W recovery/steady"
     );
+  });
+});
+
+describe("program origin", () => {
+  it("labels library vs season applies", () => {
+    assert.equal(
+      programOriginForSession({
+        trainingPlanId: "p1",
+        seasonTrainingPlanAttachmentId: null,
+      }),
+      "library"
+    );
+    assert.equal(
+      programOriginForSession({
+        trainingPlanId: "p1",
+        seasonTrainingPlanAttachmentId: "att-1",
+      }),
+      "season"
+    );
+    assert.equal(
+      programOriginForSession({
+        trainingPlanId: null,
+        seasonTrainingPlanAttachmentId: null,
+      }),
+      null
+    );
+    assert.equal(
+      programOriginCaption({ trainingPlanName: "Base Build", programOrigin: "library" }),
+      "Base Build"
+    );
+    assert.equal(
+      programOriginCaption({ trainingPlanName: "Base Build", programOrigin: "season" }),
+      "Base Build · season"
+    );
+  });
+
+  it("serializePlannedSessions stamps origin from the plan join", () => {
+    const [library] = serializePlannedSessions(
+      [
+        sessionRow({
+          source: "PLAN",
+          trainingPlanId: "tp1",
+          seasonTrainingPlanAttachmentId: null,
+          trainingPlan: { name: "Base Build" },
+        }),
+      ],
+      { RUN: "METRIC" }
+    );
+    assert.equal(library.trainingPlanId, "tp1");
+    assert.equal(library.trainingPlanName, "Base Build");
+    assert.equal(library.programOrigin, "library");
+
+    const [season] = serializePlannedSessions(
+      [
+        sessionRow({
+          source: "PLAN",
+          trainingPlanId: "tp1",
+          seasonTrainingPlanAttachmentId: "att-1",
+          trainingPlan: { name: "Base Build" },
+        }),
+      ],
+      { RUN: "METRIC" }
+    );
+    assert.equal(season.programOrigin, "season");
   });
 });
