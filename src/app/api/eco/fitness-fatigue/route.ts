@@ -20,7 +20,7 @@ import {
   seasonWeekHoursImpulses,
   type PlannedSessionForHours,
 } from "@/lib/eco/hours-impulses";
-import { formatDateKey, nextDateKey } from "@/lib/dates";
+import { formatDateKey, nextDateKey, calendarDateFromDb, parseDateKey } from "@/lib/dates";
 import { parseDisciplineZoneMinutes } from "@/lib/plan/season/simple-tiz";
 import { zoneKey, type ZoneMinutes } from "@/lib/workout/steps";
 
@@ -326,6 +326,27 @@ export async function GET(req: Request) {
 
   const series = computeFitnessFatigue(impulses, { from, to });
 
+  const seriesFrom = series[0]?.date ?? from ?? todayKey;
+  const seriesTo = series[series.length - 1]?.date ?? to;
+
+  let ecsCheckIns: Array<{ date: string; ecs: number }> = [];
+  if (ecoEnabled) {
+    const rows = await db.dailyEcsCheckIn.findMany({
+      where: {
+        athleteId,
+        date: {
+          gte: parseDateKey(seriesFrom),
+          lte: parseDateKey(seriesTo),
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+    ecsCheckIns = rows.map((row) => ({
+      date: formatDateKey(calendarDateFromDb(row.date)),
+      ecs: row.ecs,
+    }));
+  }
+
   return NextResponse.json({
     enabled: true,
     ecoEnabled,
@@ -334,20 +355,21 @@ export async function GET(req: Request) {
     includePlan,
     seasonId: seasonId || null,
     today: todayKey,
-    from: series[0]?.date ?? from ?? null,
-    to: series[series.length - 1]?.date ?? to,
+    from: seriesFrom,
+    to: seriesTo,
     tau1: 42,
     tau2: 7,
     plannedImpulseCount: planned.length,
     history: history.map(serializeImpulse),
+    ecsCheckIns,
     note:
       loadMode === "hours"
         ? includePlan || seasonId
           ? "Solid lines are TiZ/hours history; dashed lines project planned session or season volume as hours. τ₁=42 / τ₂=7 are population defaults."
           : "Fitness (τ≈42) and fatigue (τ≈7) use TiZ minutes when available, otherwise activity duration hours. Population default time constants."
         : includePlan || seasonId
-          ? "Solid lines are scored history; dashed lines project planned / season TiZ as ECO (5→8 zone map). τ₁=42 / τ₂=7 are population defaults, not athlete-fit."
-          : "Fitness (τ≈42) and fatigue (τ≈7) use population defaults, not athlete-fit values. Days use activity-local time when the source provided an offset.",
+          ? "Solid lines are scored history; dashed lines project planned / season TiZ as ECO (5→8 zone map). ECS bars are daily subjective load (not Banister input). τ₁=42 / τ₂=7 are population defaults, not athlete-fit."
+          : "Fitness (τ≈42) and fatigue (τ≈7) use population defaults, not athlete-fit values. ECS bars are daily subjective load (not Banister input). Days use activity-local time when the source provided an offset.",
     series,
   });
 }

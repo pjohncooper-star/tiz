@@ -30,6 +30,7 @@ import {
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekTarget } from "@/components/calendar/types";
+import type { CalendarEcsCheckIn } from "@/components/calendar/calendar-ecs-check-in";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import type { WorkoutShadingSettings, WorkoutShadingTarget } from "@/lib/plan/workout-shading";
 import type { PlanDiscipline } from "@/lib/plan/session";
@@ -54,6 +55,8 @@ type CalendarWeekRowProps = {
   workoutShadingSettings: WorkoutShadingSettings;
   workoutShadingTarget: WorkoutShadingTarget;
   ecoLoadEnabled?: boolean;
+  ecsCheckInsByDate?: Map<string, CalendarEcsCheckIn>;
+  onEcsChanged?: (dateKey: string, next: CalendarEcsCheckIn | null) => void;
   onSessionCreated: () => void;
   activeDragId: string | null;
   scrollAnchorRef?: React.RefObject<HTMLDivElement | null>;
@@ -91,6 +94,8 @@ export function CalendarWeekRow({
   workoutShadingSettings,
   workoutShadingTarget,
   ecoLoadEnabled = false,
+  ecsCheckInsByDate,
+  onEcsChanged,
   onSessionCreated,
   activeDragId,
   scrollAnchorRef,
@@ -245,6 +250,9 @@ export function CalendarWeekRow({
               onArmBuildFromSession={onArmBuildFromSession}
               armedPoolCardId={selectedPoolCardId}
               onUnassignWorkout={onUnassignWorkout}
+              ecoLoadEnabled={ecoLoadEnabled}
+              ecsCheckIn={ecsCheckInsByDate?.get(dateKey) ?? null}
+              onEcsChanged={onEcsChanged}
             />
           );
         })}
@@ -397,6 +405,12 @@ export function CalendarWeekRow({
         disciplineSettings={disciplineSettings}
         defaultExpanded={current}
         ecoLoadEnabled={ecoLoadEnabled}
+        weekEcsSum={
+          ecoLoadEnabled &&
+          weekDays.some((d) => ecsCheckInsByDate?.has(d))
+            ? weekDays.reduce((sum, d) => sum + (ecsCheckInsByDate?.get(d)?.ecs ?? 0), 0)
+            : null
+        }
         hideSeasonTarget={isPoolWeek}
       />
     </section>

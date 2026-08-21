@@ -48,7 +48,10 @@ export function EcoLoadSettingsPanel({ initialEnabled }: EcoLoadSettingsPanelPro
     <div className="space-y-3">
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         ECO (Objective Load Equivalents) scores each swim, bike, and run with one
-        comparable load unit. When off, planner and calendar hide all ECO references.
+        comparable load unit. When on, the calendar also shows an end-of-day ECS
+        check-in (subjective 0–5 load). ECS appears beside week ECO totals and as
+        bars on the fitness/fatigue chart for comparison—it does not feed Banister
+        fitness or fatigue. When off, planner and calendar hide all ECO/ECS references.
       </p>
       <label className="flex items-start gap-3 text-sm">
         <input
@@ -62,7 +65,8 @@ export function EcoLoadSettingsPanel({ initialEnabled }: EcoLoadSettingsPanelPro
             Show ECO training load
           </span>
           <span className="mt-0.5 block text-zinc-500">
-            Activity scores, weekly totals, and Workout Signaling load patterns.
+            Activity ECO scores, weekly ECO/ECS totals, PMC overlay, and Workout
+            Signaling load patterns.
           </span>
         </span>
       </label>

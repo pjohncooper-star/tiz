@@ -140,7 +140,8 @@ export default async function CalendarPage({
 
   const defaultScrollWeek = scrollWeekStart ?? format(currentWeekStart, "yyyy-MM-dd");
 
-  const [plannedSessions, activities, allStarts, disciplineSettings] = await Promise.all([
+  const [plannedSessions, activities, allStarts, disciplineSettings, ecsRows] =
+    await Promise.all([
     db.plannedSession.findMany({
       where: {
         athleteId,
@@ -186,6 +187,15 @@ export default async function CalendarPage({
       select: { startTime: true },
     }),
     db.athleteDisciplineSettings.findMany({ where: { athleteId } }),
+    athlete?.ecoLoadEnabled
+      ? db.dailyEcsCheckIn.findMany({
+          where: {
+            athleteId,
+            date: { gte: fromDate, lte: parseDateKey(to) },
+          },
+          orderBy: { date: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   const workoutShadingSettings = buildWorkoutShadingSettings(
@@ -241,6 +251,11 @@ export default async function CalendarPage({
     activities: weekActivities,
     weekStarts,
     weekTargets,
+    ecsCheckIns: ecsRows.map((row) => ({
+      date: format(calendarDateFromDb(row.date), "yyyy-MM-dd"),
+      ecs: row.ecs,
+      note: row.note,
+    })),
   };
 
   return (

@@ -767,6 +767,7 @@ type CalendarWeekSummaryProps = {
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   defaultExpanded?: boolean;
   ecoLoadEnabled?: boolean;
+  weekEcsSum?: number | null;
   hideSeasonTarget?: boolean;
 };
 
@@ -779,6 +780,7 @@ export function CalendarWeekSummary({
   disciplineSettings,
   defaultExpanded = false,
   ecoLoadEnabled = false,
+  weekEcsSum = null,
   hideSeasonTarget = false,
 }: CalendarWeekSummaryProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -802,12 +804,27 @@ export function CalendarWeekSummary({
   const hasEcos =
     ecoLoadEnabled &&
     ((completedSummary?.total.ecos ?? 0) > 0 || scheduledSummary.total.ecos > 0);
+  const hasEcs =
+    ecoLoadEnabled && weekEcsSum != null && Number.isFinite(weekEcsSum);
 
-  if (!hasScheduled && !hasCompleted && !hasTarget && !hasEcos) return null;
+  if (!hasScheduled && !hasCompleted && !hasTarget && !hasEcos && !hasEcs) return null;
 
   const scheduledPills = buildCollapsedWeekSummaryPills(scheduledSummary, disciplineSettings, {
     includeEcos: ecoLoadEnabled,
   });
+  if (hasEcs) {
+    const ecoIdx = scheduledPills.findIndex((p) => p.id === "ecos");
+    const ecsPill = {
+      id: "ecs",
+      label: "ECS",
+      text: `${weekEcsSum} ECS`,
+    };
+    if (ecoIdx >= 0) {
+      scheduledPills.splice(ecoIdx + 1, 0, ecsPill);
+    } else {
+      scheduledPills.unshift(ecsPill);
+    }
+  }
   const completedPills = completedSummary
     ? buildCollapsedWeekSummaryPills(completedSummary, disciplineSettings, {
         includeEcos: ecoLoadEnabled,

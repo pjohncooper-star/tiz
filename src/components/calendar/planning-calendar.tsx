@@ -171,6 +171,13 @@ function mergeRangeData(
     activities: [...activityMap.values()],
     weekStarts,
     weekTargets: [...targetMap.values()],
+    ecsCheckIns: (() => {
+      const map = new Map(
+        (prev.ecsCheckIns ?? []).map((c) => [c.date, c] as const)
+      );
+      for (const c of next.ecsCheckIns ?? []) map.set(c.date, c);
+      return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
+    })(),
   };
 }
 
@@ -421,6 +428,27 @@ export function PlanningCalendar({
   const targetsByWeek = useMemo(
     () => new Map(data.weekTargets.map((t) => [t.weekStart, t])),
     [data.weekTargets]
+  );
+
+  const ecsCheckInsByDate = useMemo(() => {
+    const map = new Map<string, (typeof data.ecsCheckIns)[number]>();
+    for (const c of data.ecsCheckIns ?? []) map.set(c.date, c);
+    return map;
+  }, [data.ecsCheckIns]);
+
+  const handleEcsChanged = useCallback(
+    (dateKey: string, next: (typeof data.ecsCheckIns)[number] | null) => {
+      setData((prev) => {
+        const without = (prev.ecsCheckIns ?? []).filter((c) => c.date !== dateKey);
+        return {
+          ...prev,
+          ecsCheckIns: next
+            ? [...without, next].sort((a, b) => a.date.localeCompare(b.date))
+            : without,
+        };
+      });
+    },
+    []
   );
 
   const poolWeekTarget = targetsByWeek.get(poolWeekStart) ?? null;
@@ -1754,6 +1782,8 @@ export function PlanningCalendar({
             workoutShadingSettings={workoutShadingSettings}
             workoutShadingTarget={workoutShadingTarget}
             ecoLoadEnabled={ecoLoadEnabled}
+            ecsCheckInsByDate={ecsCheckInsByDate}
+            onEcsChanged={handleEcsChanged}
             onSessionCreated={handleRefresh}
             activeDragId={activeDragId}
             isCurrentWeek={weekStart === currentWeekStart}
