@@ -78,8 +78,8 @@ describe("phaseSpansWithIds", () => {
 });
 
 describe("resolveLongSeatAction", () => {
-  it("returns null when planning mode does not separate longs", () => {
-    assert.equal(
+  it("converts off-week longs to endurance when volume is not separated", () => {
+    assert.deepEqual(
       resolveLongSeatAction({
         planningMode: "BY_DISCIPLINE",
         isRestWeek: false,
@@ -89,7 +89,22 @@ describe("resolveLongSeatAction", () => {
         endurancePercent: 60,
         fullLongMinutes: 120,
       }),
-      null
+      { kind: "endurance" }
+    );
+  });
+
+  it("returns full_long in By discipline when the long-week checkbox is on", () => {
+    assert.deepEqual(
+      resolveLongSeatAction({
+        planningMode: "OVERALL",
+        isRestWeek: false,
+        isTaperPhase: false,
+        longWeekOn: true,
+        policy: "EXTRA_INTENSITY",
+        endurancePercent: 60,
+        fullLongMinutes: 120,
+      }),
+      { kind: "full_long" }
     );
   });
 

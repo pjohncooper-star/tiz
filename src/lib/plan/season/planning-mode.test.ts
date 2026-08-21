@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   phaseForWeekIndex,
-  planningModeIncludesLongs,
+  planningModeSeparatesLongVolume,
   resolvePlanningModeForWeek,
 } from "./planning-mode";
 
@@ -46,9 +46,10 @@ describe("planning-mode", () => {
     assert.equal(phase?.startWeekIndex, 3);
   });
 
-  it("flags long modes", () => {
-    assert.equal(planningModeIncludesLongs("SEPARATE_LONGS"), true);
-    assert.equal(planningModeIncludesLongs("SEPARATE_LONG_TIZ"), true);
-    assert.equal(planningModeIncludesLongs("BY_DISCIPLINE"), false);
+  it("flags modes that separate long volume", () => {
+    assert.equal(planningModeSeparatesLongVolume("SEPARATE_LONGS"), true);
+    assert.equal(planningModeSeparatesLongVolume("SEPARATE_LONG_TIZ"), true);
+    assert.equal(planningModeSeparatesLongVolume("BY_DISCIPLINE"), false);
+    assert.equal(planningModeSeparatesLongVolume("OVERALL"), false);
   });
 });

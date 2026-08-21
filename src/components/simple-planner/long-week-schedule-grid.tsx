@@ -13,6 +13,8 @@ type LongWeekScheduleGridProps = {
   longRunOwnedByProgram?: boolean[];
   onLongRideWeekFlagsChange: (flags: boolean[]) => void;
   onLongRunWeekFlagsChange: (flags: boolean[]) => void;
+  /** When true, unchecked weeks follow the off-week policy above the grid. */
+  separatesLongVolume?: boolean;
 };
 
 function weekDisabled(
@@ -34,6 +36,7 @@ export function LongWeekScheduleGrid({
   longRunOwnedByProgram = [],
   onLongRideWeekFlagsChange,
   onLongRunWeekFlagsChange,
+  separatesLongVolume = false,
 }: LongWeekScheduleGridProps) {
   const weekIndices = Array.from(
     { length: endWeekIndex - startWeekIndex + 1 },
@@ -125,8 +128,9 @@ export function LongWeekScheduleGrid({
         </tbody>
       </table>
       <p className="mt-2 text-xs text-zinc-500">
-        Checked weeks schedule a full long session. Unchecked weeks use the off-week policy above.
-        Rest and taper weeks are always off.
+        {separatesLongVolume
+          ? "Checked weeks schedule a full long session. Unchecked weeks use the off-week policy above. Rest and taper weeks are always off."
+          : "Checked weeks schedule a long session. Unchecked weeks keep an endurance session instead of the long. Rest and taper weeks are always off."}
       </p>
     </div>
   );

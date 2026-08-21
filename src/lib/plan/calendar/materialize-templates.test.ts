@@ -221,3 +221,33 @@ test("substitute endurance rewrites long bike duration and slot", () => {
   assert.equal(plan.sessions[0]!.durationMinutes, 90);
   assert.equal(plan.sessions[0]!.title, "Endurance ride");
 });
+
+test("endurance rewrite keeps template duration and moderate role", () => {
+  const tpl: MaterializeTemplate = {
+    id: "bike-long",
+    items: [
+      {
+        weekday: "SUN",
+        discipline: "BIKE",
+        title: "Long ride",
+        durationMinutes: 180,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "LONG",
+      },
+    ],
+  };
+  const plan = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "bike-long",
+      bikeLongSeat: { kind: "endurance" },
+    },
+    opts({ templatesById: new Map([["bike-long", tpl]]) })
+  );
+  assert.equal(plan.sessions.length, 1);
+  assert.equal(plan.sessions[0]!.sessionRole, "MODERATE");
+  assert.equal(plan.sessions[0]!.poolSlotKind, "ENDURANCE");
+  assert.equal(plan.sessions[0]!.durationMinutes, 180);
+  assert.equal(plan.sessions[0]!.title, "Endurance ride");
+});

@@ -16,7 +16,8 @@ export const PLANNING_MODE_LABELS: Record<PlanningMode, string> = {
   SEPARATE_LONG_TIZ: "Separate long TiZ",
 };
 
-export function planningModeIncludesLongs(mode: PlanningMode): boolean {
+/** True when long ride/run hours (and optionally TiZ) ramp outside the main bag. */
+export function planningModeSeparatesLongVolume(mode: PlanningMode): boolean {
   return mode === "SEPARATE_LONGS" || mode === "SEPARATE_LONG_TIZ";
 }
 

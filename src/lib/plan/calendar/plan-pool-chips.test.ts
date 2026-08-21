@@ -146,4 +146,54 @@ describe("plan → pool skeleton chips", () => {
       "week 1 off-long bike should emit substitute endurance chip"
     );
   });
+
+  it("By discipline long week emits a long bike chip", () => {
+    const phase = basePhase({
+      planningMode: "BY_DISCIPLINE",
+      bikeSessionsPerWeek: 3,
+      bikeIntenseDaysPerWeek: 1,
+    });
+    const weeks = enrichSimpleSeasonWeeks({
+      weeks: [
+        {
+          weekIndex: 0,
+          isRestWeek: false,
+          swimHours: 2,
+          bikeHours: 5,
+          runHours: 3,
+          totalHours: 10,
+          swimDistanceMeters: null,
+          runDistanceMeters: null,
+        },
+      ],
+      phases: [phase],
+      zonePhaseSpans: [],
+      phasesWithBlocks: [],
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      deLoadStrategy: "VOLUME_ONLY",
+      seasonSplit: { swim: 33.33, bike: 33.34, run: 33.33 },
+      longAnchors: { rideStart: 60, ridePeak: 180, runStart: 30, runPeak: 90 },
+      phaseKindsByWeek: ["BUILD"],
+      taperWeekIndices: [],
+      deLoadEveryNWeeks: 4,
+      longRideWeekFlags: [true],
+      longRunWeekFlags: [false],
+    });
+
+    const target = weekTargetFromComputed(weeks[0]!, phase);
+    assert.equal(target.slotBudgets?.BIKE.long, 1);
+    assert.equal(target.slotBudgets?.BIKE.intensity, 1);
+    assert.equal(target.slotBudgets?.BIKE.endurance, 1);
+    assert.equal(weeks[0]!.longRideMinutes, 0);
+
+    const chips = computeUnscheduledChips("2026-07-06", target, []);
+    assert.ok(
+      chips.some((c) => c.discipline === "BIKE" && c.slotKind === "LONG"),
+      "By discipline long week should include a long bike chip"
+    );
+    assert.equal(
+      chips.filter((c) => c.discipline === "BIKE" && c.slotKind === "ENDURANCE").length,
+      1
+    );
+  });
 });

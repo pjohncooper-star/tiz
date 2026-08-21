@@ -37,11 +37,12 @@ export type MaterializeTemplate = {
   items: MaterializeTemplateItem[];
 };
 
-/** How a reserved long seat is filled when longs are planned separately. */
+/** How a reserved long seat is filled for the week. */
 export type LongSeatAction =
   | { kind: "full_long" }
   | { kind: "extra_intensity" }
   | { kind: "substitute_endurance"; durationMinutes: number }
+  | { kind: "endurance" }
   | { kind: "omit" };
 
 /** A single week's resolution context. */
@@ -53,9 +54,9 @@ export type WeekMaterializationContext = {
   isTestWeek: boolean;
   /** Template assigned to the phase covering this week (or null). */
   phaseTemplateId: string | null;
-  /** Separate-longs BIKE LONG seat action (null = leave LONG items unchanged). */
+  /** BIKE LONG seat action (null = leave LONG items unchanged). */
   bikeLongSeat?: LongSeatAction | null;
-  /** Separate-longs RUN LONG seat action (null = leave LONG items unchanged). */
+  /** RUN LONG seat action (null = leave LONG items unchanged). */
   runLongSeat?: LongSeatAction | null;
 };
 
@@ -136,7 +137,7 @@ function enduranceSubstituteTitle(title: string, discipline: Discipline): string
 }
 
 /**
- * Apply separate-longs seat policy to a template-derived session.
+ * Apply long-seat policy to a template-derived session.
  * Returns null when the long seat should be omitted for the week.
  */
 export function applyLongSeatToSession(
@@ -172,6 +173,13 @@ export function applyLongSeatToSession(
         poolSlotKind: "SUBSTITUTE_ENDURANCE",
       };
     }
+    case "endurance":
+      return {
+        ...session,
+        title: enduranceSubstituteTitle(session.title, session.discipline),
+        sessionRole: "MODERATE",
+        poolSlotKind: "ENDURANCE",
+      };
     case "omit":
       return null;
   }

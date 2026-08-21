@@ -32,7 +32,7 @@ import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
 import {
   PLANNING_MODE_LABELS,
   PLANNING_MODES,
-  planningModeIncludesLongs,
+  planningModeSeparatesLongVolume,
 } from "@/lib/plan/season/planning-mode";
 import {
   LONG_OFF_WEEK_POLICIES,
@@ -294,7 +294,7 @@ function PhaseDetailEditor({
     ? formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)
     : "Not assigned — use + in Week review or set the week range below";
   const effectiveMode = phase.planningMode ?? defaultPlanningMode;
-  const showLongSettings = planningModeIncludesLongs(effectiveMode);
+  const showLongVolumeSettings = planningModeSeparatesLongVolume(effectiveMode);
   const restWeekByIndex = weeks.map((week) => week.isRestWeek);
 
   return (
@@ -547,61 +547,65 @@ function PhaseDetailEditor({
         phases={phases}
         weeks={weeks}
         effectiveMode={effectiveMode}
-        showLongSettings={showLongSettings}
+        showLongSettings={showLongVolumeSettings}
         rampDefaults={rampDefaults}
         disciplineSettings={disciplineSettings}
         onChange={onChange}
       />
 
-      {showLongSettings ? (
-        <fieldset className="mt-4 space-y-3">
-          <legend className="text-sm font-medium">Long sessions</legend>
-          <p className="text-xs text-zinc-500">
-            Sessions per week includes the long on long weeks; off-week policy replaces or drops that
-            seat. Long bike/run volume ramps stay outside main hours.
-          </p>
-          <LongDisciplineEditor
-            label="Long ride"
-            startMin={phase.longRideStartMin}
-            endMin={phase.longRideEndMin}
-            offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
-            offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
-            onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
-            onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
-            onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
-            onPercentChange={(value) =>
-              onChange({ ...phase, longRideOffWeekEndurancePercent: value })
-            }
-          />
-          <LongDisciplineEditor
-            label="Long run"
-            startMin={phase.longRunStartMin}
-            endMin={phase.longRunEndMin}
-            offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
-            offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
-            onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
-            onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
-            onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
-            onPercentChange={(value) =>
-              onChange({ ...phase, longRunOffWeekEndurancePercent: value })
-            }
-          />
-          {assigned ? (
-            <LongWeekScheduleGrid
-              startWeekIndex={phase.startWeekIndex}
-              endWeekIndex={phase.endWeekIndex}
-              phaseKind={phase.phaseKind}
-              longRideWeekFlags={longRideWeekFlags}
-              longRunWeekFlags={longRunWeekFlags}
-              restWeekByIndex={restWeekByIndex}
-              longRideOwnedByProgram={longRideOwnedByProgram}
-              longRunOwnedByProgram={longRunOwnedByProgram}
-              onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
-              onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
+      <fieldset className="mt-4 space-y-3">
+        <legend className="text-sm font-medium">Long sessions</legend>
+        <p className="text-xs text-zinc-500">
+          {showLongVolumeSettings
+            ? "Sessions per week includes the long on long weeks; off-week policy replaces or drops that seat. Long bike/run volume ramps stay outside main hours."
+            : "Sessions per week includes the long. Unchecked weeks keep an endurance session instead. Rest and taper weeks omit the long."}
+        </p>
+        {showLongVolumeSettings ? (
+          <>
+            <LongDisciplineEditor
+              label="Long ride"
+              startMin={phase.longRideStartMin}
+              endMin={phase.longRideEndMin}
+              offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+              offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
+              onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
+              onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
+              onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
+              onPercentChange={(value) =>
+                onChange({ ...phase, longRideOffWeekEndurancePercent: value })
+              }
             />
-          ) : null}
-        </fieldset>
-      ) : null}
+            <LongDisciplineEditor
+              label="Long run"
+              startMin={phase.longRunStartMin}
+              endMin={phase.longRunEndMin}
+              offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+              offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
+              onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
+              onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
+              onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
+              onPercentChange={(value) =>
+                onChange({ ...phase, longRunOffWeekEndurancePercent: value })
+              }
+            />
+          </>
+        ) : null}
+        {assigned ? (
+          <LongWeekScheduleGrid
+            startWeekIndex={phase.startWeekIndex}
+            endWeekIndex={phase.endWeekIndex}
+            phaseKind={phase.phaseKind}
+            longRideWeekFlags={longRideWeekFlags}
+            longRunWeekFlags={longRunWeekFlags}
+            restWeekByIndex={restWeekByIndex}
+            longRideOwnedByProgram={longRideOwnedByProgram}
+            longRunOwnedByProgram={longRunOwnedByProgram}
+            onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
+            onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
+            separatesLongVolume={showLongVolumeSettings}
+          />
+        ) : null}
+      </fieldset>
 
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Ramp by discipline</legend>

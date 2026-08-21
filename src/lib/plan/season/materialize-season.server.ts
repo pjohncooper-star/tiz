@@ -21,7 +21,7 @@ import {
   resolveLongWeekFlagsForSeason,
 } from "@/lib/plan/season/long-session-schedule";
 import {
-  planningModeIncludesLongs,
+  planningModeSeparatesLongVolume,
   resolvePlanningModeForWeek,
 } from "@/lib/plan/season/planning-mode";
 
@@ -132,9 +132,7 @@ export function resolveLongSeatAction(input: {
   policy: LongOffWeekPolicy;
   endurancePercent: number;
   fullLongMinutes: number;
-}): LongSeatAction | null {
-  if (!planningModeIncludesLongs(input.planningMode)) return null;
-
+}): LongSeatAction {
   const suppress = shouldSuppressLongForWeek({
     isRestWeek: input.isRestWeek,
     isTaperPhase: input.isTaperPhase,
@@ -142,6 +140,9 @@ export function resolveLongSeatAction(input: {
   });
   if (suppress) return { kind: "omit" };
   if (input.longWeekOn) return { kind: "full_long" };
+  if (!planningModeSeparatesLongVolume(input.planningMode)) {
+    return { kind: "endurance" };
+  }
 
   const off = applyLongOffWeekPolicy({
     policy: input.policy,
@@ -166,8 +167,9 @@ export function resolveLongSeatAction(input: {
  * (leaving manually-added sessions untouched); with `onlyEmptyWeeks` it only
  * fills weeks that currently have no planned sessions at all.
  *
- * When the season/phase uses separate longs, LONG template seats are rewritten
- * from long-week checkboxes + off-week policy (extra intensity / endurance %).
+ * When generating, LONG template seats are rewritten from long-week checkboxes.
+ * Separate-long modes also apply off-week policy (extra intensity / endurance %).
+ * Overall / By discipline convert an off-week long seat to endurance.
  */
 export async function materializeSeasonTemplates(
   athleteId: string,

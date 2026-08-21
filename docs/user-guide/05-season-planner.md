@@ -113,7 +113,7 @@ A conventional long season is something like Base → Base 2 → Build → Race 
 | **Intense days per week** | Swim, Bike, Run — how many days carry Z3+ work. Default 1 each. |
 | **Zone focus (TiZ %)** | The intensity distribution for the phase — see [zone focus](#zone-focus-and-tiz-targets) |
 | **Phase volume** | The volume progression — see [volume](#volume-and-ramps) |
-| **Long sessions** | **Long ride** and **Long run** settings, in the separate-long modes only |
+| **Long sessions** | Long bike / Long run week checkboxes. Minute ramp and off-week policy appear in the separate-long modes only |
 | **Ramp by discipline** | Three checkboxes; unticking one holds that sport flat through the phase |
 | **Phase goal** | A free-text note — "Optional focus for this phase" |
 | **Delete phase** | Removes it |
@@ -131,7 +131,7 @@ The planning mode decides how volume and TiZ are grouped. Set a season default u
 | **Separate long workouts** | As above, but the long ride and long run are excluded from the main hours and ramp on their own schedule |
 | **Separate long TiZ** | As above, and the long session's time in zone is tracked separately too |
 
-The separate-long modes exist because the long ride and long run usually progress on a different logic from the rest of the week — you might hold weekly bike hours steady while pushing the long ride from two hours to four. In those modes, "Sessions per week" *includes* the long session.
+The separate-long modes exist because the long ride and long run usually progress on a different logic from the rest of the week — you might hold weekly bike hours steady while pushing the long ride from two hours to four. **Sessions per week includes the long session in every mode.** Separate-long only pulls that session's hours (and, in Separate long TiZ, its zone minutes) out of the main ramp.
 
 ### Volume and ramps
 
@@ -173,18 +173,24 @@ Hours × focus percentages give the phase's **TiZ target**: the minutes per zone
 
 ### Long sessions
 
-In the separate-long modes, each phase gets long-session controls:
+Every phase has **Long bike** and **Long run** checkboxes for each week. A checked week budgets a Long slot (one of the week's sessions). Rest weeks and taper weeks are always off.
+
+In **Overall volume & TiZ** and **By discipline**, an unchecked week keeps the session count: the Long seat becomes Endurance. Long duration and zone minutes stay inside that sport's main hours and TiZ budget.
+
+The separate-long modes add extra controls for how that seat's volume ramps:
 
 | Control | Meaning |
-| --- | --- |
-| **Long ride** / **Long run**, start and end minutes | The ramp across the phase |
+|---|---|
+| **Long ride** / **Long run**, start and end minutes | The ramp across the phase, outside main hours |
 | **Off-week policy** | What happens on weeks without a full long session |
 | **Endurance % of long** | Used by the percentage policy; default 60 |
 | Long week schedule grid | Checkboxes per week for long bike and long run |
 
-Off-week policies: **No substitute**, **Extra intensity day**, or **Endurance at % of long volume**. Rest weeks and taper weeks never carry a full long session.
+Off-week policies (separate-long modes only): **No substitute**, **Extra intensity day**, or **Endurance at % of long volume**. Rest weeks and taper weeks never carry a full long session.
 
 An **off week** is a week without a full-length long session; that is different from a **rest week**, which cuts volume across the board.
+
+After changing long-week checkboxes or planning mode, press **Save & recalculate** so the calendar pool picks up the new slot budgets.
 
 ## Season defaults
 

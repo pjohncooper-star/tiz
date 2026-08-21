@@ -17,7 +17,9 @@ export const LONG_OFF_WEEK_POLICY_LABELS: Record<LongOffWeekPolicy, string> = {
 export type LongOffWeekResult =
   | { kind: "none" }
   | { kind: "extra_intensity" }
-  | { kind: "substitute_endurance"; durationMinutes: number };
+  | { kind: "substitute_endurance"; durationMinutes: number }
+  /** Overall / By discipline off week: keep session count as an endurance slot. */
+  | { kind: "endurance" };
 
 export function applyLongOffWeekPolicy(input: {
   policy: LongOffWeekPolicy;

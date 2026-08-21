@@ -121,9 +121,10 @@ describe("simple-week-compute", () => {
       deLoadEveryNWeeks: 4,
     });
 
-    assert.equal(weeks[0]!.slotBudgets.BIKE.endurance, 2);
+    assert.equal(weeks[0]!.slotBudgets.BIKE.endurance, 1);
     assert.equal(weeks[0]!.slotBudgets.BIKE.intensity, 2);
-    assert.equal(weeks[0]!.slotBudgets.BIKE.long, 0);
+    assert.equal(weeks[0]!.slotBudgets.BIKE.long, 1);
+    assert.equal(weeks[0]!.longRideMinutes, 0);
   });
 
   it("stores long-session zone minutes in separate-long-tiz mode", () => {
@@ -403,20 +404,110 @@ describe("simple-week-compute", () => {
       assert.equal(budgets.BIKE.endurance, 0);
       assert.equal(disciplineTotal(budgets.BIKE), 1);
     });
+  });
 
-    it("modes 1–2 still treat sessions as intense + endurance only", () => {
+  describe("modes 1–2 also reserve a long seat", () => {
+    const phase = basePhase({
+      bikeSessionsPerWeek: 4,
+      bikeIntenseDaysPerWeek: 1,
+      runSessionsPerWeek: 4,
+      runIntenseDaysPerWeek: 1,
+      swimSessionsPerWeek: 3,
+      swimIntenseDaysPerWeek: 1,
+    });
+
+    it("full long week: endurance + intensity + long === sessions", () => {
+      for (const mode of ["OVERALL", "BY_DISCIPLINE"] as const) {
+        const budgets = computeWeekSlotBudgets({
+          phase,
+          mode,
+          longRideFull: true,
+          longRunFull: true,
+          longRideResult: { kind: "none" },
+          longRunResult: { kind: "none" },
+        });
+        assert.equal(budgets.BIKE.long, 1);
+        assert.equal(budgets.BIKE.intensity, 1);
+        assert.equal(budgets.BIKE.endurance, 2);
+        assert.equal(disciplineTotal(budgets.BIKE), phase.bikeSessionsPerWeek);
+        assert.equal(disciplineTotal(budgets.RUN), phase.runSessionsPerWeek);
+        assert.equal(budgets.SWIM.long, 0);
+        assert.equal(disciplineTotal(budgets.SWIM), phase.swimSessionsPerWeek);
+      }
+    });
+
+    it("off week converts the long seat to endurance", () => {
       const budgets = computeWeekSlotBudgets({
         phase,
         mode: "BY_DISCIPLINE",
-        longRideFull: true,
-        longRunFull: true,
-        longRideResult: { kind: "none" },
-        longRunResult: { kind: "none" },
+        longRideFull: false,
+        longRunFull: false,
+        longRideResult: { kind: "endurance" },
+        longRunResult: { kind: "endurance" },
       });
       assert.equal(budgets.BIKE.long, 0);
       assert.equal(budgets.BIKE.intensity, 1);
       assert.equal(budgets.BIKE.endurance, 3);
       assert.equal(disciplineTotal(budgets.BIKE), phase.bikeSessionsPerWeek);
+      assert.equal(disciplineTotal(budgets.RUN), phase.runSessionsPerWeek);
     });
+
+    it("rest/taper omit the long", () => {
+      const budgets = computeWeekSlotBudgets({
+        phase,
+        mode: "BY_DISCIPLINE",
+        longRideFull: false,
+        longRunFull: false,
+        longRideResult: { kind: "none" },
+        longRunResult: { kind: "none" },
+      });
+      assert.equal(budgets.BIKE.long, 0);
+      assert.equal(budgets.BIKE.intensity, 1);
+      assert.equal(budgets.BIKE.endurance, 2);
+      assert.equal(disciplineTotal(budgets.BIKE), phase.bikeSessionsPerWeek - 1);
+    });
+  });
+
+  it("By discipline off week converts long to endurance and keeps minutes in the main bag", () => {
+    const phases = [
+      basePhase({
+        planningMode: "BY_DISCIPLINE",
+        bikeSessionsPerWeek: 4,
+        bikeIntenseDaysPerWeek: 1,
+      }),
+    ];
+    const weeks = enrichSimpleSeasonWeeks({
+      weeks: [
+        {
+          weekIndex: 0,
+          isRestWeek: false,
+          swimHours: 2,
+          bikeHours: 5,
+          runHours: 3,
+          totalHours: 10,
+          swimDistanceMeters: null,
+          runDistanceMeters: null,
+        },
+      ],
+      phases,
+      zonePhaseSpans: [],
+      phasesWithBlocks: [],
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      deLoadStrategy: "VOLUME_ONLY",
+      seasonSplit: { swim: 33.33, bike: 33.34, run: 33.33 },
+      longAnchors: { rideStart: 60, ridePeak: 180, runStart: 30, runPeak: 90 },
+      phaseKindsByWeek: ["BASE"],
+      taperWeekIndices: [],
+      deLoadEveryNWeeks: 4,
+      longRideWeekFlags: [false],
+      longRunWeekFlags: [false],
+    });
+
+    const week = weeks[0]!;
+    assert.equal(week.longRideMinutes, 0);
+    assert.equal(week.slotBudgets.BIKE.long, 0);
+    assert.equal(week.slotBudgets.BIKE.substituteEndurance, 0);
+    assert.equal(week.slotBudgets.BIKE.intensity, 1);
+    assert.equal(week.slotBudgets.BIKE.endurance, 3);
   });
 });

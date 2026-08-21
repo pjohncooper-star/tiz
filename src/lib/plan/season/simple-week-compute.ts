@@ -13,7 +13,11 @@ import {
   shouldSuppressLongForWeek,
   type LongOffWeekResult,
 } from "./long-offweek-policy";
-import { resolvePlanningModeForWeek, type PhasePlanningSpan } from "./planning-mode";
+import {
+  planningModeSeparatesLongVolume,
+  resolvePlanningModeForWeek,
+  type PhasePlanningSpan,
+} from "./planning-mode";
 import type { PhaseWithBlocks } from "./phase-blocks";
 import type { SimpleWeekVolume } from "./simple-ramp";
 import {
@@ -296,42 +300,30 @@ export function computeCalendarWeekPoolFields(input: {
     ? 0
     : longMinutesForMetric(weekIndex, phase, "longRun", context.longAnchors);
 
-  let longRideMinutes = 0;
-  let longRunMinutes = 0;
-  let longRideOff: LongOffWeekResult = { kind: "none" };
-  let longRunOff: LongOffWeekResult = { kind: "none" };
-
-  if (mode === "SEPARATE_LONGS" || mode === "SEPARATE_LONG_TIZ") {
-    if (fullLongRide) {
-      longRideMinutes = fullLongRideMinutes;
-    } else if (phase && !suppressLong) {
-      longRideOff = applyLongOffWeekPolicy({
-        policy: phase.longRideOffWeekPolicy,
-        fullLongMinutes: fullLongRideMinutes,
-        endurancePercent: phase.longRideOffWeekEndurancePercent,
-      });
-    }
-    if (fullLongRun) {
-      longRunMinutes = fullLongRunMinutes;
-    } else if (phase && !suppressLong) {
-      longRunOff = applyLongOffWeekPolicy({
-        policy: phase.longRunOffWeekPolicy,
-        fullLongMinutes: fullLongRunMinutes,
-        endurancePercent: phase.longRunOffWeekEndurancePercent,
-      });
-    }
-  }
+  const longFill = resolveLongSeatFill({
+    mode,
+    phase,
+    suppressLong,
+    fullLongRide,
+    fullLongRun,
+    fullLongRideMinutes,
+    fullLongRunMinutes,
+  });
 
   const slotBudgets = buildSlotBudgets({
     phase,
     mode,
     longRideFull: fullLongRide,
     longRunFull: fullLongRun,
-    longRideResult: longRideOff,
-    longRunResult: longRunOff,
+    longRideResult: longFill.longRideOff,
+    longRunResult: longFill.longRunOff,
   });
 
-  return { slotBudgets, longRideMinutes, longRunMinutes };
+  return {
+    slotBudgets,
+    longRideMinutes: longFill.longRideMinutes,
+    longRunMinutes: longFill.longRunMinutes,
+  };
 }
 
 function buildSlotBudgets(input: {
@@ -365,45 +357,123 @@ function buildSlotBudgets(input: {
     },
   } as const;
 
-  const modesWithLongSeat =
-    input.mode === "SEPARATE_LONGS" || input.mode === "SEPARATE_LONG_TIZ";
-
   for (const discipline of TRI) {
     const { sessions, intense } = map[discipline];
-    // Modes 3–4: sessions includes the long seat for bike/run; swim has no long.
+    // Sessions per week includes the long seat for bike/run; swim has no long.
     const mainSessions =
-      modesWithLongSeat && discipline !== "SWIM"
-        ? Math.max(0, sessions - 1)
-        : sessions;
+      discipline !== "SWIM" && sessions > 0 ? Math.max(0, sessions - 1) : sessions;
     const intenseCapped = Math.min(intense, mainSessions);
     budgets[discipline].intensity = intenseCapped;
     budgets[discipline].endurance = Math.max(0, mainSessions - intenseCapped);
   }
 
-  if (!modesWithLongSeat) {
-    return budgets;
-  }
-
   // Off-week policies fill the reserved long seat (replace), not add on top.
-  if (input.longRideFull) {
-    budgets.BIKE.long = 1;
-  } else if (input.longRideResult.kind === "extra_intensity") {
-    budgets.BIKE.intensity += 1;
-  } else if (input.longRideResult.kind === "substitute_endurance") {
-    budgets.BIKE.substituteEndurance = 1;
-    budgets.BIKE.substituteDurationMinutes = input.longRideResult.durationMinutes;
-  }
-
-  if (input.longRunFull) {
-    budgets.RUN.long = 1;
-  } else if (input.longRunResult.kind === "extra_intensity") {
-    budgets.RUN.intensity += 1;
-  } else if (input.longRunResult.kind === "substitute_endurance") {
-    budgets.RUN.substituteEndurance = 1;
-    budgets.RUN.substituteDurationMinutes = input.longRunResult.durationMinutes;
-  }
+  fillReservedLongSeat(budgets.BIKE, map.BIKE.sessions, {
+    full: input.longRideFull,
+    result: input.longRideResult,
+  });
+  fillReservedLongSeat(budgets.RUN, map.RUN.sessions, {
+    full: input.longRunFull,
+    result: input.longRunResult,
+  });
 
   return budgets;
+}
+
+function fillReservedLongSeat(
+  budget: DisciplineSlotBudget,
+  sessions: number,
+  input: { full: boolean; result: LongOffWeekResult }
+) {
+  if (sessions <= 0) return;
+  if (input.full) {
+    budget.long = 1;
+    return;
+  }
+  if (input.result.kind === "extra_intensity") {
+    budget.intensity += 1;
+    return;
+  }
+  if (input.result.kind === "substitute_endurance") {
+    budget.substituteEndurance = 1;
+    budget.substituteDurationMinutes = input.result.durationMinutes;
+    return;
+  }
+  if (input.result.kind === "endurance") {
+    budget.endurance += 1;
+  }
+}
+
+function resolveLongSeatFill(input: {
+  mode: PlanningMode;
+  phase: SimplePhaseCompute | null;
+  suppressLong: boolean;
+  fullLongRide: boolean;
+  fullLongRun: boolean;
+  fullLongRideMinutes: number;
+  fullLongRunMinutes: number;
+}): {
+  longRideMinutes: number;
+  longRunMinutes: number;
+  longRideOff: LongOffWeekResult;
+  longRunOff: LongOffWeekResult;
+} {
+  const separatesVolume = planningModeSeparatesLongVolume(input.mode);
+  const ride = resolveOneLongSeatFill({
+    separatesVolume,
+    phase: input.phase,
+    suppressLong: input.suppressLong,
+    fullLong: input.fullLongRide,
+    fullLongMinutes: input.fullLongRideMinutes,
+    policy: input.phase?.longRideOffWeekPolicy,
+    endurancePercent: input.phase?.longRideOffWeekEndurancePercent,
+  });
+  const run = resolveOneLongSeatFill({
+    separatesVolume,
+    phase: input.phase,
+    suppressLong: input.suppressLong,
+    fullLong: input.fullLongRun,
+    fullLongMinutes: input.fullLongRunMinutes,
+    policy: input.phase?.longRunOffWeekPolicy,
+    endurancePercent: input.phase?.longRunOffWeekEndurancePercent,
+  });
+  return {
+    longRideMinutes: ride.minutes,
+    longRideOff: ride.off,
+    longRunMinutes: run.minutes,
+    longRunOff: run.off,
+  };
+}
+
+function resolveOneLongSeatFill(input: {
+  separatesVolume: boolean;
+  phase: SimplePhaseCompute | null;
+  suppressLong: boolean;
+  fullLong: boolean;
+  fullLongMinutes: number;
+  policy: LongOffWeekPolicy | undefined;
+  endurancePercent: number | undefined;
+}): { minutes: number; off: LongOffWeekResult } {
+  if (input.fullLong) {
+    return {
+      minutes: input.separatesVolume ? input.fullLongMinutes : 0,
+      off: { kind: "none" },
+    };
+  }
+  if (!input.phase || input.suppressLong) {
+    return { minutes: 0, off: { kind: "none" } };
+  }
+  if (input.separatesVolume) {
+    return {
+      minutes: 0,
+      off: applyLongOffWeekPolicy({
+        policy: input.policy ?? "ENDURANCE_PERCENT",
+        fullLongMinutes: input.fullLongMinutes,
+        endurancePercent: input.endurancePercent ?? 60,
+      }),
+    };
+  }
+  return { minutes: 0, off: { kind: "endurance" } };
 }
 
 export function enrichSimpleSeasonWeeks(input: {
@@ -480,31 +550,16 @@ export function enrichSimpleSeasonWeeks(input: {
       ? 0
       : longMinutesForMetric(week.weekIndex, phase, "longRun", input.longAnchors);
 
-    let longRideMinutes = 0;
-    let longRunMinutes = 0;
-    let longRideOff: LongOffWeekResult = { kind: "none" };
-    let longRunOff: LongOffWeekResult = { kind: "none" };
-
-    if (mode === "SEPARATE_LONGS" || mode === "SEPARATE_LONG_TIZ") {
-      if (fullLongRide) {
-        longRideMinutes = fullLongRideMinutes;
-      } else if (phase && !suppressLong) {
-        longRideOff = applyLongOffWeekPolicy({
-          policy: phase.longRideOffWeekPolicy,
-          fullLongMinutes: fullLongRideMinutes,
-          endurancePercent: phase.longRideOffWeekEndurancePercent,
-        });
-      }
-      if (fullLongRun) {
-        longRunMinutes = fullLongRunMinutes;
-      } else if (phase && !suppressLong) {
-        longRunOff = applyLongOffWeekPolicy({
-          policy: phase.longRunOffWeekPolicy,
-          fullLongMinutes: fullLongRunMinutes,
-          endurancePercent: phase.longRunOffWeekEndurancePercent,
-        });
-      }
-    }
+    const longFill = resolveLongSeatFill({
+      mode,
+      phase,
+      suppressLong,
+      fullLongRide,
+      fullLongRun,
+      fullLongRideMinutes,
+      fullLongRunMinutes,
+    });
+    const { longRideMinutes, longRunMinutes, longRideOff, longRunOff } = longFill;
 
     const zoneMinutes = computeZoneMinutesForWeekFromSplits({
       week: {
