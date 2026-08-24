@@ -13,7 +13,7 @@ export const FIXED_TEMPLATE_WEEKS =
   SUGGESTED_TAPER_WEEKS;
 export const FIXED_TEMPLATE_THRESHOLD = 26;
 
-const PHASE_COLORS: Record<PhaseKind, string> = {
+export const PHASE_COLORS: Record<PhaseKind, string> = {
   BASE: "#38bdf8",
   BUILD: "#6366f1",
   RACE_PREP: "#f59e0b",
