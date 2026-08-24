@@ -1,6 +1,6 @@
 -- TrainerRoad calendar ingest: private ICS URL on Athlete, external UID on PlannedSession.
-
-ALTER TYPE "PlannedSessionSource" ADD VALUE IF NOT EXISTS 'TRAINERROAD';
+-- Requires TRAINERROAD on PlannedSessionSource already committed
+-- (run manual_trainerroad_ical_enum.sql in a prior prisma db execute).
 
 ALTER TABLE "Athlete" ADD COLUMN IF NOT EXISTS "trainerRoadIcalUrl" TEXT;
 ALTER TABLE "Athlete" ADD COLUMN IF NOT EXISTS "trainerRoadSyncedAt" TIMESTAMP(3);
