@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type {
   Discipline,
   DisplayUnit,
+  PlannedSessionSource,
   SignalType,
   SurveyResponse,
   ThresholdProfile,
@@ -100,7 +101,7 @@ export type WorkoutDetailViewModel = {
   prescriptionSignal: SignalType | null;
   sessionRole: import("@prisma/client").SessionRole;
   tizSignalOverride: SignalType | null;
-  sessionSource: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  sessionSource: PlannedSessionSource;
   trainingPlanId: string | null;
   trainingPlanName: string | null;
   programOrigin: "season" | "library" | null;
@@ -124,7 +125,7 @@ export function detectWorkoutDetailMode(input: {
   hasPlannedMetrics: boolean;
   hasNotes: boolean;
   isDefaultTitle: boolean;
-  source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  source: PlannedSessionSource;
 }): WorkoutDetailMode {
   const hasPlannedContent =
     input.hasStructuredWorkout ||

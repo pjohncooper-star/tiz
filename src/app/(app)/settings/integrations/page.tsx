@@ -1,4 +1,5 @@
 import { CalendarFeedSettings } from "@/components/calendar-feed-settings";
+import { TrainerRoadSettings } from "@/components/trainerroad-settings";
 import { Card } from "@/components/ui";
 import { requireAthlete } from "@/lib/auth/session";
 import { db } from "@/lib/db";
@@ -6,12 +7,31 @@ import { loadAthleteSettingsProfile } from "@/lib/settings/athlete-settings.serv
 
 export const dynamic = "force-dynamic";
 
+async function loadTrainerRoadSettings(athleteId: string) {
+  try {
+    const row = await db.athlete.findUnique({
+      where: { id: athleteId },
+      select: { trainerRoadIcalUrl: true, trainerRoadSyncedAt: true },
+    });
+    return {
+      url: row?.trainerRoadIcalUrl ?? null,
+      syncedAt: row?.trainerRoadSyncedAt?.toISOString() ?? null,
+    };
+  } catch (error) {
+    if (error instanceof Error && /trainerRoadIcalUrl|column/i.test(error.message)) {
+      return { url: null, syncedAt: null };
+    }
+    throw error;
+  }
+}
+
 export default async function IntegrationsSettingsPage() {
   const session = await requireAthlete();
   const athleteId = session.user.athleteId!;
-  const [connection, athlete] = await Promise.all([
+  const [connection, athlete, trainerRoad] = await Promise.all([
     db.stravaConnection.findUnique({ where: { athleteId } }),
     loadAthleteSettingsProfile(athleteId),
+    loadTrainerRoadSettings(athleteId),
   ]);
 
   const calendarFeedToken =
@@ -32,6 +52,12 @@ export default async function IntegrationsSettingsPage() {
             Connect Strava
           </a>
         )}
+      </Card>
+      <Card title="TrainerRoad">
+        <TrainerRoadSettings
+          initialUrl={trainerRoad.url}
+          initialSyncedAt={trainerRoad.syncedAt}
+        />
       </Card>
       <Card title="Calendar subscription">
         <CalendarFeedSettings initialToken={calendarFeedToken} />

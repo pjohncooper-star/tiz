@@ -126,6 +126,7 @@ enum PlannedSessionSource {
   TEMPLATE
   RACE
   PLAN
+  TRAINERROAD
 }
 
 enum SessionRole {
@@ -315,6 +316,9 @@ model Athlete {
    * Null until the athlete generates a feed URL in Settings.
    */
   calendarFeedToken          String?              @unique
+  /** Private TrainerRoad ICS URL (webcal/https). Null until the athlete pastes it in Settings. */
+  trainerRoadIcalUrl         String?
+  trainerRoadSyncedAt        DateTime?
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 
@@ -866,6 +870,8 @@ model PlannedSession {
    */
   tizSignalOverride        SignalType?
   poolSlotKind             PoolSlotKind?
+  /** Stable id from an external calendar (TrainerRoad ICS UID). */
+  externalUid              String?
 
   athlete              Athlete                     @relation(fields: [athleteId], references: [id], onDelete: Cascade)
   trainingPlan         TrainingPlan?               @relation(fields: [trainingPlanId], references: [id], onDelete: SetNull)
@@ -879,6 +885,7 @@ model PlannedSession {
   workoutSource        SessionWorkoutSource?
   foldersLastCompleted WorkoutFolder[]       @relation("FolderLastCompleted")
 
+  @@index([athleteId, source, externalUid])
   @@index([athleteId, scheduledDate])
   @@index([athleteId, scheduledDate, daySortOrder])
   @@index([athleteId, trainingPlanId, scheduledDate])

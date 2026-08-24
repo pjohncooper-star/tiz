@@ -81,6 +81,7 @@ function isStalePrismaClient(client: PrismaClient): boolean {
     !("TEMPLATE" in $Enums.PlannedSessionSource) ||
     !("RACE" in $Enums.PlannedSessionSource) ||
     !("PLAN" in $Enums.PlannedSessionSource) ||
+    !("TRAINERROAD" in $Enums.PlannedSessionSource) ||
     !hasDelegate(client, "trainingPlan") ||
     globalForPrisma.prismaSeasonPlanFieldFingerprint !== seasonPlanFieldFingerprint()
   );

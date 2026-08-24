@@ -1,4 +1,4 @@
-import type { Discipline, DisplayUnit, PlannedSession, PoolSize, PoolSlotKind, SessionRole, SignalType, SyncedActivity } from "@prisma/client";
+import type { Discipline, DisplayUnit, PlannedSession, PlannedSessionSource, PoolSize, PoolSlotKind, SessionRole, SignalType, SyncedActivity } from "@prisma/client";
 import { format } from "date-fns";
 import { resolveActivityNumericMetrics } from "@/lib/activity/summary";
 import { calendarDateFromDb } from "@/lib/dates";
@@ -70,7 +70,7 @@ export type CalendarPlannedSession = {
   stepCount: number;
   metricsSummary: string | null;
   zoneAllocationMissing: boolean;
-  source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  source: PlannedSessionSource;
   trainingPlanId?: string | null;
   trainingPlanName?: string | null;
   /** Season-attached vs library apply. Null when the session is not from a program. */
@@ -122,7 +122,7 @@ export function programOriginCaption(input: {
 }
 
 export function sessionSourceLabel(input: {
-  source: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  source: PlannedSessionSource;
   trainingPlanName?: string | null;
   programOrigin?: "season" | "library" | null;
 }): string {
@@ -133,6 +133,7 @@ export function sessionSourceLabel(input: {
   }
   if (input.source === "TEMPLATE") return "Weekly template";
   if (input.source === "RACE") return "Race";
+  if (input.source === "TRAINERROAD") return "TrainerRoad";
   return "Calendar";
 }
 

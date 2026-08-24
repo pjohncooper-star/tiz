@@ -58,6 +58,7 @@ function sessionRow(
     sessionRole: "EASY" as const,
     tizSignalOverride: null,
     poolSlotKind: null,
+    externalUid: null,
     structuredWorkout: {
       steps: serializeWorkoutTree({ version: WORKOUT_TREE_VERSION, nodes }),
     },

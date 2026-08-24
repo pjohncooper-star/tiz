@@ -14,6 +14,8 @@ import {
   trainerRoadDescriptionForcesIntensity,
   trainerRoadMarkersToSeasonPhases,
   trainerRoadTitleWithoutDuration,
+  normalizeTrainerRoadIcalUrl,
+  trainerRoadSessionNotes,
 } from "./index";
 
 describe("TrainerRoad intensity mapping", () => {
@@ -328,6 +330,33 @@ describe("TrainerRoad ICS calendar parse", () => {
     assert.deepEqual(
       parsed.phaseMarkers.map((m) => m.summary),
       ["Base 1", "Recovery Week"]
+    );
+  });
+});
+
+describe("TrainerRoad iCal URL", () => {
+  it("normalizes webcal and :80 to https TrainerRoad hosts", () => {
+    assert.equal(
+      normalizeTrainerRoadIcalUrl(
+        "webcal://api.trainerroad.com:80/v1/calendar/ics/abc"
+      ),
+      "https://api.trainerroad.com/v1/calendar/ics/abc"
+    );
+  });
+
+  it("rejects empty and non-TrainerRoad hosts", () => {
+    assert.equal(normalizeTrainerRoadIcalUrl(""), null);
+    assert.equal(normalizeTrainerRoadIcalUrl("https://evil.example/ics"), null);
+  });
+
+  it("formats IF and TSS into session notes", () => {
+    assert.equal(
+      trainerRoadSessionNotes({ intensityFactor: 0.83, tss: 69 }),
+      "IF 0.83 · TSS 69"
+    );
+    assert.equal(
+      trainerRoadSessionNotes({ intensityFactor: null, tss: null }),
+      null
     );
   });
 });

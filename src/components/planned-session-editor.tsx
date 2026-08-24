@@ -29,7 +29,7 @@ import type { PlannedMetricsTriadValues } from "@/lib/plan/planned-metrics-triad
 import { resolvePlannedDurationMinutes } from "@/lib/plan/rollup";
 import { buildSessionTargetZones, hasTargetZones } from "@/lib/plan/session-target-zones";
 import { validateCompletedZoneAllocation } from "@/lib/plan/session-completion";
-import type { Discipline, SessionRole, SignalType } from "@prisma/client";
+import type { Discipline, PlannedSessionSource, SessionRole, SignalType } from "@prisma/client";
 import {
   defaultSessionTitle,
   titleMatchesSportDefault,
@@ -96,7 +96,7 @@ type PlannedSessionEditorProps = {
   prescriptionSignal?: SignalType | null;
   sessionRole?: SessionRole;
   tizSignalOverride?: SignalType | null;
-  sessionSource?: "FLEXIBLE" | "TEMPLATE" | "RACE" | "PLAN";
+  sessionSource?: PlannedSessionSource;
   trainingPlanId?: string | null;
   trainingPlanName?: string | null;
   programOrigin?: "season" | "library" | null;

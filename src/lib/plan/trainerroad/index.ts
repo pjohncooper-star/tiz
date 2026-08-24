@@ -1,4 +1,4 @@
-/** Pure TrainerRoad iCal mappings. Feed fetch, session sync, and season rewrite are not wired. */
+/** TrainerRoad iCal parse, intensity mapping, and calendar ingest. */
 
 export {
   parseIcsEvents,
@@ -29,3 +29,10 @@ export {
   type ParsedTrainerRoadCalendar,
   type TrainerRoadWorkout,
 } from "./calendar";
+export { normalizeTrainerRoadIcalUrl, trainerRoadSessionNotes } from "./url";
+export {
+  disconnectTrainerRoad,
+  fetchTrainerRoadIcs,
+  syncTrainerRoadCalendar,
+  type TrainerRoadSyncResult,
+} from "./sync";
