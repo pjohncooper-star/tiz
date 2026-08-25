@@ -93,6 +93,7 @@ type SimplePlannerPhasesPaneProps = {
   longRideOwnedByProgram?: boolean[];
   longRunOwnedByProgram?: boolean[];
   programWeekHint?: SimpleWeek | null;
+  trainerRoadDriven?: boolean;
 };
 
 export function SimplePlannerPhasesPane({
@@ -116,6 +117,7 @@ export function SimplePlannerPhasesPane({
   longRideOwnedByProgram = [],
   longRunOwnedByProgram = [],
   programWeekHint = null,
+  trainerRoadDriven = false,
 }: SimplePlannerPhasesPaneProps) {
   const selected =
     phases.find((phase) => phase.id === selectedPhaseId) ??
@@ -148,10 +150,18 @@ export function SimplePlannerPhasesPane({
 
   return (
     <div className="space-y-4">
+      {trainerRoadDriven ? (
+        <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+          Phases come from TrainerRoad. Swim and run volume stay editable; bike workouts
+          stay on the calendar feed.
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={addEmptyPhase}>
-          + Add phase
-        </Button>
+        {trainerRoadDriven ? null : (
+          <Button type="button" variant="secondary" onClick={addEmptyPhase}>
+            + Add phase
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -227,6 +237,7 @@ export function SimplePlannerPhasesPane({
             programWeekHint={programWeekHint}
             onChange={updatePhase}
             onDelete={() => deletePhase(selected)}
+            phasesLocked={trainerRoadDriven}
           />
           {selected.id ? (
             <MaterializePhasePanel
@@ -268,6 +279,7 @@ function PhaseDetailEditor({
   programWeekHint = null,
   onChange,
   onDelete,
+  phasesLocked = false,
 }: {
   phase: SimplePhase;
   phases: SimplePhase[];
@@ -288,6 +300,7 @@ function PhaseDetailEditor({
   programWeekHint?: SimpleWeek | null;
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
+  phasesLocked?: boolean;
 }) {
   const assigned = isAssignedPhase(phase);
   const weekLabel = assigned
@@ -307,6 +320,7 @@ function PhaseDetailEditor({
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             value={phase.phaseKind}
+            disabled={phasesLocked}
             onChange={(event) => {
               const phaseKind = event.target.value as PhaseKind;
               onChange({
@@ -328,6 +342,7 @@ function PhaseDetailEditor({
           <Input
             className="mt-1"
             value={phase.name}
+            disabled={phasesLocked}
             onChange={(event) =>
               onChange({
                 ...phase,
@@ -406,6 +421,7 @@ function PhaseDetailEditor({
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             value={assigned ? phase.startWeekIndex + 1 : ""}
+            disabled={phasesLocked}
             onChange={(event) => {
               const start = Number(event.target.value) - 1;
               const end = assigned ? phase.endWeekIndex : start;
@@ -425,6 +441,7 @@ function PhaseDetailEditor({
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             value={assigned ? phase.endWeekIndex + 1 : ""}
+            disabled={phasesLocked}
             onChange={(event) => {
               const end = Number(event.target.value) - 1;
               const start = assigned ? phase.startWeekIndex : end;
@@ -454,19 +471,23 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <NumberEditorInput
-                min={0}
-                max={7}
-                className="mt-1"
-                value={phase[field.key]}
-                onCommit={(v) => {
-                  if (v == null) return;
-                  onChange({
-                    ...phase,
-                    [field.key]: v,
-                  });
-                }}
-              />
+              {phasesLocked && field.key === "bikeSessionsPerWeek" ? (
+                <p className="mt-1 text-sm text-zinc-500">From TrainerRoad</p>
+              ) : (
+                <NumberEditorInput
+                  min={0}
+                  max={7}
+                  className="mt-1"
+                  value={phase[field.key]}
+                  onCommit={(v) => {
+                    if (v == null) return;
+                    onChange({
+                      ...phase,
+                      [field.key]: v,
+                    });
+                  }}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -509,19 +530,23 @@ function PhaseDetailEditor({
           ).map((field) => (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              <NumberEditorInput
-                min={0}
-                max={7}
-                className="mt-1"
-                value={phase[field.key]}
-                onCommit={(v) => {
-                  if (v == null) return;
-                  onChange({
-                    ...phase,
-                    [field.key]: v,
-                  });
-                }}
-              />
+              {phasesLocked && field.key === "bikeIntenseDaysPerWeek" ? (
+                <p className="mt-1 text-sm text-zinc-500">From TrainerRoad</p>
+              ) : (
+                <NumberEditorInput
+                  min={0}
+                  max={7}
+                  className="mt-1"
+                  value={phase[field.key]}
+                  onCommit={(v) => {
+                    if (v == null) return;
+                    onChange({
+                      ...phase,
+                      [field.key]: v,
+                    });
+                  }}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -551,6 +576,7 @@ function PhaseDetailEditor({
         rampDefaults={rampDefaults}
         disciplineSettings={disciplineSettings}
         onChange={onChange}
+        hideBike={phasesLocked}
       />
 
       <fieldset className="mt-4 space-y-3">
@@ -614,6 +640,7 @@ function PhaseDetailEditor({
             <input
               type="checkbox"
               checked={phase.rampEnabled[discipline]}
+              disabled={phasesLocked && discipline === "bike"}
               onChange={(event) =>
                 onChange({
                   ...phase,
@@ -640,9 +667,11 @@ function PhaseDetailEditor({
       </div>
 
       <div className="mt-4">
-        <Button type="button" variant="secondary" onClick={onDelete}>
-          Delete phase
-        </Button>
+        {phasesLocked ? null : (
+          <Button type="button" variant="secondary" onClick={onDelete}>
+            Delete phase
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -657,6 +686,7 @@ function PhaseVolumeEditor({
   rampDefaults,
   disciplineSettings,
   onChange,
+  hideBike = false,
 }: {
   phase: SimplePhase;
   phases: SimplePhase[];
@@ -666,6 +696,7 @@ function PhaseVolumeEditor({
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onChange: (phase: SimplePhase) => void;
+  hideBike?: boolean;
 }) {
   const progressionMode = inferVolumeProgressionMode(phase);
   const swimDistance = disciplinePlanningMode("swim", rampDefaults) === "DISTANCE";
@@ -730,7 +761,9 @@ function PhaseVolumeEditor({
           onStepHoursChange={(value) => onChange({ ...phase, volumeStepHours: value })}
         />
       ) : (
-        (["swim", "bike", "run"] as const).map((discipline) => {
+        (["swim", "bike", "run"] as const)
+          .filter((discipline) => !(hideBike && discipline === "bike"))
+          .map((discipline) => {
           const distanceMode =
             discipline !== "bike" && disciplinePlanningMode(discipline, rampDefaults) === "DISTANCE";
           const paceDiscipline = discipline === "swim" ? "SWIM" : "RUN";

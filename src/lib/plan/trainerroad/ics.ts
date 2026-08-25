@@ -79,3 +79,18 @@ export function parseIcsEvents(raw: string): IcsEvent[] {
 
   return events;
 }
+
+/** Calendar display name from X-WR-CALNAME, if present. */
+export function parseIcsCalendarName(raw: string): string | null {
+  for (const line of unfoldIcsLines(raw)) {
+    if (line === "BEGIN:VEVENT") break;
+    const colon = line.indexOf(":");
+    if (colon < 0) continue;
+    const name = line.slice(0, colon).split(";")[0]!.toUpperCase();
+    if (name === "X-WR-CALNAME" || name === "NAME") {
+      const value = unescapeIcsText(line.slice(colon + 1)).trim();
+      return value || null;
+    }
+  }
+  return null;
+}

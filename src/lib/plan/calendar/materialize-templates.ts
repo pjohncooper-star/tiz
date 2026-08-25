@@ -66,6 +66,8 @@ export type MaterializeOptions = {
   /** De-load volume as a percent of a normal week (e.g. 75). */
   deLoadVolumePercent: number;
   templatesById: Map<string, MaterializeTemplate>;
+  /** Template items in these disciplines are not expanded (TrainerRoad owns bike). */
+  omitDisciplines?: Discipline[];
 };
 
 export type MaterializedSession = {
@@ -206,6 +208,7 @@ export function planWeekMaterialization(
 
   const sessions: MaterializedSession[] = [];
   for (const item of template?.items ?? []) {
+    if (opts.omitDisciplines?.includes(item.discipline)) continue;
     const base: MaterializedSession = {
       scheduledDateKey: weekdayToDate(ctx.weekStartKey, item.weekday),
       weekday: item.weekday,

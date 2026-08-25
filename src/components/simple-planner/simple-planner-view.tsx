@@ -109,6 +109,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
       season.trainingPlanAttachments?.[0] ?? season.trainingPlanAttachment ?? null,
     planSessionConflicts: season.planSessionConflicts ?? [],
     maxWeekHours: season.maxWeekHours ?? null,
+    trainerRoadDriven: Boolean(season.trainerRoadDriven),
   };
 
   const preview = previewPhaseAwareVolumes({
@@ -1306,6 +1307,7 @@ export function SimplePlannerView({
                 ? attachedPlanPreview.weeks[selectedWeekIndex] ?? null
                 : null
             }
+            trainerRoadDriven={Boolean(season.trainerRoadDriven)}
           />
         </div>
       </CollapsibleSection>
@@ -1399,6 +1401,7 @@ export function SimplePlannerView({
           selectedPhaseId={selectedPhaseId}
           onSelectPhase={handleSelectPhase}
           highlightedWeekIndex={selectedWeekIndex}
+          phasesLocked={Boolean(season.trainerRoadDriven)}
           onWeeksChange={(nextWeeks) => {
             const nextByIndex = new Map(
               nextWeeks.map((week) => [week.weekIndex, week])

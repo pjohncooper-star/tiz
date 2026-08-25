@@ -11,15 +11,22 @@ async function loadTrainerRoadSettings(athleteId: string) {
   try {
     const row = await db.athlete.findUnique({
       where: { id: athleteId },
-      select: { trainerRoadIcalUrl: true, trainerRoadSyncedAt: true },
+      select: {
+        trainerRoadIcalUrl: true,
+        trainerRoadSyncedAt: true,
+        trainerRoadSeasonPlan: { select: { id: true, name: true } },
+      },
     });
     return {
       url: row?.trainerRoadIcalUrl ?? null,
       syncedAt: row?.trainerRoadSyncedAt?.toISOString() ?? null,
+      season: row?.trainerRoadSeasonPlan
+        ? { id: row.trainerRoadSeasonPlan.id, name: row.trainerRoadSeasonPlan.name }
+        : null,
     };
   } catch (error) {
     if (error instanceof Error && /trainerRoadIcalUrl|column/i.test(error.message)) {
-      return { url: null, syncedAt: null };
+      return { url: null, syncedAt: null, season: null };
     }
     throw error;
   }
@@ -57,6 +64,7 @@ export default async function IntegrationsSettingsPage() {
         <TrainerRoadSettings
           initialUrl={trainerRoad.url}
           initialSyncedAt={trainerRoad.syncedAt}
+          initialSeason={trainerRoad.season}
         />
       </Card>
       <Card title="Calendar subscription">

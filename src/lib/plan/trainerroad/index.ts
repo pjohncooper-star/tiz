@@ -1,10 +1,6 @@
 /** TrainerRoad iCal parse, intensity mapping, and calendar ingest. */
 
-export {
-  parseIcsEvents,
-  unfoldIcsLines,
-  type IcsEvent,
-} from "./ics";
+export { parseIcsCalendarName, parseIcsEvents, unfoldIcsLines, type IcsEvent } from "./ics";
 export {
   TR_EASY_IF_MAX,
   TR_INTENSITY_IF_MIN,
@@ -20,8 +16,10 @@ export {
 export {
   isTrainerRoadPhaseMarker,
   matchTrainerRoadPhaseSummary,
+  trainerRoadMarkersToPhaseSpans,
   trainerRoadMarkersToSeasonPhases,
   type TrainerRoadPhaseMarker,
+  type TrainerRoadPhaseSpan,
 } from "./phases";
 export {
   dedupeTrainerRoadWorkouts,
@@ -29,6 +27,18 @@ export {
   type ParsedTrainerRoadCalendar,
   type TrainerRoadWorkout,
 } from "./calendar";
+export {
+  applyTrainerRoadBikeWeekTarget,
+  lastTrainerRoadWorkoutDateKey,
+  mergeTrainerRoadPhaseWrites,
+  trainerRoadCalendarToSeasonDraft,
+  trainerRoadSessionsByWeekStart,
+  TrainerRoadSeasonOverlapError,
+  type TrainerRoadBikeSession,
+  type TrainerRoadSeasonDraft,
+  type TrainerRoadSeasonOverlap,
+  type TrainerRoadSeasonPhase,
+} from "./season";
 export { normalizeTrainerRoadIcalUrl, trainerRoadSessionNotes } from "./url";
 export {
   disconnectTrainerRoad,

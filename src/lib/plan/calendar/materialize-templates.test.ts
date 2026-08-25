@@ -251,3 +251,12 @@ test("endurance rewrite keeps template duration and moderate role", () => {
   assert.equal(plan.sessions[0]!.durationMinutes, 180);
   assert.equal(plan.sessions[0]!.title, "Endurance ride");
 });
+
+test("TrainerRoad-driven weeks omit BIKE template items", () => {
+  const plan = planWeekMaterialization(
+    { ...baseCtx, phaseTemplateId: "phase-1" },
+    opts({ omitDisciplines: ["BIKE"] })
+  );
+  assert.equal(plan.sessions.length, 1);
+  assert.equal(plan.sessions[0]!.discipline, "RUN");
+});

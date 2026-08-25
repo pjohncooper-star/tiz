@@ -321,6 +321,9 @@ export async function materializeSeasonTemplates(
     testTemplateId: plan.testWeekTemplateId,
     deLoadVolumePercent: plan.deLoadVolumePercent ?? 100,
     templatesById,
+    omitDisciplines: (plan as { trainerRoadDriven?: boolean }).trainerRoadDriven
+      ? ["BIKE"]
+      : undefined,
   });
 
   let weeksMaterialized = 0;

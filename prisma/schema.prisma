@@ -319,10 +319,13 @@ model Athlete {
   /** Private TrainerRoad ICS URL (webcal/https). Null until the athlete pastes it in Settings. */
   trainerRoadIcalUrl         String?
   trainerRoadSyncedAt        DateTime?
+  /** Season whose phases follow the TrainerRoad iCal feed. */
+  trainerRoadSeasonPlanId    String?              @unique
   createdAt                  DateTime             @default(now())
   updatedAt                  DateTime             @updatedAt
 
   user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trainerRoadSeasonPlan SeasonPlan?            @relation("TrainerRoadDrivenSeason", fields: [trainerRoadSeasonPlanId], references: [id], onDelete: SetNull)
   disciplineSettings  AthleteDisciplineSettings[]
   thresholdProfiles   ThresholdProfile[]
   signalPreferences   SignalPreference[]
@@ -566,6 +569,8 @@ model SeasonPlan {
   defaultPlanningMode      PlanningMode   @default(BY_DISCIPLINE)
   primaryGoalEventId       String?        @unique
   setupComplete            Boolean        @default(false)
+  /** When true, phases and bike seats come from a TrainerRoad iCal feed. */
+  trainerRoadDriven        Boolean        @default(false)
   /** Athlete-set cap; planner warns when a week’s total hours exceed it. */
   maxWeekHours             Float?
   /**
@@ -577,6 +582,7 @@ model SeasonPlan {
   updatedAt                DateTime       @updatedAt
 
   athlete           Athlete        @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  trainerRoadAthlete Athlete?      @relation("TrainerRoadDrivenSeason")
   primaryGoalEvent  GoalEvent?     @relation("PrimaryGoalEvent", fields: [primaryGoalEventId], references: [id], onDelete: SetNull)
   phases            SeasonPhase[]
   weeks             SeasonWeek[]

@@ -69,14 +69,21 @@ function exclusiveEndMonday(inclusiveEndDateKey: string): string {
   return nextWeekStartKey(mondayWeekStartKey(inclusiveEndDateKey));
 }
 
+export type TrainerRoadPhaseSpan = {
+  weekStartDate: string;
+  name: string;
+  phaseKind: PhaseKind;
+  weekCount: number;
+};
+
 /**
- * Turn TR Monday phase markers into SeasonPhase drafts.
+ * Monday-aligned phase spans from TR annotations.
  * Duplicate labels (two "Base 1" blocks) stay as separate rows.
  */
-export function trainerRoadMarkersToSeasonPhases(
+export function trainerRoadMarkersToPhaseSpans(
   markers: TrainerRoadPhaseMarker[],
   options?: { lastWorkoutDateKey?: string; seasonEndDateKey?: string }
-): SeasonPhaseInput[] {
+): TrainerRoadPhaseSpan[] {
   const mapped = markers
     .map((marker) => {
       const match = matchTrainerRoadPhaseSummary(marker.summary);
@@ -102,7 +109,24 @@ export function trainerRoadMarkersToSeasonPhases(
   return mapped.map((row, index) => {
     const nextStart =
       mapped[index + 1]?.weekStartDate ?? exclusiveEndMonday(inclusiveEnd);
-    const weekCount = mondaySpanWeeks(row.weekStartDate, nextStart);
-    return defaultPhaseForKind(row.phaseKind, weekCount, index, row.name);
+    return {
+      weekStartDate: row.weekStartDate,
+      name: row.name,
+      phaseKind: row.phaseKind,
+      weekCount: mondaySpanWeeks(row.weekStartDate, nextStart),
+    };
   });
+}
+
+/**
+ * Turn TR Monday phase markers into SeasonPhase drafts.
+ * Duplicate labels (two "Base 1" blocks) stay as separate rows.
+ */
+export function trainerRoadMarkersToSeasonPhases(
+  markers: TrainerRoadPhaseMarker[],
+  options?: { lastWorkoutDateKey?: string; seasonEndDateKey?: string }
+): SeasonPhaseInput[] {
+  return trainerRoadMarkersToPhaseSpans(markers, options).map((row, index) =>
+    defaultPhaseForKind(row.phaseKind, row.weekCount, index, row.name)
+  );
 }

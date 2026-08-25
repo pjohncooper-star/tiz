@@ -13,6 +13,10 @@ import {
   parseTrainerRoadIntensityFactor,
   trainerRoadDescriptionForcesIntensity,
   trainerRoadMarkersToSeasonPhases,
+  trainerRoadCalendarToSeasonDraft,
+  mergeTrainerRoadPhaseWrites,
+  applyTrainerRoadBikeWeekTarget,
+  TrainerRoadSeasonOverlapError,
   trainerRoadTitleWithoutDuration,
   normalizeTrainerRoadIcalUrl,
   trainerRoadSessionNotes,
@@ -231,6 +235,7 @@ describe("TrainerRoad phase markers", () => {
 describe("TrainerRoad ICS calendar parse", () => {
   const ics = [
     "BEGIN:VCALENDAR",
+    "X-WR-CALNAME:Patrick TrainerRoad Calendar",
     "BEGIN:VEVENT",
     "UID:easy-1",
     "DTSTART;VALUE=DATE:20260811",
@@ -331,6 +336,7 @@ describe("TrainerRoad ICS calendar parse", () => {
       parsed.phaseMarkers.map((m) => m.summary),
       ["Base 1", "Recovery Week"]
     );
+    assert.equal(parsed.calendarName, "Patrick TrainerRoad Calendar");
   });
 });
 
@@ -358,5 +364,174 @@ describe("TrainerRoad iCal URL", () => {
       trainerRoadSessionNotes({ intensityFactor: null, tss: null }),
       null
     );
+  });
+});
+
+const PATRICK_MARKERS = [
+  { dateKey: "2026-08-24", summary: "Base 1", weekStartDate: "2026-08-24" },
+  { dateKey: "2026-09-21", summary: "Base 2", weekStartDate: "2026-09-21" },
+  { dateKey: "2026-10-19", summary: "Base 3", weekStartDate: "2026-10-19" },
+  { dateKey: "2026-11-16", summary: "Build", weekStartDate: "2026-11-16" },
+  { dateKey: "2027-01-11", summary: "Specialty", weekStartDate: "2027-01-11" },
+  { dateKey: "2027-03-08", summary: "Base 1", weekStartDate: "2027-03-08" },
+  { dateKey: "2027-04-05", summary: "Build", weekStartDate: "2027-04-05" },
+  { dateKey: "2027-05-31", summary: "Specialty", weekStartDate: "2027-05-31" },
+  { dateKey: "2027-07-26", summary: "Recovery Week", weekStartDate: "2027-07-26" },
+];
+
+describe("TrainerRoad-driven season", () => {
+  it("drafts nine phases with Rest Week last and bike ramp off", () => {
+    const draft = trainerRoadCalendarToSeasonDraft({
+      calendarName: "Patrick TrainerRoad Calendar",
+      phaseMarkers: PATRICK_MARKERS,
+      workouts: [
+        {
+          uid: "race",
+          dateKey: "2027-07-25",
+          title: "Aquabike worlds",
+          durationMinutes: 240,
+          tss: 350,
+          intensityFactor: null,
+          sessionRole: "INTENSITY",
+          description: "",
+        },
+        {
+          uid: "last",
+          dateKey: "2027-07-31",
+          title: "Easy",
+          durationMinutes: 60,
+          tss: 20,
+          intensityFactor: 0.5,
+          sessionRole: "EASY",
+          description: "",
+        },
+      ],
+    });
+    assert.ok(draft);
+    assert.equal(draft!.name, "Patrick TrainerRoad Calendar");
+    assert.equal(draft!.startDateKey, "2026-08-24");
+    assert.equal(draft!.endDateKey, "2027-08-01");
+    assert.deepEqual(
+      draft!.phases.map((p) => ({
+        name: p.name,
+        weeks: p.endWeekIndex - p.startWeekIndex + 1,
+        kind: p.phaseKind,
+        bikeRamp: p.rampEnabled.bike,
+        bikeSessions: p.bikeSessionsPerWeek,
+      })),
+      [
+        { name: "Base 1", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+        { name: "Base 2", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+        { name: "Base 3", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+        { name: "Build", weeks: 8, kind: "BUILD", bikeRamp: false, bikeSessions: 0 },
+        { name: "Specialty", weeks: 8, kind: "RACE_PREP", bikeRamp: false, bikeSessions: 0 },
+        { name: "Base 1", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+        { name: "Build", weeks: 8, kind: "BUILD", bikeRamp: false, bikeSessions: 0 },
+        { name: "Specialty", weeks: 8, kind: "RACE_PREP", bikeRamp: false, bikeSessions: 0 },
+        { name: "Rest Week", weeks: 1, kind: "TAPER", bikeRamp: false, bikeSessions: 0 },
+      ]
+    );
+    const specialty = draft!.phases.filter((p) => p.name === "Specialty");
+    assert.equal(specialty.length, 2);
+    assert.equal(specialty[1]!.endWeekIndex + 1, draft!.phases.at(-1)!.startWeekIndex);
+  });
+
+  it("returns null when the feed has no phase markers", () => {
+    assert.equal(
+      trainerRoadCalendarToSeasonDraft({
+        calendarName: null,
+        phaseMarkers: [],
+        workouts: [],
+      }),
+      null
+    );
+  });
+
+  it("lists overlapping seasons without creating a row", () => {
+    const error = new TrainerRoadSeasonOverlapError([
+      { id: "s1", name: "2026 season", startDate: "2026-01-05", endDate: "2026-12-27" },
+    ]);
+    assert.match(error.message, /2026 season/);
+    assert.equal(error.overlapping.length, 1);
+  });
+
+  it("preserves swim/run fields from the overlapping prior phase on re-sync", () => {
+    const incoming = trainerRoadCalendarToSeasonDraft({
+      calendarName: "TrainerRoad",
+      phaseMarkers: PATRICK_MARKERS,
+      workouts: [{ uid: "w", dateKey: "2027-07-31", title: "Easy", durationMinutes: 60, tss: 20, intensityFactor: 0.5, sessionRole: "EASY", description: "" }],
+    })!.phases;
+    const existing = incoming.map((phase, index) =>
+      index === 0
+        ? {
+            ...phase,
+            id: "keep-base-1",
+            swimSessionsPerWeek: 5,
+            swimStartHours: 3.5,
+            weeklyTemplateId: "tmpl-swim-run",
+            rampEnabled: { swim: false, bike: true, run: true },
+          }
+        : phase
+    );
+    const merged = mergeTrainerRoadPhaseWrites(incoming, existing);
+    assert.equal(merged[0]!.id, "keep-base-1");
+    assert.equal(merged[0]!.swimSessionsPerWeek, 5);
+    assert.equal(merged[0]!.swimStartHours, 3.5);
+    assert.equal(merged[0]!.weeklyTemplateId, "tmpl-swim-run");
+    assert.equal(merged[0]!.rampEnabled.swim, false);
+    assert.equal(merged[0]!.rampEnabled.bike, false);
+    assert.equal(merged[0]!.bikeSessionsPerWeek, 0);
+  });
+
+  it("sets bike week targets from TrainerRoad session duration and zones", () => {
+    const target = applyTrainerRoadBikeWeekTarget(
+      {
+        weekStart: "2026-08-24",
+        weekIndex: 0,
+        isRestWeek: false,
+        totalHours: 8,
+        phase: { name: "Base 1", color: "#38bdf8" },
+        strengthSessionsPerWeek: 0,
+        byDiscipline: [
+          { discipline: "SWIM", hours: 2, zoneMinutes: { "SWIM-2": 60 }, sessionsPerWeek: 3, intenseDaysPerWeek: 1 },
+          { discipline: "BIKE", hours: 5, zoneMinutes: { "BIKE-2": 99 }, sessionsPerWeek: 4, intenseDaysPerWeek: 2 },
+          { discipline: "RUN", hours: 1.5, zoneMinutes: { "RUN-2": 40 }, sessionsPerWeek: 3, intenseDaysPerWeek: 1 },
+        ],
+        zoneMinutes: { "SWIM-2": 60, "BIKE-2": 99, "RUN-2": 40 },
+        slotBudgets: {
+          SWIM: { endurance: 2, intensity: 1, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+          BIKE: { endurance: 2, intensity: 1, long: 1, substituteEndurance: 0, substituteDurationMinutes: 0 },
+          RUN: { endurance: 2, intensity: 1, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+        },
+      },
+      [
+        {
+          dateKey: "2026-08-24",
+          durationMinutes: 60,
+          targetZones: { "BIKE-2": 40, "BIKE-4": 20 },
+          sessionRole: "INTENSITY",
+        },
+        {
+          dateKey: "2026-08-26",
+          durationMinutes: 90,
+          targetZones: { "BIKE-2": 90 },
+          sessionRole: "MODERATE",
+        },
+        {
+          dateKey: "2026-08-31",
+          durationMinutes: 120,
+          sessionRole: "LONG",
+        },
+      ]
+    );
+    const bike = target.byDiscipline.find((row) => row.discipline === "BIKE")!;
+    assert.equal(bike.hours, 2.5);
+    assert.equal(bike.sessionsPerWeek, 2);
+    assert.equal(bike.intenseDaysPerWeek, 1);
+    assert.deepEqual(bike.zoneMinutes, { "BIKE-2": 130, "BIKE-4": 20 });
+    assert.equal(target.byDiscipline.find((row) => row.discipline === "SWIM")!.hours, 2);
+    assert.equal(target.totalHours, 6);
+    assert.equal(target.slotBudgets?.BIKE.endurance, 0);
+    assert.equal(target.zoneMinutes["SWIM-2"], 60);
   });
 });

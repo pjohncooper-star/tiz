@@ -165,6 +165,7 @@ export type CreateSimpleSeasonInput = {
   rampDefaults?: SimpleRampDefaults;
   phaseKindZoneDefaults?: PhaseKindZoneDefaults;
   defaultPlanningMode?: PlanningMode;
+  trainerRoadDriven?: boolean;
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
@@ -801,6 +802,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
         deLoadVolumePercent: DEFAULT_REST_VOLUME_PERCENT,
         deLoadStrategy,
         defaultPlanningMode,
+        trainerRoadDriven: input.trainerRoadDriven ?? false,
         phaseKindZoneDefaults: serializePhaseKindZoneDefaults(
           kindDefaults
         ) as Prisma.InputJsonValue,
@@ -1343,6 +1345,9 @@ export function serializeSimpleSeasonPlan(
     endDate: formatDateKey(plan.endDate),
     totalWeeks: plan.totalWeeks,
     status: plan.status,
+    trainerRoadDriven: Boolean(
+      (plan as { trainerRoadDriven?: boolean }).trainerRoadDriven
+    ),
     defaultPlanningMode: plan.defaultPlanningMode,
     deLoadVolumePercent: plan.deLoadVolumePercent ?? DEFAULT_REST_VOLUME_PERCENT,
     maxWeekHours: (plan as { maxWeekHours?: number | null }).maxWeekHours ?? null,

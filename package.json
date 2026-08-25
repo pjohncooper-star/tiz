@@ -34,7 +34,8 @@
     "db:migrate:season-training-plan": "prisma db execute --file prisma/migrations/manual_season_training_plan_attachment.sql --schema prisma/schema.prisma",
     "db:migrate:multi-program-seasons": "prisma db execute --file prisma/migrations/manual_multi_program_seasons.sql --schema prisma/schema.prisma",
     "db:migrate:max-heart-rate": "prisma db execute --file prisma/migrations/manual_max_heart_rate.sql --schema prisma/schema.prisma",
-    "db:migrate:trainerroad-ical": "prisma db execute --file prisma/migrations/manual_trainerroad_ical_enum.sql --schema prisma/schema.prisma && prisma db execute --file prisma/migrations/manual_trainerroad_ical.sql --schema prisma/schema.prisma"
+    "db:migrate:trainerroad-ical": "prisma db execute --file prisma/migrations/manual_trainerroad_ical_enum.sql --schema prisma/schema.prisma && prisma db execute --file prisma/migrations/manual_trainerroad_ical.sql --schema prisma/schema.prisma",
+    "db:migrate:trainerroad-season": "prisma db execute --file prisma/migrations/manual_trainerroad_season.sql --schema prisma/schema.prisma"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.3",

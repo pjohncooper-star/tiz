@@ -28,6 +28,7 @@ type SimplePlannerWeekTableProps = {
   onWeeksChange: (weeks: SimpleWeek[]) => void;
   onPhasesChange: (phases: SimplePhase[]) => void;
   highlightedWeekIndex: number | null;
+  phasesLocked?: boolean;
 };
 
 type DragState = {
@@ -80,6 +81,7 @@ export function SimplePlannerWeekTable({
   onWeeksChange,
   onPhasesChange,
   highlightedWeekIndex,
+  phasesLocked = false,
 }: SimplePlannerWeekTableProps) {
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
   const [hoveredWeek, setHoveredWeek] = useState<number | null>(null);
@@ -280,7 +282,10 @@ export function SimplePlannerWeekTable({
                 onSelectPhase={() => onSelectPhase(phase.id ?? null)}
                 onToggleExpanded={toggleExpanded}
                 onUpdateWeek={updateWeek}
-                onDragStart={(edge, clientY) => phase.id && startDrag(phase.id, edge, clientY)}
+                onDragStart={(edge, clientY) => {
+                  if (phasesLocked) return;
+                  if (phase.id) startDrag(phase.id, edge, clientY);
+                }}
                 testWeekFlags={testWeekFlags}
                 onToggleTestWeek={toggleTestWeek}
               />

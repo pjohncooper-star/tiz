@@ -1,5 +1,5 @@
 import { mondayWeekStartKey } from "@/lib/dates";
-import { parseIcsEvents } from "./ics";
+import { parseIcsCalendarName, parseIcsEvents } from "./ics";
 import {
   durationMinutesFromTssIf,
   inferTrainerRoadSessionRole,
@@ -26,6 +26,7 @@ export type TrainerRoadWorkout = {
 };
 
 export type ParsedTrainerRoadCalendar = {
+  calendarName: string | null;
   workouts: TrainerRoadWorkout[];
   phaseMarkers: TrainerRoadPhaseMarker[];
 };
@@ -99,6 +100,7 @@ export function parseTrainerRoadCalendar(ics: string): ParsedTrainerRoadCalendar
   }
 
   return {
+    calendarName: parseIcsCalendarName(ics),
     workouts: dedupeTrainerRoadWorkouts(workouts),
     phaseMarkers,
   };

@@ -131,6 +131,7 @@ export type SimpleSeason = {
   endDate: string;
   totalWeeks: number;
   status: string;
+  trainerRoadDriven?: boolean;
   defaultPlanningMode?: PlanningMode;
   deLoadVolumePercent: number;
   maxWeekHours?: number | null;

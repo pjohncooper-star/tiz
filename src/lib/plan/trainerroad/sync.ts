@@ -5,6 +5,7 @@ import { nextDaySortOrderForDate } from "@/lib/plan/session-day-order.server";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { zoneKey } from "@/lib/workout/steps";
 import { parseTrainerRoadCalendar } from "./calendar";
+import { unlinkTrainerRoadSeason, syncLinkedTrainerRoadSeason } from "./season.server";
 import { trainerRoadSessionNotes } from "./url";
 
 const ROLE_ZONE_SHARE: Record<SessionRole, Partial<Record<number, number>>> = {
@@ -20,6 +21,13 @@ export type TrainerRoadSyncResult = {
   workoutCount: number;
   phaseCount: number;
   syncedAt: string;
+  season?: {
+    updated: boolean;
+    id?: string;
+    name?: string;
+    error?: string;
+    overlapping?: Array<{ id: string; name: string; startDate: string; endDate: string }>;
+  };
 };
 
 export async function fetchTrainerRoadIcs(url: string): Promise<string> {
@@ -132,17 +140,38 @@ export async function syncTrainerRoadCalendar(
     data: { trainerRoadSyncedAt: syncedAt },
   });
 
+  let season: TrainerRoadSyncResult["season"];
+  try {
+    const seasonResult = await syncLinkedTrainerRoadSeason(athleteId, ics);
+    if (seasonResult.season || seasonResult.error || seasonResult.updated) {
+      season = {
+        updated: seasonResult.updated,
+        id: seasonResult.season?.id,
+        name: seasonResult.season?.name,
+        error: seasonResult.error,
+        overlapping: seasonResult.overlapping,
+      };
+    }
+  } catch (error) {
+    season = {
+      updated: false,
+      error: error instanceof Error ? error.message : "Could not update TrainerRoad season",
+    };
+  }
+
   return {
     upserted,
     removed: stale.length,
     workoutCount: parsed.workouts.length,
     phaseCount: parsed.phaseMarkers.length,
     syncedAt: syncedAt.toISOString(),
+    season,
   };
 }
 
 export async function disconnectTrainerRoad(athleteId: string): Promise<void> {
   const today = parseDateKey(todayUtcDateKey());
+  await unlinkTrainerRoadSeason(athleteId);
   await db.$transaction([
     db.plannedSession.deleteMany({
       where: {
@@ -154,7 +183,11 @@ export async function disconnectTrainerRoad(athleteId: string): Promise<void> {
     }),
     db.athlete.update({
       where: { id: athleteId },
-      data: { trainerRoadIcalUrl: null, trainerRoadSyncedAt: null },
+      data: {
+        trainerRoadIcalUrl: null,
+        trainerRoadSyncedAt: null,
+        trainerRoadSeasonPlanId: null,
+      },
     }),
   ]);
 }

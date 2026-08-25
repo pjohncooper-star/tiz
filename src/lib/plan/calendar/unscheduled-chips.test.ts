@@ -310,4 +310,24 @@ describe("findNextUnplannedWeekStart", () => {
       null
     );
   });
+
+  it("emits no leftover bike chips when bike seats are zeroed for TrainerRoad", () => {
+    const weekTarget = baseWeekTarget({
+      byDiscipline: [
+        { discipline: "SWIM", hours: 2, zoneMinutes: {}, sessionsPerWeek: 3, intenseDaysPerWeek: 1 },
+        { discipline: "BIKE", hours: 2.5, zoneMinutes: {}, sessionsPerWeek: 2, intenseDaysPerWeek: 1 },
+        { discipline: "RUN", hours: 2, zoneMinutes: {}, sessionsPerWeek: 2, intenseDaysPerWeek: 1 },
+      ],
+      slotBudgets: {
+        SWIM: { endurance: 2, intensity: 1, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+        BIKE: { endurance: 0, intensity: 0, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+        RUN: { endurance: 1, intensity: 1, long: 0, substituteEndurance: 0, substituteDurationMinutes: 0 },
+      },
+    });
+    const chips = computeUnscheduledChips("2026-07-06", weekTarget, [
+      session("BIKE", "TRAINERROAD"),
+      session("BIKE", "TRAINERROAD"),
+    ]);
+    assert.equal(chips.filter((c) => c.discipline === "BIKE").length, 0);
+  });
 });
