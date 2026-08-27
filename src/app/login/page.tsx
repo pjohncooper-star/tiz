@@ -31,6 +31,14 @@ export default function LoginPage() {
           <div>
             <Label>Password</Label>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <p className="mt-1 text-right text-sm">
+              <Link
+                href={email.trim() ? `/forgot-password?email=${encodeURIComponent(email.trim())}` : "/forgot-password"}
+                className="text-sky-600"
+              >
+                Forgot password?
+              </Link>
+            </p>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" className="w-full">Sign in</Button>

@@ -42,6 +42,8 @@ Run the test suite with `npm test`, and lint with `npm run lint`.
 | `DATABASE_URL` | Yes | PostgreSQL connection string. Use the pooled string on Neon. |
 | `AUTH_URL` | Yes | The app's public origin. Must match exactly, including `www`, or OAuth redirects break. |
 | `NEXTAUTH_SECRET` | Yes | Session encryption key. Generate 32 random bytes. |
+| `RESEND_API_KEY` | For password reset email | From [Resend](https://resend.com). Without it, reset requests log a link locally instead of sending mail. |
+| `EMAIL_FROM` | For password reset email | Verified sender, e.g. `TiZ <noreply@tizplanner.com>`. Required together with `RESEND_API_KEY`. |
 | `STRAVA_CLIENT_ID` | For Strava | From the Strava API settings page |
 | `STRAVA_CLIENT_SECRET` | For Strava | From Strava |
 | `STRAVA_WEBHOOK_VERIFY_TOKEN` | For Strava webhooks | A random secret; must match the value used when registering the webhook |
@@ -107,7 +109,7 @@ Run with `DATABASE_URL` set in the environment.
 | Command | Purpose |
 | --- | --- |
 | `npm run user:list` | List recent users with emails and password status |
-| `npm run user:reset-password <email> <password>` | Reset a password (minimum 8 characters) |
+| `npm run user:reset-password <email> <password>` | Reset a password (minimum 8 characters). Fallback if self-service email is not configured. |
 | `npm run user:delete <email> --confirm` | Delete a user and all their athlete data |
 | `npm run user:migrate-to-prod <email> --confirm` | Copy a full athlete graph between databases, using `SOURCE_DATABASE_URL` and `TARGET_DATABASE_URL`. Supports `--resume`. |
 | `npm run user:dedup-activities <email> --dry-run\|--confirm` | Merge duplicate activities, keeping the richest copy and repointing surveys and session links |
@@ -159,7 +161,6 @@ Several scripts in `scripts/` are not wired into `package.json` but are useful w
 
 [Chapter 13](./13-known-limitations.md) is the full list. The ones most likely to generate support requests, all of which need database or script access to resolve:
 
-- **No self-service password reset** — requires `user:reset-password`.
 - **No Strava disconnect in the UI** — requires removing the connection row.
 - **Strava updates and deletes are ignored** — only new-activity webhooks are handled, so TiZ silently diverges from Strava after an edit.
 - **Duplicate activities outside the fuzzy-match window** — requires `user:dedup-activities`.

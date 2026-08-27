@@ -59,11 +59,15 @@ git push -u origin main
 | `DATABASE_URL` | Neon pooled connection string |
 | `AUTH_URL` | `https://www.tizplanner.com` |
 | `NEXTAUTH_SECRET` | Random secret (see below) |
+| `RESEND_API_KEY` | From [Resend](https://resend.com) (password-reset email) |
+| `EMAIL_FROM` | Verified sender, e.g. `TiZ <noreply@tizplanner.com>` |
 | `STRAVA_CLIENT_ID` | From [Strava API settings](https://www.strava.com/settings/api) |
 | `STRAVA_CLIENT_SECRET` | From Strava |
 | `STRAVA_WEBHOOK_VERIFY_TOKEN` | Random secret |
 | `INNGEST_EVENT_KEY` | From Inngest dashboard (after step 4) |
 | `INNGEST_SIGNING_KEY` | From Inngest dashboard (after step 4) |
+
+Password reset email uses [Resend](https://resend.com). Verify the sending domain and set `EMAIL_FROM` to an address on that domain (for example `TiZ <noreply@tizplanner.com>`). Without those two variables, reset requests succeed in the UI but no email is sent.
 
 **Do not set** `INNGEST_DEV` in production.
 

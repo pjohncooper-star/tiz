@@ -20,12 +20,14 @@ Registration does **not** log you in — you are sent to `/login` to sign in wit
 
 Go to `/login`, enter your email and password, and press **Sign in**. A wrong password gives "Invalid email or password".
 
+If you have forgotten your password, use **Forgot password?** on the sign-in page. Enter the email on the account; if it matches, TiZ emails a link that is valid for one hour. Open the link, choose a new password (minimum 8 characters), then sign in. The same response is shown whether or not the email exists, so a typo will look like success.
+
 After signing in you land on `/`, which immediately forwards you to wherever you left off:
 
 - If onboarding is unfinished, you go to the step you stopped on.
 - If onboarding is complete, you go to the **Dashboard**.
 
-Everything except the login, register, and Strava callback/webhook routes requires you to be signed in.
+Everything except the login, register, password-reset, and Strava callback/webhook routes requires you to be signed in.
 
 **Sign out** is at the bottom of the sidebar.
 

@@ -10,8 +10,11 @@ export const authConfig = {
       const publicPaths = [
         "/login",
         "/register",
+        "/forgot-password",
+        "/reset-password",
         "/api/auth",
         "/api/register",
+        "/api/password-reset",
         "/api/webhooks/strava",
         "/api/strava/callback",
         "/api/inngest",

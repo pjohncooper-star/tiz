@@ -6,7 +6,8 @@
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| "Invalid email or password" | Wrong credentials | Passwords are at least 8 characters. There is no self-service reset — an administrator can reset it with the `user:reset-password` script. |
+| "Invalid email or password" | Wrong credentials | Passwords are at least 8 characters. Use **Forgot password?** on `/login`. An administrator can still reset it with the `user:reset-password` script. |
+| Reset email never arrives | Email is not configured, or the address does not match an account | Check spam. Production needs `RESEND_API_KEY` and `EMAIL_FROM`. The page always says a link was sent, even when no account matches. |
 | "Email taken" on register | An account already exists | Sign in instead. |
 | Registering didn't log me in | By design | Registration sends you to the sign-in page; sign in with the credentials you just made. |
 | I can't get back into onboarding | By design | Onboarding is one-way. Everything it set is editable under **Settings**. |
@@ -113,7 +114,7 @@
 Some fixes need database or server access. Ask an administrator to look at [chapter 12](./12-configuration.md) if:
 
 - Background jobs aren't running at all (imports never progress, zones never compute, Strava never syncs).
-- You need a password reset, a Strava disconnect, or an activity dedup pass.
+- You need a Strava disconnect, an activity dedup pass, or a password reset when email is not configured.
 - A stuck import job needs to be force-completed or reset.
 - Environment variables or feature flags need changing.
 

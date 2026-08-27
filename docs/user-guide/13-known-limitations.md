@@ -54,7 +54,6 @@ Insights are correlations over a small number of flagged days, sensitive to how 
 
 | Limitation | Detail | Workaround |
 | --- | --- | --- |
-| No password reset | There is no "forgot password" flow anywhere in the UI | An administrator runs `npm run user:reset-password` |
 | No Strava disconnect | Settings shows connection status and a connect link, nothing else | Reconnecting replaces the stored tokens. A real disconnect needs database access. |
 | Onboarding is one-way | Once complete, you cannot re-enter the guided flow | Everything it set is editable under **Settings** |
 | Bulk import is effectively onboarding-only | Nothing in the app links to the import page after onboarding | The page still works if you navigate to `/onboarding/import` directly |
