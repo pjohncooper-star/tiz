@@ -5,8 +5,13 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlanPage() {
+export default async function PlanPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ new?: string; seasonId?: string }>;
+}) {
   const session = await requireAthlete();
+  const params = await searchParams;
   const athlete = await db.athlete.findUnique({
     where: { id: session.user.athleteId! },
     select: { onboardingStep: true, ecoLoadEnabled: true },
@@ -22,7 +27,10 @@ export default async function PlanPage() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading season…</p>}>
-        <SimplePlannerView ecoLoadEnabled={ecoLoadEnabled} />
+        <SimplePlannerView
+          ecoLoadEnabled={ecoLoadEnabled}
+          initialCreate={params.new === "1" && !params.seasonId}
+        />
       </Suspense>
     </main>
   );

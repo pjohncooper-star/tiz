@@ -346,12 +346,14 @@ function defaultSeasonDates() {
 
 export function SimplePlannerView({
   ecoLoadEnabled = false,
+  initialCreate = false,
 }: {
   ecoLoadEnabled?: boolean;
+  initialCreate?: boolean;
 }) {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
-  const createRequested = searchParams.get("new") === "1";
+  const createRequested = initialCreate || searchParams.get("new") === "1";
   const [season, setSeason] = useState<SimpleSeason | null>(null);
   const [baselineSeason, setBaselineSeason] = useState<SimpleSeason | null>(null);
   const [zoneFocusCatalog, setZoneFocusCatalog] = useState<ZoneFocusCatalog>(() =>
@@ -438,20 +440,27 @@ export function SimplePlannerView({
     const url = seasonIdParam
       ? `/api/plan/season/simple?seasonId=${encodeURIComponent(seasonIdParam)}`
       : "/api/plan/season/simple";
-    const res = await fetch(url);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    const [trRes, seasonRes] = await Promise.all([
+      fetch("/api/settings/trainerroad"),
+      fetch(url),
+    ]);
+    if (!seasonRes.ok) {
+      const body = (await seasonRes.json().catch(() => null)) as { error?: string } | null;
       setError(
         typeof body?.error === "string" ? body.error : "Could not load season plan."
       );
       setLoading(false);
       return;
     }
-    const data = (await res.json()) as {
+    const data = (await seasonRes.json()) as {
       season: SimpleSeason | null;
       zoneFocusCatalog?: ZoneFocusCatalog;
       trainerRoadCalendarSaved?: boolean;
     };
+    const trData = trRes.ok
+      ? ((await trRes.json()) as { url?: string | null })
+      : null;
+    const calendarSaved = Boolean(trData?.url) || Boolean(data.trainerRoadCalendarSaved);
     const loaded =
       createRequested || !data.season ? null : normalizeSeason(data.season);
     lastVolumeSignatureRef.current = loaded ? volumePreviewSignature(loaded) : null;
@@ -459,7 +468,10 @@ export function SimplePlannerView({
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
-    setTrainerRoadCalendarSaved(Boolean(data.trainerRoadCalendarSaved));
+    setTrainerRoadCalendarSaved(calendarSaved);
+    if (calendarSaved && (createRequested || !data.season)) {
+      setDraftFollowTrainerRoad(true);
+    }
     setCreateMode(createRequested || !data.season);
     setLoading(false);
   }, [seasonIdParam, createRequested]);
@@ -1020,40 +1032,44 @@ export function SimplePlannerView({
                 />
               </div>
             </div>
-            <div className="space-y-3">
-              <label className="flex items-start gap-2 text-sm">
+            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+              <label className="flex items-start gap-3 text-sm">
                 <input
                   type="checkbox"
-                  className="mt-1"
+                  className="mt-1 h-4 w-4"
                   checked={draftFollowTrainerRoad}
                   disabled={!trainerRoadCalendarSaved}
                   onChange={(event) => setDraftFollowTrainerRoad(event.target.checked)}
                 />
                 <span>
-                  Follow TrainerRoad phases for this season
+                  <span className="block font-medium text-zinc-900 dark:text-zinc-100">
+                    Follow TrainerRoad phases
+                  </span>
                   {!trainerRoadCalendarSaved ? (
                     <span className="mt-1 block text-xs text-zinc-500">
                       Save a calendar URL in{" "}
                       <Link href="/settings/integrations" className="text-sky-600 hover:underline">
                         Settings → Integrations
                       </Link>{" "}
-                      first.
+                      first, then this season can import bike phases from the feed.
                     </span>
                   ) : (
                     <span className="mt-1 block text-xs text-zinc-500">
-                      Requires an end date and A Race. Only TrainerRoad phases inside these
-                      dates are imported.
+                      Imports TrainerRoad phases that fall between the start and end dates.
+                      Requires an A Race.
                     </span>
                   )}
                 </span>
               </label>
               {draftFollowTrainerRoad ? (
-                <RaceEditor
-                  priority="A"
-                  value={draftARace}
-                  onChange={setDraftARace}
-                  required
-                />
+                <div className="mt-4">
+                  <RaceEditor
+                    priority="A"
+                    value={draftARace}
+                    onChange={setDraftARace}
+                    required
+                  />
+                </div>
               ) : null}
             </div>
             <Button type="button" disabled={saving} onClick={() => void handleCreateSeason()}>
@@ -1086,6 +1102,12 @@ export function SimplePlannerView({
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             All seasons
+          </Link>
+          <Link
+            href="/plan?new=1"
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            New season
           </Link>
           <Button
             type="button"
