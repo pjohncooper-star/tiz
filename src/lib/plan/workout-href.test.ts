@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { workoutHref, workoutHrefForResolvedActivity } from "@/lib/plan/workout-href";
+import { newWorkoutHref, workoutHref, workoutHrefForResolvedActivity } from "@/lib/plan/workout-href";
 
 describe("workoutHref", () => {
   it("returns base path without returnTo", () => {
@@ -11,6 +11,19 @@ describe("workoutHref", () => {
     assert.equal(
       workoutHref("session-1", { returnTo: "/calendar?week=2026-01-05" }),
       "/workouts/session-1?returnTo=%2Fcalendar%3Fweek%3D2026-01-05"
+    );
+  });
+});
+
+describe("newWorkoutHref", () => {
+  it("includes the calendar date", () => {
+    assert.equal(newWorkoutHref("2026-08-17"), "/workouts/new?date=2026-08-17");
+  });
+
+  it("appends encoded returnTo query", () => {
+    assert.equal(
+      newWorkoutHref("2026-08-17", { returnTo: "/calendar" }),
+      "/workouts/new?date=2026-08-17&returnTo=%2Fcalendar"
     );
   });
 });

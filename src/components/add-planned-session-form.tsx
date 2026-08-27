@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { PlannedMetricsFields } from "@/components/planned-metrics-fields";
 import {
   emptyZoneMinuteValues,
@@ -37,14 +38,21 @@ type AddPlannedSessionFormProps = {
   weekDays: string[];
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (sessionId: string) => void;
   variant?: "default" | "inline";
+  expandHref?: string;
 };
 
 const INLINE_FIELD =
   "box-border w-full min-w-0 max-w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs leading-tight text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
 
 const INLINE_LABEL = "mb-0.5 block text-[10px] font-medium leading-none text-zinc-500";
+
+function createdSessionId(data: unknown): string | null {
+  if (!data || typeof data !== "object") return null;
+  const session = (data as { session?: { id?: unknown } }).session;
+  return typeof session?.id === "string" ? session.id : null;
+}
 
 export function AddPlannedSessionForm({
   defaultDate,
@@ -53,6 +61,7 @@ export function AddPlannedSessionForm({
   onClose,
   onCreated,
   variant = "default",
+  expandHref,
 }: AddPlannedSessionFormProps) {
   const [sessionKind, setSessionKind] = useState<"workout" | "race">("workout");
   const [raceDisciplines, setRaceDisciplines] = useState<Discipline[]>(["RUN"]);
@@ -111,7 +120,13 @@ export function AddPlannedSessionForm({
         setError("Could not create race");
         return;
       }
-      onCreated();
+      const data = await res.json().catch(() => null);
+      const sessionId = createdSessionId(data);
+      if (!sessionId) {
+        setError("Could not create race");
+        return;
+      }
+      onCreated(sessionId);
       return;
     }
 
@@ -153,7 +168,14 @@ export function AddPlannedSessionForm({
       return;
     }
 
-    onCreated();
+    const data = await res.json().catch(() => null);
+    const sessionId = createdSessionId(data);
+    if (!sessionId) {
+      setError("Could not create session");
+      return;
+    }
+
+    onCreated(sessionId);
   }
 
   const metricsFields = (
@@ -188,16 +210,27 @@ export function AddPlannedSessionForm({
     return (
       <div className="min-w-0 overflow-hidden rounded-md border border-dashed border-sky-400 bg-sky-50/80 p-2 text-sm shadow-sm dark:border-sky-700 dark:bg-sky-950/30">
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <div>
-            <span className={INLINE_LABEL}>Type</span>
-            <select
-              className={INLINE_FIELD}
-              value={sessionKind}
-              onChange={(e) => setSessionKind(e.target.value as "workout" | "race")}
-            >
-              <option value="workout">Workout</option>
-              <option value="race">Race</option>
-            </select>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className={INLINE_LABEL}>Type</span>
+              <select
+                className={INLINE_FIELD}
+                value={sessionKind}
+                onChange={(e) => setSessionKind(e.target.value as "workout" | "race")}
+              >
+                <option value="workout">Workout</option>
+                <option value="race">Race</option>
+              </select>
+            </div>
+            {expandHref ? (
+              <Link
+                href={expandHref}
+                className="mt-3 shrink-0 rounded px-1 text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400"
+                aria-label="Add session on full page"
+              >
+                +
+              </Link>
+            ) : null}
           </div>
           <div>
             <span className={INLINE_LABEL}>Title</span>

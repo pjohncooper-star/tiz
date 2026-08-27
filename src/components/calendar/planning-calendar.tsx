@@ -1804,7 +1804,6 @@ export function PlanningCalendar({
             onSelectDay={(dateKey) => {
               setFocusedWeek(weekStart, { lockMs: 800 });
               setSelectedDateKey(dateKey);
-              if (!poolOpen) setPoolOpen(true);
             }}
             onClearSelection={() => setSelectedDateKey(null)}
             poolDrafts={poolDrafts}

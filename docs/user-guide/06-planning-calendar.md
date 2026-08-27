@@ -83,12 +83,12 @@ Completed figures only appear for the current week and earlier.
 
 ### By hand
 
-Press **+** on a day. The inline form covers two cases:
+Press **+** on a day. That opens the inline quick-add form only — it does not open the workout pool. The form covers two cases:
 
 - **Workout** — type, title, duration, distance or pace, and zone pills for a zone budget.
 - **Race** — title, discipline toggles for swim/bike/run, a **Goal time** (accepting `mm:ss`, `hh:mm:ss`, or plain minutes), and distance.
 
-Submit with **Save**, or **Create session** / **Create race** in the full form.
+Submit with **Save**. A second **+** on the form opens the full add-session page; after you create the session there, you land on its detail page to add a structured workout. Open the pool with **Workout pool** in the toolbar.
 
 ### From the workout pool
 

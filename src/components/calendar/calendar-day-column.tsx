@@ -8,6 +8,7 @@ import { CalendarSessionCard } from "@/components/calendar/calendar-session-card
 import { CalendarActivityGroupCard } from "@/components/calendar/calendar-activity-card";
 import { CalendarPlannedRaceGroupCard } from "@/components/calendar/calendar-planned-race-group-card";
 import { groupPlannedSessions } from "@/lib/plan/group-planned-sessions";
+import { newWorkoutHref } from "@/lib/plan/workout-href";
 import {
   ASSEMBLED_WORKOUT_DRAG_ID,
   isPoolPlacementDragId,
@@ -219,6 +220,7 @@ export function CalendarDayColumn({
               defaultDate={dateKey}
               weekDays={weekDays}
               disciplineSettings={disciplineSettings}
+              expandHref={newWorkoutHref(dateKey, { returnTo: "/calendar" })}
               onClose={closeAdd}
               onCreated={() => {
                 closeAdd();
