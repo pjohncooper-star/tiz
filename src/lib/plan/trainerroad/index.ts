@@ -38,11 +38,14 @@ export {
   type TrainerRoadSeasonDraft,
   type TrainerRoadSeasonOverlap,
   type TrainerRoadSeasonPhase,
+  type TrainerRoadSeasonWindow,
 } from "./season";
 export { normalizeTrainerRoadIcalUrl, trainerRoadSessionNotes } from "./url";
 export {
   disconnectTrainerRoad,
   fetchTrainerRoadIcs,
+  refreshTrainerRoadCalendarForAthlete,
+  scheduleTrainerRoadRefresh,
   syncTrainerRoadCalendar,
   type TrainerRoadSyncResult,
 } from "./sync";

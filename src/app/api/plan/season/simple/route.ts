@@ -8,10 +8,15 @@ import {
   createSimpleSeasonPlan,
   loadAthleteZoneFocusCatalog,
   serializeSimpleSeasonPlan,
-  updateSimpleSeasonPlan,
 } from "@/lib/plan/season/simple-planner.server";
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
+import { fetchTrainerRoadIcs } from "@/lib/plan/trainerroad/sync";
+import {
+  athleteHasTrainerRoadCalendar,
+  createSeasonFromTrainerRoadCalendar,
+  getTrainerRoadIcalUrl,
+} from "@/lib/plan/trainerroad/season.server";
 
 export async function GET(request: Request) {
   if (!isSimpleSeasonPlannerEnabled()) {
@@ -27,14 +32,25 @@ export async function GET(request: Request) {
   const seasonId = new URL(request.url).searchParams.get("seasonId");
 
   try {
-    const plan = await getSimplePlannerSeason(athleteId, seasonId);
+    const [plan, trainerRoadCalendarSaved] = await Promise.all([
+      getSimplePlannerSeason(athleteId, seasonId),
+      athleteHasTrainerRoadCalendar(athleteId),
+    ]);
+    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
 
     if (!plan) {
-      return NextResponse.json({ season: null, zoneFocusCatalog: await loadAthleteZoneFocusCatalog(athleteId) });
+      return NextResponse.json({
+        season: null,
+        zoneFocusCatalog,
+        trainerRoadCalendarSaved,
+      });
     }
 
-    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
+    return NextResponse.json({
+      season: serializeSimpleSeasonPlan(plan),
+      zoneFocusCatalog,
+      trainerRoadCalendarSaved,
+    });
   } catch (err) {
     console.error("GET /api/plan/season/simple failed", err);
     const message = err instanceof Error ? err.message : "Could not load season plan";
@@ -67,7 +83,38 @@ export async function POST(request: Request) {
 
   const data = parsed.data;
 
+  if (data.trainerRoadDriven) {
+    if (!data.goalEvent?.name.trim() || !data.goalEvent.date) {
+      return NextResponse.json(
+        { error: "A Race name and date are required to follow TrainerRoad phases." },
+        { status: 400 }
+      );
+    }
+  }
+
   try {
+    if (data.trainerRoadDriven) {
+      const url = await getTrainerRoadIcalUrl(athleteId);
+      if (!url) {
+        return NextResponse.json(
+          { error: "Save a TrainerRoad calendar URL in Settings first." },
+          { status: 400 }
+        );
+      }
+      const ics = await fetchTrainerRoadIcs(url);
+      const plan = await createSeasonFromTrainerRoadCalendar(athleteId, ics, {
+        name: data.name,
+        startDate: parseDateKey(data.startDate),
+        endDate: parseDateKey(data.endDate),
+        goalEvent: parseGoalEventWrite(data.goalEvent!),
+      });
+      const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+      return NextResponse.json(
+        { season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog },
+        { status: 201 }
+      );
+    }
+
     const plan = await createSimpleSeasonPlan({
       athleteId,
       name: data.name,
@@ -92,6 +139,7 @@ export async function POST(request: Request) {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not create season";
-    return NextResponse.json({ error: message }, { status: 409 });
+    const status = /calendar URL|phase markers|A Race/i.test(message) ? 400 : 409;
+    return NextResponse.json({ error: message }, { status });
   }
 }

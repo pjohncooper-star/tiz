@@ -1,5 +1,6 @@
 import { upsertSyncedActivity } from "@/lib/activity/upsert-synced";
 import { db } from "@/lib/db";
+import { scheduleTrainerRoadRefresh } from "@/lib/plan/trainerroad/sync";
 import type { NormalizedStreams } from "@/lib/zones/compute";
 import {
   mapStravaType,
@@ -125,6 +126,12 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
       linkPlannedSession: true,
     }
   );
+
+  try {
+    await scheduleTrainerRoadRefresh(athleteId);
+  } catch {
+    // TrainerRoad scheduling must not fail Strava ingest.
+  }
 
   return synced;
 }

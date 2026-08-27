@@ -379,61 +379,94 @@ const PATRICK_MARKERS = [
   { dateKey: "2027-07-26", summary: "Recovery Week", weekStartDate: "2027-07-26" },
 ];
 
+const PATRICK_CALENDAR = {
+  calendarName: "Patrick TrainerRoad Calendar",
+  phaseMarkers: PATRICK_MARKERS,
+  workouts: [
+    {
+      uid: "race",
+      dateKey: "2027-07-25",
+      title: "Aquabike worlds",
+      durationMinutes: 240,
+      tss: 350,
+      intensityFactor: null,
+      sessionRole: "INTENSITY" as const,
+      description: "",
+    },
+    {
+      uid: "last",
+      dateKey: "2027-07-31",
+      title: "Easy",
+      durationMinutes: 60,
+      tss: 20,
+      intensityFactor: 0.5,
+      sessionRole: "EASY" as const,
+      description: "",
+    },
+  ],
+};
+
+function phaseSummary(
+  phases: NonNullable<ReturnType<typeof trainerRoadCalendarToSeasonDraft>>["phases"]
+) {
+  return phases.map((p) => ({
+    name: p.name,
+    weeks: p.endWeekIndex - p.startWeekIndex + 1,
+    kind: p.phaseKind,
+    bikeRamp: p.rampEnabled.bike,
+    bikeSessions: p.bikeSessionsPerWeek,
+  }));
+}
+
 describe("TrainerRoad-driven season", () => {
-  it("drafts nine phases with Rest Week last and bike ramp off", () => {
-    const draft = trainerRoadCalendarToSeasonDraft({
-      calendarName: "Patrick TrainerRoad Calendar",
-      phaseMarkers: PATRICK_MARKERS,
-      workouts: [
-        {
-          uid: "race",
-          dateKey: "2027-07-25",
-          title: "Aquabike worlds",
-          durationMinutes: 240,
-          tss: 350,
-          intensityFactor: null,
-          sessionRole: "INTENSITY",
-          description: "",
-        },
-        {
-          uid: "last",
-          dateKey: "2027-07-31",
-          title: "Easy",
-          durationMinutes: 60,
-          tss: 20,
-          intensityFactor: 0.5,
-          sessionRole: "EASY",
-          description: "",
-        },
-      ],
+  it("clips the first Specialty window to one season’s phases", () => {
+    const draft = trainerRoadCalendarToSeasonDraft(PATRICK_CALENDAR, {
+      startDateKey: "2026-08-24",
+      endDateKey: "2027-03-07",
     });
     assert.ok(draft);
     assert.equal(draft!.name, "Patrick TrainerRoad Calendar");
     assert.equal(draft!.startDateKey, "2026-08-24");
-    assert.equal(draft!.endDateKey, "2027-08-01");
-    assert.deepEqual(
-      draft!.phases.map((p) => ({
-        name: p.name,
-        weeks: p.endWeekIndex - p.startWeekIndex + 1,
-        kind: p.phaseKind,
-        bikeRamp: p.rampEnabled.bike,
-        bikeSessions: p.bikeSessionsPerWeek,
-      })),
-      [
-        { name: "Base 1", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
-        { name: "Base 2", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
-        { name: "Base 3", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
-        { name: "Build", weeks: 8, kind: "BUILD", bikeRamp: false, bikeSessions: 0 },
-        { name: "Specialty", weeks: 8, kind: "RACE_PREP", bikeRamp: false, bikeSessions: 0 },
-        { name: "Base 1", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
-        { name: "Build", weeks: 8, kind: "BUILD", bikeRamp: false, bikeSessions: 0 },
-        { name: "Specialty", weeks: 8, kind: "RACE_PREP", bikeRamp: false, bikeSessions: 0 },
-        { name: "Rest Week", weeks: 1, kind: "TAPER", bikeRamp: false, bikeSessions: 0 },
-      ]
+    assert.equal(draft!.endDateKey, "2027-03-07");
+    assert.deepEqual(phaseSummary(draft!.phases), [
+      { name: "Base 1", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+      { name: "Base 2", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+      { name: "Base 3", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+      { name: "Build", weeks: 8, kind: "BUILD", bikeRamp: false, bikeSessions: 0 },
+      { name: "Specialty", weeks: 8, kind: "RACE_PREP", bikeRamp: false, bikeSessions: 0 },
+    ]);
+  });
+
+  it("clips the later Base 1 window to a second season with no shared weeks", () => {
+    const first = trainerRoadCalendarToSeasonDraft(PATRICK_CALENDAR, {
+      startDateKey: "2026-08-24",
+      endDateKey: "2027-03-07",
+    });
+    const second = trainerRoadCalendarToSeasonDraft(PATRICK_CALENDAR, {
+      startDateKey: "2027-03-08",
+      endDateKey: "2027-08-01",
+    });
+    assert.ok(first);
+    assert.ok(second);
+    assert.equal(second!.startDateKey, "2027-03-08");
+    assert.equal(second!.endDateKey, "2027-08-01");
+    assert.deepEqual(phaseSummary(second!.phases), [
+      { name: "Base 1", weeks: 4, kind: "BASE", bikeRamp: false, bikeSessions: 0 },
+      { name: "Build", weeks: 8, kind: "BUILD", bikeRamp: false, bikeSessions: 0 },
+      { name: "Specialty", weeks: 8, kind: "RACE_PREP", bikeRamp: false, bikeSessions: 0 },
+      { name: "Rest Week", weeks: 1, kind: "TAPER", bikeRamp: false, bikeSessions: 0 },
+    ]);
+    assert.ok(first!.endDateKey < second!.startDateKey);
+  });
+
+  it("returns null when the window has no phase markers", () => {
+    assert.equal(
+      trainerRoadCalendarToSeasonDraft(PATRICK_CALENDAR, {
+        startDateKey: "2025-01-06",
+        endDateKey: "2025-03-02",
+      }),
+      null
     );
-    const specialty = draft!.phases.filter((p) => p.name === "Specialty");
-    assert.equal(specialty.length, 2);
-    assert.equal(specialty[1]!.endWeekIndex + 1, draft!.phases.at(-1)!.startWeekIndex);
   });
 
   it("returns null when the feed has no phase markers", () => {

@@ -351,6 +351,7 @@ export function SimplePlannerView({
 }) {
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
+  const createRequested = searchParams.get("new") === "1";
   const [season, setSeason] = useState<SimpleSeason | null>(null);
   const [baselineSeason, setBaselineSeason] = useState<SimpleSeason | null>(null);
   const [zoneFocusCatalog, setZoneFocusCatalog] = useState<ZoneFocusCatalog>(() =>
@@ -387,6 +388,10 @@ export function SimplePlannerView({
   const [createMode, setCreateMode] = useState(false);
   const [draftName, setDraftName] = useState("2026 Season");
   const [draftDates, setDraftDates] = useState(defaultSeasonDates);
+  const [draftFollowTrainerRoad, setDraftFollowTrainerRoad] = useState(false);
+  const [draftARace, setDraftARace] = useState(() => emptyRace("A"));
+  const [trainerRoadCalendarSaved, setTrainerRoadCalendarSaved] = useState(false);
+  const [followTrainerRoadBusy, setFollowTrainerRoadBusy] = useState(false);
   const [volumePreviewDirty, setVolumePreviewDirty] = useState(false);
   const lastVolumeSignatureRef = useRef<string | null>(null);
   const seasonRef = useRef(season);
@@ -445,16 +450,19 @@ export function SimplePlannerView({
     const data = (await res.json()) as {
       season: SimpleSeason | null;
       zoneFocusCatalog?: ZoneFocusCatalog;
+      trainerRoadCalendarSaved?: boolean;
     };
-    const loaded = data.season ? normalizeSeason(data.season) : null;
+    const loaded =
+      createRequested || !data.season ? null : normalizeSeason(data.season);
     lastVolumeSignatureRef.current = loaded ? volumePreviewSignature(loaded) : null;
     setVolumePreviewDirty(false);
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
-    setCreateMode(!data.season);
+    setTrainerRoadCalendarSaved(Boolean(data.trainerRoadCalendarSaved));
+    setCreateMode(createRequested || !data.season);
     setLoading(false);
-  }, [seasonIdParam]);
+  }, [seasonIdParam, createRequested]);
 
   useEffect(() => {
     void load();
@@ -784,6 +792,18 @@ export function SimplePlannerView({
   async function handleCreateSeason() {
     setSaving(true);
     setError(null);
+    if (draftFollowTrainerRoad) {
+      if (!trainerRoadCalendarSaved) {
+        setSaving(false);
+        setError("Save a TrainerRoad calendar URL in Settings first.");
+        return;
+      }
+      if (!draftARace.name.trim() || !draftARace.date) {
+        setSaving(false);
+        setError("A Race name and date are required to follow TrainerRoad phases.");
+        return;
+      }
+    }
     const res = await fetch("/api/plan/season/simple", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -792,6 +812,19 @@ export function SimplePlannerView({
         startDate: draftDates.startDate,
         endDate: draftDates.endDate,
         rampDefaults: defaultSimpleRampDefaults(),
+        ...(draftFollowTrainerRoad
+          ? {
+              trainerRoadDriven: true,
+              goalEvent: {
+                name: draftARace.name.trim(),
+                date: draftARace.date,
+                disciplines:
+                  draftARace.disciplines.length > 0
+                    ? draftARace.disciplines
+                    : ["SWIM", "BIKE", "RUN"],
+              },
+            }
+          : {}),
       }),
     });
     setSaving(false);
@@ -821,6 +854,58 @@ export function SimplePlannerView({
       "",
       `/plan?seasonId=${encodeURIComponent(normalized.id)}`
     );
+  }
+
+  async function patchTrainerRoadDriven(driven: boolean) {
+    if (!season) return;
+    const aRace = season.primaryGoalEvent ?? racesByPriority.a;
+    if (driven && (!aRace.name.trim() || !aRace.date)) {
+      setError("Add an A Race (name and date) before following TrainerRoad phases.");
+      setExpandedSections((current) => ({ ...current, races: true }));
+      return;
+    }
+    setFollowTrainerRoadBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/plan/season/${encodeURIComponent(season.id)}/simple`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          driven
+            ? {
+                trainerRoadDriven: true,
+                goalEvent: {
+                  id: aRace.id,
+                  name: aRace.name.trim(),
+                  date: aRace.date,
+                  disciplines:
+                    aRace.disciplines.length > 0 ? aRace.disciplines : ["SWIM", "BIKE", "RUN"],
+                },
+              }
+            : { trainerRoadDriven: false }
+        ),
+      });
+      const body = (await res.json()) as {
+        error?: string | Record<string, unknown>;
+        season?: SimpleSeason;
+        zoneFocusCatalog?: ZoneFocusCatalog;
+      };
+      if (!res.ok) {
+        setError(typeof body.error === "string" ? body.error : "Could not update TrainerRoad link.");
+        return;
+      }
+      if (!body.season) return;
+      const normalized = normalizeSeason(body.season);
+      lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+      setVolumePreviewDirty(false);
+      setSeason(normalized);
+      setBaselineSeason(cloneSeason(normalized));
+      if (body.zoneFocusCatalog) {
+        setZoneFocusCatalog(parseZoneFocusCatalog(body.zoneFocusCatalog));
+      }
+    } finally {
+      setFollowTrainerRoadBusy(false);
+    }
   }
 
   const { disciplineSettings } = useDisciplineSettings();
@@ -934,6 +1019,42 @@ export function SimplePlannerView({
                   }
                 />
               </div>
+            </div>
+            <div className="space-y-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={draftFollowTrainerRoad}
+                  disabled={!trainerRoadCalendarSaved}
+                  onChange={(event) => setDraftFollowTrainerRoad(event.target.checked)}
+                />
+                <span>
+                  Follow TrainerRoad phases for this season
+                  {!trainerRoadCalendarSaved ? (
+                    <span className="mt-1 block text-xs text-zinc-500">
+                      Save a calendar URL in{" "}
+                      <Link href="/settings/integrations" className="text-sky-600 hover:underline">
+                        Settings → Integrations
+                      </Link>{" "}
+                      first.
+                    </span>
+                  ) : (
+                    <span className="mt-1 block text-xs text-zinc-500">
+                      Requires an end date and A Race. Only TrainerRoad phases inside these
+                      dates are imported.
+                    </span>
+                  )}
+                </span>
+              </label>
+              {draftFollowTrainerRoad ? (
+                <RaceEditor
+                  priority="A"
+                  value={draftARace}
+                  onChange={setDraftARace}
+                  required
+                />
+              ) : null}
             </div>
             <Button type="button" disabled={saving} onClick={() => void handleCreateSeason()}>
               Create season
@@ -1308,6 +1429,10 @@ export function SimplePlannerView({
                 : null
             }
             trainerRoadDriven={Boolean(season.trainerRoadDriven)}
+            trainerRoadCalendarSaved={trainerRoadCalendarSaved}
+            trainerRoadBusy={followTrainerRoadBusy}
+            onFollowTrainerRoad={() => void patchTrainerRoadDriven(true)}
+            onStopFollowingTrainerRoad={() => void patchTrainerRoadDriven(false)}
           />
         </div>
       </CollapsibleSection>

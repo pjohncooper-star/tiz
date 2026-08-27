@@ -481,6 +481,7 @@ export const createSimpleSeasonSchema = z.object({
   endDate: z.string().regex(DATE_KEY),
   rampDefaults: simpleRampDefaultsSchema.optional(),
   defaultPlanningMode: planningModeSchema.optional(),
+  trainerRoadDriven: z.boolean().optional(),
   goalEvent: seasonGoalEventSchema.optional(),
   bGoalEvents: z.array(seasonGoalEventSchema).optional(),
   cGoalEvents: z.array(seasonGoalEventSchema).optional(),
@@ -508,6 +509,7 @@ export const updateSimpleSeasonSchema = z
     restWeekTemplateId: z.string().nullable().optional(),
     testWeekTemplateId: z.string().nullable().optional(),
     maxWeekHours: z.number().positive().nullable().optional(),
+    trainerRoadDriven: z.boolean().optional(),
     planSessionConflicts: z
       .array(
         z.object({

@@ -196,6 +196,7 @@ export type UpdateSimpleSeasonInput = {
   trainingPlanAttachment?: SeasonTrainingPlanAttachmentWrite | null;
   planSessionConflicts?: PlanSessionConflict[];
   maxWeekHours?: number | null;
+  trainerRoadDriven?: boolean;
 };
 
 function phaseWritesToDb(phases: SimplePhaseWrite[]) {
@@ -727,6 +728,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       phaseKindZoneDefaults: input.phaseKindZoneDefaults,
       phases: [],
       recalculate: true,
+      trainerRoadDriven: input.trainerRoadDriven,
       goalEvent: input.goalEvent,
       bGoalEvents: input.bGoalEvents,
       cGoalEvents: input.cGoalEvents,
@@ -1068,6 +1070,9 @@ export async function updateSimpleSeasonPlan(
           ? { defaultPlanningMode: input.defaultPlanningMode }
           : {}),
         ...(input.maxWeekHours !== undefined ? { maxWeekHours: input.maxWeekHours } : {}),
+        ...(input.trainerRoadDriven !== undefined
+          ? { trainerRoadDriven: input.trainerRoadDriven }
+          : {}),
         ...(input.restWeekTemplateId !== undefined
           ? { restWeekTemplateId: input.restWeekTemplateId }
           : {}),

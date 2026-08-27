@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button, Input, Label } from "@/components/ui";
 
 type LinkedSeason = { id: string; name: string };
@@ -10,19 +11,19 @@ type Overlap = { id: string; name: string; startDate: string; endDate: string };
 type TrainerRoadSettingsProps = {
   initialUrl: string | null;
   initialSyncedAt: string | null;
-  initialSeason: LinkedSeason | null;
+  initialSeasons: LinkedSeason[];
 };
 
 export function TrainerRoadSettings({
   initialUrl,
   initialSyncedAt,
-  initialSeason,
+  initialSeasons,
 }: TrainerRoadSettingsProps) {
   const [url, setUrl] = useState(initialUrl ?? "");
   const [syncedAt, setSyncedAt] = useState(initialSyncedAt);
-  const [season, setSeason] = useState<LinkedSeason | null>(initialSeason);
+  const [seasons, setSeasons] = useState<LinkedSeason[]>(initialSeasons);
   const [phaseCount, setPhaseCount] = useState<number | null>(null);
-  const [busy, setBusy] = useState<"save" | "sync" | "clear" | "season" | null>(null);
+  const [busy, setBusy] = useState<"save" | "sync" | "clear" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overlaps, setOverlaps] = useState<Overlap[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -30,16 +31,15 @@ export function TrainerRoadSettings({
   function applySeasonFromSync(data: {
     season?: {
       updated?: boolean;
-      id?: string;
-      name?: string;
+      seasons?: LinkedSeason[];
       error?: string;
       overlapping?: Overlap[];
     };
     phaseCount?: number;
   }) {
     if (typeof data.phaseCount === "number") setPhaseCount(data.phaseCount);
-    if (data.season?.id && data.season.name) {
-      setSeason({ id: data.season.id, name: data.season.name });
+    if (data.season?.seasons) {
+      setSeasons(data.season.seasons);
     }
     if (data.season?.overlapping?.length) {
       setOverlaps(data.season.overlapping);
@@ -66,10 +66,10 @@ export function TrainerRoadSettings({
         syncedAt?: string | null;
         upserted?: number;
         phaseCount?: number;
+        seasons?: LinkedSeason[];
         season?: {
           updated?: boolean;
-          id?: string;
-          name?: string;
+          seasons?: LinkedSeason[];
           error?: string;
           overlapping?: Overlap[];
         };
@@ -81,11 +81,14 @@ export function TrainerRoadSettings({
       setUrl(data.url ?? "");
       setSyncedAt(data.syncedAt ?? null);
       if (mode === "clear") {
-        setSeason(null);
+        setSeasons([]);
         setPhaseCount(null);
-        setStatus("Disconnected. Future TrainerRoad bike sessions were removed. The season was kept.");
+        setStatus(
+          "Disconnected. Future TrainerRoad bike sessions were removed. Seasons were kept."
+        );
       } else if (typeof data.upserted === "number") {
         setStatus(`Synced ${data.upserted} bike sessions.`);
+        if (data.seasons) setSeasons(data.seasons);
         applySeasonFromSync(data);
       } else {
         setStatus("Saved. Sync failed — check the URL and try Sync now.");
@@ -111,8 +114,7 @@ export function TrainerRoadSettings({
         phaseCount?: number;
         season?: {
           updated?: boolean;
-          id?: string;
-          name?: string;
+          seasons?: LinkedSeason[];
           error?: string;
           overlapping?: Overlap[];
         };
@@ -131,54 +133,15 @@ export function TrainerRoadSettings({
     }
   }
 
-  async function createSeason() {
-    setBusy("season");
-    setError(null);
-    setStatus(null);
-    setOverlaps([]);
-    try {
-      const res = await fetch("/api/settings/trainerroad/season", { method: "POST" });
-      const data = (await res.json()) as {
-        error?: string;
-        id?: string;
-        name?: string;
-        phaseCount?: number;
-        alreadyLinked?: boolean;
-        overlapping?: Overlap[];
-      };
-      if (res.status === 409) {
-        setOverlaps(data.overlapping ?? []);
-        setError(
-          data.error ??
-            "An existing season overlaps these dates. Archive or shorten it on Seasons, then try again."
-        );
-        return;
-      }
-      if (!res.ok) {
-        setError(data.error ?? "Could not create TrainerRoad season");
-        return;
-      }
-      if (data.id && data.name) setSeason({ id: data.id, name: data.name });
-      if (typeof data.phaseCount === "number") setPhaseCount(data.phaseCount);
-      setStatus(
-        data.alreadyLinked
-          ? `Season “${data.name}” already follows this calendar.`
-          : `Created season “${data.name}” from TrainerRoad phases.`
-      );
-    } catch {
-      setError("Could not create TrainerRoad season");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
     <div className="space-y-3 text-sm">
       <p className="text-zinc-600 dark:text-zinc-400">
         Paste the calendar URL from TrainerRoad (Calendar → Subscribe). TiZ imports bike
         sessions as duration plus inferred intensity (Easy / Moderate / Intensity / Long).
-        You can then create a dedicated season whose phases follow the feed. Swim and run
-        stay on your TiZ plan; bike workouts stay on TrainerRoad.
+        Create a season on the Seasons page with an end date and A Race, then attach this
+        calendar so only phases in that window follow TrainerRoad. Swim and run stay on
+        your TiZ plan. After a Strava upload, TiZ waits about 30 minutes of quiet time,
+        then refreshes this calendar automatically.
       </p>
       <div>
         <Label>Calendar URL</Label>
@@ -223,21 +186,29 @@ export function TrainerRoadSettings({
           {phaseCount != null ? ` · ${phaseCount} phase markers` : ""}
         </p>
       ) : null}
-      {season ? (
+      {seasons.length > 0 ? (
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
-          Season “{season.name}” follows this calendar. Later syncs update its phases.
+          Following TrainerRoad:{" "}
+          {seasons.map((season, index) => (
+            <span key={season.id}>
+              {index > 0 ? ", " : ""}
+              <Link
+                href={`/plan?seasonId=${encodeURIComponent(season.id)}`}
+                className="text-sky-600 hover:underline dark:text-sky-400"
+              >
+                {season.name}
+              </Link>
+            </span>
+          ))}
         </p>
       ) : syncedAt ? (
-        <div className="space-y-2">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={busy != null}
-            onClick={() => void createSeason()}
-          >
-            {busy === "season" ? "Creating…" : "Create season from TrainerRoad"}
-          </Button>
-        </div>
+        <p className="text-xs text-zinc-500">
+          No season is attached yet.{" "}
+          <Link href="/plan?new=1" className="text-sky-600 hover:underline dark:text-sky-400">
+            Create a season
+          </Link>{" "}
+          with an end date and A Race, then follow TrainerRoad phases there.
+        </p>
       ) : null}
       {overlaps.length > 0 ? (
         <div className="text-xs text-red-600">

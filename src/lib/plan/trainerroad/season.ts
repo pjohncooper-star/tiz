@@ -92,6 +92,11 @@ export type TrainerRoadSeasonDraft = {
   phases: TrainerRoadSeasonPhase[];
 };
 
+export type TrainerRoadSeasonWindow = {
+  startDateKey: string;
+  endDateKey: string;
+};
+
 export function lastTrainerRoadWorkoutDateKey(
   calendar: ParsedTrainerRoadCalendar
 ): string | undefined {
@@ -107,12 +112,26 @@ function seasonNameFromCalendar(calendar: ParsedTrainerRoadCalendar): string {
   return name || "TrainerRoad";
 }
 
+function markersInWindow(
+  markers: ParsedTrainerRoadCalendar["phaseMarkers"],
+  window: TrainerRoadSeasonWindow
+) {
+  const startMonday = mondayWeekStartKey(window.startDateKey);
+  return markers.filter((marker) => {
+    const monday = mondayWeekStartKey(marker.weekStartDate || marker.dateKey);
+    return monday >= startMonday && monday <= window.endDateKey;
+  });
+}
+
 export function trainerRoadCalendarToSeasonDraft(
-  calendar: ParsedTrainerRoadCalendar
+  calendar: ParsedTrainerRoadCalendar,
+  window?: TrainerRoadSeasonWindow
 ): TrainerRoadSeasonDraft | null {
-  const lastWorkoutDateKey = lastTrainerRoadWorkoutDateKey(calendar);
-  const spans = trainerRoadMarkersToPhaseSpans(calendar.phaseMarkers, {
+  const markers = window ? markersInWindow(calendar.phaseMarkers, window) : calendar.phaseMarkers;
+  const lastWorkoutDateKey = window ? undefined : lastTrainerRoadWorkoutDateKey(calendar);
+  const spans = trainerRoadMarkersToPhaseSpans(markers, {
     lastWorkoutDateKey,
+    seasonEndDateKey: window?.endDateKey,
   });
   if (spans.length === 0) return null;
 
@@ -123,7 +142,9 @@ export function trainerRoadCalendarToSeasonDraft(
       ? parseDateKey(lastWorkoutDateKey)
       : lastPhaseEnd
     : lastPhaseEnd;
-  const bounds = buildSeasonDateBounds(parseDateKey(spans[0]!.weekStartDate), endCandidate);
+  const bounds = window
+    ? buildSeasonDateBounds(parseDateKey(window.startDateKey), parseDateKey(window.endDateKey))
+    : buildSeasonDateBounds(parseDateKey(spans[0]!.weekStartDate), endCandidate);
 
   const phases = spans.map((span, index) => {
     const input = defaultPhaseForKind(span.phaseKind, span.weekCount, index, span.name);

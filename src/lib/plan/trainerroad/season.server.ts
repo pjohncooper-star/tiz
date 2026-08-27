@@ -1,11 +1,7 @@
-import { formatDateKey, parseDateKey } from "@/lib/dates";
+import { formatDateKey } from "@/lib/dates";
 import { db } from "@/lib/db";
-import {
-  findOverlappingSeasonPlans,
-  getSeasonPlanById,
-  type OverlappingSeasonSummary,
-} from "@/lib/plan/season/season-plan.server";
-import { buildSeasonDateBounds } from "@/lib/plan/season/season-dates";
+import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
+import type { GoalEventWriteInput } from "@/lib/plan/season/goal-events-sync";
 import {
   createSimpleSeasonPlan,
   serializeSimpleSeasonPlan,
@@ -16,7 +12,6 @@ import { parseTrainerRoadCalendar } from "./calendar";
 import {
   mergeTrainerRoadPhaseWrites,
   trainerRoadCalendarToSeasonDraft,
-  TrainerRoadSeasonOverlapError,
   type TrainerRoadSeasonOverlap,
   type TrainerRoadSeasonPhase,
 } from "./season";
@@ -26,28 +21,12 @@ export type TrainerRoadLinkedSeason = {
   name: string;
 };
 
-export type TrainerRoadSeasonCreateResult = TrainerRoadLinkedSeason & {
-  startDate: string;
-  endDate: string;
-  phaseCount: number;
-  alreadyLinked?: boolean;
-};
-
 export type TrainerRoadSeasonSyncResult = {
   updated: boolean;
-  season?: TrainerRoadLinkedSeason;
+  seasons: TrainerRoadLinkedSeason[];
   error?: string;
   overlapping?: TrainerRoadSeasonOverlap[];
 };
-
-function toOverlapDtos(rows: OverlappingSeasonSummary[]): TrainerRoadSeasonOverlap[] {
-  return rows.map((season) => ({
-    id: season.id,
-    name: season.name,
-    startDate: formatDateKey(season.startDate),
-    endDate: formatDateKey(season.endDate),
-  }));
-}
 
 function toPhaseWrites(phases: TrainerRoadSeasonPhase[]): SimplePhaseWrite[] {
   return phases.map((phase) => ({
@@ -104,182 +83,176 @@ function existingPhasesFromPlan(
   return serializeSimpleSeasonPlan(plan).phases;
 }
 
-export async function getLinkedTrainerRoadSeason(
-  athleteId: string
-): Promise<TrainerRoadLinkedSeason | null> {
+function seasonHasARace(
+  plan: NonNullable<Awaited<ReturnType<typeof getSeasonPlanById>>>
+): boolean {
+  const primary = plan.primaryGoalEvent;
+  if (primary?.name.trim() && primary.date) return true;
+  return plan.goalEvents.some(
+    (event) => event.priority === "A" && event.name.trim() && event.date
+  );
+}
+
+export async function athleteHasTrainerRoadCalendar(athleteId: string): Promise<boolean> {
+  return Boolean(await getTrainerRoadIcalUrl(athleteId));
+}
+
+export async function getTrainerRoadIcalUrl(athleteId: string): Promise<string | null> {
   try {
     const athlete = await db.athlete.findUnique({
       where: { id: athleteId },
-      select: {
-        trainerRoadSeasonPlan: { select: { id: true, name: true } },
-      },
+      select: { trainerRoadIcalUrl: true },
     });
-    const season = athlete?.trainerRoadSeasonPlan;
-    return season ? { id: season.id, name: season.name } : null;
+    return athlete?.trainerRoadIcalUrl ?? null;
   } catch (error) {
-    if (error instanceof Error && /trainerRoadSeasonPlan/i.test(error.message)) {
+    if (error instanceof Error && /trainerRoadIcalUrl|column/i.test(error.message)) {
       return null;
     }
     throw error;
   }
 }
 
-export async function createTrainerRoadSeason(
-  athleteId: string,
-  ics: string
-): Promise<TrainerRoadSeasonCreateResult> {
-  const athlete = await db.athlete.findUnique({
-    where: { id: athleteId },
-    select: {
-      trainerRoadIcalUrl: true,
-      trainerRoadSeasonPlanId: true,
-    },
-  });
-  if (!athlete?.trainerRoadIcalUrl) {
-    throw new Error("Save a TrainerRoad calendar URL first");
-  }
-
-  if (athlete.trainerRoadSeasonPlanId) {
-    const existing = await getSeasonPlanById(athleteId, athlete.trainerRoadSeasonPlanId);
-    if (existing) {
-      return {
-        id: existing.id,
-        name: existing.name,
-        startDate: formatDateKey(existing.startDate),
-        endDate: formatDateKey(existing.endDate),
-        phaseCount: existing.phases.length,
-        alreadyLinked: true,
-      };
+export async function listTrainerRoadDrivenSeasons(
+  athleteId: string
+): Promise<TrainerRoadLinkedSeason[]> {
+  try {
+    const seasons = await db.seasonPlan.findMany({
+      where: { athleteId, trainerRoadDriven: true, status: { not: "ARCHIVED" } },
+      select: { id: true, name: true },
+      orderBy: { startDate: "asc" },
+    });
+    return seasons;
+  } catch (error) {
+    if (error instanceof Error && /trainerRoadDriven|column/i.test(error.message)) {
+      return [];
     }
+    throw error;
+  }
+}
+
+const NO_MARKERS_IN_WINDOW =
+  "This calendar has no TrainerRoad phase markers in this season’s dates.";
+
+export async function applyTrainerRoadCalendarToSeason(
+  athleteId: string,
+  seasonId: string,
+  ics: string,
+  options?: { requireARace?: boolean }
+): Promise<NonNullable<Awaited<ReturnType<typeof updateSimpleSeasonPlan>>>> {
+  const existing = await getSeasonPlanById(athleteId, seasonId);
+  if (!existing) {
+    throw new Error("Season not found");
+  }
+  if (options?.requireARace !== false && !seasonHasARace(existing)) {
+    throw new Error("Add an A Race (name and date) before following TrainerRoad phases.");
   }
 
-  const draft = trainerRoadCalendarToSeasonDraft(parseTrainerRoadCalendar(ics));
+  const draft = trainerRoadCalendarToSeasonDraft(parseTrainerRoadCalendar(ics), {
+    startDateKey: formatDateKey(existing.startDate),
+    endDateKey: formatDateKey(existing.endDate),
+  });
   if (!draft) {
-    throw new Error("This calendar has no TrainerRoad phase markers (Base, Build, Specialty, Rest Week).");
+    throw new Error(NO_MARKERS_IN_WINDOW);
   }
 
-  const bounds = buildSeasonDateBounds(
-    parseDateKey(draft.startDateKey),
-    parseDateKey(draft.endDateKey)
-  );
-  const overlapping = await findOverlappingSeasonPlans(
-    athleteId,
-    bounds.startDate,
-    bounds.endDate
-  );
-  if (overlapping.length > 0) {
-    throw new TrainerRoadSeasonOverlapError(toOverlapDtos(overlapping));
+  const merged = mergeTrainerRoadPhaseWrites(draft.phases, existingPhasesFromPlan(existing));
+  const plan = await updateSimpleSeasonPlan(athleteId, seasonId, {
+    trainerRoadDriven: true,
+    phases: toPhaseWrites(merged),
+    recalculate: true,
+  });
+  if (!plan) {
+    throw new Error("Could not update TrainerRoad season");
+  }
+  return plan;
+}
+
+export async function createSeasonFromTrainerRoadCalendar(
+  athleteId: string,
+  ics: string,
+  input: {
+    name: string;
+    startDate: Date;
+    endDate: Date;
+    goalEvent: GoalEventWriteInput;
+  }
+) {
+  const draft = trainerRoadCalendarToSeasonDraft(parseTrainerRoadCalendar(ics), {
+    startDateKey: formatDateKey(input.startDate),
+    endDateKey: formatDateKey(input.endDate),
+  });
+  if (!draft) {
+    throw new Error(NO_MARKERS_IN_WINDOW);
   }
 
   const created = await createSimpleSeasonPlan({
     athleteId,
-    name: draft.name,
-    startDate: bounds.startDate,
-    endDate: bounds.endDate,
+    name: input.name,
+    startDate: input.startDate,
+    endDate: input.endDate,
     trainerRoadDriven: true,
+    goalEvent: input.goalEvent,
   });
   if (!created) {
     throw new Error("Could not create TrainerRoad season");
   }
 
-  await db.athlete.update({
-    where: { id: athleteId },
-    data: { trainerRoadSeasonPlanId: created.id },
-  });
-
-  const updated = await updateSimpleSeasonPlan(athleteId, created.id, {
+  const plan = await updateSimpleSeasonPlan(athleteId, created.id, {
+    trainerRoadDriven: true,
     phases: toPhaseWrites(draft.phases),
     recalculate: true,
   });
-  const plan = updated ?? created;
-  return {
-    id: plan.id,
-    name: plan.name,
-    startDate: formatDateKey(plan.startDate),
-    endDate: formatDateKey(plan.endDate),
-    phaseCount: plan.phases.length,
-  };
+  return plan ?? created;
 }
 
-export async function syncLinkedTrainerRoadSeason(
+export async function detachTrainerRoadFromSeason(
+  athleteId: string,
+  seasonId: string
+) {
+  return updateSimpleSeasonPlan(athleteId, seasonId, {
+    trainerRoadDriven: false,
+  });
+}
+
+export async function syncTrainerRoadDrivenSeasons(
   athleteId: string,
   ics: string
 ): Promise<TrainerRoadSeasonSyncResult> {
-  const athlete = await db.athlete.findUnique({
-    where: { id: athleteId },
-    select: { trainerRoadSeasonPlanId: true },
-  });
-  const seasonId = athlete?.trainerRoadSeasonPlanId;
-  if (!seasonId) return { updated: false };
+  const driven = await listTrainerRoadDrivenSeasons(athleteId);
+  if (driven.length === 0) return { updated: false, seasons: [] };
 
-  const existing = await getSeasonPlanById(athleteId, seasonId);
-  if (!existing) {
-    await db.athlete.update({
-      where: { id: athleteId },
-      data: { trainerRoadSeasonPlanId: null },
-    });
-    return { updated: false };
+  const seasons: TrainerRoadLinkedSeason[] = [];
+  let updated = false;
+  let error: string | undefined;
+
+  for (const row of driven) {
+    try {
+      const plan = await applyTrainerRoadCalendarToSeason(athleteId, row.id, ics, {
+        requireARace: false,
+      });
+      seasons.push({ id: plan.id, name: plan.name });
+      updated = true;
+    } catch (caught) {
+      seasons.push(row);
+      const message =
+        caught instanceof Error ? caught.message : "Could not update TrainerRoad season";
+      if (!error) error = message;
+    }
   }
 
-  const draft = trainerRoadCalendarToSeasonDraft(parseTrainerRoadCalendar(ics));
-  if (!draft) {
-    return {
-      updated: false,
-      season: { id: existing.id, name: existing.name },
-      error: "This calendar has no TrainerRoad phase markers.",
-    };
-  }
-
-  const bounds = buildSeasonDateBounds(
-    parseDateKey(draft.startDateKey),
-    parseDateKey(draft.endDateKey)
-  );
-  const overlapping = await findOverlappingSeasonPlans(
-    athleteId,
-    bounds.startDate,
-    bounds.endDate,
-    seasonId
-  );
-  if (overlapping.length > 0) {
-    return {
-      updated: false,
-      season: { id: existing.id, name: existing.name },
-      error: new TrainerRoadSeasonOverlapError(toOverlapDtos(overlapping)).message,
-      overlapping: toOverlapDtos(overlapping),
-    };
-  }
-
-  const merged = mergeTrainerRoadPhaseWrites(
-    draft.phases,
-    existingPhasesFromPlan(existing)
-  );
-  const plan = await updateSimpleSeasonPlan(athleteId, seasonId, {
-    startDate: bounds.startDate,
-    endDate: bounds.endDate,
-    phases: toPhaseWrites(merged),
-    recalculate: true,
-  });
-  const linked = plan ?? existing;
-  return {
-    updated: true,
-    season: { id: linked.id, name: linked.name },
-  };
+  return { updated, seasons, error };
 }
 
-export async function unlinkTrainerRoadSeason(athleteId: string): Promise<void> {
-  const athlete = await db.athlete.findUnique({
-    where: { id: athleteId },
-    select: { trainerRoadSeasonPlanId: true },
-  });
-  const seasonId = athlete?.trainerRoadSeasonPlanId;
-  if (seasonId) {
+export async function unlinkTrainerRoadSeasons(athleteId: string): Promise<void> {
+  try {
     await db.seasonPlan.updateMany({
-      where: { id: seasonId, athleteId },
+      where: { athleteId, trainerRoadDriven: true },
       data: { trainerRoadDriven: false },
     });
+  } catch (error) {
+    if (error instanceof Error && /trainerRoadDriven|column/i.test(error.message)) {
+      return;
+    }
+    throw error;
   }
-  await db.athlete.update({
-    where: { id: athleteId },
-    data: { trainerRoadSeasonPlanId: null },
-  });
 }

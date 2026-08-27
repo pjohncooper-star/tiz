@@ -94,6 +94,10 @@ type SimplePlannerPhasesPaneProps = {
   longRunOwnedByProgram?: boolean[];
   programWeekHint?: SimpleWeek | null;
   trainerRoadDriven?: boolean;
+  trainerRoadCalendarSaved?: boolean;
+  trainerRoadBusy?: boolean;
+  onFollowTrainerRoad?: () => void;
+  onStopFollowingTrainerRoad?: () => void;
 };
 
 export function SimplePlannerPhasesPane({
@@ -118,6 +122,10 @@ export function SimplePlannerPhasesPane({
   longRunOwnedByProgram = [],
   programWeekHint = null,
   trainerRoadDriven = false,
+  trainerRoadCalendarSaved = false,
+  trainerRoadBusy = false,
+  onFollowTrainerRoad,
+  onStopFollowingTrainerRoad,
 }: SimplePlannerPhasesPaneProps) {
   const selected =
     phases.find((phase) => phase.id === selectedPhaseId) ??
@@ -151,10 +159,37 @@ export function SimplePlannerPhasesPane({
   return (
     <div className="space-y-4">
       {trainerRoadDriven ? (
-        <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-          Phases come from TrainerRoad. Swim and run volume stay editable; bike workouts
-          stay on the calendar feed.
-        </p>
+        <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+          <p>
+            Phases come from TrainerRoad. Swim and run volume stay editable; bike workouts
+            stay on the calendar feed.
+          </p>
+          {onStopFollowingTrainerRoad ? (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={trainerRoadBusy}
+              onClick={onStopFollowingTrainerRoad}
+            >
+              {trainerRoadBusy ? "Updating…" : "Stop following TrainerRoad"}
+            </Button>
+          ) : null}
+        </div>
+      ) : trainerRoadCalendarSaved && onFollowTrainerRoad ? (
+        <div className="space-y-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
+          <p className="text-zinc-600 dark:text-zinc-400">
+            Attach this season to your TrainerRoad calendar. Requires an A Race. Only phases
+            inside this season’s dates are imported.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={trainerRoadBusy}
+            onClick={onFollowTrainerRoad}
+          >
+            {trainerRoadBusy ? "Updating…" : "Follow TrainerRoad phases"}
+          </Button>
+        </div>
       ) : null}
       <div className="flex flex-wrap items-center justify-end gap-3">
         {trainerRoadDriven ? null : (

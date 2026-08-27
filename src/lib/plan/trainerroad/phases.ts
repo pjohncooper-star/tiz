@@ -99,12 +99,11 @@ export function trainerRoadMarkersToPhaseSpans(
 
   if (mapped.length === 0) return [];
 
-  const endCandidates = [
-    options?.lastWorkoutDateKey,
-    options?.seasonEndDateKey,
-    mapped[mapped.length - 1]!.weekStartDate,
-  ].filter((value): value is string => Boolean(value));
-  const inclusiveEnd = endCandidates.reduce((latest, key) => (key > latest ? key : latest));
+  const inclusiveEnd = options?.seasonEndDateKey
+    ? options.seasonEndDateKey
+    : [options?.lastWorkoutDateKey, mapped[mapped.length - 1]!.weekStartDate]
+        .filter((value): value is string => Boolean(value))
+        .reduce((latest, key) => (key > latest ? key : latest));
 
   return mapped.map((row, index) => {
     const nextStart =

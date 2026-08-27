@@ -12,6 +12,13 @@ import {
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
 import { TrainingPlanError } from "@/lib/plan/training-plan.server";
+import { fetchTrainerRoadIcs } from "@/lib/plan/trainerroad/sync";
+import {
+  athleteHasTrainerRoadCalendar,
+  applyTrainerRoadCalendarToSeason,
+  detachTrainerRoadFromSeason,
+  getTrainerRoadIcalUrl,
+} from "@/lib/plan/trainerroad/season.server";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -35,7 +42,12 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
+    const trainerRoadCalendarSaved = await athleteHasTrainerRoadCalendar(athleteId);
+    return NextResponse.json({
+      season: serializeSimpleSeasonPlan(plan),
+      zoneFocusCatalog,
+      trainerRoadCalendarSaved,
+    });
   } catch (err) {
     console.error(`GET /api/plan/season/${id}/simple failed`, err);
     const message = err instanceof Error ? err.message : "Could not load season plan";
@@ -71,33 +83,61 @@ export async function PATCH(request: Request, context: RouteContext) {
   const data = parsed.data;
 
   try {
-    const plan = await updateSimpleSeasonPlan(athleteId, id, {
-      name: data.name,
-      startDate: data.startDate ? parseDateKey(data.startDate) : undefined,
-      endDate: data.endDate ? parseDateKey(data.endDate) : undefined,
-      rampDefaults: data.rampDefaults
-        ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
-        : undefined,
-      deLoadVolumePercent: data.deLoadVolumePercent,
-      phaseKindZoneDefaults: data.phaseKindZoneDefaults,
-      defaultPlanningMode: data.defaultPlanningMode,
-      phases: data.phases,
-      weeks: data.weeks,
-      recalculate: data.recalculate,
-      goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
-      bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
-      cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
-      removedGoalEvents: data.removedGoalEvents,
-      longRideWeekFlags: data.longRideWeekFlags,
-      longRunWeekFlags: data.longRunWeekFlags,
-      testWeekFlags: data.testWeekFlags,
-      restWeekTemplateId: data.restWeekTemplateId,
-      testWeekTemplateId: data.testWeekTemplateId,
-      trainingPlanAttachments: data.trainingPlanAttachments,
-      trainingPlanAttachment: data.trainingPlanAttachment,
-      planSessionConflicts: data.planSessionConflicts,
-      maxWeekHours: data.maxWeekHours,
-    });
+    if (data.trainerRoadDriven === true) {
+      const url = await getTrainerRoadIcalUrl(athleteId);
+      if (!url) {
+        return NextResponse.json(
+          { error: "Save a TrainerRoad calendar URL in Settings first." },
+          { status: 400 }
+        );
+      }
+      if (data.goalEvent) {
+        const saved = await updateSimpleSeasonPlan(athleteId, id, {
+          goalEvent: parseGoalEventWrite(data.goalEvent),
+        });
+        if (!saved) {
+          return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+      }
+      const ics = await fetchTrainerRoadIcs(url);
+      const plan = await applyTrainerRoadCalendarToSeason(athleteId, id, ics);
+      const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+      return NextResponse.json({
+        season: serializeSimpleSeasonPlan(plan),
+        zoneFocusCatalog,
+      });
+    }
+
+    const plan =
+      data.trainerRoadDriven === false
+        ? await detachTrainerRoadFromSeason(athleteId, id)
+        : await updateSimpleSeasonPlan(athleteId, id, {
+            name: data.name,
+            startDate: data.startDate ? parseDateKey(data.startDate) : undefined,
+            endDate: data.endDate ? parseDateKey(data.endDate) : undefined,
+            rampDefaults: data.rampDefaults
+              ? parseSimpleRampDefaultsFromApi(data.rampDefaults)
+              : undefined,
+            deLoadVolumePercent: data.deLoadVolumePercent,
+            phaseKindZoneDefaults: data.phaseKindZoneDefaults,
+            defaultPlanningMode: data.defaultPlanningMode,
+            phases: data.phases,
+            weeks: data.weeks,
+            recalculate: data.recalculate,
+            goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
+            bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
+            cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
+            removedGoalEvents: data.removedGoalEvents,
+            longRideWeekFlags: data.longRideWeekFlags,
+            longRunWeekFlags: data.longRunWeekFlags,
+            testWeekFlags: data.testWeekFlags,
+            restWeekTemplateId: data.restWeekTemplateId,
+            testWeekTemplateId: data.testWeekTemplateId,
+            trainingPlanAttachments: data.trainingPlanAttachments,
+            trainingPlanAttachment: data.trainingPlanAttachment,
+            planSessionConflicts: data.planSessionConflicts,
+            maxWeekHours: data.maxWeekHours,
+          });
 
     if (!plan) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -112,7 +152,9 @@ export async function PATCH(request: Request, context: RouteContext) {
         ? err.status
         : message.includes("not found")
           ? 404
-          : 409;
+          : /calendar URL|phase markers|A Race/i.test(message)
+            ? 400
+            : 409;
     return NextResponse.json({ error: message }, { status });
   }
 }

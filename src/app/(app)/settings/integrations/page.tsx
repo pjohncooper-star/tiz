@@ -4,6 +4,7 @@ import { Card } from "@/components/ui";
 import { requireAthlete } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { loadAthleteSettingsProfile } from "@/lib/settings/athlete-settings.server";
+import { listTrainerRoadDrivenSeasons } from "@/lib/plan/trainerroad/season.server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,19 +15,16 @@ async function loadTrainerRoadSettings(athleteId: string) {
       select: {
         trainerRoadIcalUrl: true,
         trainerRoadSyncedAt: true,
-        trainerRoadSeasonPlan: { select: { id: true, name: true } },
       },
     });
     return {
       url: row?.trainerRoadIcalUrl ?? null,
       syncedAt: row?.trainerRoadSyncedAt?.toISOString() ?? null,
-      season: row?.trainerRoadSeasonPlan
-        ? { id: row.trainerRoadSeasonPlan.id, name: row.trainerRoadSeasonPlan.name }
-        : null,
+      seasons: await listTrainerRoadDrivenSeasons(athleteId),
     };
   } catch (error) {
     if (error instanceof Error && /trainerRoadIcalUrl|column/i.test(error.message)) {
-      return { url: null, syncedAt: null, season: null };
+      return { url: null, syncedAt: null, seasons: [] };
     }
     throw error;
   }
@@ -64,7 +62,7 @@ export default async function IntegrationsSettingsPage() {
         <TrainerRoadSettings
           initialUrl={trainerRoad.url}
           initialSyncedAt={trainerRoad.syncedAt}
-          initialSeason={trainerRoad.season}
+          initialSeasons={trainerRoad.seasons}
         />
       </Card>
       <Card title="Calendar subscription">

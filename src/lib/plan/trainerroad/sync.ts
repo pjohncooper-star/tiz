@@ -1,11 +1,12 @@
 import type { SessionRole } from "@prisma/client";
+import { inngest } from "@/inngest/client";
 import { parseDateKey } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { nextDaySortOrderForDate } from "@/lib/plan/session-day-order.server";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
 import { zoneKey } from "@/lib/workout/steps";
 import { parseTrainerRoadCalendar } from "./calendar";
-import { unlinkTrainerRoadSeason, syncLinkedTrainerRoadSeason } from "./season.server";
+import { unlinkTrainerRoadSeasons, syncTrainerRoadDrivenSeasons } from "./season.server";
 import { trainerRoadSessionNotes } from "./url";
 
 const ROLE_ZONE_SHARE: Record<SessionRole, Partial<Record<number, number>>> = {
@@ -23,8 +24,7 @@ export type TrainerRoadSyncResult = {
   syncedAt: string;
   season?: {
     updated: boolean;
-    id?: string;
-    name?: string;
+    seasons?: Array<{ id: string; name: string }>;
     error?: string;
     overlapping?: Array<{ id: string; name: string; startDate: string; endDate: string }>;
   };
@@ -44,6 +44,33 @@ export async function fetchTrainerRoadIcs(url: string): Promise<string> {
     throw new Error("That URL did not return a calendar feed");
   }
   return text;
+}
+
+/** Queue a debounced iCal refresh if this athlete has a TrainerRoad calendar URL. */
+export async function scheduleTrainerRoadRefresh(athleteId: string): Promise<boolean> {
+  const athlete = await db.athlete.findUnique({
+    where: { id: athleteId },
+    select: { trainerRoadIcalUrl: true },
+  });
+  if (!athlete?.trainerRoadIcalUrl) return false;
+  await inngest.send({
+    name: "trainerroad/calendar.refresh",
+    data: { athleteId },
+  });
+  return true;
+}
+
+/** Fetch and ingest the athlete's TrainerRoad calendar. No-op if no URL is saved. */
+export async function refreshTrainerRoadCalendarForAthlete(athleteId: string) {
+  const athlete = await db.athlete.findUnique({
+    where: { id: athleteId },
+    select: { trainerRoadIcalUrl: true },
+  });
+  if (!athlete?.trainerRoadIcalUrl) {
+    return { skipped: true as const };
+  }
+  const ics = await fetchTrainerRoadIcs(athlete.trainerRoadIcalUrl);
+  return syncTrainerRoadCalendar(athleteId, ics);
 }
 
 function todayUtcDateKey(): string {
@@ -142,12 +169,11 @@ export async function syncTrainerRoadCalendar(
 
   let season: TrainerRoadSyncResult["season"];
   try {
-    const seasonResult = await syncLinkedTrainerRoadSeason(athleteId, ics);
-    if (seasonResult.season || seasonResult.error || seasonResult.updated) {
+    const seasonResult = await syncTrainerRoadDrivenSeasons(athleteId, ics);
+    if (seasonResult.seasons.length > 0 || seasonResult.error || seasonResult.updated) {
       season = {
         updated: seasonResult.updated,
-        id: seasonResult.season?.id,
-        name: seasonResult.season?.name,
+        seasons: seasonResult.seasons,
         error: seasonResult.error,
         overlapping: seasonResult.overlapping,
       };
@@ -171,7 +197,7 @@ export async function syncTrainerRoadCalendar(
 
 export async function disconnectTrainerRoad(athleteId: string): Promise<void> {
   const today = parseDateKey(todayUtcDateKey());
-  await unlinkTrainerRoadSeason(athleteId);
+  await unlinkTrainerRoadSeasons(athleteId);
   await db.$transaction([
     db.plannedSession.deleteMany({
       where: {
@@ -186,7 +212,6 @@ export async function disconnectTrainerRoad(athleteId: string): Promise<void> {
       data: {
         trainerRoadIcalUrl: null,
         trainerRoadSyncedAt: null,
-        trainerRoadSeasonPlanId: null,
       },
     }),
   ]);

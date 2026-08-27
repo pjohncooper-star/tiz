@@ -7,7 +7,7 @@ import {
   fetchTrainerRoadIcs,
   syncTrainerRoadCalendar,
 } from "@/lib/plan/trainerroad/sync";
-import { getLinkedTrainerRoadSeason } from "@/lib/plan/trainerroad/season.server";
+import { listTrainerRoadDrivenSeasons } from "@/lib/plan/trainerroad/season.server";
 import { normalizeTrainerRoadIcalUrl } from "@/lib/plan/trainerroad/url";
 
 const saveSchema = z.object({
@@ -29,11 +29,11 @@ export async function GET() {
     return NextResponse.json({
       url: athlete?.trainerRoadIcalUrl ?? null,
       syncedAt: athlete?.trainerRoadSyncedAt?.toISOString() ?? null,
-      season: await getLinkedTrainerRoadSeason(athleteId),
+      seasons: await listTrainerRoadDrivenSeasons(athleteId),
     });
   } catch (error) {
     if (error instanceof Error && /trainerRoadIcalUrl|column/i.test(error.message)) {
-      return NextResponse.json({ url: null, syncedAt: null, season: null });
+      return NextResponse.json({ url: null, syncedAt: null, seasons: [] });
     }
     throw error;
   }
@@ -61,7 +61,7 @@ export async function PUT(request: Request) {
   const trimmed = parsed.data.url.trim();
   if (!trimmed) {
     await disconnectTrainerRoad(athleteId);
-    return NextResponse.json({ url: null, syncedAt: null });
+    return NextResponse.json({ url: null, syncedAt: null, seasons: [] });
   }
 
   const url = normalizeTrainerRoadIcalUrl(trimmed);

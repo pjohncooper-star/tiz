@@ -1,5 +1,6 @@
 import { inngest } from "@/inngest/client";
 import { processImportBatch } from "@/lib/import/process-batch";
+import { refreshTrainerRoadCalendarForAthlete } from "@/lib/plan/trainerroad/sync";
 import { recomputeZonesForDateRangeSync } from "@/lib/zones/recompute-zones";
 import { computeActivityZones } from "@/lib/zones/process-activity";
 import { regenerateV0Insights } from "@/lib/signaling/v0";
@@ -73,10 +74,26 @@ export const syncStravaFn = inngest.createFunction(
   }
 );
 
+export const refreshTrainerRoadCalendarFn = inngest.createFunction(
+  {
+    id: "refresh-trainerroad-calendar",
+    debounce: {
+      key: "event.data.athleteId",
+      period: "30m",
+    },
+    triggers: [{ event: "trainerroad/calendar.refresh" }],
+  },
+  async ({ event }) => {
+    const { athleteId } = event.data as { athleteId: string };
+    await refreshTrainerRoadCalendarForAthlete(athleteId);
+  }
+);
+
 export const inngestFunctions = [
   processImportBatchFn,
   computeZonesFn,
   recomputeZonesRangeFn,
   generateInsightsFn,
   syncStravaFn,
+  refreshTrainerRoadCalendarFn,
 ];
