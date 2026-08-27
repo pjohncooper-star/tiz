@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button, Card, Input, Label } from "@/components/ui";
 import { NumberEditorInput } from "@/components/number-editor-input";
 import { FitnessFatigueChart } from "@/components/fitness-fatigue-chart";
@@ -351,9 +351,11 @@ export function SimplePlannerView({
   ecoLoadEnabled?: boolean;
   initialCreate?: boolean;
 }) {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const seasonIdParam = searchParams.get("seasonId");
-  const createRequested = initialCreate || searchParams.get("new") === "1";
+  const createRequested =
+    !seasonIdParam && (initialCreate || searchParams.get("new") === "1");
   const [season, setSeason] = useState<SimpleSeason | null>(null);
   const [baselineSeason, setBaselineSeason] = useState<SimpleSeason | null>(null);
   const [zoneFocusCatalog, setZoneFocusCatalog] = useState<ZoneFocusCatalog>(() =>
@@ -396,6 +398,7 @@ export function SimplePlannerView({
   const [followTrainerRoadBusy, setFollowTrainerRoadBusy] = useState(false);
   const [volumePreviewDirty, setVolumePreviewDirty] = useState(false);
   const lastVolumeSignatureRef = useRef<string | null>(null);
+  const loadGenerationRef = useRef(0);
   const seasonRef = useRef(season);
   seasonRef.current = season;
   const [libraryPlans, setLibraryPlans] = useState<
@@ -435,6 +438,12 @@ export function SimplePlannerView({
   }, [volumeSignature]);
 
   const load = useCallback(async () => {
+    if (seasonIdParam && seasonRef.current?.id === seasonIdParam) {
+      setCreateMode(false);
+      setLoading(false);
+      return;
+    }
+    const generation = ++loadGenerationRef.current;
     setLoading(true);
     setError(null);
     const url = seasonIdParam
@@ -444,6 +453,7 @@ export function SimplePlannerView({
       fetch("/api/settings/trainerroad"),
       fetch(url),
     ]);
+    if (generation !== loadGenerationRef.current) return;
     if (!seasonRes.ok) {
       const body = (await seasonRes.json().catch(() => null)) as { error?: string } | null;
       setError(
@@ -460,19 +470,18 @@ export function SimplePlannerView({
     const trData = trRes.ok
       ? ((await trRes.json()) as { url?: string | null })
       : null;
+    if (generation !== loadGenerationRef.current) return;
     const calendarSaved = Boolean(trData?.url) || Boolean(data.trainerRoadCalendarSaved);
+    const wantCreateForm = createRequested && !seasonIdParam;
     const loaded =
-      createRequested || !data.season ? null : normalizeSeason(data.season);
+      wantCreateForm || !data.season ? null : normalizeSeason(data.season);
     lastVolumeSignatureRef.current = loaded ? volumePreviewSignature(loaded) : null;
     setVolumePreviewDirty(false);
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     setTrainerRoadCalendarSaved(calendarSaved);
-    if (calendarSaved && (createRequested || !data.season)) {
-      setDraftFollowTrainerRoad(true);
-    }
-    setCreateMode(createRequested || !data.season);
+    setCreateMode(wantCreateForm || !loaded);
     setLoading(false);
   }, [seasonIdParam, createRequested]);
 
@@ -849,23 +858,28 @@ export function SimplePlannerView({
       setError(message);
       return;
     }
-    const data = (await res.json()) as {
-      season: SimpleSeason;
-      zoneFocusCatalog?: ZoneFocusCatalog;
-    };
-    const normalized = normalizeSeason(data.season);
-    lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
-    setVolumePreviewDirty(false);
-    setSeason(normalized);
-    setBaselineSeason(cloneSeason(normalized));
-    setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
-    setCreateMode(false);
-    setExpandedSections(DEFAULT_SECTION_EXPANDED);
-    window.history.replaceState(
-      null,
-      "",
-      `/plan?seasonId=${encodeURIComponent(normalized.id)}`
-    );
+    try {
+      const data = (await res.json()) as {
+        season: SimpleSeason;
+        zoneFocusCatalog?: ZoneFocusCatalog;
+      };
+      if (!data.season?.id) {
+        setError("Could not create season.");
+        return;
+      }
+      loadGenerationRef.current += 1;
+      const normalized = normalizeSeason(data.season);
+      lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+      setVolumePreviewDirty(false);
+      setSeason(normalized);
+      setBaselineSeason(cloneSeason(normalized));
+      setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
+      setCreateMode(false);
+      setExpandedSections(DEFAULT_SECTION_EXPANDED);
+      router.replace(`/plan?seasonId=${encodeURIComponent(normalized.id)}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not open the new season.");
+    }
   }
 
   async function patchTrainerRoadDriven(driven: boolean) {
