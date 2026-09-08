@@ -287,11 +287,19 @@ export function SimplePlannerWorkbench({
           ) : null}
         </div>
 
+        {inspectorOpen ? (
+          <button
+            type="button"
+            aria-label="Close inspector"
+            className="fixed inset-0 z-30 bg-zinc-950/40 lg:hidden"
+            onClick={() => setInspectorOpen(false)}
+          />
+        ) : null}
         <aside
-          className={`${
-            inspectorOpen ? "block" : "hidden"
-          } rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:block ${
-            inspectorOpen ? "fixed inset-x-0 bottom-0 z-40 max-h-[70vh] overflow-y-auto lg:static lg:max-h-none" : ""
+          className={`rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:block ${
+            inspectorOpen
+              ? "fixed inset-x-0 bottom-0 z-40 max-h-[min(28rem,55vh)] overflow-y-auto shadow-2xl lg:static lg:z-auto lg:max-h-none lg:shadow-none"
+              : "hidden lg:block"
           }`}
         >
           <div className="mb-3 flex items-center justify-between lg:hidden">

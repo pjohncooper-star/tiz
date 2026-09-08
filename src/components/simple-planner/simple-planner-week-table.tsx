@@ -616,7 +616,10 @@ function WeekCells({
       <td className="px-3 py-2">
         <button
           type="button"
-          onClick={onToggle}
+          onClick={() => {
+            onSelectWeek?.(week.weekIndex);
+            onToggle();
+          }}
           className="font-medium text-sky-600 dark:text-sky-400"
         >
           {expanded ? "▼" : "▶"} {week.weekIndex + 1}
