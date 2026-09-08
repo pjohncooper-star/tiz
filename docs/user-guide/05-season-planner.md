@@ -41,7 +41,7 @@ Managing a season is a **timeline workbench**, not a stack of collapsible sectio
 
 | Region | Purpose |
 | --- | --- |
-| **Header** | Season name, dates, TrainerRoad badge (Follow / Stop following), links to Programs, All seasons, New season. On small screens, a season switcher dropdown. |
+| **Header** | Season name, dates, TrainerRoad badge (Follow / Stop following / **Refresh feed**), links to Programs, All seasons, New season. On small screens, a season switcher dropdown. |
 | **Season rail** (desktop) | Compact list from `/plan/seasons`, plus New season. Hidden below the large breakpoint. |
 | **Timeline** | Sticky volume chart with phase bands, race badges, and program bars. Clicking a band, badge, or week **selects** it in the inspector — it does not scroll-jump. |
 | **Canvas** | **Weeks** (the week-by-week table) or **Load** (cross-phase hours table). Starts on Weeks. |
@@ -59,7 +59,7 @@ Click:
 
 **Advanced** (collapsed) on Season: default planning mode, max hours, rest-week %, rest/test templates, phase-kind zone defaults, planning units. On a phase Load tab: planning-mode override and long off-week policy.
 
-Also in the header: **Programs** (to the library) and **All seasons**. When ECO load is enabled, a **Fitness / fatigue** disclosure under the canvas projects your PMC curve from the season you are drafting.
+Also in the header: **Programs** (to the library) and **All seasons**. When the season is following TrainerRoad, **Refresh feed** re-fetches the calendar, updates bike sessions, and realigns this season’s phases with today’s phase markers. Last synced time sits under the dates. Save or discard unsaved edits first. When ECO load is enabled, a **Fitness / fatigue** disclosure under the canvas projects your PMC curve from the season you are drafting.
 
 ### Saving
 
