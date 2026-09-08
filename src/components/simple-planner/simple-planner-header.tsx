@@ -8,16 +8,20 @@ export function SimplePlannerHeader({
   season,
   trainerRoadCalendarSaved,
   trainerRoadBusy,
+  trainerRoadSyncedAt,
   onFollowTrainerRoad,
   onStopFollowingTrainerRoad,
+  onRefreshTrainerRoad,
   seasons,
   onSelectSeason,
 }: {
   season: SimpleSeason;
   trainerRoadCalendarSaved: boolean;
   trainerRoadBusy: boolean;
+  trainerRoadSyncedAt: string | null;
   onFollowTrainerRoad: () => void;
   onStopFollowingTrainerRoad: () => void;
+  onRefreshTrainerRoad: () => void;
   seasons: Array<{ id: string; name: string }>;
   onSelectSeason?: () => void;
 }) {
@@ -44,6 +48,11 @@ export function SimplePlannerHeader({
         <p className="text-sm text-zinc-500">
           {season.startDate} → {season.endDate} · {season.totalWeeks} weeks
         </p>
+        {following && trainerRoadSyncedAt ? (
+          <p className="text-xs text-zinc-500">
+            Last synced {new Date(trainerRoadSyncedAt).toLocaleString()}
+          </p>
+        ) : null}
         {seasons.length > 1 ? (
           <label className="mt-2 block text-xs text-zinc-500 lg:hidden">
             Season
@@ -65,14 +74,24 @@ export function SimplePlannerHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {following ? (
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={trainerRoadBusy}
-            onClick={onStopFollowingTrainerRoad}
-          >
-            {trainerRoadBusy ? "Updating…" : "Stop following"}
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={trainerRoadBusy}
+              onClick={onRefreshTrainerRoad}
+            >
+              {trainerRoadBusy ? "Refreshing…" : "Refresh feed"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={trainerRoadBusy}
+              onClick={onStopFollowingTrainerRoad}
+            >
+              {trainerRoadBusy ? "Updating…" : "Stop following"}
+            </Button>
+          </>
         ) : trainerRoadCalendarSaved ? (
           <Button
             type="button"

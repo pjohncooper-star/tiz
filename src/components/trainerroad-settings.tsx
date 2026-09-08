@@ -140,8 +140,9 @@ export function TrainerRoadSettings({
         sessions as duration plus inferred intensity (Easy / Moderate / Intensity / Long).
         Create a season on the Seasons page with an end date and A Race, then attach this
         calendar so only phases in that window follow TrainerRoad. Swim and run stay on
-        your TiZ plan. After a Strava upload, TiZ waits about 30 minutes of quiet time,
-        then refreshes this calendar automatically.
+        your TiZ plan. On a following season, **Refresh feed** on `/plan` pulls the latest
+        calendar and realigns phases. After a Strava upload, TiZ waits about 30 minutes of
+        quiet time, then refreshes this calendar automatically.
       </p>
       <div>
         <Label>Calendar URL</Label>

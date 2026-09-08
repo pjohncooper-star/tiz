@@ -39,8 +39,10 @@ export function SimplePlannerWorkbench({
   seasons,
   trainerRoadCalendarSaved,
   trainerRoadBusy,
+  trainerRoadSyncedAt,
   onFollowTrainerRoad,
   onStopFollowingTrainerRoad,
+  onRefreshTrainerRoad,
   ecoLoadEnabled,
   dirty,
   saving,
@@ -71,8 +73,10 @@ export function SimplePlannerWorkbench({
   seasons: Array<{ id: string; name: string }>;
   trainerRoadCalendarSaved: boolean;
   trainerRoadBusy: boolean;
+  trainerRoadSyncedAt: string | null;
   onFollowTrainerRoad: () => void;
   onStopFollowingTrainerRoad: () => void;
+  onRefreshTrainerRoad: () => void;
   ecoLoadEnabled: boolean;
   dirty: boolean;
   saving: boolean;
@@ -115,8 +119,10 @@ export function SimplePlannerWorkbench({
         season={season}
         trainerRoadCalendarSaved={trainerRoadCalendarSaved}
         trainerRoadBusy={trainerRoadBusy}
+        trainerRoadSyncedAt={trainerRoadSyncedAt}
         onFollowTrainerRoad={onFollowTrainerRoad}
         onStopFollowingTrainerRoad={onStopFollowingTrainerRoad}
+        onRefreshTrainerRoad={onRefreshTrainerRoad}
         seasons={seasons}
         onSelectSeason={() => {
           onSelectTarget({ kind: "season" });

@@ -191,6 +191,7 @@ export function SimplePlannerView({
   const [inspectorTarget, setInspectorTarget] = useState<InspectorTarget>({ kind: "season" });
   const [createMode, setCreateMode] = useState(false);
   const [trainerRoadCalendarSaved, setTrainerRoadCalendarSaved] = useState(false);
+  const [trainerRoadSyncedAt, setTrainerRoadSyncedAt] = useState<string | null>(null);
   const [followTrainerRoadBusy, setFollowTrainerRoadBusy] = useState(false);
   const [seasons, setSeasons] = useState<Array<{ id: string; name: string }>>([]);
   const lastVolumeSignatureRef = useRef<string | null>(null);
@@ -264,7 +265,7 @@ export function SimplePlannerView({
       trainerRoadCalendarSaved?: boolean;
     };
     const trData = trRes.ok
-      ? ((await trRes.json()) as { url?: string | null })
+      ? ((await trRes.json()) as { url?: string | null; syncedAt?: string | null })
       : null;
     const seasonsData = seasonsRes.ok
       ? ((await seasonsRes.json()) as { seasons?: Array<{ id: string; name: string }> })
@@ -279,6 +280,7 @@ export function SimplePlannerView({
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
     setTrainerRoadCalendarSaved(calendarSaved);
+    setTrainerRoadSyncedAt(trData?.syncedAt ?? null);
     setSeasons(seasonsData?.seasons ?? []);
     setInspectorTarget({ kind: "season" });
     setCreateMode(wantCreateForm || !loaded);
@@ -658,6 +660,61 @@ export function SimplePlannerView({
     season && baselineSeason && JSON.stringify(season) !== JSON.stringify(baselineSeason)
   );
 
+  async function refreshTrainerRoadFeed() {
+    if (!season?.trainerRoadDriven) return;
+    if (dirty) {
+      setError("Save or discard changes before refreshing TrainerRoad.");
+      return;
+    }
+    setFollowTrainerRoadBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/trainerroad", { method: "POST" });
+      const data = (await res.json()) as {
+        error?: string;
+        syncedAt?: string | null;
+        season?: { error?: string };
+      };
+      if (!res.ok) {
+        setError(
+          typeof data.error === "string" ? data.error : "Could not refresh TrainerRoad."
+        );
+        return;
+      }
+      if (data.syncedAt) setTrainerRoadSyncedAt(data.syncedAt);
+      if (data.season?.error) {
+        setError(data.season.error);
+      }
+      const seasonRes = await fetch(
+        `/api/plan/season/${encodeURIComponent(season.id)}/simple`
+      );
+      const body = (await seasonRes.json()) as {
+        error?: string;
+        season?: SimpleSeason;
+        zoneFocusCatalog?: ZoneFocusCatalog;
+      };
+      if (!seasonRes.ok || !body.season) {
+        setError(
+          typeof body.error === "string"
+            ? body.error
+            : "Refreshed the feed, but could not reload the season."
+        );
+        return;
+      }
+      const normalized = normalizeSeason(body.season);
+      lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+      setSeason(normalized);
+      setBaselineSeason(cloneSeason(normalized));
+      if (body.zoneFocusCatalog) {
+        setZoneFocusCatalog(parseZoneFocusCatalog(body.zoneFocusCatalog));
+      }
+    } catch {
+      setError("Could not refresh TrainerRoad.");
+    } finally {
+      setFollowTrainerRoadBusy(false);
+    }
+  }
+
   if (loading) {
     return <p className="text-sm text-zinc-500">Loading season…</p>;
   }
@@ -689,8 +746,10 @@ export function SimplePlannerView({
       seasons={seasons}
       trainerRoadCalendarSaved={trainerRoadCalendarSaved}
       trainerRoadBusy={followTrainerRoadBusy}
+      trainerRoadSyncedAt={trainerRoadSyncedAt}
       onFollowTrainerRoad={() => void patchTrainerRoadDriven(true)}
       onStopFollowingTrainerRoad={() => void patchTrainerRoadDriven(false)}
+      onRefreshTrainerRoad={() => void refreshTrainerRoadFeed()}
       ecoLoadEnabled={ecoLoadEnabled}
       dirty={dirty}
       saving={saving}
