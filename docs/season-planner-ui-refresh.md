@@ -1,11 +1,16 @@
 # Season planner UI refresh — design options
 
-Status: proposal. Wireframes only, no implementation. Four alternative designs for
-season **creation** and **management**, with the same underlying functionality.
+Status: **chosen and implemented.** Create is a 3-step wizard (A1–A2 plus races; no
+load step). Manage is the Option B timeline workbench with Option C’s cross-phase
+load table. All six items in [section 9](#9-fixes-worth-making-in-all-four) are
+applied. See [chapter 5](./user-guide/05-season-planner.md).
 
-The premise: the planner's capability set is fine, but `/plan` presents all of it at
-once, at one visual level, with three competing save models. This document keeps every
-existing control and only changes where it lives and when it appears.
+The four options below are the historical design notes. The shipped product is
+**A create + B manage + C load table**, with no dual UI and no feature flag.
+
+The premise: the planner's capability set is fine, but `/plan` used to present all of
+it at once, at one visual level, with three competing save models. This document keeps
+every existing control and only changes where it lives and when it appears.
 
 ---
 

@@ -10,10 +10,19 @@ export const PLANNING_MODES: PlanningMode[] = [
 ];
 
 export const PLANNING_MODE_LABELS: Record<PlanningMode, string> = {
-  OVERALL: "Overall volume & TiZ",
+  OVERALL: "Overall volume",
   BY_DISCIPLINE: "By discipline",
-  SEPARATE_LONGS: "Separate long workouts",
-  SEPARATE_LONG_TIZ: "Separate long TiZ",
+  SEPARATE_LONGS: "Plan longs separately from weekly hours",
+  SEPARATE_LONG_TIZ: "Plan long hours and zone minutes separately",
+};
+
+export const PLANNING_MODE_HELP: Record<PlanningMode, string> = {
+  OVERALL: "One total hours/week, then split across swim, bike, and run.",
+  BY_DISCIPLINE: "Plan swim, bike, and run hours independently.",
+  SEPARATE_LONGS:
+    "Plan the long ride and long run separately from the rest of weekly hours.",
+  SEPARATE_LONG_TIZ:
+    "Like separate longs, and also track the long session's time in zone on its own.",
 };
 
 /** True when long ride/run hours (and optionally TiZ) ramp outside the main bag. */

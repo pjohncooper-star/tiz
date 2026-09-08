@@ -6,25 +6,28 @@ The season planner answers one question: **how much of what, in which week, betw
 
 Open it from **Seasons** in the sidebar. Existing seasons are listed at `/plan/seasons`.
 
-The planner is intentionally **volume-first**. You describe the shape of the season, save with recalculate, and the planner computes every week. Then you either **materialize** those weeks into calendar sessions, or fill them in by hand from the [workout pool](./06-planning-calendar.md#the-workout-pool).
+The planner is intentionally **volume-first**. You describe the shape of the season, save, and the planner computes every week. Then you either **materialize** those weeks into calendar sessions, or fill them in by hand from the [workout pool](./06-planning-calendar.md#the-workout-pool).
 
 ## Creating a season
 
-With no season yet, the page shows a short create form:
+Open **New season** from `/plan/seasons` or `/plan?new=1`. Creation is a 3-step wizard, then one save:
 
-| Field | Default |
-| --- | --- |
-| **Season name** | The current year, for example `2026 Season` |
-| **Start date** | Today |
-| **End date** | Six months out |
+1. **Basics** — name, start, and end. The week count is shown as you type. Dates snap to whole Monday–Sunday weeks.
+2. **Races** — A race plus optional B and C races. An A race (name and date) is required if the next step is Follow TrainerRoad.
+3. **Structure** — exclusive choice:
+   - **Follow TrainerRoad** — imports Base/Build/Specialty blocks that fall inside these dates. Bike stays on the TrainerRoad feed; you plan swim, run, and strength. Disabled until a calendar URL is saved in **Settings → Integrations**.
+   - **Suggest phases for me** — Base / Build / Race prep / Taper, scaled to the week count.
+   - **Start empty** — a blank week grid; you draw phases yourself.
 
-Press **Create season**.
+Load (hours, ramps, rest-week %) is **not** in the wizard. You set that in the workbench after create.
+
+Press **Create season**. You land on `/plan?seasonId=…`.
 
 Some things happen automatically:
 
 - Start snaps back to a **Monday** and end forward to a **Sunday**, because every week in TiZ is Monday-start.
 - The week count is computed from the range.
-- **No phases are created.** A new season is a blank set of weeks; you add structure next.
+- **Suggested** writes those phases in the same request; **Start empty** creates zero phases.
 - A default volume ramp is applied per sport: swim 2 → 4 hours, bike 4 → 8, run 2 → 4, at 5% growth per week.
 - Every fourth week is marked as a **rest week** at 75% of the previous week's volume.
 - Long-session anchors are seeded: long ride 60 → 180 minutes, long run 30 → 90.
@@ -34,20 +37,33 @@ The season's status is derived from its dates: **draft** if it starts more than 
 
 ## The layout
 
-At the top is a sticky **volume timeline** — the chart you will look at most. Below it, collapsible sections in the order you generally work through them:
+Managing a season is a **timeline workbench**, not a stack of collapsible sections.
 
-| Section | Purpose |
+| Region | Purpose |
 | --- | --- |
-| **Season** | Name, dates, default planning mode |
-| **Races** | Your A, B, and C races |
-| **Program** | Optionally attach a program from your library |
-| **Phases** | The real work: blocks, volume, zone focus, long sessions |
-| **Season defaults** | Zone focus per phase kind, hours-vs-distance planning units |
-| **Week review** | The week-by-week table, rest and test weeks |
+| **Header** | Season name, dates, TrainerRoad badge (Follow / Stop following), links to Programs, All seasons, New season. On small screens, a season switcher dropdown. |
+| **Season rail** (desktop) | Compact list from `/plan/seasons`, plus New season. Hidden below the large breakpoint. |
+| **Timeline** | Sticky volume chart with phase bands, race badges, and program bars. Clicking a band, badge, or week **selects** it in the inspector — it does not scroll-jump. |
+| **Canvas** | **Weeks** (the week-by-week table) or **Load** (cross-phase hours table). Starts on Weeks. |
+| **Inspector** | Context pane (~22rem). Starts on Season, with Advanced collapsed. On small screens it is a bottom sheet. |
 
-Each section has its own **Save** and **Cancel**; **Save all** at the top saves everything. Sections that change computed volume say **Save & recalculate** instead, and the timeline shows "Live preview — Save & recalculate to persist volume" while you have unsaved edits.
+Click:
 
-Also at the top: **Programs** (to the library), **All seasons**, and, when ECO load is enabled, a **Fitness / fatigue (season TiZ → ECO)** card that projects your PMC curve from the season you are drafting.
+| Selection | Inspector shows |
+| --- | --- |
+| Season title, or nothing | Name, dates, races summary, phase list, Advanced |
+| Phase band or week-table gutter | Phase tabs: Shape, Load, Intensity, Layout |
+| Week bar or week row | Rest, test, hours and TiZ |
+| Race badge | Race editor |
+| Program bar | Program attachment pane |
+
+**Advanced** (collapsed) on Season: default planning mode, max hours, rest-week %, rest/test templates, phase-kind zone defaults, planning units. On a phase Load tab: planning-mode override and long off-week policy.
+
+Also in the header: **Programs** (to the library) and **All seasons**. When ECO load is enabled, a **Fitness / fatigue** disclosure under the canvas projects your PMC curve from the season you are drafting.
+
+### Saving
+
+There is one save model. A sticky bar appears when the draft differs from the last saved season: **Unsaved changes**, **Discard**, and **Save**. Save always persists the full season and recalculates weekly volume. The timeline may show "Unsaved preview" while you edit; volume updates live as you type, and Save stores that preview.
 
 ### The volume timeline
 
@@ -58,9 +74,13 @@ One bar per week, height proportional to hours, stacked by sport — swim, bike,
 - **A/B/C race badges** on the weeks your races fall in.
 - Month labels along the axis.
 
-Controls: **Show volume** / **Hide volume**, and filters for **All**, **Swim**, **Bike**, **Run**. Clicking a week scrolls the Week review table to it.
+Controls: **Show volume** / **Hide volume**, and filters for **All**, **Swim**, **Bike**, **Run**. Clicking a week selects it in the inspector. Clicking a phase band opens that phase's tabs. A `!` on a phase band means Generate sessions is blocked (unassigned weeks or missing weekly template).
 
 This is the chart to check when you are asking "does this season look right" — you are looking for a sane progression, rest weeks that actually dip, and a taper that actually tapers.
+
+### Load table
+
+Toggle **Load** under the timeline for a cross-phase spreadsheet: one row per discipline (bike hours hide while following TrainerRoad), one column per assigned phase, plus rest-week % and max hours. Edits write the same fields as the phase Load tab. Bike cells say **From TrainerRoad** while that season is following the feed.
 
 ## Races
 
@@ -106,7 +126,7 @@ A conventional long season is something like Base → Base 2 → Build → Race 
 | **Phase kind** | Base / Build / Race prep / Taper |
 | **Label** | The phase name shown on the timeline |
 | Colour picker | The band colour on the timeline |
-| **Planning mode** | Season default, or an override — see [planning modes](#planning-modes) |
+| **Planning mode** | Season default, or an override under Advanced — see [planning modes](#planning-modes) |
 | **Weekly template** | The Mon–Sun layout used when you generate sessions. Required to materialize. |
 | **From week** / **To week** | Week range (on narrow screens; on desktop you drag the phase band's handles in Week review) |
 | **Sessions per week** | Swim, Bike, Run, Strength counts. Defaults 3 / 4 / 3 / 2. |
@@ -118,18 +138,20 @@ A conventional long season is something like Base → Base 2 → Build → Race 
 | **Phase goal** | A free-text note — "Optional focus for this phase" |
 | **Delete phase** | Removes it |
 
-Press **Save & recalculate** to persist and recompute weekly volume.
+Press **Save** on the sticky bar to persist and recompute weekly volume.
+
+Phase settings live in four inspector tabs: **Shape** (kind, label, colour, week range, goal, delete), **Load** (progression, per-discipline start/rate/cap, ramp toggles, long minutes), **Intensity** (sessions/week, intense days, zone focus), **Layout** (weekly template, long-week grid, Generate sessions).
 
 ### Planning modes
 
-The planning mode decides how volume and TiZ are grouped. Set a season default under **Season**, and override per phase if you want.
+The planning mode decides how volume and TiZ are grouped. Set a season default under Season **Advanced**, and override per phase under the Load tab **Advanced** if you want.
 
 | Mode | What you manage |
 | --- | --- |
-| **Overall volume & TiZ** | One total hours target per week; the planner splits it across sports |
+| **Overall volume** | One total hours target per week; the planner splits it across sports |
 | **By discipline** (default) | Separate hours targets for swim, bike, and run |
-| **Separate long workouts** | As above, but the long ride and long run are excluded from the main hours and ramp on their own schedule |
-| **Separate long TiZ** | As above, and the long session's time in zone is tracked separately too |
+| **Plan longs separately from weekly hours** | As above, but the long ride and long run are excluded from the main hours and ramp on their own schedule |
+| **Plan long hours and zone minutes separately** | As above, and the long session's time in zone is tracked separately too |
 
 The separate-long modes exist because the long ride and long run usually progress on a different logic from the rest of the week — you might hold weekly bike hours steady while pushing the long ride from two hours to four. **Sessions per week includes the long session in every mode.** Separate-long only pulls that session's hours (and, in Separate long TiZ, its zone minutes) out of the main ramp.
 
@@ -165,7 +187,7 @@ The seeded focuses, as Z1/Z2/Z3/Z4/Z5 percentages:
 | Strength / power | 60 | 20 | 10 | 8 | 2 |
 | Maintenance | 70 | 22 | 6 | 1 | 1 |
 
-By default Base uses Aerobic base, Build uses Threshold, Race prep uses Race specificity, and Taper uses Freshness. You can change those defaults in **Season defaults**, ramp between two focuses across a phase, or set **Manual TiZ %** with sliders. Add and edit named focuses in **Settings → Training & planning → Zone focus**.
+By default Base uses Aerobic base, Build uses Threshold, Race prep uses Race specificity, and Taper uses Freshness. You can change those defaults in Season **Advanced**, ramp between two focuses across a phase, or set **Manual TiZ %** with sliders. Add and edit named focuses in **Settings → Training & planning → Zone focus**.
 
 Hours × focus percentages give the phase's **TiZ target**: the minutes per zone per sport per week. That budget is what the calendar's workout pool spends when you schedule sessions.
 
@@ -175,7 +197,7 @@ Hours × focus percentages give the phase's **TiZ target**: the minutes per zone
 
 Every phase has **Long bike** and **Long run** checkboxes for each week. A checked week budgets a Long slot (one of the week's sessions). Rest weeks and taper weeks are always off.
 
-In **Overall volume & TiZ** and **By discipline**, an unchecked week keeps the session count: the Long seat becomes Endurance. Long duration and zone minutes stay inside that sport's main hours and TiZ budget.
+In **Overall volume** and **By discipline**, an unchecked week keeps the session count: the Long seat becomes Endurance. Long duration and zone minutes stay inside that sport's main hours and TiZ budget.
 
 The separate-long modes add extra controls for how that seat's volume ramps:
 
@@ -190,15 +212,17 @@ Off-week policies (separate-long modes only): **No substitute**, **Extra intensi
 
 An **off week** is a week without a full-length long session; that is different from a **rest week**, which cuts volume across the board.
 
-After changing long-week checkboxes or planning mode, press **Save & recalculate** so the calendar pool picks up the new slot budgets.
+After changing long-week checkboxes or planning mode, press **Save** so the calendar pool picks up the new slot budgets.
 
 ## Season defaults
 
-Collapsed by default. Two things live here:
+Under Season inspector **Advanced** (collapsed by default):
 
 **Phase kind zone defaults** — the zone focus applied to each phase kind (Base, Build, Race prep, Taper) per sport, used when creating new phases. A link points to **Settings** for managing the focus library itself.
 
 **Planning units** — whether swim and run are planned in **hours** or **distance**, plus the **reference pace** used to convert between them. Bike is always hours. If you think in "60 km weeks" rather than "5 hour weeks", switch the run to distance and give it a reference pace.
+
+Rest-week %, max hours, and rest/test templates also live here.
 
 ## Week review
 
@@ -214,7 +238,7 @@ The week-by-week table, and where you make per-week adjustments.
 
 Expanding a week shows each sport as `Xh · TiZ Ym (Z3 Zm)`. Badges mark weeks covered by an attached program (**Program**) and weeks where you paused it (**Paused**).
 
-**Rest week volume** and **Save & recalculate volume** sit above the table. On desktop, phase bands in the left gutter can be dragged by their top and bottom handles to resize phases.
+**Rest week volume** and **max hours** also live on the Load canvas. On desktop, phase bands in the left gutter can be dragged by their top and bottom handles to resize phases.
 
 ## Generating sessions (materialize)
 
@@ -227,12 +251,12 @@ Each phase has a **Generate sessions for this phase** panel:
 | **Only fill weeks with no existing sessions** | On by default. Skips any week that already has planned sessions. |
 | **Generate sessions** | Runs it |
 
-Two prerequisites: the phase must be **assigned to weeks**, and it must have a **weekly template**. Without them you get "Assign this phase to weeks and choose a weekly template before generating." A phase you just added must be saved first.
+Two prerequisites: the phase must be **assigned to weeks**, and it must have a **weekly template**. Missing ones show next to **Generate sessions** and as a badge on the phase chip / `!` on the timeline band. A phase you just added must be saved first.
 
 What generation does:
 
 - Creates planned sessions for every week in the phase from the phase's weekly template.
-- Uses your **rest week template** for rest weeks and **test week template** for test weeks (both set at the top of the Phases section).
+- Uses your **rest week template** for rest weeks and **test week template** for test weeks (both set under Season **Advanced**).
 - Rewrites long-session slots according to the long-week checkboxes and off-week policy.
 - Avoids colliding with sessions from an attached program.
 - With the checkbox **off**, it replaces previously generated sessions in those weeks while leaving sessions you created by hand alone.
@@ -255,7 +279,7 @@ You can attach several library programs to one season. Windows may overlap (a sw
 | **Pause selected week** | Skips that program for the selected week — holidays, illness, travel |
 | **Pause all programs this week** | Vacation: skip every attached program that week |
 | **Remove** | Detaches that program only; future season-stamped sessions go with it. Unattached library copies of the same program stay. |
-| **Save & apply** | Persists attachments and recalculates |
+| **Save** | Persists attachments and recalculates |
 
 Attached program weeks appear as colored bars on the timeline (one bar per program); paused weeks are dashed. Same-day same-sport overlaps warn with **Prefer A**, **Prefer B**, or **Keep both**. Save is allowed either way.
 
@@ -275,9 +299,9 @@ To work on a specific season, open it from this list.
 
 | Message | Meaning |
 | --- | --- |
-| "Live preview — Save & recalculate to persist volume" | You have unsaved volume edits |
-| "Assign this phase to weeks and choose a weekly template before generating." | Materialize prerequisites are missing |
-| "Save the Phases section to persist this phase before generating sessions." | The phase has not been saved yet |
+| "Unsaved changes" / "Unsaved preview" | You have edits that are not saved yet. Press **Save** or **Discard**. |
+| "Assign this phase to weeks" / "Choose a weekly template" | Generate-session prerequisites are missing |
+| "Save the season first so assignments are stored." | The phase has not been saved yet |
 | "Created N sessions… (skipped M with existing sessions)" | Materialize skipped already-populated weeks |
 | A season overlap error | Your dates collide with another season |
 

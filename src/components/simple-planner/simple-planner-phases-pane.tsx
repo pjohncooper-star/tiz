@@ -29,7 +29,9 @@ import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
+import { phaseGenerateBlockers } from "@/lib/plan/season/phase-generate-blockers";
 import {
+  PLANNING_MODE_HELP,
   PLANNING_MODE_LABELS,
   PLANNING_MODES,
   planningModeSeparatesLongVolume,
@@ -94,10 +96,6 @@ type SimplePlannerPhasesPaneProps = {
   longRunOwnedByProgram?: boolean[];
   programWeekHint?: SimpleWeek | null;
   trainerRoadDriven?: boolean;
-  trainerRoadCalendarSaved?: boolean;
-  trainerRoadBusy?: boolean;
-  onFollowTrainerRoad?: () => void;
-  onStopFollowingTrainerRoad?: () => void;
 };
 
 export function SimplePlannerPhasesPane({
@@ -122,10 +120,6 @@ export function SimplePlannerPhasesPane({
   longRunOwnedByProgram = [],
   programWeekHint = null,
   trainerRoadDriven = false,
-  trainerRoadCalendarSaved = false,
-  trainerRoadBusy = false,
-  onFollowTrainerRoad,
-  onStopFollowingTrainerRoad,
 }: SimplePlannerPhasesPaneProps) {
   const selected =
     phases.find((phase) => phase.id === selectedPhaseId) ??
@@ -158,39 +152,6 @@ export function SimplePlannerPhasesPane({
 
   return (
     <div className="space-y-4">
-      {trainerRoadDriven ? (
-        <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-          <p>
-            Phases come from TrainerRoad. Swim and run volume stay editable; bike workouts
-            stay on the calendar feed.
-          </p>
-          {onStopFollowingTrainerRoad ? (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={trainerRoadBusy}
-              onClick={onStopFollowingTrainerRoad}
-            >
-              {trainerRoadBusy ? "Updating…" : "Stop following TrainerRoad"}
-            </Button>
-          ) : null}
-        </div>
-      ) : trainerRoadCalendarSaved && onFollowTrainerRoad ? (
-        <div className="space-y-2 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
-          <p className="text-zinc-600 dark:text-zinc-400">
-            Attach this season to your TrainerRoad calendar. Requires an A Race. Only phases
-            inside this season’s dates are imported.
-          </p>
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={trainerRoadBusy}
-            onClick={onFollowTrainerRoad}
-          >
-            {trainerRoadBusy ? "Updating…" : "Follow TrainerRoad phases"}
-          </Button>
-        </div>
-      ) : null}
       <div className="flex flex-wrap items-center justify-end gap-3">
         {trainerRoadDriven ? null : (
           <Button type="button" variant="secondary" onClick={addEmptyPhase}>
@@ -219,6 +180,11 @@ export function SimplePlannerPhasesPane({
                   style={{ backgroundColor: phase.color }}
                 />
                 <span className="font-medium">{phase.name}</span>
+                {phaseGenerateBlockers(phase).length > 0 ? (
+                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                    {phaseGenerateBlockers(phase)[0]}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-1 text-xs text-zinc-500">
                 {formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)}
@@ -279,13 +245,12 @@ export function SimplePlannerPhasesPane({
               seasonId={seasonId}
               phaseId={selected.id}
               phaseName={selected.name}
-              canGenerate={
-                isAssignedPhase(selected) && Boolean(selected.weeklyTemplateId)
-              }
+              canGenerate={phaseGenerateBlockers(selected).length === 0}
+              blockers={phaseGenerateBlockers(selected)}
             />
           ) : (
             <p className="mt-3 text-xs text-zinc-500">
-              Save the Phases section to persist this phase before generating sessions.
+              Save the season to persist this phase before generating sessions.
             </p>
           )}
         </div>
@@ -294,7 +259,9 @@ export function SimplePlannerPhasesPane({
   );
 }
 
-function PhaseDetailEditor({
+export type PhaseEditorSection = "all" | "shape" | "load" | "intensity" | "layout";
+
+export function PhaseDetailEditor({
   phase,
   phases,
   phaseKindZoneDefaults,
@@ -315,6 +282,7 @@ function PhaseDetailEditor({
   onChange,
   onDelete,
   phasesLocked = false,
+  section = "all",
 }: {
   phase: SimplePhase;
   phases: SimplePhase[];
@@ -336,7 +304,10 @@ function PhaseDetailEditor({
   onChange: (phase: SimplePhase) => void;
   onDelete: () => void;
   phasesLocked?: boolean;
+  section?: PhaseEditorSection;
 }) {
+  const show = (name: Exclude<PhaseEditorSection, "all">) =>
+    section === "all" || section === name;
   const assigned = isAssignedPhase(phase);
   const weekLabel = assigned
     ? formatWeekRange(phase.startWeekIndex, phase.endWeekIndex)
@@ -346,12 +317,13 @@ function PhaseDetailEditor({
   const restWeekByIndex = weeks.map((week) => week.isRestWeek);
 
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <p className="text-sm font-semibold">Editing: {phase.name}</p>
+    <div className={section === "all" ? "rounded-lg border border-zinc-200 p-4 dark:border-zinc-800" : "space-y-4"}>
+      {section === "all" ? <p className="text-sm font-semibold">Editing: {phase.name}</p> : null}
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div>
-          <Label>Phase kind</Label>
+      {show("shape") ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Phase kind</Label>
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             value={phase.phaseKind}
@@ -396,7 +368,90 @@ function PhaseDetailEditor({
             onChange={(event) => onChange({ ...phase, color: event.target.value })}
           />
         </div>
-        <div>
+        </div>
+      ) : null}
+      {show("load") ? (
+        <>
+      <PhaseVolumeEditor
+        phase={phase}
+        phases={phases}
+        weeks={weeks}
+        effectiveMode={effectiveMode}
+        showLongSettings={showLongVolumeSettings}
+        rampDefaults={rampDefaults}
+        disciplineSettings={disciplineSettings}
+        onChange={onChange}
+        hideBike={phasesLocked}
+      />
+
+      <fieldset className="mt-4 space-y-3">
+        <legend className="text-sm font-medium">Long sessions</legend>
+        <p className="text-xs text-zinc-500">
+          {showLongVolumeSettings
+            ? "Sessions per week includes the long on long weeks; off-week policy replaces or drops that seat. Long bike/run volume ramps stay outside main hours."
+            : "Sessions per week includes the long. Unchecked weeks keep an endurance session instead. Rest and taper weeks omit the long."}
+        </p>
+        {showLongVolumeSettings ? (
+          <>
+            <LongDisciplineEditor
+              label="Long ride"
+              startMin={phase.longRideStartMin}
+              endMin={phase.longRideEndMin}
+              offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+              offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
+              onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
+              onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
+              onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
+              onPercentChange={(value) =>
+                onChange({ ...phase, longRideOffWeekEndurancePercent: value })
+              }
+              showOffWeekPolicy={false}
+            />
+            <LongDisciplineEditor
+              label="Long run"
+              startMin={phase.longRunStartMin}
+              endMin={phase.longRunEndMin}
+              offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+              offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
+              onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
+              onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
+              onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
+              onPercentChange={(value) =>
+                onChange({ ...phase, longRunOffWeekEndurancePercent: value })
+              }
+              showOffWeekPolicy={false}
+            />
+          </>
+        ) : null}
+      </fieldset>
+
+      <fieldset className="mt-4 space-y-2">
+        <legend className="text-sm font-medium">Ramp by discipline</legend>
+        {(["swim", "bike", "run"] as const).map((discipline) => (
+          <label key={discipline} className="flex items-center gap-2 text-sm capitalize">
+            <input
+              type="checkbox"
+              checked={phase.rampEnabled[discipline]}
+              disabled={phasesLocked && discipline === "bike"}
+              onChange={(event) =>
+                onChange({
+                  ...phase,
+                  rampEnabled: {
+                    ...phase.rampEnabled,
+                    [discipline]: event.target.checked,
+                  },
+                })
+              }
+            />
+            {discipline} ramp on
+          </label>
+        ))}
+      </fieldset>
+
+        <details className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <summary className="cursor-pointer text-sm font-medium">Advanced</summary>
+          <div className="mt-3 space-y-4">
+          <div>
           <Label>Planning mode</Label>
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
@@ -419,7 +474,45 @@ function PhaseDetailEditor({
               </option>
             ))}
           </select>
-        </div>
+          <p className="mt-1 text-xs text-zinc-500">{PLANNING_MODE_HELP[effectiveMode]}</p>
+          </div>
+          {showLongVolumeSettings ? (
+            <>
+              <LongDisciplineEditor
+                label="Long ride off-week"
+                startMin={phase.longRideStartMin}
+                endMin={phase.longRideEndMin}
+                offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+                offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
+                onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
+                onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
+                onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
+                onPercentChange={(value) =>
+                  onChange({ ...phase, longRideOffWeekEndurancePercent: value })
+                }
+                minutesHidden
+              />
+              <LongDisciplineEditor
+                label="Long run off-week"
+                startMin={phase.longRunStartMin}
+                endMin={phase.longRunEndMin}
+                offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+                offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
+                onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
+                onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
+                onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
+                onPercentChange={(value) =>
+                  onChange({ ...phase, longRunOffWeekEndurancePercent: value })
+                }
+                minutesHidden
+              />
+            </>
+          ) : null}
+          </div>
+        </details>
+        </>
+      ) : null}
+      {show("layout") ? (
         <div>
           <Label>Weekly template</Label>
           <select
@@ -444,8 +537,10 @@ function PhaseDetailEditor({
             template library.
           </p>
         </div>
-      </div>
+      ) : null}
 
+      {show("shape") ? (
+        <>
       <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
         Weeks: <span className="font-medium">{weekLabel}</span>
       </p>
@@ -492,7 +587,11 @@ function PhaseDetailEditor({
           </select>
         </div>
       </div>
+        </>
+      ) : null}
 
+      {show("intensity") ? (
+        <>
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Sessions per week</legend>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -601,96 +700,27 @@ function PhaseDetailEditor({
           showStartEnd
         />
       </fieldset>
+        </>
+      ) : null}
 
-      <PhaseVolumeEditor
-        phase={phase}
-        phases={phases}
-        weeks={weeks}
-        effectiveMode={effectiveMode}
-        showLongSettings={showLongVolumeSettings}
-        rampDefaults={rampDefaults}
-        disciplineSettings={disciplineSettings}
-        onChange={onChange}
-        hideBike={phasesLocked}
-      />
+      {show("layout") && assigned ? (
+        <LongWeekScheduleGrid
+          startWeekIndex={phase.startWeekIndex}
+          endWeekIndex={phase.endWeekIndex}
+          phaseKind={phase.phaseKind}
+          longRideWeekFlags={longRideWeekFlags}
+          longRunWeekFlags={longRunWeekFlags}
+          restWeekByIndex={restWeekByIndex}
+          longRideOwnedByProgram={longRideOwnedByProgram}
+          longRunOwnedByProgram={longRunOwnedByProgram}
+          onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
+          onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
+          separatesLongVolume={showLongVolumeSettings}
+        />
+      ) : null}
 
-      <fieldset className="mt-4 space-y-3">
-        <legend className="text-sm font-medium">Long sessions</legend>
-        <p className="text-xs text-zinc-500">
-          {showLongVolumeSettings
-            ? "Sessions per week includes the long on long weeks; off-week policy replaces or drops that seat. Long bike/run volume ramps stay outside main hours."
-            : "Sessions per week includes the long. Unchecked weeks keep an endurance session instead. Rest and taper weeks omit the long."}
-        </p>
-        {showLongVolumeSettings ? (
-          <>
-            <LongDisciplineEditor
-              label="Long ride"
-              startMin={phase.longRideStartMin}
-              endMin={phase.longRideEndMin}
-              offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
-              offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
-              onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
-              onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
-              onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
-              onPercentChange={(value) =>
-                onChange({ ...phase, longRideOffWeekEndurancePercent: value })
-              }
-            />
-            <LongDisciplineEditor
-              label="Long run"
-              startMin={phase.longRunStartMin}
-              endMin={phase.longRunEndMin}
-              offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
-              offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
-              onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
-              onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
-              onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
-              onPercentChange={(value) =>
-                onChange({ ...phase, longRunOffWeekEndurancePercent: value })
-              }
-            />
-          </>
-        ) : null}
-        {assigned ? (
-          <LongWeekScheduleGrid
-            startWeekIndex={phase.startWeekIndex}
-            endWeekIndex={phase.endWeekIndex}
-            phaseKind={phase.phaseKind}
-            longRideWeekFlags={longRideWeekFlags}
-            longRunWeekFlags={longRunWeekFlags}
-            restWeekByIndex={restWeekByIndex}
-            longRideOwnedByProgram={longRideOwnedByProgram}
-            longRunOwnedByProgram={longRunOwnedByProgram}
-            onLongRideWeekFlagsChange={onLongRideWeekFlagsChange}
-            onLongRunWeekFlagsChange={onLongRunWeekFlagsChange}
-            separatesLongVolume={showLongVolumeSettings}
-          />
-        ) : null}
-      </fieldset>
-
-      <fieldset className="mt-4 space-y-2">
-        <legend className="text-sm font-medium">Ramp by discipline</legend>
-        {(["swim", "bike", "run"] as const).map((discipline) => (
-          <label key={discipline} className="flex items-center gap-2 text-sm capitalize">
-            <input
-              type="checkbox"
-              checked={phase.rampEnabled[discipline]}
-              disabled={phasesLocked && discipline === "bike"}
-              onChange={(event) =>
-                onChange({
-                  ...phase,
-                  rampEnabled: {
-                    ...phase.rampEnabled,
-                    [discipline]: event.target.checked,
-                  },
-                })
-              }
-            />
-            {discipline} ramp on
-          </label>
-        ))}
-      </fieldset>
-
+      {show("shape") ? (
+        <>
       <div className="mt-4">
         <Label>Phase goal</Label>
         <Input
@@ -708,11 +738,13 @@ function PhaseDetailEditor({
           </Button>
         )}
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
 
-function PhaseVolumeEditor({
+export function PhaseVolumeEditor({
   phase,
   phases,
   weeks,
@@ -1240,7 +1272,7 @@ function ChainedVolumeStartInput({
   );
 }
 
-function LongDisciplineEditor({
+export function LongDisciplineEditor({
   label,
   startMin,
   endMin,
@@ -1250,6 +1282,8 @@ function LongDisciplineEditor({
   onEndMinChange,
   onPolicyChange,
   onPercentChange,
+  showOffWeekPolicy = true,
+  minutesHidden = false,
 }: {
   label: string;
   startMin?: number | null;
@@ -1260,79 +1294,87 @@ function LongDisciplineEditor({
   onEndMinChange: (value: number | null) => void;
   onPolicyChange: (value: LongOffWeekPolicy) => void;
   onPercentChange: (value: number) => void;
+  showOffWeekPolicy?: boolean;
+  minutesHidden?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
       <p className="text-sm font-medium">{label}</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>Start (min)</Label>
-          <NumberEditorInput
-            min={0}
-            nullable
-            className="mt-1"
-            placeholder="Season default"
-            value={startMin ?? null}
-            onCommit={onStartMinChange}
-          />
-        </div>
-        <div>
-          <Label>End (min)</Label>
-          <NumberEditorInput
-            min={0}
-            nullable
-            className="mt-1"
-            placeholder="Season default"
-            value={endMin ?? null}
-            onCommit={onEndMinChange}
-          />
-        </div>
-      </div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label>Off-week policy</Label>
-          <select
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            value={offWeekPolicy}
-            onChange={(event) => onPolicyChange(event.target.value as LongOffWeekPolicy)}
-          >
-            {LONG_OFF_WEEK_POLICIES.map((policy) => (
-              <option key={policy} value={policy}>
-                {LONG_OFF_WEEK_POLICY_LABELS[policy]}
-              </option>
-            ))}
-          </select>
-        </div>
-        {offWeekPolicy === "ENDURANCE_PERCENT" ? (
+      {minutesHidden ? null : (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <Label>Endurance % of long</Label>
+            <Label>Start (min)</Label>
             <NumberEditorInput
               min={0}
-              max={100}
+              nullable
               className="mt-1"
-              value={offWeekPercent}
-              onCommit={(v) => {
-                if (v == null) return;
-                onPercentChange(v);
-              }}
+              placeholder="Season default"
+              value={startMin ?? null}
+              onCommit={onStartMinChange}
             />
           </div>
-        ) : null}
-      </div>
+          <div>
+            <Label>End (min)</Label>
+            <NumberEditorInput
+              min={0}
+              nullable
+              className="mt-1"
+              placeholder="Season default"
+              value={endMin ?? null}
+              onCommit={onEndMinChange}
+            />
+          </div>
+        </div>
+      )}
+      {showOffWeekPolicy ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Off-week policy</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={offWeekPolicy}
+              onChange={(event) => onPolicyChange(event.target.value as LongOffWeekPolicy)}
+            >
+              {LONG_OFF_WEEK_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {LONG_OFF_WEEK_POLICY_LABELS[policy]}
+                </option>
+              ))}
+            </select>
+          </div>
+          {offWeekPolicy === "ENDURANCE_PERCENT" ? (
+            <div>
+              <Label>Endurance % of long</Label>
+              <NumberEditorInput
+                min={0}
+                max={100}
+                className="mt-1"
+                value={offWeekPercent}
+                onCommit={(v) => {
+                  if (v == null) return;
+                  onPercentChange(v);
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function MaterializePhasePanel({
+export function MaterializePhasePanel({
   seasonId,
   phaseId,
   phaseName,
   canGenerate,
+  blockers = [],
 }: {
   seasonId: string;
   phaseId: string;
   phaseName: string;
   canGenerate: boolean;
+  blockers?: string[];
 }) {
   const [busy, setBusy] = useState(false);
   const [onlyEmptyWeeks, setOnlyEmptyWeeks] = useState(true);
@@ -1372,12 +1414,14 @@ function MaterializePhasePanel({
       <p className="text-sm font-semibold">Generate sessions for this phase</p>
       <p className="mt-1 text-xs text-zinc-500">
         Fill calendar weeks in {phaseName} from the assigned phase template (and season
-        rest/test templates on flagged weeks). Save the Phases section first so assignments
+        rest/test templates on flagged weeks). Save the season first so assignments
         are stored.
       </p>
       {!canGenerate ? (
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-          Assign this phase to weeks and choose a weekly template before generating.
+          {blockers.length > 0
+            ? blockers.join(". ") + "."
+            : "Assign this phase to weeks and choose a weekly template before generating."}
         </p>
       ) : null}
       <label className="mt-3 flex items-center gap-2 text-sm">

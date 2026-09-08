@@ -173,6 +173,18 @@ export type SimpleTrainingPlanAttachment = {
 
 export type { PoolSlotKind, WeekSlotBudgets };
 
+export type InspectorTarget =
+  | { kind: "season" }
+  | { kind: "phase"; phaseId: string }
+  | { kind: "week"; weekIndex: number }
+  | { kind: "race"; eventKey: string }
+  | { kind: "program"; attachmentId: string };
+
+export function raceEventKey(race: SimpleGoalEvent, index = 0): string {
+  if (race.id) return race.id;
+  return `${race.priority}-${index}`;
+}
+
 export function emptyRace(priority: "A" | "B" | "C"): SimpleGoalEvent {
   return {
     name: "",

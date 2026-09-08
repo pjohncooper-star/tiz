@@ -24,8 +24,10 @@ export default async function PlanPage({
     athlete && "ecoLoadEnabled" in athlete ? athlete.ecoLoadEnabled : false
   );
 
+  const isCreate = params.new === "1" && !params.seasonId;
+
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <main className={isCreate ? "mx-auto max-w-6xl px-4 py-8" : "px-4 py-8"}>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading season…</p>}>
         <SimplePlannerView
           ecoLoadEnabled={ecoLoadEnabled}
