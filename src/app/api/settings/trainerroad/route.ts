@@ -8,13 +8,17 @@ import {
   syncTrainerRoadCalendar,
 } from "@/lib/plan/trainerroad/sync";
 import { listTrainerRoadDrivenSeasons } from "@/lib/plan/trainerroad/season.server";
+import { parseTrainerRoadCalendar } from "@/lib/plan/trainerroad/calendar";
+import { trainerRoadCalendarToSeasonDraft } from "@/lib/plan/trainerroad/season";
 import { normalizeTrainerRoadIcalUrl } from "@/lib/plan/trainerroad/url";
 
 const saveSchema = z.object({
   url: z.string().max(2000),
 });
 
-export async function GET() {
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function GET(request: Request) {
   const session = await auth();
   const athleteId = session?.user?.athleteId;
   if (!athleteId) {
@@ -26,14 +30,48 @@ export async function GET() {
       where: { id: athleteId },
       select: { trainerRoadIcalUrl: true, trainerRoadSyncedAt: true },
     });
+    const url = new URL(request.url);
+    const startDate = url.searchParams.get("startDate");
+    const endDate = url.searchParams.get("endDate");
+    let previewPhases: Array<{
+      name: string;
+      color: string;
+      startWeekIndex: number;
+      endWeekIndex: number;
+    }> | null = null;
+    if (
+      athlete?.trainerRoadIcalUrl &&
+      startDate &&
+      endDate &&
+      DATE_KEY.test(startDate) &&
+      DATE_KEY.test(endDate)
+    ) {
+      try {
+        const ics = await fetchTrainerRoadIcs(athlete.trainerRoadIcalUrl);
+        const calendar = parseTrainerRoadCalendar(ics);
+        const draft = trainerRoadCalendarToSeasonDraft(calendar, {
+          startDateKey: startDate,
+          endDateKey: endDate,
+        });
+        previewPhases = (draft?.phases ?? []).map((phase) => ({
+          name: phase.name,
+          color: phase.color,
+          startWeekIndex: phase.startWeekIndex,
+          endWeekIndex: phase.endWeekIndex,
+        }));
+      } catch {
+        previewPhases = [];
+      }
+    }
     return NextResponse.json({
       url: athlete?.trainerRoadIcalUrl ?? null,
       syncedAt: athlete?.trainerRoadSyncedAt?.toISOString() ?? null,
       seasons: await listTrainerRoadDrivenSeasons(athleteId),
+      previewPhases,
     });
   } catch (error) {
     if (error instanceof Error && /trainerRoadIcalUrl|column/i.test(error.message)) {
-      return NextResponse.json({ url: null, syncedAt: null, seasons: [] });
+      return NextResponse.json({ url: null, syncedAt: null, seasons: [], previewPhases: null });
     }
     throw error;
   }

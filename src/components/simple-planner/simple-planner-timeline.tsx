@@ -9,13 +9,15 @@ import {
 } from "@/lib/plan/season/preview-race-markers";
 import { monthTicksForWeeks } from "@/lib/plan/season/season-dates";
 import { isAssignedPhase, phaseForWeekIndex } from "@/lib/plan/season/phase-span-utils";
+import { phaseGenerateBlockers } from "@/lib/plan/season/phase-generate-blockers";
 import type { ApplyWindowWithPausesResult } from "@/lib/plan/training-plan";
-import type {
-  PlanWeekCoverage,
-  SimpleGoalEvent,
-  SimplePhase,
-  SimpleTrainingPlanAttachment,
-  SimpleWeek,
+import {
+  raceEventKey,
+  type PlanWeekCoverage,
+  type SimpleGoalEvent,
+  type SimplePhase,
+  type SimpleTrainingPlanAttachment,
+  type SimpleWeek,
 } from "./simple-planner-types";
 
 const DISCIPLINE_COLORS = {
@@ -39,6 +41,9 @@ type SimplePlannerTimelineProps = {
   primaryGoalEvent: SimpleGoalEvent | null;
   selectedWeekIndex: number | null;
   onSelectWeek: (weekIndex: number) => void;
+  onSelectPhase?: (phaseId: string) => void;
+  onSelectRace?: (eventKey: string) => void;
+  onSelectProgram?: (attachmentId: string) => void;
   sticky?: boolean;
   previewHint?: string | null;
   planWindow?: ApplyWindowWithPausesResult | null;
@@ -71,6 +76,9 @@ export function SimplePlannerTimeline({
   primaryGoalEvent,
   selectedWeekIndex,
   onSelectWeek,
+  onSelectPhase,
+  onSelectRace,
+  onSelectProgram,
   sticky = false,
   previewHint = null,
   planWindow = null,
@@ -204,9 +212,12 @@ export function SimplePlannerTimeline({
     function onPointerEnd() {
       const drag = programDragRef.current;
       setProgramDrag(null);
-      if (drag && drag.weekDelta !== 0) {
+      if (!drag) return;
+      if (drag.weekDelta !== 0) {
         moveProgram(drag.attachmentId, drag.weekDelta);
+        return;
       }
+      onSelectProgram?.(drag.attachmentId);
     }
 
     window.addEventListener("pointermove", onPointerMove);
@@ -217,7 +228,7 @@ export function SimplePlannerTimeline({
       window.removeEventListener("pointerup", onPointerEnd);
       window.removeEventListener("pointercancel", onPointerEnd);
     };
-  }, [onMoveProgram, programDrag?.attachmentId, weeks.length]);
+  }, [onMoveProgram, onSelectProgram, programDrag?.attachmentId, weeks.length]);
 
   const chart = (
     <div className="space-y-2">
@@ -326,12 +337,20 @@ export function SimplePlannerTimeline({
               })}
             </div>
 
-            {raceMarkers.map((marker) => (
-              <div
+            {raceMarkers.map((marker, index) => {
+              const events = goalEventsForRaceMarkers(primaryGoalEvent, goalEvents);
+              const event = events[index];
+              return (
+              <button
                 key={marker.key}
-                className="pointer-events-none absolute bottom-0 z-10 -translate-x-1/2"
+                type="button"
+                className="absolute bottom-0 z-10 -translate-x-1/2"
                 style={{ left: `${marker.positionFraction * 100}%` }}
                 title={marker.tooltip}
+                onClick={() => {
+                  if (!event) return;
+                  onSelectRace?.(raceEventKey(event, index));
+                }}
               >
                 <span
                   className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white ${
@@ -344,8 +363,9 @@ export function SimplePlannerTimeline({
                 >
                   {marker.priority}
                 </span>
-              </div>
-            ))}
+              </button>
+              );
+            })}
           </div>
 
           {focus === "all" && (
@@ -380,19 +400,29 @@ export function SimplePlannerTimeline({
               const widthPct =
                 ((phase.endWeekIndex - phase.startWeekIndex + 1) / displayWeeks) * 100;
               const leftPct = (phase.startWeekIndex / displayWeeks) * 100;
+              const blockers = phaseGenerateBlockers(phase);
               return (
-                <div
+                <button
                   key={phase.id ?? `${phase.name}-${phase.startWeekIndex}`}
+                  type="button"
                   className="absolute top-0 flex h-4 items-center overflow-hidden rounded-sm px-1 text-[10px] font-medium text-white"
                   style={{
                     left: `${leftPct}%`,
                     width: `${widthPct}%`,
                     backgroundColor: phase.color,
                   }}
-                  title={phase.name}
+                  title={
+                    blockers.length > 0
+                      ? `${phase.name} — ${blockers.join(". ")}`
+                      : phase.name
+                  }
+                  onClick={() => onSelectPhase?.(phase.id ?? phase.name)}
                 >
-                  <span className="truncate">{phase.name}</span>
-                </div>
+                  <span className="truncate">
+                    {phase.name}
+                    {blockers.length > 0 ? " !" : ""}
+                  </span>
+                </button>
               );
             })}
           </div>

@@ -2,7 +2,7 @@ import type { Discipline } from "@prisma/client";
 import {
   flattenOptionsForDiscipline,
   type PaceThresholdContext,
-} from "@/lib/plan/pace-threshold-context";
+} from "@/lib/plan/pace-threshold-flatten";
 import {
   flattenForPlanning,
   flatStepDurationSeconds,

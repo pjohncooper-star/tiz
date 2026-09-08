@@ -37,6 +37,7 @@ import {
 import { migrateSeasonRampDefaultsOntoPhases } from "./migrate-season-ramp-to-phases";
 import { fitSimplePhasesToTotalWeeks } from "./phase-span-utils";
 import type { SimplePhase } from "@/components/simple-planner/simple-planner-types";
+import { phasesForCreateSeed } from "./simple-phase-zone-seed";
 import {
   parsePhaseKindZoneDefaults,
   resolvePhaseKindZoneDefaultsForNewSeason,
@@ -166,6 +167,7 @@ export type CreateSimpleSeasonInput = {
   phaseKindZoneDefaults?: PhaseKindZoneDefaults;
   defaultPlanningMode?: PlanningMode;
   trainerRoadDriven?: boolean;
+  seedPhases?: "empty" | "suggested";
   goalEvent?: GoalEventWriteInput;
   bGoalEvents?: GoalEventWriteInput[];
   cGoalEvents?: GoalEventWriteInput[];
@@ -719,6 +721,8 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
     bounds.endDate
   );
 
+  const suggestedPhases = phasesForCreateSeed(input.seedPhases, bounds.totalWeeks);
+
   if (overlapping.length === 1 && !overlapping[0]!.setupComplete) {
     return updateSimpleSeasonPlan(input.athleteId, overlapping[0]!.id, {
       name: input.name,
@@ -726,7 +730,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       endDate: input.endDate,
       rampDefaults: input.rampDefaults,
       phaseKindZoneDefaults: input.phaseKindZoneDefaults,
-      phases: [],
+      phases: suggestedPhases,
       recalculate: true,
       trainerRoadDriven: input.trainerRoadDriven,
       goalEvent: input.goalEvent,
@@ -788,7 +792,7 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
   const status = deriveSeasonStatus(bounds.startDate, bounds.endDate);
   const seasonPlanId = cuid();
 
-  return db.$transaction(async (tx) => {
+  const created = await db.$transaction(async (tx) => {
     await tx.seasonPlan.create({
       data: {
         id: seasonPlanId,
@@ -830,7 +834,14 @@ export async function createSimpleSeasonPlan(input: CreateSimpleSeasonInput) {
       });
     }
 
-    return getSeasonPlanById(input.athleteId, seasonPlanId, tx);
+    const created = await getSeasonPlanById(input.athleteId, seasonPlanId, tx);
+    return created;
+  });
+
+  if (!created || suggestedPhases.length === 0) return created;
+  return updateSimpleSeasonPlan(input.athleteId, created.id, {
+    phases: suggestedPhases,
+    recalculate: true,
   });
 }
 

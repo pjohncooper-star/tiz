@@ -65,15 +65,15 @@
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| The workout pool is empty | The week has no season targets | The pool only appears for weeks inside an active season. Create a season and save with recalculate. |
-| "No typed pool slots for this week" | The season was saved without recalculating slot budgets | Save the season again using **Save & recalculate**. |
+| The workout pool is empty | The week has no season targets | The pool only appears for weeks inside an active season. Create a season and save. |
+| "No typed pool slots for this week" | The season was saved without recalculating slot budgets | Save the season again. Save always recalculates. |
 | The pool panel won't open | It is desktop-only and closes below 768px wide | Use a wider window. |
 | I can't drop a pool card on a day | Only the **pool week** — the one with the emerald ring — accepts drops | Navigate the pool to the week you want with **◀** / **▶**. |
 | I can't reorder sessions within a day | Sessions with a **start time** are ordered by that time | Clear the start time to hand-order them. |
 | The **Shift** menu isn't on the week header | Shifting is hidden for weeks inside an active season | Adjust the season plan instead. |
-| **Generate sessions** is refused | The phase isn't assigned to weeks, or has no weekly template | Assign week ranges and pick a **Weekly template**, then save the Phases section. |
+| **Generate sessions** is refused | The phase isn't assigned to weeks, or has no weekly template | Assign week ranges and pick a **Weekly template** on the Layout tab, then Save. |
 | Generating created nothing | "Only fill weeks with no existing sessions" skipped populated weeks | Untick it to replace previously generated sessions, or clear the weeks first. |
-| Season volume edits don't stick | The timeline says "Live preview — Save & recalculate to persist volume" | Press **Save & recalculate**. |
+| Season volume edits don't stick | The sticky bar still shows unsaved changes | Press **Save**. |
 | A season won't save | Seasons cannot overlap | Adjust the dates or archive the other season. |
 | Past sessions aren't shaded green or red | Workout shading is off by default | Turn it on per sport in **Settings → Units & display → Workout shading**. |
 

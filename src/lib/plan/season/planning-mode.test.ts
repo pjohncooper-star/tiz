@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  PLANNING_MODE_HELP,
+  PLANNING_MODE_LABELS,
+  PLANNING_MODES,
   phaseForWeekIndex,
   planningModeSeparatesLongVolume,
   resolvePlanningModeForWeek,
@@ -51,5 +54,22 @@ describe("planning-mode", () => {
     assert.equal(planningModeSeparatesLongVolume("SEPARATE_LONG_TIZ"), true);
     assert.equal(planningModeSeparatesLongVolume("BY_DISCIPLINE"), false);
     assert.equal(planningModeSeparatesLongVolume("OVERALL"), false);
+  });
+
+  it("names modes in athlete language with a help line each", () => {
+    assert.equal(PLANNING_MODE_LABELS.OVERALL, "Overall volume");
+    assert.equal(PLANNING_MODE_LABELS.BY_DISCIPLINE, "By discipline");
+    assert.equal(
+      PLANNING_MODE_LABELS.SEPARATE_LONGS,
+      "Plan longs separately from weekly hours"
+    );
+    assert.equal(
+      PLANNING_MODE_LABELS.SEPARATE_LONG_TIZ,
+      "Plan long hours and zone minutes separately"
+    );
+    for (const mode of PLANNING_MODES) {
+      assert.equal(typeof PLANNING_MODE_HELP[mode], "string");
+      assert.ok(PLANNING_MODE_HELP[mode].length > 10);
+    }
   });
 });

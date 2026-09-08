@@ -482,6 +482,7 @@ export const createSimpleSeasonSchema = z.object({
   rampDefaults: simpleRampDefaultsSchema.optional(),
   defaultPlanningMode: planningModeSchema.optional(),
   trainerRoadDriven: z.boolean().optional(),
+  seedPhases: z.enum(["empty", "suggested"]).optional().default("empty"),
   goalEvent: seasonGoalEventSchema.optional(),
   bGoalEvents: z.array(seasonGoalEventSchema).optional(),
   cGoalEvents: z.array(seasonGoalEventSchema).optional(),

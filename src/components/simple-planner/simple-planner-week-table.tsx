@@ -25,6 +25,7 @@ type SimplePlannerWeekTableProps = {
   onTestWeekFlagsChange: (flags: boolean[]) => void;
   selectedPhaseId: string | null;
   onSelectPhase: (phaseId: string | null) => void;
+  onSelectWeek?: (weekIndex: number) => void;
   onWeeksChange: (weeks: SimpleWeek[]) => void;
   onPhasesChange: (phases: SimplePhase[]) => void;
   highlightedWeekIndex: number | null;
@@ -78,6 +79,7 @@ export function SimplePlannerWeekTable({
   onTestWeekFlagsChange,
   selectedPhaseId,
   onSelectPhase,
+  onSelectWeek,
   onWeeksChange,
   onPhasesChange,
   highlightedWeekIndex,
@@ -258,6 +260,7 @@ export function SimplePlannerWeekTable({
                   expanded={expanded.has(week.weekIndex)}
                   highlighted={highlightedWeekIndex === week.weekIndex}
                   onToggle={() => toggleExpanded(week.weekIndex)}
+                  onSelectWeek={onSelectWeek}
                   onUpdateWeek={(patch) => updateWeek(week.weekIndex, patch)}
                   isTestWeek={testWeekFlags[week.weekIndex] ?? false}
                   onToggleTestWeek={(checked) => toggleTestWeek(week.weekIndex, checked)}
@@ -280,6 +283,7 @@ export function SimplePlannerWeekTable({
                 expanded={expanded}
                 highlightedWeekIndex={highlightedWeekIndex}
                 onSelectPhase={() => onSelectPhase(phase.id ?? null)}
+                onSelectWeek={onSelectWeek}
                 onToggleExpanded={toggleExpanded}
                 onUpdateWeek={updateWeek}
                 onDragStart={(edge, clientY) => {
@@ -455,6 +459,7 @@ function WeekRowGroup({
   expanded,
   highlighted,
   onToggle,
+  onSelectWeek,
   onUpdateWeek,
   isTestWeek,
   onToggleTestWeek,
@@ -464,6 +469,7 @@ function WeekRowGroup({
   expanded: boolean;
   highlighted: boolean;
   onToggle: () => void;
+  onSelectWeek?: (weekIndex: number) => void;
   onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
   isTestWeek: boolean;
   onToggleTestWeek: (checked: boolean) => void;
@@ -486,6 +492,7 @@ function WeekRowGroup({
           week={week}
           expanded={expanded}
           onToggle={onToggle}
+          onSelectWeek={onSelectWeek}
           onUpdateWeek={onUpdateWeek}
           isTestWeek={isTestWeek}
           onToggleTestWeek={onToggleTestWeek}
@@ -511,6 +518,7 @@ function PhaseBandRows({
   expanded,
   highlightedWeekIndex,
   onSelectPhase,
+  onSelectWeek,
   onToggleExpanded,
   onUpdateWeek,
   onDragStart,
@@ -524,6 +532,7 @@ function PhaseBandRows({
   expanded: Set<number>;
   highlightedWeekIndex: number | null;
   onSelectPhase: () => void;
+  onSelectWeek?: (weekIndex: number) => void;
   onToggleExpanded: (weekIndex: number) => void;
   onUpdateWeek: (weekIndex: number, patch: Partial<SimpleWeek>) => void;
   onDragStart: (edge: "top" | "bottom", clientY: number) => void;
@@ -562,6 +571,7 @@ function PhaseBandRows({
                 week={week}
                 expanded={weekExpanded}
                 onToggle={() => onToggleExpanded(week.weekIndex)}
+                onSelectWeek={onSelectWeek}
                 onUpdateWeek={(patch) => onUpdateWeek(week.weekIndex, patch)}
                 isTestWeek={testWeekFlags[week.weekIndex] ?? false}
                 onToggleTestWeek={(checked) => onToggleTestWeek(week.weekIndex, checked)}
@@ -588,6 +598,7 @@ function WeekCells({
   week,
   expanded,
   onToggle,
+  onSelectWeek,
   onUpdateWeek,
   isTestWeek,
   onToggleTestWeek,
@@ -595,6 +606,7 @@ function WeekCells({
   week: SimpleWeek;
   expanded: boolean;
   onToggle: () => void;
+  onSelectWeek?: (weekIndex: number) => void;
   onUpdateWeek: (patch: Partial<SimpleWeek>) => void;
   isTestWeek: boolean;
   onToggleTestWeek: (checked: boolean) => void;
@@ -604,7 +616,10 @@ function WeekCells({
       <td className="px-3 py-2">
         <button
           type="button"
-          onClick={onToggle}
+          onClick={() => {
+            onSelectWeek?.(week.weekIndex);
+            onToggle();
+          }}
           className="font-medium text-sky-600 dark:text-sky-400"
         >
           {expanded ? "▼" : "▶"} {week.weekIndex + 1}
@@ -640,7 +655,13 @@ function WeekCells({
         ) : null}
       </td>
       <td className="px-3 py-2 text-zinc-600 dark:text-zinc-400">
-        {formatWeekDateRange(week.weekStartDate)}
+        <button
+          type="button"
+          className="text-left hover:text-sky-600"
+          onClick={() => onSelectWeek?.(week.weekIndex)}
+        >
+          {formatWeekDateRange(week.weekStartDate)}
+        </button>
       </td>
       <td className="px-3 py-2">
         <input

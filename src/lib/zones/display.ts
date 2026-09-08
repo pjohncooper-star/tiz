@@ -1,6 +1,6 @@
 import type { Discipline, SignalType, ThresholdProfile } from "@prisma/client";
 import { formatPace, thresholdPaceToInput } from "@/lib/units/pace";
-import { parseZoneBoundaries } from "./thresholds";
+import { parseZoneBoundaries } from "./parse-boundaries";
 
 export type ZoneRange = {
   zone: number;

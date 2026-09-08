@@ -126,6 +126,7 @@ export async function POST(request: Request) {
       goalEvent: data.goalEvent ? parseGoalEventWrite(data.goalEvent) : undefined,
       bGoalEvents: data.bGoalEvents?.map(parseGoalEventWrite),
       cGoalEvents: data.cGoalEvents?.map(parseGoalEventWrite),
+      seedPhases: data.seedPhases,
     });
 
     if (!plan) {

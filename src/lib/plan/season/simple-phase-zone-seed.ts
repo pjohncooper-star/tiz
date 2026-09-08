@@ -1,4 +1,3 @@
-import type { PhaseKind } from "@prisma/client";
 import {
   defaultPhaseKindZoneDefaults,
   defaultZoneSplitsForKind,
@@ -25,6 +24,19 @@ export function zoneSplitsForPhase(
     phaseKind: phase.phaseKind,
     phaseZoneSplits: phase.zoneSplits,
     kindDefaults,
+  });
+}
+
+export function phasesForCreateSeed(
+  seedPhases: "empty" | "suggested" | undefined,
+  totalWeeks: number,
+  kindDefaults: PhaseKindZoneDefaults = defaultPhaseKindZoneDefaults()
+): Omit<SimplePhase, "id">[] {
+  if (seedPhases !== "suggested") return [];
+  return suggestSimplePhasesForWeeks(totalWeeks, kindDefaults).map((phase) => {
+    const { id: _unusedId, ...rest } = phase;
+    void _unusedId;
+    return rest;
   });
 }
 

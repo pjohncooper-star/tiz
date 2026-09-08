@@ -68,7 +68,7 @@
 
 **Planned session** — A row on the calendar: what you intend to do. Holds the sport, day, role, duration, zone budget, notes, tags, and optionally a structured workout.
 
-**Planning mode** — How volume and TiZ are grouped: Overall, By discipline, Separate long workouts, or Separate long TiZ.
+**Planning mode** — How volume and TiZ are grouped: Overall volume, By discipline, Plan longs separately from weekly hours, or Plan long hours and zone minutes separately.
 
 **Pool** (as in *workout pool*) — The week's remaining session budget: what the season says you should do, minus what's already on the calendar. Nothing to do with swimming pools.
 
