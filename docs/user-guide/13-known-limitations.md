@@ -144,6 +144,7 @@ Worth knowing if you read the rest of `docs/`, because several documents describ
 | `docs/workout-pool-wizard-wireframe.md` | Largely shipped on wide screens, but the separate skeleton/build tabs, the role picker, and the mobile version are not |
 | `docs/plan-wizard-screen-spec.md`, `plan-wizard-implementation-plan.md`, `plan-wizard-pain-points.md` | Proposals for a planner redesign. None of it is built. |
 | `docs/plan-wizard-weekly-template-strategy.md` | Applying a weekly template is shipped; season-owned phase layout materialization as described is not |
+| `docs/season-planner-ui-refresh.md` | Wireframes for four alternative layouts of the season planner. Nothing is built; the shipped planner is the one described in [chapter 5](./05-season-planner.md). |
 
 ---
 
