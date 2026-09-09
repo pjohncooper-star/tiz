@@ -1,5 +1,7 @@
 # Plan wizard — pain points & proposed flow
 
+> **⚠️ SUPERSEDED (July 2026).** Audits a wizard (`season-settings-panels.tsx`) that no longer exists — `src/components/season/` was removed and production uses the single-page **Simple Planner**. Retained for history only. See [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md) for the current direction.
+
 Baseline audit of live wizard in [`season-settings-panels.tsx`](../src/components/season/season-settings-panels.tsx).
 
 **Wireframe v2** reflects user-directed step order (July 2026). v1 wireframe reordered layout only; v2 reorders *what you configure when*.
