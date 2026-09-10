@@ -469,4 +469,94 @@ describe("simple-phase-volume", () => {
       hoursFromDistancePace("SWIM", 3300, 90)
     );
   });
+
+  it("keeps TARGET run volume at the end hours even with leftover ramp percent", () => {
+    const phases = [
+      basePhase({
+        volumeProgressionMode: "TARGET",
+        runStartHours: 1,
+        runEndHours: 2.5,
+        runRampPercent: 5,
+        swimStartHours: 2,
+        swimEndHours: 4,
+        bikeStartHours: 4,
+        bikeEndHours: 8,
+      }),
+    ];
+    const defaults = defaultSimpleRampDefaults();
+    const weeks = [
+      week(0, 2, 4, 9),
+      week(1, 2, 4, 9),
+      week(2, 2, 4, 9),
+      week(3, 2, 4, 9),
+    ];
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 16 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(result[0]!.runHours, 1);
+    assert.equal(result[2]!.runHours, 2);
+    assert.equal(result[3]!.runHours, 2.5);
+    assert.equal(result[3]!.bikeHours, 8);
+    assert.equal(result[3]!.totalHours, 14.5);
+    for (const row of result) {
+      assert.ok(row.runHours <= 2.5);
+    }
+  });
+
+  it("applies TARGET end hours when the phase does not start at week 0", () => {
+    const phases = [
+      basePhase({
+        startWeekIndex: 2,
+        endWeekIndex: 5,
+        volumeProgressionMode: "TARGET",
+        runStartHours: 1,
+        runEndHours: 2.5,
+        runRampPercent: 5,
+        swimStartHours: 2,
+        swimEndHours: 2,
+        bikeStartHours: 4,
+        bikeEndHours: 4,
+      }),
+    ];
+    const defaults = defaultSimpleRampDefaults();
+    const weeks = [
+      week(0, 9, 9, 9),
+      week(1, 9, 9, 9),
+      week(2, 9, 9, 9),
+      week(3, 9, 9, 9),
+      week(4, 9, 9, 9),
+      week(5, 9, 9, 9),
+    ];
+    const result = recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 16 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+
+    assert.equal(result[2]!.runHours, 1);
+    assert.equal(result[5]!.runHours, 2.5);
+    assert.ok(result[5]!.runHours <= 2.5);
+    assert.equal(result[5]!.totalHours, 8.5);
+  });
 });

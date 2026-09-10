@@ -5,10 +5,10 @@ import {
   mesocycleSteppedValue,
 } from "./mesocycle-ramp";
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
-import { volumeEndFromStartAndRamp, weeklyCompoundVolumeAtWeek } from "./volume-ramp-triad";
 import {
   inferVolumeProgressionMode,
   resolveProgressionExit,
+  volumeAtProgressionWeek,
 } from "./volume-progression";
 
 export type SeasonVolumeAnchors = {
@@ -308,17 +308,22 @@ export function plateauForWeek(
 
   if (
     metric === "volume" &&
+    inferVolumeProgressionMode(phase) === "PERCENT" &&
     phase.volumeRampPercent != null &&
     targets.mode !== "HOLD"
   ) {
     const offset = weekOffsetInPhase(phases, weekIndex);
     if (offset != null) {
-      return weeklyCompoundVolumeAtWeek(
+      return volumeAtProgressionWeek({
         entry,
-        phase.volumeRampPercent,
-        offset,
-        targets.mode
-      );
+        exit: phase.volumeEndHours,
+        rampPercent: phase.volumeRampPercent,
+        progressionMode: "PERCENT",
+        mesocycleMode: targets.mode,
+        weekOffset: offset,
+        weekCount: Math.max(phase.weekCount, 1),
+        rampOn: true,
+      });
     }
   }
 
