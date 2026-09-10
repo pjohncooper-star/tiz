@@ -129,4 +129,52 @@ describe("discipline-volume-ramp", () => {
     assert.equal(targets[0]?.exit, 5);
     assert.equal(targets[1]?.entry, 5);
   });
+
+  it("TARGET run end hours win over leftover ramp percent", () => {
+    const result = recomputeSeasonWeeks({
+      startDate: new Date("2026-01-05"),
+      endDate: new Date("2026-02-01"),
+      mesocycleLengthWeeks: 4,
+      phases: [
+        {
+          name: "Base",
+          sortOrder: 0,
+          weekCount: 4,
+          phaseKind: "BASE",
+          focusMode: "PHASE",
+          phaseFocus: "AEROBIC_BASE",
+          swimSessionsPerWeek: 3,
+          bikeSessionsPerWeek: 4,
+          runSessionsPerWeek: 3,
+          volumeProgressionMode: "TARGET",
+          runStartHours: 1,
+          runEndHours: 2.5,
+          runRampPercent: 40,
+          mesocycles: [{ name: "Base I", weekCount: 4 }],
+        },
+      ],
+      startHours: 8,
+      peakHours: 16,
+      swimSplitPercent: 25,
+      bikeSplitPercent: 50,
+      runSplitPercent: 25,
+      maxRampPercent: 5,
+      deLoadEveryNWeeks: 99,
+      deLoadVolumePercent: 75,
+      deLoadStrategy: "VOLUME_ONLY",
+      reduceCountsOnDeLoad: true,
+      longRideStartMin: 60,
+      longRidePeakMin: 180,
+      longRunStartMin: 30,
+      longRunPeakMin: 90,
+    });
+
+    for (const week of result.weeks) {
+      assert.ok(
+        week.runHours <= 2.5,
+        `week ${week.weekIndex} run hours ${week.runHours} exceeded 2.5`
+      );
+    }
+    assert.equal(result.weeks[result.weeks.length - 1]!.runHours, 2.5);
+  });
 });

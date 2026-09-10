@@ -20,10 +20,10 @@ import {
 } from "./phase-volume-ramp";
 import type { ComputedMesocycle, SeasonPhaseInput } from "./types";
 import { roundHours } from "./volume-curve";
-import { volumeEndFromStartAndRamp, weeklyCompoundVolumeAtWeek } from "./volume-ramp-triad";
 import {
   inferVolumeProgressionMode,
   resolveProgressionExit,
+  volumeAtProgressionWeek,
 } from "./volume-progression";
 
 export type DisciplineKey = "swim" | "bike" | "run";
@@ -269,16 +269,25 @@ function disciplinePlateauForWeek(
   const targets = resolved.find((t) => t.phaseIndex === phaseIndex);
   if (!targets) return null;
 
+  const progressionMode = inferVolumeProgressionMode(phase);
   const rampPercent = phaseField(phase, discipline, "rampPercent");
-  if (rampPercent != null && targets.mode !== "HOLD") {
+  if (
+    progressionMode === "PERCENT" &&
+    rampPercent != null &&
+    targets.mode !== "HOLD"
+  ) {
     const offset = weekOffsetInPhase(phases, weekIndex);
     if (offset != null) {
-      return weeklyCompoundVolumeAtWeek(
-        targets.entry,
+      return volumeAtProgressionWeek({
+        entry: targets.entry,
+        exit: phaseField(phase, discipline, "endHours"),
         rampPercent,
-        offset,
-        targets.mode
-      );
+        progressionMode,
+        mesocycleMode: targets.mode,
+        weekOffset: offset,
+        weekCount: Math.max(phase.weekCount, 1),
+        rampOn: true,
+      });
     }
   }
 

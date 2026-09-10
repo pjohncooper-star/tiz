@@ -427,20 +427,16 @@ function applySeasonSplitHours(
 
 function findTotalTargets(
   resolved: ReturnType<typeof resolvePhaseTargets>,
-  weekIndex: number
+  phaseIndex: number
 ) {
-  return resolved.find(
-    (t) => weekIndex >= t.weekStart && weekIndex < t.weekEnd
-  );
+  return resolved.find((t) => t.phaseIndex === phaseIndex);
 }
 
 function findDisciplineTargets(
   resolved: ReturnType<typeof resolveDisciplineTargets>,
-  weekIndex: number
+  phaseIndex: number
 ) {
-  return resolved.find(
-    (t) => weekIndex >= t.weekStart && weekIndex < t.weekEnd
-  );
+  return resolved.find((t) => t.phaseIndex === phaseIndex);
 }
 
 function lastRampExitTotal(resolved: ReturnType<typeof resolvePhaseTargets>): number {
@@ -601,6 +597,8 @@ export function recalculatePhaseAwareVolumes(input: {
       sorted,
       input.seasonDefaultPlanningMode
     );
+    const phaseIndex = phaseIndexOf(sorted, phase);
+    if (phaseIndex < 0) continue;
     const rampSpan: SimplePhaseSpan = {
       startWeekIndex: phase.startWeekIndex,
       endWeekIndex: phase.endWeekIndex,
@@ -637,7 +635,7 @@ export function recalculatePhaseAwareVolumes(input: {
     }
 
     if (mode === "OVERALL") {
-      const targets = findTotalTargets(totalTargets, week.weekIndex);
+      const targets = findTotalTargets(totalTargets, phaseIndex);
       if (!targets) continue;
       const totalHours = progressionVolumeAtWeek(
         targets.volumeEntry,
@@ -664,7 +662,7 @@ export function recalculatePhaseAwareVolumes(input: {
     for (const discipline of SIMPLE_DISCIPLINES) {
       const targets = findDisciplineTargets(
         disciplineTargets[discipline],
-        week.weekIndex
+        phaseIndex
       );
       if (!targets) continue;
       applyDisciplineVolume(

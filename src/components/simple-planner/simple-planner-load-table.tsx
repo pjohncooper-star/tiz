@@ -180,6 +180,11 @@ export function SimplePlannerLoadTable({
               ) : null}
             </tbody>
           </table>
+          <p className="mt-2 text-xs text-zinc-500">
+            End hours are the last training week for that sport. Week totals also include
+            other sports{hideBike ? " and TrainerRoad bike" : ""}. Attached programs replace
+            the hours they own.
+          </p>
         </div>
       )}
     </div>

@@ -784,7 +784,7 @@ export function PhaseVolumeEditor({
       ? "Compound weekly growth from start (skips rest weeks). Optional end acts as a cap."
       : progressionMode === "STEP"
         ? "Add a fixed amount each training week from start. Optional end acts as a cap."
-        : "Linear ramp from start to end. Blank start chains from the prior phase exit.";
+        : "Linear ramp from start to end across training weeks (rest weeks are skipped, then cut). Blank start chains from the prior phase exit. End hours are the last training week for that sport — not a cap on the whole week, and attached programs replace that sport's hours on covered weeks.";
 
   return (
     <fieldset className="mt-4 space-y-3">
