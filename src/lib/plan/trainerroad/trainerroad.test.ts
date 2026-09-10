@@ -16,6 +16,7 @@ import {
   trainerRoadCalendarToSeasonDraft,
   mergeTrainerRoadPhaseWrites,
   applyTrainerRoadBikeWeekTarget,
+  overlayTrainerRoadBikeHoursOnWeeks,
   TrainerRoadSeasonOverlapError,
   trainerRoadTitleWithoutDuration,
   normalizeTrainerRoadIcalUrl,
@@ -566,5 +567,38 @@ describe("TrainerRoad-driven season", () => {
     assert.equal(target.totalHours, 6);
     assert.equal(target.slotBudgets?.BIKE.endurance, 0);
     assert.equal(target.zoneMinutes["SWIM-2"], 60);
+  });
+
+  it("overlays TrainerRoad bike hours onto planner weeks instead of the 8h default peak", () => {
+    const weeks = overlayTrainerRoadBikeHoursOnWeeks(
+      [
+        {
+          weekStartDate: "2026-08-24",
+          swimHours: 2,
+          bikeHours: 8,
+          runHours: 2.5,
+          totalHours: 12.5,
+        },
+        {
+          weekStartDate: "2026-08-31",
+          swimHours: 2,
+          bikeHours: 8,
+          runHours: 2.5,
+          totalHours: 12.5,
+        },
+      ],
+      [
+        { dateKey: "2026-08-24", durationMinutes: 90 },
+        { dateKey: "2026-08-26", durationMinutes: 75 },
+        { dateKey: "2026-08-27", durationMinutes: 90 },
+        { dateKey: "2026-09-01", durationMinutes: 60 },
+      ]
+    );
+    assert.equal(weeks[0]!.bikeHours, 4.25);
+    assert.equal(weeks[0]!.totalHours, 8.75);
+    assert.equal(weeks[1]!.bikeHours, 1);
+    assert.equal(weeks[1]!.totalHours, 5.5);
+    assert.equal(weeks[0]!.swimHours, 2);
+    assert.equal(weeks[0]!.runHours, 2.5);
   });
 });

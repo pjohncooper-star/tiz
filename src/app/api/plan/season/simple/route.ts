@@ -7,7 +7,6 @@ import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
   createSimpleSeasonPlan,
   loadAthleteZoneFocusCatalog,
-  serializeSimpleSeasonPlan,
 } from "@/lib/plan/season/simple-planner.server";
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
@@ -16,6 +15,7 @@ import {
   athleteHasTrainerRoadCalendar,
   createSeasonFromTrainerRoadCalendar,
   getTrainerRoadIcalUrl,
+  serializeSimpleSeasonPlanWithTrainerRoadBike,
 } from "@/lib/plan/trainerroad/season.server";
 
 export async function GET(request: Request) {
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      season: serializeSimpleSeasonPlan(plan),
+      season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
       zoneFocusCatalog,
       trainerRoadCalendarSaved,
     });
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
       });
       const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
       return NextResponse.json(
-        { season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog },
+        { season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan), zoneFocusCatalog },
         { status: 201 }
       );
     }
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
 
     const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
     return NextResponse.json(
-      { season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog },
+      { season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan), zoneFocusCatalog },
       { status: 201 }
     );
   } catch (err) {

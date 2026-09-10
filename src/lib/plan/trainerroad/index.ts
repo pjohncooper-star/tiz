@@ -31,6 +31,8 @@ export {
   applyTrainerRoadBikeWeekTarget,
   lastTrainerRoadWorkoutDateKey,
   mergeTrainerRoadPhaseWrites,
+  overlayTrainerRoadBikeHoursOnWeeks,
+  trainerRoadBikeHoursForWeek,
   trainerRoadCalendarToSeasonDraft,
   trainerRoadSessionsByWeekStart,
   TrainerRoadSeasonOverlapError,

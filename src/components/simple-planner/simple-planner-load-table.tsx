@@ -185,6 +185,12 @@ export function SimplePlannerLoadTable({
             other sports{hideBike ? " and TrainerRoad bike" : ""}. Attached programs replace
             the hours they own.
           </p>
+          {hideBike ? (
+            <p className="mt-1 text-xs text-zinc-500">
+              Bike hours on the volume chart come from your TrainerRoad feed, not the
+              season’s 4→8 hour default ramp.
+            </p>
+          ) : null}
         </div>
       )}
     </div>

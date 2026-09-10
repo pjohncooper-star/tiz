@@ -91,6 +91,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     rampDefaults: base.rampDefaults,
     restVolumePercent: base.deLoadVolumePercent,
     seasonDefaultPlanningMode: base.defaultPlanningMode ?? "BY_DISCIPLINE",
+    preserveBikeHours: Boolean(base.trainerRoadDriven),
   });
 
   return {
@@ -221,6 +222,7 @@ export function SimplePlannerView({
         rampDefaults: current.rampDefaults,
         restVolumePercent: current.deLoadVolumePercent,
         seasonDefaultPlanningMode: current.defaultPlanningMode ?? "BY_DISCIPLINE",
+        preserveBikeHours: Boolean(current.trainerRoadDriven),
       });
       setSeason((draft) => {
         if (!draft) return draft;

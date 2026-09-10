@@ -275,16 +275,62 @@ function emptyBikeSlotBudget() {
   };
 }
 
+function trainerRoadSessionsInWeek(
+  sessions: TrainerRoadBikeSession[],
+  weekStart: string
+): TrainerRoadBikeSession[] {
+  const weekEnd = formatDateKey(addDays(parseDateKey(weekStart), 6));
+  return sessions.filter(
+    (session) => session.dateKey >= weekStart && session.dateKey <= weekEnd
+  );
+}
+
+export function trainerRoadBikeHoursForWeek(
+  sessions: TrainerRoadBikeSession[],
+  weekStart: string
+): number {
+  let minutes = 0;
+  for (const session of trainerRoadSessionsInWeek(sessions, weekStart)) {
+    if (session.durationMinutes != null && session.durationMinutes > 0) {
+      minutes += session.durationMinutes;
+    }
+  }
+  return roundHours(minutes / 60);
+}
+
+/** Replace planner bike hours with TrainerRoad session duration for each week. */
+export function overlayTrainerRoadBikeHoursOnWeeks<
+  T extends {
+    weekStartDate: string;
+    swimHours: number;
+    bikeHours: number;
+    runHours: number;
+    totalHours: number;
+    strengthHours?: number;
+  },
+>(weeks: T[], sessions: TrainerRoadBikeSession[]): T[] {
+  return weeks.map((week) => {
+    const bikeHours = trainerRoadBikeHoursForWeek(
+      sessions,
+      mondayWeekStartKey(week.weekStartDate)
+    );
+    return {
+      ...week,
+      bikeHours,
+      totalHours: roundHours(
+        week.swimHours + bikeHours + week.runHours + (week.strengthHours ?? 0)
+      ),
+    };
+  });
+}
+
 /** Replace bike hour/zone/session targets with TrainerRoad sessions in that week. */
 export function applyTrainerRoadBikeWeekTarget(
   target: CalendarWeekTarget,
   sessions: TrainerRoadBikeSession[]
 ): CalendarWeekTarget {
   const weekStart = target.weekStart;
-  const weekEnd = formatDateKey(addDays(parseDateKey(weekStart), 6));
-  const inWeek = sessions.filter(
-    (session) => session.dateKey >= weekStart && session.dateKey <= weekEnd
-  );
+  const inWeek = trainerRoadSessionsInWeek(sessions, weekStart);
 
   let minutes = 0;
   const bikeZones: Record<string, number> = {};

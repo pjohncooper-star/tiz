@@ -4,17 +4,13 @@ import type {
   TargetDiscipline,
 } from "@/components/calendar/types";
 import type { PlanningMode } from "@prisma/client";
-import { addDays } from "date-fns";
 import { getSimplePlannerSeason } from "@/lib/plan/season/season-plan.server";
 import { serializeSimpleSeasonPlan } from "@/lib/plan/season/simple-planner.server";
 import { resolvePlanningModeForWeek } from "@/lib/plan/season/planning-mode";
 import { weekIndexForDate } from "@/lib/plan/season/season-dates";
-import { calendarDateFromDb, formatDateKey, parseDateKey } from "@/lib/dates";
-import { db } from "@/lib/db";
-import {
-  applyTrainerRoadBikeWeekTarget,
-  type TrainerRoadBikeSession,
-} from "@/lib/plan/trainerroad/season";
+import { parseDateKey } from "@/lib/dates";
+import { applyTrainerRoadBikeWeekTarget } from "@/lib/plan/trainerroad/season";
+import { loadTrainerRoadBikeSessions } from "@/lib/plan/trainerroad/season.server";
 import {
   computeCalendarWeekPoolFields,
   needsSlotBudgetBackfill,
@@ -208,44 +204,6 @@ function buildWeekTarget(
     byDiscipline,
     zoneMinutes: week.zoneMinutes,
   };
-}
-
-function parseTargetZones(raw: unknown): Record<string, number> | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const out: Record<string, number> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof value === "number" && value > 0) out[key] = value;
-  }
-  return Object.keys(out).length > 0 ? out : null;
-}
-
-async function loadTrainerRoadBikeSessions(
-  athleteId: string,
-  weekStarts: string[]
-): Promise<TrainerRoadBikeSession[]> {
-  if (weekStarts.length === 0) return [];
-  const sorted = [...weekStarts].sort();
-  const from = parseDateKey(sorted[0]!);
-  const to = parseDateKey(formatDateKey(addDays(parseDateKey(sorted[sorted.length - 1]!), 6)));
-  const rows = await db.plannedSession.findMany({
-    where: {
-      athleteId,
-      source: "TRAINERROAD",
-      scheduledDate: { gte: from, lte: to },
-    },
-    select: {
-      scheduledDate: true,
-      estimatedDurationMinutes: true,
-      targetZones: true,
-      sessionRole: true,
-    },
-  });
-  return rows.map((row) => ({
-    dateKey: formatDateKey(calendarDateFromDb(row.scheduledDate)),
-    durationMinutes: row.estimatedDurationMinutes,
-    targetZones: parseTargetZones(row.targetZones),
-    sessionRole: row.sessionRole,
-  }));
 }
 
 /**

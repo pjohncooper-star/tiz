@@ -5,7 +5,6 @@ import { isSimpleSeasonPlannerEnabled } from "@/lib/features";
 import { updateSimpleSeasonSchema } from "@/lib/plan/api-schemas";
 import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
-  serializeSimpleSeasonPlan,
   updateSimpleSeasonPlan,
   loadAthleteZoneFocusCatalog,
 } from "@/lib/plan/season/simple-planner.server";
@@ -18,6 +17,7 @@ import {
   applyTrainerRoadCalendarToSeason,
   detachTrainerRoadFromSeason,
   getTrainerRoadIcalUrl,
+  serializeSimpleSeasonPlanWithTrainerRoadBike,
 } from "@/lib/plan/trainerroad/season.server";
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -44,7 +44,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
     const trainerRoadCalendarSaved = await athleteHasTrainerRoadCalendar(athleteId);
     return NextResponse.json({
-      season: serializeSimpleSeasonPlan(plan),
+      season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
       zoneFocusCatalog,
       trainerRoadCalendarSaved,
     });
@@ -103,7 +103,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       const plan = await applyTrainerRoadCalendarToSeason(athleteId, id, ics);
       const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
       return NextResponse.json({
-        season: serializeSimpleSeasonPlan(plan),
+        season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
         zoneFocusCatalog,
       });
     }
@@ -144,7 +144,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
-    return NextResponse.json({ season: serializeSimpleSeasonPlan(plan), zoneFocusCatalog });
+    return NextResponse.json({
+      season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
+      zoneFocusCatalog,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update season";
     const status =
