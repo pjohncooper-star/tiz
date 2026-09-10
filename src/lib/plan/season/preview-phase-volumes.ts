@@ -61,6 +61,7 @@ export function previewPhaseAwareVolumes(input: {
   rampDefaults: SimpleRampDefaults;
   restVolumePercent: number;
   seasonDefaultPlanningMode: PlanningMode;
+  preserveBikeHours?: boolean;
 }): { weeks: SimpleWeek[]; phases: SimplePhase[]; migrated: boolean } {
   const planningMode = input.seasonDefaultPlanningMode ?? "BY_DISCIPLINE";
   const { phases, migrated } = migrateSeasonRampDefaultsOntoPhases(
@@ -104,12 +105,15 @@ export function previewPhaseAwareVolumes(input: {
   const weeks = input.weeks.map((week) => {
     const next = byIndex.get(week.weekIndex);
     if (!next) return week;
+    const bikeHours = input.preserveBikeHours ? week.bikeHours : next.bikeHours;
     return {
       ...week,
       swimHours: next.swimHours,
-      bikeHours: next.bikeHours,
+      bikeHours,
       runHours: next.runHours,
-      totalHours: next.totalHours,
+      totalHours: roundHours(
+        next.swimHours + bikeHours + next.runHours + (week.strengthHours ?? 0)
+      ),
       swimDistanceMeters: next.swimDistanceMeters,
       runDistanceMeters: next.runDistanceMeters,
     };

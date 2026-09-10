@@ -1,4 +1,9 @@
-import { formatDateKey } from "@/lib/dates";
+import { addDays } from "date-fns";
+import {
+  calendarDateFromDb,
+  formatDateKey,
+  parseDateKey,
+} from "@/lib/dates";
 import { db } from "@/lib/db";
 import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
 import type { GoalEventWriteInput } from "@/lib/plan/season/goal-events-sync";
@@ -11,7 +16,9 @@ import {
 import { parseTrainerRoadCalendar } from "./calendar";
 import {
   mergeTrainerRoadPhaseWrites,
+  overlayTrainerRoadBikeHoursOnWeeks,
   trainerRoadCalendarToSeasonDraft,
+  type TrainerRoadBikeSession,
   type TrainerRoadSeasonOverlap,
   type TrainerRoadSeasonPhase,
 } from "./season";
@@ -255,4 +262,58 @@ export async function unlinkTrainerRoadSeasons(athleteId: string): Promise<void>
     }
     throw error;
   }
+}
+
+function parseSessionZones(raw: unknown): Record<string, number> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === "number" && value > 0) out[key] = value;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+export async function loadTrainerRoadBikeSessions(
+  athleteId: string,
+  weekStarts: string[]
+): Promise<TrainerRoadBikeSession[]> {
+  if (weekStarts.length === 0) return [];
+  const sorted = [...weekStarts].sort();
+  const from = parseDateKey(sorted[0]!);
+  const to = parseDateKey(formatDateKey(addDays(parseDateKey(sorted[sorted.length - 1]!), 6)));
+  const rows = await db.plannedSession.findMany({
+    where: {
+      athleteId,
+      source: "TRAINERROAD",
+      scheduledDate: { gte: from, lte: to },
+    },
+    select: {
+      scheduledDate: true,
+      estimatedDurationMinutes: true,
+      targetZones: true,
+      sessionRole: true,
+    },
+  });
+  return rows.map((row) => ({
+    dateKey: formatDateKey(calendarDateFromDb(row.scheduledDate)),
+    durationMinutes: row.estimatedDurationMinutes,
+    targetZones: parseSessionZones(row.targetZones),
+    sessionRole: row.sessionRole,
+  }));
+}
+
+export async function serializeSimpleSeasonPlanWithTrainerRoadBike(
+  athleteId: string,
+  plan: Parameters<typeof serializeSimpleSeasonPlan>[0]
+) {
+  const season = serializeSimpleSeasonPlan(plan);
+  if (!season.trainerRoadDriven) return season;
+  const sessions = await loadTrainerRoadBikeSessions(
+    athleteId,
+    season.weeks.map((week) => week.weekStartDate)
+  );
+  return {
+    ...season,
+    weeks: overlayTrainerRoadBikeHoursOnWeeks(season.weeks, sessions),
+  };
 }
