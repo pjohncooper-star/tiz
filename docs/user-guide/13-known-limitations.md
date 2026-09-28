@@ -114,6 +114,8 @@ These all work server-side; there is simply no control for them.
 | Mean-maximal curves are dashboard-only | You can see your best 5-minute power for a date range, but not for a single ride |
 | Swim has no execution stream chart | Swims get a lap pace chart instead |
 | The planned-versus-actual overlay needs all three of: a bike or run stream, a structured workout, and matching device lap data | Without them you get a plain stream chart |
+| Existing activities have no route map | GPS is stored only for activities imported or synced after the map feature. Re-upload the file to add a route; there is no backfill. |
+| Indoor and GPS-less sessions have no map | Trainer, treadmill, virtual, and dropouts with too few moving points are omitted |
 
 ## Planner constraints
 

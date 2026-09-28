@@ -50,6 +50,7 @@ Run the test suite with `npm test`, and lint with `npm run lint`.
 | `INNGEST_EVENT_KEY` | In production | From the Inngest dashboard |
 | `INNGEST_SIGNING_KEY` | In production | From the Inngest dashboard |
 | `INNGEST_DEV` | Local only | `1` processes jobs inline. **Never set this in production** — imports and Strava sync will hang. |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | For outdoor activity maps | Public Mapbox token. Restrict it to your production URL in the Mapbox dashboard. Without it, workout pages omit the route map. |
 
 ## Feature flags
 

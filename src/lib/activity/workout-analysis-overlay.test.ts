@@ -54,6 +54,8 @@ function linearStream(totalSec: number, metersPerSec: number): ActivityStreamPoi
       speed: 30,
       pace: null,
       heartRate: 140,
+      lat: null,
+      lng: null,
     });
   }
   return points;

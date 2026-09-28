@@ -36,5 +36,6 @@ export function mergeStreams(
     velocity: a.velocity ?? b.velocity,
     distance: a.distance ?? b.distance,
     cadence: a.cadence ?? b.cadence,
+    latlng: a.latlng ?? b.latlng,
   };
 }

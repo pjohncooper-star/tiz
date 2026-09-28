@@ -66,6 +66,7 @@ git push -u origin main
 | `STRAVA_WEBHOOK_VERIFY_TOKEN` | Random secret |
 | `INNGEST_EVENT_KEY` | From Inngest dashboard (after step 4) |
 | `INNGEST_SIGNING_KEY` | From Inngest dashboard (after step 4) |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox public token (outdoor activity maps). Restrict to your production URL. Optional — maps are omitted if unset. |
 
 Password reset email uses [Resend](https://resend.com). Verify the sending domain and set `EMAIL_FROM` to an address on that domain (for example `TiZ <noreply@tizplanner.com>`). Without those two variables, reset requests succeed in the UI but no email is sent.
 

@@ -15,6 +15,8 @@ export type ActivityStreamPoint = {
   /** Run pace in sec/km (metric) or sec/mi (imperial) for chart axis. */
   pace: number | null;
   heartRate: number | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 export type BikeStreamMetrics = {
@@ -39,7 +41,8 @@ function seriesLength(streams: NormalizedStreams): number {
     streams.cadence?.data.length ?? 0,
     streams.velocity?.data.length ?? 0,
     streams.distance?.data.length ?? 0,
-    streams.heartrate?.data.length ?? 0
+    streams.heartrate?.data.length ?? 0,
+    streams.latlng?.data.length ?? 0
   );
 }
 
@@ -111,6 +114,7 @@ export function parseRecordStreamPoints(
   const velocity = normalized.velocity?.data ?? [];
   const heartrate = normalized.heartrate?.data ?? [];
   const distanceSeries = normalized.distance?.data ?? [];
+  const latlng = normalized.latlng?.data ?? [];
   const distanceM =
     distanceSeries.some((d) => d > 0)
       ? distanceSeries
@@ -125,6 +129,7 @@ export function parseRecordStreamPoints(
     const hr =
       heartrate[i] != null && heartrate[i] > 0 ? heartrate[i] : null;
 
+    const coord = latlng[i];
     points.push({
       timeSec,
       distanceM: distanceM[i] ?? points[i - 1]?.distanceM ?? 0,
@@ -142,6 +147,8 @@ export function parseRecordStreamPoints(
           ? mpsToDisplayPaceSec(vel, displayUnit)
           : null,
       heartRate: hr,
+      lat: coord?.[0] ?? null,
+      lng: coord?.[1] ?? null,
     });
   }
 

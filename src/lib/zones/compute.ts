@@ -47,6 +47,8 @@ export type NormalizedStreams = {
   distance?: StreamSeries;
   /** Cadence in rpm at each record sample. */
   cadence?: StreamSeries;
+  /** WGS84 [lat, lng] at each record sample; null for indoor/dropout. */
+  latlng?: { data: Array<[number, number] | null> };
   meta?: ActivitySessionMeta;
 };
 

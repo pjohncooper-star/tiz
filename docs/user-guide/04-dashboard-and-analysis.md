@@ -134,6 +134,18 @@ Without a structured workout and matching lap data, the card is simply titled **
 
 **Swim** does not get this chart. Instead swims get a **Lap pace** bar chart — one bar per lap, with rest laps drawn slower than your slowest swim and labelled **Rest**.
 
+### Route map
+
+Outdoor bike and run activities imported **after this feature shipped** show a Mapbox map above the execution chart when the file or Strava sync includes GPS.
+
+- The full route is drawn as a polyline (green start / red finish).
+- Hovering the execution chart moves a dot along the route.
+- Dragging a range on the chart highlights that stretch of the route. Click or press Escape to clear the highlight.
+
+Indoor trainer, treadmill, virtual, and pool sessions have no map. Activities already in TiZ before GPS capture was added stay map-less unless you re-upload the original file. Swim stays on the lap pace chart.
+
+A `NEXT_PUBLIC_MAPBOX_TOKEN` must be set on the server; without it the map is omitted.
+
 ### Step execution
 
 When a structured workout can be matched against your device's laps, a table compares them step by step:
