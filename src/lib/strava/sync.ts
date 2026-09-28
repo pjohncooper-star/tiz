@@ -8,6 +8,7 @@ import {
   stravaFetch,
 } from "./client";
 import { fetchStravaActivityLaps, mapStravaLapsToSwimLaps } from "./laps";
+import { mapStravaStreams, STRAVA_STREAM_KEYS } from "./map-streams";
 
 async function getToken(athleteId: string) {
   const conn = await db.stravaConnection.findUnique({ where: { athleteId } });
@@ -45,25 +46,7 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
 
   let streams: NormalizedStreams = {};
   try {
-    const raw = await fetchActivityStreams(stravaId, token);
-    if (Array.isArray(raw)) {
-      for (const s of raw) {
-        if (s.type === "time") streams.time = { data: s.data };
-        if (s.type === "watts") streams.watts = { data: s.data };
-        if (s.type === "heartrate") streams.heartrate = { data: s.data };
-        if (s.type === "velocity_smooth") streams.velocity = { data: s.data };
-        if (s.type === "cadence") streams.cadence = { data: s.data };
-        if (s.type === "distance") streams.distance = { data: s.data };
-      }
-    } else if (raw && typeof raw === "object") {
-      const o = raw as Record<string, { data: number[] }>;
-      if (o.time) streams.time = { data: o.time.data };
-      if (o.watts) streams.watts = { data: o.watts.data };
-      if (o.heartrate) streams.heartrate = { data: o.heartrate.data };
-      if (o.velocity_smooth) streams.velocity = { data: o.velocity_smooth.data };
-      if (o.cadence) streams.cadence = { data: o.cadence.data };
-      if (o.distance) streams.distance = { data: o.distance.data };
-    }
+    streams = mapStravaStreams(await fetchActivityStreams(stravaId, token));
   } catch {
     streams = {};
   }
@@ -138,7 +121,7 @@ export async function syncStravaActivity(athleteId: string, stravaId: number) {
 
 async function fetchActivityStreams(id: number, token: string) {
   return stravaFetch<unknown>(
-    `/activities/${id}/streams?keys=time,watts,heartrate,velocity_smooth,cadence,distance&key_by_type=true`,
+    `/activities/${id}/streams?keys=${STRAVA_STREAM_KEYS}&key_by_type=true`,
     token
   );
 }

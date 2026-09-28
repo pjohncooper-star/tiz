@@ -5,6 +5,7 @@ import {
   deriveVelocityFromDistance,
   looksLikeCumulativeDistance,
 } from "@/lib/zones/sample-time";
+import { normalizeLatLng } from "@/lib/activity/latlng";
 
 function mapSport(sport: string): ParsedActivity["discipline"] | null {
   const s = sport.toLowerCase();
@@ -29,6 +30,7 @@ export function parseTcxFile(xml: string, fallbackName: string): ParsedActivity 
   const distances: number[] = [];
   const elapsed: number[] = [];
   const speeds: number[] = [];
+  const latlng: Array<[number, number] | null> = [];
 
   for (const tp of trackpoints) {
     const block = tp[0];
@@ -37,6 +39,8 @@ export function parseTcxFile(xml: string, fallbackName: string): ParsedActivity 
     const wM = block.match(/<Watts>(\d+)<\/Watts>/i);
     const distM = block.match(/<DistanceMeters>([\d.]+)<\/DistanceMeters>/i);
     const speedM = block.match(/<Speed>([\d.]+)<\/Speed>/i);
+    const latM = block.match(/<LatitudeDegrees>([^<]+)<\/LatitudeDegrees>/i);
+    const lonM = block.match(/<LongitudeDegrees>([^<]+)<\/LongitudeDegrees>/i);
 
     if (timeM) {
       const t = new Date(timeM[1]);
@@ -46,6 +50,12 @@ export function parseTcxFile(xml: string, fallbackName: string): ParsedActivity 
     if (wM) watts.push(parseInt(wM[1], 10));
     if (distM) distances.push(parseFloat(distM[1]));
     if (speedM) speeds.push(parseFloat(speedM[1]));
+    latlng.push(
+      normalizeLatLng(
+        latM ? Number(latM[1]) : NaN,
+        lonM ? Number(lonM[1]) : NaN
+      )
+    );
   }
 
   const totalTimeM = xml.match(/<TotalTimeSeconds>([\d.]+)<\/TotalTimeSeconds>/i);
@@ -63,6 +73,7 @@ export function parseTcxFile(xml: string, fallbackName: string): ParsedActivity 
     if (vel.some((v) => v > 0)) streams.velocity = { data: vel };
   }
   if (distances.some((d) => d > 0)) streams.distance = { data: distances };
+  if (latlng.some((p) => p != null)) streams.latlng = { data: latlng };
 
   return {
     name: buildTcxActivityName(xml, fallbackName),

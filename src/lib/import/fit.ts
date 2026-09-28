@@ -15,6 +15,7 @@ import {
 import { mergePoolSwimLapData } from "./swim-laps";
 import { parseFitSessionSelfEval } from "@/lib/survey/fit-self-eval";
 import { mergePoolSwimStreams } from "./swim-lengths";
+import { latLngFromFitRecord } from "@/lib/activity/latlng";
 
 function mapSport(
   sport: unknown,
@@ -218,6 +219,7 @@ function buildStreams(
     const d = r.distance as number | undefined;
     return typeof d === "number" && d >= 0 ? d : 0;
   });
+  const latlng = records.map((r) => latLngFromFitRecord(r));
 
   const avgPower = session?.avgPower as number | undefined;
   if (!watts.some((w) => w > 0) && typeof avgPower === "number" && avgPower > 0) {
@@ -229,6 +231,7 @@ function buildStreams(
   if (vel.some((v) => v > 0)) streams.velocity = { data: vel };
   if (cadence.some((c) => c > 0)) streams.cadence = { data: cadence };
   if (distances.some((d) => d > 0)) streams.distance = { data: distances };
+  if (latlng.some((p) => p != null)) streams.latlng = { data: latlng };
 
   if (session && sessionEnd) {
     const sessionStart = sessionStartTime(session);

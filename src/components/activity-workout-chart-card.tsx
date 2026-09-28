@@ -1,7 +1,7 @@
 import type { Discipline } from "@prisma/client";
-import { ActivityStreamsChart } from "@/components/activity-streams-chart";
-import { Card } from "@/components/ui";
+import { ActivityWorkoutChartWithMap } from "@/components/activity-workout-chart-with-map";
 import { resolveActivityStreamChart } from "@/lib/activity/resolve-activity-stream-chart";
+import { mapboxAccessToken } from "@/lib/activity/latlng";
 import { db } from "@/lib/db";
 import type { DisplayUnit } from "@/lib/workout/metrics";
 
@@ -50,14 +50,9 @@ export async function ActivityWorkoutChartCard({
   if (!chart) return null;
 
   return (
-    <Card title={chart.chartTitle}>
-      <ActivityStreamsChart
-        points={chart.points}
-        displayUnit={chart.displayUnit}
-        discipline={chart.discipline}
-        available={chart.metrics}
-        overlay={chart.overlay}
-      />
-    </Card>
+    <ActivityWorkoutChartWithMap
+      chart={chart}
+      mapToken={mapboxAccessToken()}
+    />
   );
 }

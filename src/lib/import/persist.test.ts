@@ -49,4 +49,20 @@ describe("mergeActivityStreams", () => {
     assert.deepEqual(merged.watts?.data, [150, 160, 170]);
     assert.equal(merged.workoutLaps?.data?.length, 1);
   });
+
+  it("merges incoming latlng like other stream series", () => {
+    const existing: NormalizedStreams = {
+      time: { data: [0, 1] },
+      watts: { data: [180, 190] },
+    };
+    const incoming: NormalizedStreams = {
+      latlng: { data: [[37.7, -122.4], [37.71, -122.41]] },
+    };
+    const merged = mergeActivityStreams(existing, incoming);
+    assert.deepEqual(merged.watts?.data, [180, 190]);
+    assert.deepEqual(merged.latlng?.data, [
+      [37.7, -122.4],
+      [37.71, -122.41],
+    ]);
+  });
 });

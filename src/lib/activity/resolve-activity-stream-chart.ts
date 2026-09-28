@@ -7,6 +7,7 @@ import {
   type ChartDiscipline,
   type StreamMetrics,
 } from "@/lib/activity/record-streams";
+import { hasActivityRoute } from "@/lib/activity/latlng";
 import {
   buildWorkoutAnalysisOverlay,
   type WorkoutAnalysisOverlay,
@@ -20,7 +21,8 @@ import { getThresholdProfileAtDate } from "@/lib/zones/thresholds";
 
 export type ActivityStreamChartData = {
   points: ActivityStreamPoint[];
-  metrics: StreamMetrics;
+  metrics: StreamMetrics | null;
+  hasRoute: boolean;
   discipline: ChartDiscipline;
   displayUnit: "METRIC" | "IMPERIAL";
   overlay: WorkoutAnalysisOverlay | null;
@@ -56,12 +58,13 @@ export async function resolveActivityStreamChart(input: {
   if (!points) return null;
 
   const metrics = recordStreamMetrics(points, chartDiscipline);
-  if (!metrics) return null;
+  const route = hasActivityRoute(points);
+  if (!metrics && !route) return null;
 
   let overlay: WorkoutAnalysisOverlay | null = null;
   const workoutLaps = workoutLapsFromStreams(streams);
 
-  if (input.structuredSteps && workoutLaps?.length) {
+  if (input.structuredSteps && workoutLaps?.length && metrics) {
     const settingsRow = await db.athleteDisciplineSettings.findFirst({
       where: { athleteId: input.athleteId, discipline: input.discipline },
     });
@@ -118,6 +121,7 @@ export async function resolveActivityStreamChart(input: {
   return {
     points,
     metrics,
+    hasRoute: route,
     discipline: chartDiscipline,
     displayUnit: input.displayUnit,
     overlay,

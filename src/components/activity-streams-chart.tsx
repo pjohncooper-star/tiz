@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -33,6 +33,7 @@ import {
   findLapRegionAtTime,
   findStepRegionAtTime,
 } from "@/lib/activity/workout-analysis-overlay";
+import type { ChartCursor, ChartSelection } from "@/lib/activity/latlng";
 
 type XAxisMode = "time" | "distance";
 
@@ -42,6 +43,9 @@ type ActivityStreamsChartProps = {
   discipline: ChartDiscipline;
   available: StreamMetrics;
   overlay?: WorkoutAnalysisOverlay | null;
+  selection?: ChartSelection | null;
+  onCursorChange?: (cursor: ChartCursor | null) => void;
+  onSelectionChange?: (selection: ChartSelection | null) => void;
 };
 
 type ChartRow = ActivityStreamPoint & {
@@ -375,6 +379,9 @@ export function ActivityStreamsChart({
   discipline,
   available,
   overlay,
+  selection = null,
+  onCursorChange,
+  onSelectionChange,
 }: ActivityStreamsChartProps) {
   const metrics = discipline === "BIKE" ? BIKE_METRICS : RUN_METRICS;
   const hasDistance = points.some((p) => p.distanceM > 0);
@@ -387,6 +394,10 @@ export function ActivityStreamsChart({
   const [showLaps, setShowLaps] = useState(true);
   const [showTargets, setShowTargets] = useState(true);
   const [showGhost, setShowGhost] = useState(true);
+  const [draft, setDraft] = useState<{ start: ChartRow; current: ChartRow } | null>(
+    null
+  );
+  const dragRef = useRef<{ start: ChartRow; current: ChartRow } | null>(null);
 
   const chartData = useMemo<ChartRow[]>(
     () =>
@@ -467,6 +478,50 @@ export function ActivityStreamsChart({
     };
   }
 
+  function rowFromEvent(state: {
+    activeTooltipIndex?: number | string | null;
+  } | null): ChartRow | null {
+    const raw = state?.activeTooltipIndex;
+    const index = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(index)) return null;
+    return chartData[index] ?? null;
+  }
+
+  useEffect(() => {
+    function finishDrag() {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      setDraft(null);
+      if (!drag) return;
+      if (Math.abs(drag.start.x - drag.current.x) < 1e-6) {
+        onSelectionChange?.(null);
+        return;
+      }
+      onSelectionChange?.({
+        startTimeSec: Math.min(drag.start.timeSec, drag.current.timeSec),
+        endTimeSec: Math.max(drag.start.timeSec, drag.current.timeSec),
+        startDistanceM: Math.min(drag.start.distanceM, drag.current.distanceM),
+        endDistanceM: Math.max(drag.start.distanceM, drag.current.distanceM),
+      });
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      dragRef.current = null;
+      setDraft(null);
+      onSelectionChange?.(null);
+      onCursorChange?.(null);
+    }
+    function onUp() {
+      if (dragRef.current) finishDrag();
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [onCursorChange, onSelectionChange]);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -514,11 +569,35 @@ export function ActivityStreamsChart({
         </div>
       )}
 
-      <div className="h-72 w-full">
+      <div className="h-72 w-full select-none">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={chartData}
             margin={{ top: 8, right: marginRight, left: marginLeft, bottom: 4 }}
+            onMouseDown={(state) => {
+              const row = rowFromEvent(state);
+              if (!row) return;
+              dragRef.current = { start: row, current: row };
+              setDraft({ start: row, current: row });
+            }}
+            onMouseMove={(state) => {
+              const row = rowFromEvent(state);
+              if (row) {
+                onCursorChange?.({
+                  timeSec: row.timeSec,
+                  distanceM: row.distanceM,
+                });
+              } else {
+                onCursorChange?.(null);
+              }
+              if (dragRef.current && row) {
+                dragRef.current = { start: dragRef.current.start, current: row };
+                setDraft({ start: dragRef.current.start, current: row });
+              }
+            }}
+            onMouseLeave={() => {
+              if (!dragRef.current) onCursorChange?.(null);
+            }}
           >
             <CartesianGrid
               strokeDasharray="3 3"
@@ -543,6 +622,33 @@ export function ActivityStreamsChart({
                   />
                 );
               })}
+            {(draft || selection) && (
+              <ReferenceArea
+                x1={
+                  draft
+                    ? Math.min(draft.start.x, draft.current.x)
+                    : regionX(
+                        selection!.startTimeSec,
+                        selection!.endTimeSec,
+                        selection!.startDistanceM,
+                        selection!.endDistanceM
+                      ).x1
+                }
+                x2={
+                  draft
+                    ? Math.max(draft.start.x, draft.current.x)
+                    : regionX(
+                        selection!.startTimeSec,
+                        selection!.endTimeSec,
+                        selection!.startDistanceM,
+                        selection!.endDistanceM
+                      ).x2
+                }
+                fill="#0ea5e9"
+                fillOpacity={0.16}
+                ifOverflow="extendDomain"
+              />
+            )}
             {showTargets &&
               overlay?.stepRegions.map((step) => {
                 const { x1, x2 } = regionX(
