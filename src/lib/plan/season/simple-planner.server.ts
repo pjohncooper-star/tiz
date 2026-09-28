@@ -63,6 +63,11 @@ import {
   parsePhaseCoachNotes,
   serializePhaseCoachNotes,
 } from "./simple-phase-notes";
+import {
+  emptyDisciplineFormulaIds,
+  parseSessionFormulaCatalog,
+  type SessionFormulaCatalog,
+} from "./base-formulas";
 import { buildPhaseBlocks, type PhaseWithBlocks } from "./phase-blocks";
 import {
   enrichSimpleSeasonWeeks,
@@ -98,6 +103,20 @@ export async function loadAthleteZoneFocusCatalog(
     return parseZoneFocusCatalog(athlete?.zoneFocusCatalog);
   } catch {
     return parseZoneFocusCatalog(null);
+  }
+}
+
+export async function loadAthleteSessionFormulaCatalog(
+  athleteId: string
+): Promise<SessionFormulaCatalog> {
+  try {
+    const athlete = await db.athlete.findUnique({
+      where: { id: athleteId },
+      select: { sessionFormulaCatalog: true },
+    });
+    return parseSessionFormulaCatalog(athlete?.sessionFormulaCatalog);
+  } catch {
+    return [];
   }
 }
 
@@ -146,6 +165,7 @@ export type SimplePhaseWrite = {
   runEndHours?: number | null;
   runRampPercent?: number | null;
   runStepHours?: number | null;
+  disciplineFormulaIds?: import("./base-formulas").DisciplineFormulaIds | null;
 };
 
 export type SimpleWeekWrite = {
@@ -259,6 +279,8 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
           bikeIntenseDaysPerWeek: phase.bikeIntenseDaysPerWeek,
           runIntenseDaysPerWeek: phase.runIntenseDaysPerWeek,
           zoneSplits: phase.zoneSplits ?? null,
+          disciplineFormulaIds:
+            phase.disciplineFormulaIds ?? emptyDisciplineFormulaIds(),
         }),
       };
     });
@@ -314,6 +336,7 @@ function phaseComputeFromWrites(
       runEndHours: phase.runEndHours,
       runRampPercent: phase.runRampPercent,
       runStepHours: phase.runStepHours,
+      disciplineFormulaIds: phase.disciplineFormulaIds ?? emptyDisciplineFormulaIds(),
     }));
 }
 
@@ -379,6 +402,7 @@ function phaseComputeFromDb(
         runEndHours: phase.runEndHours,
         runRampPercent: phase.runRampPercent,
         runStepHours: phase.runStepHours,
+        disciplineFormulaIds: notes.disciplineFormulaIds,
       };
     });
 }
@@ -581,6 +605,7 @@ function phaseVolumeSpansFromCompute(
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    disciplineFormulaIds: phase.disciplineFormulaIds,
   }));
 }
 
@@ -604,7 +629,8 @@ function recalculateWeeks(
   longWeekFlags?: {
     longRideWeekFlags?: boolean[] | null;
     longRunWeekFlags?: boolean[] | null;
-  }
+  },
+  formulaCatalog?: SessionFormulaCatalog
 ): ComputedSimpleWeek[] {
   const rampPhaseSpans = zonePhaseSpans.map((span) => ({
     startWeekIndex: span.startWeekIndex,
@@ -631,6 +657,7 @@ function recalculateWeeks(
       ),
     },
     seasonSplit: seasonContext.seasonSplit,
+    formulaCatalog,
   });
 
   return enrichSimpleSeasonWeeks({
@@ -648,6 +675,7 @@ function recalculateWeeks(
     deLoadEveryNWeeks: seasonContext.deLoadEveryNWeeks,
     longRideWeekFlags: longWeekFlags?.longRideWeekFlags,
     longRunWeekFlags: longWeekFlags?.longRunWeekFlags,
+    formulaCatalog,
   });
 }
 
@@ -1018,6 +1046,7 @@ export async function updateSimpleSeasonPlan(
   }));
 
   const catalog = await loadAthleteZoneFocusCatalog(athleteId);
+  const formulaCatalog = await loadAthleteSessionFormulaCatalog(athleteId);
 
   if (input.recalculate) {
     weeks = recalculateWeeks(
@@ -1035,7 +1064,8 @@ export async function updateSimpleSeasonPlan(
       {
         longRideWeekFlags: resolvedLongRideWeekFlags,
         longRunWeekFlags: resolvedLongRunWeekFlags,
-      }
+      },
+      formulaCatalog
     );
   }
 
@@ -1338,6 +1368,7 @@ export function serializeSimpleSeasonPlan(
         runEndHours: phase.runEndHours,
         runRampPercent: phase.runRampPercent,
         runStepHours: phase.runStepHours,
+        disciplineFormulaIds: notes.disciplineFormulaIds,
       };
     });
 

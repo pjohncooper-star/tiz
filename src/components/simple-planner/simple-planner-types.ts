@@ -14,6 +14,7 @@ import type { PhaseKindZoneDefaults, PhaseZoneSplits } from "@/lib/plan/season/z
 import { newPhaseId } from "@/lib/plan/season/phase-span-utils";
 import type { ZoneMinutes } from "@/lib/workout/steps";
 import type { LongOffWeekPolicy } from "@prisma/client";
+import type { DisciplineFormulaIds } from "@/lib/plan/season/base-formulas";
 import type { PoolSlotKind, WeekSlotBudgets } from "@/lib/plan/season/simple-week-compute";
 import type { ProgramDiscipline } from "@/lib/plan/season/plan-session-conflicts";
 
@@ -89,6 +90,7 @@ export type SimplePhase = {
   runEndHours?: number | null;
   runRampPercent?: number | null;
   runStepHours?: number | null;
+  disciplineFormulaIds?: DisciplineFormulaIds | null;
 };
 
 export type PlanWeekCoverage = "attached" | "paused";

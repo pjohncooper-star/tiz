@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseDisciplineFormulaIds } from "@/lib/plan/season/base-formulas";
 
 const DISCIPLINES = ["BIKE", "RUN", "SWIM"] as const;
 
@@ -309,6 +310,24 @@ const longOffWeekPolicySchema = z.enum([
   "ENDURANCE_PERCENT",
 ]);
 
+const formulaSessionSchema = z.object({
+  sharePercent: z.number().positive().max(100),
+  zone: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  intensity: z.boolean(),
+  long: z.boolean(),
+});
+
+export const sessionFormulaCatalogSchema = z.array(
+  z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    discipline: z.enum(["SWIM", "BIKE", "RUN"]),
+    growthPercentPerWeek: z.number().min(0).max(100),
+    peakCapHours: z.number().nonnegative().nullable(),
+    sessions: z.array(formulaSessionSchema).min(1).max(7),
+  })
+);
+
 export const zoneFocusCatalogSchema = z
   .array(
     z.object({
@@ -428,6 +447,15 @@ export const simplePhaseSchema = z
     runEndHours: z.number().nonnegative().nullable().optional(),
     runRampPercent: z.number().nonnegative().nullable().optional(),
     runStepHours: z.number().nonnegative().nullable().optional(),
+    disciplineFormulaIds: z
+      .object({
+        SWIM: z.string().nullable().optional(),
+        BIKE: z.string().nullable().optional(),
+        RUN: z.string().nullable().optional(),
+      })
+      .nullable()
+      .optional()
+      .transform((value) => (value == null ? value : parseDisciplineFormulaIds(value))),
   })
   .refine(
     (phase) =>

@@ -74,13 +74,13 @@ One bar per week, height proportional to hours, stacked by sport — swim, bike,
 - **A/B/C race badges** on the weeks your races fall in.
 - Month labels along the axis.
 
-Controls: **Show volume** / **Hide volume**, and filters for **All**, **Swim**, **Bike**, **Run**. Clicking a week selects it in the inspector. Clicking a phase band opens that phase's tabs. A `!` on a phase band means Generate sessions is blocked (unassigned weeks or missing weekly template).
+Controls: **Show volume** / **Hide volume**, and filters for **All**, **Swim**, **Bike**, **Run**. Clicking a week selects it in the inspector. Clicking a phase band opens that phase's tabs. A `!` on a phase band means Generate sessions is blocked (unassigned weeks, a missing weekly template, or a template whose session count does not match a chosen formula).
 
 This is the chart to check when you are asking "does this season look right" — you are looking for a sane progression, rest weeks that actually dip, and a taper that actually tapers.
 
 ### Load table
 
-Toggle **Load** under the timeline for a cross-phase spreadsheet: one row per discipline (bike hours hide while following TrainerRoad), one column per assigned phase, plus rest-week % and max hours. Edits write the same fields as the phase Load tab. Bike cells say **From TrainerRoad** while that season is following the feed.
+Toggle **Load** under the timeline for a cross-phase spreadsheet: one row per discipline (bike hours hide while following TrainerRoad), one column per assigned phase, plus rest-week % and max hours. Edits write the same fields as the phase Load tab. Bike cells say **From TrainerRoad** while that season is following the feed. A sport that uses a session formula shows that formula’s name in the cell. A removed formula shows **Removed formula**.
 
 ## Races
 
@@ -132,7 +132,7 @@ A conventional long season is something like Base → Base 2 → Build → Race 
 | **Sessions per week** | Swim, Bike, Run, Strength counts. Defaults 3 / 4 / 3 / 2. |
 | **Intense days per week** | Swim, Bike, Run — how many days carry Z3+ work. Default 1 each. |
 | **Zone focus (TiZ %)** | The intensity distribution for the phase — see [zone focus](#zone-focus-and-tiz-targets) |
-| **Phase volume** | The volume progression — see [volume](#volume-and-ramps) |
+| **Phase volume** | The volume progression — see [volume](#volume-and-ramps). Each sport can also choose a [session formula](#session-formula) |
 | **Long sessions** | Long bike / Long run week checkboxes. Minute ramp and off-week policy appear in the separate-long modes only |
 | **Ramp by discipline** | Three checkboxes; unticking one holds that sport flat through the phase |
 | **Phase goal** | A free-text note — "Optional focus for this phase" |
@@ -170,6 +170,14 @@ Chaining is the useful default: set the start for your first phase, then let eac
 **Rest weeks** interrupt the ramp. Under Week review, **Rest week volume** sets what a rest week gets as a percentage of the previous training week — 75% by default. Rest weeks are marked every fourth week when a season is created, and you can tick or untick the **Rest** checkbox on any week.
 
 **Mesocycles** are the four-week blocks inside each phase. You do not edit them directly; the planner uses them to time de-load weeks, schedule long weeks, and step volume plateaus. They are also what the Dashboard's "This cycle" date range refers to.
+
+### Session formula
+
+On the Load tab, under each sport’s volume row, choose **None** or a formula saved in **Settings → Training & planning → Session formulas**. **None** leaves that sport on the phase progression (Target, Percent per week, or Absolute step).
+
+A chosen formula keeps that sport’s **start hours** and replaces the end and rate fields with a readout of the formula’s growth, cap, and session shares at those start hours. The long-ride or long-run minutes for that sport follow the session marked long. On the Intensity tab, that sport’s sessions per week, intense days, and zone focus become readouts from the formula. The other sports stay editable. The phase progression select still drives sports set to **None**.
+
+Rest weeks keep the season’s rest-week cut. If the formula was deleted, the inspector says so and that sport stays on its normal ramp until you clear the choice or pick another. **Edit in settings** opens the library.
 
 ### Zone focus and TiZ targets
 
@@ -251,7 +259,9 @@ Each phase has a **Generate sessions for this phase** panel:
 | **Only fill weeks with no existing sessions** | On by default. Skips any week that already has planned sessions. |
 | **Generate sessions** | Runs it |
 
-Two prerequisites: the phase must be **assigned to weeks**, and it must have a **weekly template**. Missing ones show next to **Generate sessions** and as a badge on the phase chip / `!` on the timeline band. A phase you just added must be saved first.
+Two prerequisites: the phase must be **assigned to weeks**, and it must have a **weekly template**. Missing ones show next to **Generate sessions** and as a badge on the phase chip / `!` on the timeline band. A phase you just added must be saved first. When a sport uses a session formula, the weekly template must have the same number of sessions in that sport as the formula. A mismatch stays blocked, for example “Weekly template has 1 run session; formula has 2 sessions.”
+
+Generation keeps each template item’s weekday. For a sport with a formula, it sets that sport’s session durations from the formula’s shares for that week. The resulting pool cards stay empty until you build the workout.
 
 What generation does:
 

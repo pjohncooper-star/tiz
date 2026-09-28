@@ -6,6 +6,7 @@ import { createSimpleSeasonSchema } from "@/lib/plan/api-schemas";
 import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
   createSimpleSeasonPlan,
+  loadAthleteSessionFormulaCatalog,
   loadAthleteZoneFocusCatalog,
 } from "@/lib/plan/season/simple-planner.server";
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
@@ -36,12 +37,16 @@ export async function GET(request: Request) {
       getSimplePlannerSeason(athleteId, seasonId),
       athleteHasTrainerRoadCalendar(athleteId),
     ]);
-    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    const [zoneFocusCatalog, sessionFormulaCatalog] = await Promise.all([
+      loadAthleteZoneFocusCatalog(athleteId),
+      loadAthleteSessionFormulaCatalog(athleteId),
+    ]);
 
     if (!plan) {
       return NextResponse.json({
         season: null,
         zoneFocusCatalog,
+        sessionFormulaCatalog,
         trainerRoadCalendarSaved,
       });
     }
@@ -49,6 +54,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
       zoneFocusCatalog,
+      sessionFormulaCatalog,
       trainerRoadCalendarSaved,
     });
   } catch (err) {
@@ -108,9 +114,16 @@ export async function POST(request: Request) {
         endDate: parseDateKey(data.endDate),
         goalEvent: parseGoalEventWrite(data.goalEvent!),
       });
-      const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+      const [zoneFocusCatalog, sessionFormulaCatalog] = await Promise.all([
+        loadAthleteZoneFocusCatalog(athleteId),
+        loadAthleteSessionFormulaCatalog(athleteId),
+      ]);
       return NextResponse.json(
-        { season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan), zoneFocusCatalog },
+        {
+          season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
+          zoneFocusCatalog,
+          sessionFormulaCatalog,
+        },
         { status: 201 }
       );
     }
@@ -133,9 +146,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Could not create season" }, { status: 500 });
     }
 
-    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    const [zoneFocusCatalog, sessionFormulaCatalog] = await Promise.all([
+      loadAthleteZoneFocusCatalog(athleteId),
+      loadAthleteSessionFormulaCatalog(athleteId),
+    ]);
     return NextResponse.json(
-      { season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan), zoneFocusCatalog },
+      {
+        season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
+        zoneFocusCatalog,
+        sessionFormulaCatalog,
+      },
       { status: 201 }
     );
   } catch (err) {

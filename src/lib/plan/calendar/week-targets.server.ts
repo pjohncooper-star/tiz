@@ -17,6 +17,11 @@ import {
   type SimplePhaseCompute,
   type WeekSlotBudgets,
 } from "@/lib/plan/season/simple-week-compute";
+import {
+  formulaForDiscipline,
+  type SessionFormulaCatalog,
+} from "@/lib/plan/season/base-formulas";
+import { loadAthleteSessionFormulaCatalog } from "@/lib/plan/season/simple-planner.server";
 
 type SerializedSeason = ReturnType<typeof serializeSimpleSeasonPlan>;
 type SerializedPhase = SerializedSeason["phases"][number];
@@ -121,6 +126,7 @@ function phaseToCompute(phase: SerializedPhase): SimplePhaseCompute {
     longRunOffWeekPolicy: phase.longRunOffWeekPolicy,
     longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
     longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
+    disciplineFormulaIds: phase.disciplineFormulaIds,
     rampEnabled: phase.rampEnabled,
   };
 }
@@ -139,6 +145,24 @@ function findSeasonWeek(
   return season.weeks.find((week) => week.weekIndex === weekIndex);
 }
 
+function applyFormulaSessionCounts(
+  rows: CalendarWeekTargetDiscipline[],
+  phase: SerializedPhase | null,
+  catalog: SessionFormulaCatalog
+): CalendarWeekTargetDiscipline[] {
+  if (!phase) return rows;
+  return rows.map((row) => {
+    const formula = formulaForDiscipline(catalog, phase.disciplineFormulaIds, row.discipline);
+    if (!formula) return row;
+    return {
+      ...row,
+      sessionsPerWeek: formula.sessions.length,
+      intenseDaysPerWeek: formula.sessions.filter((session) => session.intensity && !session.long)
+        .length,
+    };
+  });
+}
+
 function buildWeekTarget(
   requestedWeekStart: string,
   week: SerializedWeek & {
@@ -149,16 +173,19 @@ function buildWeekTarget(
   },
   phase: SerializedPhase | null,
   planningMode: PlanningMode,
-  season: SerializedSeason
+  season: SerializedSeason,
+  formulaCatalog: SessionFormulaCatalog
 ): CalendarWeekTarget {
-  const byDiscipline: CalendarWeekTargetDiscipline[] = TARGET_DISCIPLINES.map(
-    (discipline) => ({
+  const byDiscipline = applyFormulaSessionCounts(
+    TARGET_DISCIPLINES.map((discipline) => ({
       discipline,
       hours: week[HOURS_KEY[discipline]] ?? 0,
       zoneMinutes: disciplineZoneMinutes(week.zoneMinutes, discipline),
       sessionsPerWeek: phase ? phase[SESSIONS_KEY[discipline]] : 0,
       intenseDaysPerWeek: phase ? phase[INTENSE_KEY[discipline]] : 0,
-    })
+    })),
+    phase,
+    formulaCatalog
   );
 
   const storedSlotBudgets = parseSlotBudgets(week.slotBudgets);
@@ -173,6 +200,12 @@ function buildWeekTarget(
       isRestWeek: week.isRestWeek,
       phase: phaseCompute,
       planningMode,
+      formulaCatalog,
+      disciplineHours: {
+        SWIM: week.swimHours ?? 0,
+        BIKE: week.bikeHours ?? 0,
+        RUN: week.runHours ?? 0,
+      },
       context: {
         longRideWeekFlags: season.longRideWeekFlags,
         longRunWeekFlags: season.longRunWeekFlags,
@@ -228,6 +261,7 @@ export async function getCalendarWeekTargets(
   }
 
   const requested = new Set(weekStarts);
+  const formulaCatalog = await loadAthleteSessionFormulaCatalog(athleteId);
   const trSessions = season.trainerRoadDriven
     ? await loadTrainerRoadBikeSessions(athleteId, weekStarts)
     : [];
@@ -250,7 +284,7 @@ export async function getCalendarWeekTargets(
       phasePlanningSpans,
       defaultPlanningMode
     );
-    let target = buildWeekTarget(weekStart, week, phase, planningMode, season);
+    let target = buildWeekTarget(weekStart, week, phase, planningMode, season, formulaCatalog);
     if (season.trainerRoadDriven) {
       target = applyTrainerRoadBikeWeekTarget(target, trSessions);
     }

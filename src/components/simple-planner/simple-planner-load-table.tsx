@@ -10,12 +10,25 @@ import {
   VOLUME_PROGRESSION_MODES,
 } from "@/lib/plan/season/volume-progression";
 import type { VolumeProgressionMode } from "@prisma/client";
+import {
+  formulaForDiscipline,
+  type FormulaDiscipline,
+  type SessionFormulaCatalog,
+} from "@/lib/plan/season/base-formulas";
+
+const LOAD_DISCIPLINE: Record<"swim" | "bike" | "run", FormulaDiscipline> = {
+  swim: "SWIM",
+  bike: "BIKE",
+  run: "RUN",
+};
 
 export function SimplePlannerLoadTable({
   season,
+  formulaCatalog = [],
   onSeasonChange,
 }: {
   season: SimpleSeason;
+  formulaCatalog?: SessionFormulaCatalog;
   onSeasonChange: (season: SimpleSeason) => void;
 }) {
   const phases = season.phases.filter(isAssignedPhase);
@@ -128,6 +141,19 @@ export function SimplePlannerLoadTable({
                           ? "bikeEndHours"
                           : "runEndHours";
                     const mode = inferVolumeProgressionMode(phase);
+                    const formula = formulaForDiscipline(
+                      formulaCatalog,
+                      phase.disciplineFormulaIds,
+                      LOAD_DISCIPLINE[discipline]
+                    );
+                    const chosenId = phase.disciplineFormulaIds?.[LOAD_DISCIPLINE[discipline]];
+                    if (formula || chosenId) {
+                      return (
+                        <td key={`${phase.id}-${discipline}`} className="py-2 pr-3 text-xs text-zinc-600 dark:text-zinc-300">
+                          {formula ? formula.name : "Removed formula"}
+                        </td>
+                      );
+                    }
                     return (
                       <td key={`${phase.id}-${discipline}`} className="py-2 pr-3">
                         <div className="flex flex-col gap-1">

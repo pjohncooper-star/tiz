@@ -16,6 +16,7 @@ import {
   distanceMetersFromHoursPace,
 } from "./distance-pace-rollup";
 import { TAPER_VOLUME_START_FACTOR } from "./constants";
+import type { DisciplineFormula } from "./base-formulas";
 
 function exactSwimHours(meters: number, paceSeconds = 90): number {
   return ((meters / 100) * paceSeconds) / 3600;
@@ -558,5 +559,90 @@ describe("simple-phase-volume", () => {
     assert.equal(result[5]!.runHours, 2.5);
     assert.ok(result[5]!.runHours <= 2.5);
     assert.equal(result[5]!.totalHours, 8.5);
+  });
+});
+
+describe("discipline formulas", () => {
+  const runFormula: DisciplineFormula = {
+    id: "sf_run",
+    name: "Run split",
+    discipline: "RUN",
+    growthPercentPerWeek: 10,
+    peakCapHours: 5,
+    sessions: [
+      { sharePercent: 100, zone: 1, intensity: false, long: false },
+    ],
+  };
+
+  function runInput(
+    phases: PhaseVolumeSpan[],
+    weeks: SimpleWeekVolume[],
+    catalog: DisciplineFormula[]
+  ) {
+    return recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((phase) => ({
+        startWeekIndex: phase.startWeekIndex,
+        endWeekIndex: phase.endWeekIndex,
+        rampEnabled: phase.rampEnabled,
+      })),
+      defaults: defaultSimpleRampDefaults(),
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+      formulaCatalog: catalog,
+    });
+  }
+
+  it("compounds run hours, caps them, and cuts the rest week without changing swim or bike", () => {
+    const phases = [
+      basePhase({
+        endWeekIndex: 3,
+        swimStartHours: 2,
+        swimEndHours: 2,
+        bikeStartHours: 4,
+        bikeEndHours: 4,
+        runStartHours: 4,
+        runEndHours: 4,
+        disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
+      }),
+    ];
+    const weeks = [
+      week(0, 1, 1, 1),
+      week(1, 1, 1, 1),
+      week(2, 1, 1, 1, true),
+      week(3, 1, 1, 1),
+    ];
+    const result = runInput(phases, weeks, [runFormula]);
+    const untouched = runInput(phases, weeks, []);
+    assert.equal(result[0]!.runHours, 4);
+    assert.equal(result[1]!.runHours, 4.4);
+    assert.equal(result[2]!.runHours, 3.3);
+    assert.equal(result[3]!.runHours, 4.84);
+    assert.equal(result[0]!.swimHours, untouched[0]!.swimHours);
+    assert.equal(result[1]!.bikeHours, untouched[1]!.bikeHours);
+    assert.equal(result[3]!.swimHours, untouched[3]!.swimHours);
+    assert.equal(result[3]!.bikeHours, untouched[3]!.bikeHours);
+  });
+
+  it("ignores a phase formula id that is not in the library", () => {
+    const phases = [
+      basePhase({
+        endWeekIndex: 0,
+        runStartHours: 2,
+        runEndHours: 2,
+        disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "missing" },
+      }),
+    ];
+    const weeks = [week(0, 1, 1, 1)];
+    const withId = runInput(phases, weeks, []);
+    const withoutId = runInput(
+      [basePhase({ endWeekIndex: 0, runStartHours: 2, runEndHours: 2 })],
+      weeks,
+      []
+    );
+    assert.equal(withId[0]!.runHours, withoutId[0]!.runHours);
   });
 });

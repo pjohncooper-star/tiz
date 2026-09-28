@@ -296,6 +296,8 @@ model Athlete {
   selfEvalConfig             Json?
   zoneFocusCatalog      Json?
   phaseKindZoneDefaults Json?
+  /** Athlete-defined session formulas. Empty until the athlete saves one. */
+  sessionFormulaCatalog Json?
   /** Editable swim gear list for workout step equipment pickers. */
   swimEquipmentCatalog       Json?
   /**

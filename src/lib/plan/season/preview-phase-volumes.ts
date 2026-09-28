@@ -1,5 +1,6 @@
 import type { PlanningMode } from "@prisma/client";
 import type { SimplePhase, SimpleWeek } from "@/components/simple-planner/simple-planner-types";
+import type { SessionFormulaCatalog } from "./base-formulas";
 import { migrateSeasonRampDefaultsOntoPhases } from "./migrate-season-ramp-to-phases";
 import { isAssignedPhase } from "./phase-span-utils";
 import {
@@ -35,6 +36,7 @@ function toPhaseVolumeSpan(phase: SimplePhase): PhaseVolumeSpan {
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    disciplineFormulaIds: phase.disciplineFormulaIds,
   };
 }
 
@@ -62,6 +64,7 @@ export function previewPhaseAwareVolumes(input: {
   restVolumePercent: number;
   seasonDefaultPlanningMode: PlanningMode;
   preserveBikeHours?: boolean;
+  formulaCatalog?: SessionFormulaCatalog;
 }): { weeks: SimpleWeek[]; phases: SimplePhase[]; migrated: boolean } {
   const planningMode = input.seasonDefaultPlanningMode ?? "BY_DISCIPLINE";
   const { phases, migrated } = migrateSeasonRampDefaultsOntoPhases(
@@ -99,6 +102,7 @@ export function previewPhaseAwareVolumes(input: {
       bike: 50,
       run: 25,
     },
+    formulaCatalog: input.formulaCatalog,
   });
 
   const byIndex = new Map(volumeWeeks.map((week) => [week.weekIndex, week]));

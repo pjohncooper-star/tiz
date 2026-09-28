@@ -260,3 +260,69 @@ test("TrainerRoad-driven weeks omit BIKE template items", () => {
   assert.equal(plan.sessions.length, 1);
   assert.equal(plan.sessions[0]!.discipline, "RUN");
 });
+
+test("formula shares replace matching run durations and leave a count mismatch alone", () => {
+  const runTemplate: MaterializeTemplate = {
+    id: "runs",
+    items: [
+      {
+        weekday: "TUE",
+        discipline: "RUN",
+        title: "Easy",
+        durationMinutes: 30,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "EASY",
+      },
+      {
+        weekday: "THU",
+        discipline: "RUN",
+        title: "Quality",
+        durationMinutes: 40,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "INTENSITY",
+      },
+      {
+        weekday: "SUN",
+        discipline: "RUN",
+        title: "Long",
+        durationMinutes: 50,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "LONG",
+      },
+    ],
+  };
+  const formulaSessions = [
+    { minutes: 60, intensity: false, long: false },
+    { minutes: 60, intensity: true, long: false },
+    { minutes: 120, intensity: false, long: true },
+  ];
+  const matched = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "runs",
+      formulaSessions: { RUN: formulaSessions },
+    },
+    opts({ templatesById: new Map([["runs", runTemplate]]) })
+  );
+  assert.deepEqual(
+    matched.sessions.map((session) => session.durationMinutes),
+    [60, 60, 120]
+  );
+  assert.equal(matched.sessions[2]!.sessionRole, "LONG");
+
+  const mismatched = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "runs",
+      formulaSessions: { RUN: formulaSessions.slice(0, 2) },
+    },
+    opts({ templatesById: new Map([["runs", runTemplate]]) })
+  );
+  assert.deepEqual(
+    mismatched.sessions.map((session) => session.durationMinutes),
+    [30, 40, 50]
+  );
+});
