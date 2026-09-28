@@ -16,6 +16,7 @@ import {
   type SimpleSeason,
 } from "@/components/simple-planner/simple-planner-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
+import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
 import type { AttachedPlanSessionDraft } from "@/lib/plan/season/preview-attached-plan";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
@@ -31,6 +32,7 @@ export function SimplePlannerWorkbench({
   onSelectTarget,
   templates,
   zoneFocusCatalog,
+  formulaCatalog = [],
   disciplineSettings,
   libraryPlans,
   attachedPlanSessionsById,
@@ -57,6 +59,7 @@ export function SimplePlannerWorkbench({
   onSelectTarget: (target: InspectorTarget) => void;
   templates: WeeklyTemplateOption[];
   zoneFocusCatalog: ZoneFocusCatalog;
+  formulaCatalog?: SessionFormulaCatalog;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   libraryPlans: Array<{ id: string; name: string; durationDays: number; sessionCount: number }>;
   attachedPlanSessionsById: Record<string, AttachedPlanSessionDraft[]>;
@@ -181,6 +184,8 @@ export function SimplePlannerWorkbench({
             }}
             planWindows={attachedPlanPreview.windows}
             attachments={seasonAttachments}
+            formulaCatalog={formulaCatalog}
+            templates={templates}
             onMoveProgram={(attachmentId, weekDelta) => {
               const windowStart = attachedPlanPreview.windows.find(
                 (row) => row.attachmentId === attachmentId
@@ -270,7 +275,11 @@ export function SimplePlannerWorkbench({
               onPhasesChange={(phases) => onSeasonChange({ ...season, phases })}
             />
           ) : (
-            <SimplePlannerLoadTable season={season} onSeasonChange={onSeasonChange} />
+            <SimplePlannerLoadTable
+              season={season}
+              formulaCatalog={formulaCatalog}
+              onSeasonChange={onSeasonChange}
+            />
           )}
 
           {ecoLoadEnabled ? (
@@ -331,6 +340,7 @@ export function SimplePlannerWorkbench({
             }}
             templates={templates}
             zoneFocusCatalog={zoneFocusCatalog}
+            formulaCatalog={formulaCatalog}
             disciplineSettings={disciplineSettings}
             libraryPlans={libraryPlans}
             attachedPlanSessionsById={attachedPlanSessionsById}

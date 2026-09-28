@@ -27,13 +27,18 @@ import {
 } from "@/components/simple-planner/simple-planner-types";
 import { DEFAULT_REST_VOLUME_PERCENT } from "@/lib/plan/season/constants";
 import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
+import { parseSessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
+import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { useDisciplineSettings } from "@/lib/units/use-discipline-settings";
 import { resolveLongWeekFlagsForSeason } from "@/lib/plan/season/long-session-schedule";
 import { previewPhaseAwareVolumes } from "@/lib/plan/season/preview-phase-volumes";
 
-function normalizeSeason(season: SimpleSeason): SimpleSeason {
+function normalizeSeason(
+  season: SimpleSeason,
+  formulaCatalog?: SessionFormulaCatalog
+): SimpleSeason {
   const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
   const longRideWeekFlags = resolveLongWeekFlagsForSeason({
     totalWeeks: season.totalWeeks,
@@ -92,6 +97,7 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     restVolumePercent: base.deLoadVolumePercent,
     seasonDefaultPlanningMode: base.defaultPlanningMode ?? "BY_DISCIPLINE",
     preserveBikeHours: Boolean(base.trainerRoadDriven),
+    formulaCatalog,
   });
 
   return {
@@ -99,6 +105,13 @@ function normalizeSeason(season: SimpleSeason): SimpleSeason {
     phases: preview.phases,
     weeks: preview.weeks,
   };
+}
+
+function fullVolumeSignature(
+  season: SimpleSeason,
+  catalog: SessionFormulaCatalog
+): string {
+  return `${volumePreviewSignature(season)}|${JSON.stringify(catalog)}`;
 }
 
 function volumePreviewSignature(season: SimpleSeason): string {
@@ -132,6 +145,7 @@ function volumePreviewSignature(season: SimpleSeason): string {
       runEndHours: phase.runEndHours,
       runRampPercent: phase.runRampPercent,
       runStepHours: phase.runStepHours,
+      disciplineFormulaIds: phase.disciplineFormulaIds,
     })),
   });
 }
@@ -185,6 +199,7 @@ export function SimplePlannerView({
   const [zoneFocusCatalog, setZoneFocusCatalog] = useState<ZoneFocusCatalog>(() =>
     parseZoneFocusCatalog(null)
   );
+  const [sessionFormulaCatalog, setSessionFormulaCatalog] = useState<SessionFormulaCatalog>([]);
   const [templates, setTemplates] = useState<WeeklyTemplateOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -206,7 +221,9 @@ export function SimplePlannerView({
     Record<string, AttachedPlanSessionDraft[]>
   >({});
 
-  const volumeSignature = season ? volumePreviewSignature(season) : null;
+  const volumeSignature = season
+    ? fullVolumeSignature(season, sessionFormulaCatalog)
+    : null;
 
   useEffect(() => {
     if (!volumeSignature) return;
@@ -223,6 +240,7 @@ export function SimplePlannerView({
         restVolumePercent: current.deLoadVolumePercent,
         seasonDefaultPlanningMode: current.defaultPlanningMode ?? "BY_DISCIPLINE",
         preserveBikeHours: Boolean(current.trainerRoadDriven),
+        formulaCatalog: sessionFormulaCatalog,
       });
       setSeason((draft) => {
         if (!draft) return draft;
@@ -233,7 +251,7 @@ export function SimplePlannerView({
         };
       });
     });
-  }, [volumeSignature]);
+  }, [sessionFormulaCatalog, volumeSignature]);
 
   const load = useCallback(async () => {
     if (seasonIdParam && seasonRef.current?.id === seasonIdParam) {
@@ -264,6 +282,7 @@ export function SimplePlannerView({
     const data = (await seasonRes.json()) as {
       season: SimpleSeason | null;
       zoneFocusCatalog?: ZoneFocusCatalog;
+      sessionFormulaCatalog?: SessionFormulaCatalog;
       trainerRoadCalendarSaved?: boolean;
     };
     const trData = trRes.ok
@@ -275,12 +294,16 @@ export function SimplePlannerView({
     if (generation !== loadGenerationRef.current) return;
     const calendarSaved = Boolean(trData?.url) || Boolean(data.trainerRoadCalendarSaved);
     const wantCreateForm = createRequested && !seasonIdParam;
+    const formulaCatalog = parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null);
     const loaded =
-      wantCreateForm || !data.season ? null : normalizeSeason(data.season);
-    lastVolumeSignatureRef.current = loaded ? volumePreviewSignature(loaded) : null;
+      wantCreateForm || !data.season ? null : normalizeSeason(data.season, formulaCatalog);
+    lastVolumeSignatureRef.current = loaded
+      ? fullVolumeSignature(loaded, formulaCatalog)
+      : null;
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
+    setSessionFormulaCatalog(formulaCatalog);
     setTrainerRoadCalendarSaved(calendarSaved);
     setTrainerRoadSyncedAt(trData?.syncedAt ?? null);
     setSeasons(seasonsData?.seasons ?? []);
@@ -298,13 +321,19 @@ export function SimplePlannerView({
       const res = await fetch("/api/plan/calendar/templates");
       if (!res.ok) return;
       const data = (await res.json()) as {
-        templates?: { id: string; name: string; category: WeeklyTemplateOption["category"] }[];
+        templates?: {
+          id: string;
+          name: string;
+          category: WeeklyTemplateOption["category"];
+          items?: Array<{ discipline: string }>;
+        }[];
       };
       setTemplates(
         (data.templates ?? []).map((t) => ({
           id: t.id,
           name: t.name,
           category: t.category,
+          items: (t.items ?? []).map((item) => ({ discipline: item.discipline })),
         }))
       );
     })();
@@ -461,12 +490,15 @@ export function SimplePlannerView({
     const data = (await res.json()) as {
       season: SimpleSeason;
       zoneFocusCatalog?: ZoneFocusCatalog;
+      sessionFormulaCatalog?: SessionFormulaCatalog;
     };
-    const normalized = normalizeSeason(data.season);
-    lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+    const formulaCatalog = parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null);
+    const normalized = normalizeSeason(data.season, formulaCatalog);
+    lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
+    setSessionFormulaCatalog(formulaCatalog);
     return true;
   }
 
@@ -517,17 +549,20 @@ export function SimplePlannerView({
       const data = (await res.json()) as {
         season: SimpleSeason;
         zoneFocusCatalog?: ZoneFocusCatalog;
+        sessionFormulaCatalog?: SessionFormulaCatalog;
       };
       if (!data.season?.id) {
         setError("Could not create season.");
         return;
       }
       loadGenerationRef.current += 1;
-      const normalized = normalizeSeason(data.season);
-      lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+      const formulaCatalog = parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null);
+      const normalized = normalizeSeason(data.season, formulaCatalog);
+      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
       setSeason(normalized);
       setBaselineSeason(cloneSeason(normalized));
       setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
+      setSessionFormulaCatalog(formulaCatalog);
       setInspectorTarget({ kind: "season" });
       setCreateMode(false);
       setSeasons((current) =>
@@ -574,16 +609,19 @@ export function SimplePlannerView({
         error?: string | Record<string, unknown>;
         season?: SimpleSeason;
         zoneFocusCatalog?: ZoneFocusCatalog;
+        sessionFormulaCatalog?: SessionFormulaCatalog;
       };
       if (!res.ok) {
         setError(typeof body.error === "string" ? body.error : "Could not update TrainerRoad link.");
         return;
       }
       if (!body.season) return;
-      const normalized = normalizeSeason(body.season);
-      lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+      const formulaCatalog = parseSessionFormulaCatalog(body.sessionFormulaCatalog ?? null);
+      const normalized = normalizeSeason(body.season, formulaCatalog);
+      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
       setSeason(normalized);
       setBaselineSeason(cloneSeason(normalized));
+      setSessionFormulaCatalog(formulaCatalog);
       if (body.zoneFocusCatalog) {
         setZoneFocusCatalog(parseZoneFocusCatalog(body.zoneFocusCatalog));
       }
@@ -694,6 +732,7 @@ export function SimplePlannerView({
         error?: string;
         season?: SimpleSeason;
         zoneFocusCatalog?: ZoneFocusCatalog;
+        sessionFormulaCatalog?: SessionFormulaCatalog;
       };
       if (!seasonRes.ok || !body.season) {
         setError(
@@ -703,10 +742,12 @@ export function SimplePlannerView({
         );
         return;
       }
-      const normalized = normalizeSeason(body.season);
-      lastVolumeSignatureRef.current = volumePreviewSignature(normalized);
+      const formulaCatalog = parseSessionFormulaCatalog(body.sessionFormulaCatalog ?? null);
+      const normalized = normalizeSeason(body.season, formulaCatalog);
+      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
       setSeason(normalized);
       setBaselineSeason(cloneSeason(normalized));
+      setSessionFormulaCatalog(formulaCatalog);
       if (body.zoneFocusCatalog) {
         setZoneFocusCatalog(parseZoneFocusCatalog(body.zoneFocusCatalog));
       }
@@ -740,6 +781,7 @@ export function SimplePlannerView({
       onSelectTarget={setInspectorTarget}
       templates={templates}
       zoneFocusCatalog={zoneFocusCatalog}
+      formulaCatalog={sessionFormulaCatalog}
       disciplineSettings={disciplineSettings}
       libraryPlans={libraryPlans}
       attachedPlanSessionsById={attachedPlanSessionsById}
@@ -759,7 +801,7 @@ export function SimplePlannerView({
       onSave={() => void saveSeason(savePayload({ recalculate: true }))}
       onDiscard={() => {
         if (!baselineSeason) return;
-        lastVolumeSignatureRef.current = volumePreviewSignature(baselineSeason);
+        lastVolumeSignatureRef.current = fullVolumeSignature(baselineSeason, sessionFormulaCatalog);
         setSeason(cloneSeason(baselineSeason));
         setError(null);
       }}

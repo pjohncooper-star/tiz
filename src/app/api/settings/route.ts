@@ -17,7 +17,11 @@ import {
 } from "@/lib/zones/signal-preference";
 import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
-import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema, swimEquipmentSettingsSchema, racePaceAnchorsSettingsSchema } from "@/lib/plan/api-schemas";
+import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema, sessionFormulaCatalogSchema, swimEquipmentSettingsSchema, racePaceAnchorsSettingsSchema } from "@/lib/plan/api-schemas";
+import {
+  serializeSessionFormulaCatalog,
+  validateDisciplineFormula,
+} from "@/lib/plan/season/base-formulas";
 import { maxHeartRateSchema, signalPreferenceSchema } from "@/lib/settings/api-schemas";
 import { serializePhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import {
@@ -490,6 +494,37 @@ export async function PUT(req: Request) {
     await syncCurrentPreferenceToSettings(athleteId, row.discipline);
     await recomputeAfterPreferenceChange(athleteId, row.discipline, from, to);
     return NextResponse.json({ ok: true });
+  }
+
+  if (body.type === "session-formula-settings") {
+    try {
+      const data = z.object({ sessionFormulaCatalog: sessionFormulaCatalogSchema }).parse(body.data);
+      for (const formula of data.sessionFormulaCatalog) {
+        const message = validateDisciplineFormula(formula);
+        if (message) {
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
+      }
+      await db.athlete.update({
+        where: { id: athleteId },
+        data: {
+          sessionFormulaCatalog: serializeSessionFormulaCatalog(
+            data.sessionFormulaCatalog
+          ) as import("@prisma/client").Prisma.InputJsonValue,
+        },
+      });
+      return NextResponse.json({ ok: true });
+    } catch (error) {
+      const message =
+        error instanceof z.ZodError
+          ? "Invalid session formula settings"
+          : error instanceof Error && /sessionFormulaCatalog|column/.test(error.message)
+            ? "Session formulas are not available yet. Run prisma/migrations/manual_athlete_session_formula_catalog.sql, then run npx prisma generate and restart the dev server."
+            : error instanceof Error
+              ? error.message
+              : "Could not save session formulas";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
 
   if (body.type === "zone-focus-settings") {

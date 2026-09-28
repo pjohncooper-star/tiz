@@ -15,6 +15,7 @@ export async function loadAthleteSettingsProfile(athleteId: string) {
         workoutShadingTarget: true,
         phaseKindZoneDefaults: true,
         zoneFocusCatalog: true,
+        sessionFormulaCatalog: true,
         swimEquipmentCatalog: true,
         racePaceAnchors: true,
         maxHeartRateBpm: true,
@@ -25,7 +26,7 @@ export async function loadAthleteSettingsProfile(athleteId: string) {
   } catch (error) {
     if (
       error instanceof Error &&
-      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|swimEquipmentCatalog|racePaceAnchors|maxHeartRateBpm|ecoLoadEnabled|calendarFeedToken|column/.test(
+      /phaseKindZoneDefaults|PhaseKindZoneDefaults|zoneFocusCatalog|ZoneFocusCatalog|sessionFormulaCatalog|swimEquipmentCatalog|racePaceAnchors|maxHeartRateBpm|ecoLoadEnabled|calendarFeedToken|column/.test(
         error.message
       )
     ) {

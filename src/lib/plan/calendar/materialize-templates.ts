@@ -58,6 +58,17 @@ export type WeekMaterializationContext = {
   bikeLongSeat?: LongSeatAction | null;
   /** RUN LONG seat action (null = leave LONG items unchanged). */
   runLongSeat?: LongSeatAction | null;
+  /**
+   * When set for a sport, replace that sport's template durations when the
+   * template has the same number of sessions. Already includes rest-week hours.
+   */
+  formulaSessions?: Partial<Record<"SWIM" | "BIKE" | "RUN", FormulaDurationSession[]>>;
+};
+
+export type FormulaDurationSession = {
+  minutes: number;
+  intensity: boolean;
+  long: boolean;
 };
 
 export type MaterializeOptions = {
@@ -187,6 +198,52 @@ export function applyLongSeatToSession(
   }
 }
 
+function pairedFormulaMinutes(
+  items: MaterializeTemplateItem[],
+  formulaSessions: WeekMaterializationContext["formulaSessions"],
+  omitDisciplines: Discipline[] | undefined
+): Map<number, number> {
+  const paired = new Map<number, number>();
+  if (!formulaSessions) return paired;
+  for (const discipline of ["SWIM", "BIKE", "RUN"] as const) {
+    if (omitDisciplines?.includes(discipline)) continue;
+    const sessions = formulaSessions[discipline];
+    if (!sessions) continue;
+    const rows = items
+      .map((item, index) => ({ item, index }))
+      .filter((row) => row.item.discipline === discipline);
+    if (rows.length !== sessions.length) continue;
+    const used = new Array(sessions.length).fill(false);
+    const take = (predicate: (session: FormulaDurationSession) => boolean): number | null => {
+      const found = sessions.findIndex(
+        (session, index) => !used[index] && predicate(session)
+      );
+      if (found < 0) return null;
+      used[found] = true;
+      return sessions[found]!.minutes;
+    };
+    const assigned = new Map<number, number>();
+    let failed = false;
+    for (const row of rows) {
+      let minutes: number | null = null;
+      if (row.item.sessionRole === "LONG") minutes = take((session) => session.long);
+      else if (row.item.sessionRole === "INTENSITY") {
+        minutes = take((session) => session.intensity && !session.long);
+      }
+      if (minutes == null) minutes = take(() => true);
+      if (minutes == null) {
+        failed = true;
+        break;
+      }
+      assigned.set(row.index, minutes);
+    }
+    if (!failed) {
+      for (const [index, minutes] of assigned) paired.set(index, minutes);
+    }
+  }
+  return paired;
+}
+
 /** Resolve and expand a single week into concrete session specs. */
 export function planWeekMaterialization(
   ctx: WeekMaterializationContext,
@@ -206,16 +263,19 @@ export function planWeekMaterialization(
     ? Math.max(0, Math.min(1, opts.deLoadVolumePercent / 100))
     : 1;
 
+  const items = template?.items ?? [];
+  const formulaMinutes = pairedFormulaMinutes(items, ctx.formulaSessions, opts.omitDisciplines);
   const sessions: MaterializedSession[] = [];
-  for (const item of template?.items ?? []) {
-    if (opts.omitDisciplines?.includes(item.discipline)) continue;
+  items.forEach((item, index) => {
+    if (opts.omitDisciplines?.includes(item.discipline)) return;
     const base: MaterializedSession = {
       scheduledDateKey: weekdayToDate(ctx.weekStartKey, item.weekday),
       weekday: item.weekday,
       discipline: item.discipline,
       title: item.title,
-      // De-load scales duration (the main volume lever); distance is left as-is.
-      durationMinutes: scaleDuration(item.durationMinutes, scale),
+      // Formula minutes already follow the week's hours, including rest cuts.
+      durationMinutes:
+        formulaMinutes.get(index) ?? scaleDuration(item.durationMinutes, scale),
       distanceMeters: item.distanceMeters,
       poolSize: item.discipline === "SWIM" ? item.poolSize : null,
       sessionRole: item.sessionRole,
@@ -223,7 +283,7 @@ export function planWeekMaterialization(
     };
     const next = applyLongSeatToSession(base, ctx);
     if (next) sessions.push(next);
-  }
+  });
 
   return {
     weekIndex: ctx.weekIndex,

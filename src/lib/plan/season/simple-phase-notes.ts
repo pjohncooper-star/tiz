@@ -3,6 +3,12 @@ import {
   DEFAULT_PHASE_SESSIONS,
 } from "@/components/simple-planner/simple-planner-types";
 import {
+  emptyDisciplineFormulaIds,
+  formulaIdsAreEmpty,
+  parseDisciplineFormulaIds,
+  type DisciplineFormulaIds,
+} from "@/lib/plan/season/base-formulas";
+import {
   parsePhaseZoneSplits,
   serializePhaseZoneSplits,
 } from "@/lib/plan/season/phase-zone-defaults";
@@ -15,6 +21,7 @@ type PhaseCoachNotesPayload = {
   bikeIntenseDaysPerWeek?: number;
   runIntenseDaysPerWeek?: number;
   zoneSplits?: unknown;
+  disciplineFormulaIds?: unknown;
 };
 
 export type PhaseCoachNotes = {
@@ -24,6 +31,7 @@ export type PhaseCoachNotes = {
   bikeIntenseDaysPerWeek: number;
   runIntenseDaysPerWeek: number;
   zoneSplits: PhaseZoneSplits | null;
+  disciplineFormulaIds: DisciplineFormulaIds;
 };
 
 const DEFAULTS: Omit<PhaseCoachNotes, "goal"> = {
@@ -32,6 +40,7 @@ const DEFAULTS: Omit<PhaseCoachNotes, "goal"> = {
   bikeIntenseDaysPerWeek: DEFAULT_PHASE_INTENSE_DAYS.bikeIntenseDaysPerWeek,
   runIntenseDaysPerWeek: DEFAULT_PHASE_INTENSE_DAYS.runIntenseDaysPerWeek,
   zoneSplits: null,
+  disciplineFormulaIds: emptyDisciplineFormulaIds(),
 };
 
 function nonNegativeIntOr(value: unknown, fallback: number): number {
@@ -54,11 +63,13 @@ export function parsePhaseCoachNotes(coachNotes: string | null): PhaseCoachNotes
         "runIntenseDaysPerWeek",
         "goal",
         "zoneSplits",
+        "disciplineFormulaIds",
       ] as const;
       if (known.some((key) => key in parsed)) {
         return {
           goal: typeof parsed.goal === "string" ? parsed.goal.trim() || null : null,
           zoneSplits: parsePhaseZoneSplits(parsed.zoneSplits),
+          disciplineFormulaIds: parseDisciplineFormulaIds(parsed.disciplineFormulaIds),
           strengthSessionsPerWeek: nonNegativeIntOr(
             parsed.strengthSessionsPerWeek,
             DEFAULTS.strengthSessionsPerWeek
@@ -87,7 +98,7 @@ export function parsePhaseCoachNotes(coachNotes: string | null): PhaseCoachNotes
 
 export function serializePhaseCoachNotes(input: PhaseCoachNotes): string | null {
   const trimmedGoal = input.goal?.trim() || null;
-  const data: Omit<PhaseCoachNotes, "goal" | "zoneSplits"> = {
+  const data: Omit<PhaseCoachNotes, "goal" | "zoneSplits" | "disciplineFormulaIds"> = {
     strengthSessionsPerWeek: Math.max(0, Math.round(input.strengthSessionsPerWeek)),
     swimIntenseDaysPerWeek: Math.max(0, Math.round(input.swimIntenseDaysPerWeek)),
     bikeIntenseDaysPerWeek: Math.max(0, Math.round(input.bikeIntenseDaysPerWeek)),
@@ -99,7 +110,8 @@ export function serializePhaseCoachNotes(input: PhaseCoachNotes): string | null 
     data.swimIntenseDaysPerWeek === DEFAULTS.swimIntenseDaysPerWeek &&
     data.bikeIntenseDaysPerWeek === DEFAULTS.bikeIntenseDaysPerWeek &&
     data.runIntenseDaysPerWeek === DEFAULTS.runIntenseDaysPerWeek &&
-    !input.zoneSplits;
+    !input.zoneSplits &&
+    formulaIdsAreEmpty(input.disciplineFormulaIds);
 
   if (allDefault) {
     return trimmedGoal;
@@ -109,5 +121,8 @@ export function serializePhaseCoachNotes(input: PhaseCoachNotes): string | null 
     ...(trimmedGoal ? { goal: trimmedGoal } : {}),
     ...data,
     ...(input.zoneSplits ? { zoneSplits: serializePhaseZoneSplits(input.zoneSplits) } : {}),
+    ...(!formulaIdsAreEmpty(input.disciplineFormulaIds)
+      ? { disciplineFormulaIds: input.disciplineFormulaIds }
+      : {}),
   });
 }

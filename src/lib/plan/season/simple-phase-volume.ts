@@ -5,6 +5,13 @@ import type {
   VolumeProgressionMode,
 } from "@prisma/client";
 import {
+  formulaForDiscipline,
+  formulaHoursAtTrainingWeek,
+  type DisciplineFormulaIds,
+  type FormulaDiscipline,
+  type SessionFormulaCatalog,
+} from "./base-formulas";
+import {
   distanceMetersFromHoursPace,
   hoursFromDistancePace,
 } from "./distance-pace-rollup";
@@ -29,6 +36,7 @@ import {
   type SimpleWeekVolume,
   SIMPLE_DISCIPLINES,
   isRampOnForDiscipline,
+  rampBaseWeekIndex,
   sumWeekHours,
   syncDerivedDistanceOrHours,
   applyRestVolumeCuts,
@@ -62,6 +70,7 @@ export type PhaseVolumeSpan = PhasePlanningSpan & {
   runEndHours?: number | null;
   runRampPercent?: number | null;
   runStepHours?: number | null;
+  disciplineFormulaIds?: DisciplineFormulaIds | null;
 };
 
 const DISCIPLINE_KEYS: DisciplineKey[] = ["swim", "bike", "run"];
@@ -537,15 +546,18 @@ export function recalculatePhaseAwareVolumes(input: {
   seasonDefaultPlanningMode: PlanningMode;
   seasonAnchors: { startHours: number; peakHours: number };
   seasonSplit: { swim: number; bike: number; run: number };
+  formulaCatalog?: SessionFormulaCatalog;
 }): SimpleWeekVolume[] {
   const sorted = sortedPhases(input.phases);
   if (!planUsesPhaseVolumeRamps(sorted)) {
-    return recalculateSimpleVolumes(
+    const simple = recalculateSimpleVolumes(
       input.weeks,
       input.rampPhaseSpans,
       input.defaults,
       input.restVolumePercent
     );
+    applyFormulaDisciplineVolumes(simple, sorted, input);
+    return simple;
   }
 
   const seasonPhaseInputs = sorted.map((phase, index) =>
@@ -686,5 +698,134 @@ export function recalculatePhaseAwareVolumes(input: {
     week.totalHours = sumWeekHours(week);
   }
 
+  applyFormulaDisciplineVolumes(result, sorted, input);
   return result;
+}
+
+const FORMULA_DISCIPLINE_KEY: Record<
+  SimpleDiscipline,
+  FormulaDiscipline
+> = {
+  swim: "SWIM",
+  bike: "BIKE",
+  run: "RUN",
+};
+
+function formulaStartHours(
+  weeks: SimpleWeekVolume[],
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline
+): number {
+  const explicit = phaseStartHours(phase, discipline);
+  if (explicit != null && Number.isFinite(explicit)) return explicit;
+  for (let index = phase.startWeekIndex - 1; index >= 0; index -= 1) {
+    const prior = weeks.find((week) => week.weekIndex === index && !week.isRestWeek);
+    if (!prior) continue;
+    if (discipline === "swim") return prior.swimHours;
+    if (discipline === "bike") return prior.bikeHours;
+    return prior.runHours;
+  }
+  return 0;
+}
+
+function trainingWeekOffset(
+  weeks: SimpleWeekVolume[],
+  phase: PhaseVolumeSpan,
+  weekIndex: number
+): number {
+  return weeks.filter(
+    (week) =>
+      !week.isRestWeek &&
+      week.weekIndex >= phase.startWeekIndex &&
+      week.weekIndex < weekIndex
+  ).length;
+}
+
+function writeFormulaHours(
+  week: SimpleWeekVolume,
+  discipline: SimpleDiscipline,
+  hours: number,
+  defaults: SimpleRampDefaults
+): void {
+  const rounded = roundHours(Math.max(0, hours));
+  if (isDistanceDiscipline(discipline, defaults)) {
+    applyMetersToWeek(week, discipline, metersFromHours(discipline, rounded, defaults), defaults);
+    return;
+  }
+  if (discipline === "swim") week.swimHours = rounded;
+  else if (discipline === "bike") week.bikeHours = rounded;
+  else week.runHours = rounded;
+  if (discipline !== "bike") {
+    const pace = defaults[discipline].referencePaceSeconds;
+    if (pace > 0) {
+      const meters = roundMeters(metersFromHours(discipline, rounded, defaults));
+      if (discipline === "swim") week.swimDistanceMeters = meters;
+      else week.runDistanceMeters = meters;
+    }
+  }
+}
+
+function applyFormulaDisciplineVolumes(
+  weeks: SimpleWeekVolume[],
+  phases: PhaseVolumeSpan[],
+  input: {
+    defaults: SimpleRampDefaults;
+    restVolumePercent: number;
+    formulaCatalog?: SessionFormulaCatalog;
+  }
+): void {
+  const catalog = input.formulaCatalog ?? [];
+  if (catalog.length === 0) return;
+  const factor = input.restVolumePercent / 100;
+
+  for (const week of weeks) {
+    if (week.isRestWeek) continue;
+    const phase = phaseAtWeek(phases, week.weekIndex);
+    if (!phase?.disciplineFormulaIds) continue;
+    let touched = false;
+    for (const discipline of SIMPLE_DISCIPLINES) {
+      const formula = formulaForDiscipline(
+        catalog,
+        phase.disciplineFormulaIds,
+        FORMULA_DISCIPLINE_KEY[discipline]
+      );
+      if (!formula) continue;
+      const hours = formulaHoursAtTrainingWeek({
+        startHours: formulaStartHours(weeks, phase, discipline),
+        growthPercentPerWeek: formula.growthPercentPerWeek,
+        peakCapHours: formula.peakCapHours,
+        trainingWeekOffset: trainingWeekOffset(weeks, phase, week.weekIndex),
+      });
+      writeFormulaHours(week, discipline, hours, input.defaults);
+      touched = true;
+    }
+    if (touched) week.totalHours = sumWeekHours(week);
+  }
+
+  for (const week of weeks) {
+    if (!week.isRestWeek) continue;
+    const phase = phaseAtWeek(phases, week.weekIndex);
+    if (!phase?.disciplineFormulaIds) continue;
+    const baseIndex = rampBaseWeekIndex(weeks, week.weekIndex);
+    let touched = false;
+    for (const discipline of SIMPLE_DISCIPLINES) {
+      const formula = formulaForDiscipline(
+        catalog,
+        phase.disciplineFormulaIds,
+        FORMULA_DISCIPLINE_KEY[discipline]
+      );
+      if (!formula) continue;
+      const priorHours =
+        baseIndex < 0
+          ? formulaStartHours(weeks, phase, discipline)
+          : discipline === "swim"
+            ? weeks[baseIndex]!.swimHours
+            : discipline === "bike"
+              ? weeks[baseIndex]!.bikeHours
+              : weeks[baseIndex]!.runHours;
+      writeFormulaHours(week, discipline, priorHours * factor, input.defaults);
+      touched = true;
+    }
+    if (touched) week.totalHours = sumWeekHours(week);
+  }
 }

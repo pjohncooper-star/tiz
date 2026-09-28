@@ -23,7 +23,8 @@ import {
   type SimplePhase,
   type SimpleSeason,
 } from "@/components/simple-planner/simple-planner-types";
-import { phaseGenerateBlockers } from "@/lib/plan/season/phase-generate-blockers";
+import { phaseGenerateBlockersForTemplate } from "@/lib/plan/season/phase-generate-blockers";
+import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
 import { isAssignedPhase, isEmptyPhase } from "@/lib/plan/season/phase-span-utils";
 import { PLANNING_MODE_HELP, PLANNING_MODE_LABELS, PLANNING_MODES } from "@/lib/plan/season/planning-mode";
 import type { PlanningMode } from "@prisma/client";
@@ -49,6 +50,7 @@ export function SimplePlannerInspector({
   onSelectTarget,
   templates,
   zoneFocusCatalog,
+  formulaCatalog = [],
   disciplineSettings,
   libraryPlans,
   attachedPlanSessionsById,
@@ -65,6 +67,7 @@ export function SimplePlannerInspector({
   onSelectTarget: (target: InspectorTarget) => void;
   templates: WeeklyTemplateOption[];
   zoneFocusCatalog: ZoneFocusCatalog;
+  formulaCatalog?: SessionFormulaCatalog;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   libraryPlans: Array<{ id: string; name: string; durationDays: number; sessionCount: number }>;
   attachedPlanSessionsById: Record<string, AttachedPlanSessionDraft[]>;
@@ -95,6 +98,7 @@ export function SimplePlannerInspector({
         phase={phase}
         templates={templates}
         zoneFocusCatalog={zoneFocusCatalog}
+        formulaCatalog={formulaCatalog}
         disciplineSettings={disciplineSettings}
         onSeasonChange={onSeasonChange}
       />
@@ -133,6 +137,7 @@ export function SimplePlannerInspector({
       season={season}
       templates={templates}
       zoneFocusCatalog={zoneFocusCatalog}
+      formulaCatalog={formulaCatalog}
       disciplineSettings={disciplineSettings}
       onSeasonChange={onSeasonChange}
       onSelectTarget={onSelectTarget}
@@ -145,6 +150,7 @@ function PhaseInspector({
   phase,
   templates,
   zoneFocusCatalog,
+  formulaCatalog,
   disciplineSettings,
   onSeasonChange,
 }: {
@@ -152,11 +158,12 @@ function PhaseInspector({
   phase: SimplePhase;
   templates: WeeklyTemplateOption[];
   zoneFocusCatalog: ZoneFocusCatalog;
+  formulaCatalog: SessionFormulaCatalog;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onSeasonChange: (season: SimpleSeason) => void;
 }) {
   const [tab, setTab] = useState<Exclude<PhaseEditorSection, "all">>("shape");
-  const blockers = phaseGenerateBlockers(phase);
+  const blockers = phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates);
 
   function updatePhase(updated: SimplePhase) {
     onSeasonChange({
@@ -205,6 +212,7 @@ function PhaseInspector({
         phases={season.phases}
         phaseKindZoneDefaults={season.phaseKindZoneDefaults}
         zoneFocusCatalog={zoneFocusCatalog}
+        formulaCatalog={formulaCatalog}
         totalWeeks={season.totalWeeks}
         weeks={season.weeks}
         templates={templates}
@@ -414,6 +422,7 @@ function SeasonInspector({
   season,
   templates,
   zoneFocusCatalog,
+  formulaCatalog,
   disciplineSettings,
   onSeasonChange,
   onSelectTarget,
@@ -421,6 +430,7 @@ function SeasonInspector({
   season: SimpleSeason;
   templates: WeeklyTemplateOption[];
   zoneFocusCatalog: ZoneFocusCatalog;
+  formulaCatalog: SessionFormulaCatalog;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   onSeasonChange: (season: SimpleSeason) => void;
   onSelectTarget: (target: InspectorTarget) => void;
@@ -510,7 +520,7 @@ function SeasonInspector({
         <p className="text-sm font-medium">Phases</p>
         <ul className="mt-1 space-y-1 text-sm">
           {assigned.map((phase) => {
-            const blockers = phaseGenerateBlockers(phase);
+            const blockers = phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates);
             return (
               <li key={phase.id ?? phase.name}>
                 <button

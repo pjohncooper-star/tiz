@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { emptyDisciplineFormulaIds } from "./base-formulas";
 import {
   parsePhaseCoachNotes,
   serializePhaseCoachNotes,
@@ -7,6 +8,7 @@ import {
 
 const defaults = {
   zoneSplits: null,
+  disciplineFormulaIds: emptyDisciplineFormulaIds(),
   strengthSessionsPerWeek: 2,
   swimIntenseDaysPerWeek: 1,
   bikeIntenseDaysPerWeek: 1,
@@ -25,6 +27,7 @@ describe("simple-phase-notes", () => {
     const serialized = serializePhaseCoachNotes({
       goal: "Build",
       zoneSplits: null,
+      disciplineFormulaIds: emptyDisciplineFormulaIds(),
       strengthSessionsPerWeek: 3,
       swimIntenseDaysPerWeek: 1,
       bikeIntenseDaysPerWeek: 2,
@@ -33,6 +36,7 @@ describe("simple-phase-notes", () => {
     assert.deepEqual(parsePhaseCoachNotes(serialized), {
       goal: "Build",
       zoneSplits: null,
+      disciplineFormulaIds: emptyDisciplineFormulaIds(),
       strengthSessionsPerWeek: 3,
       swimIntenseDaysPerWeek: 1,
       bikeIntenseDaysPerWeek: 2,
@@ -45,6 +49,7 @@ describe("simple-phase-notes", () => {
       serializePhaseCoachNotes({
         goal: "Taper focus",
         zoneSplits: null,
+        disciplineFormulaIds: emptyDisciplineFormulaIds(),
         strengthSessionsPerWeek: 2,
         swimIntenseDaysPerWeek: 1,
         bikeIntenseDaysPerWeek: 1,

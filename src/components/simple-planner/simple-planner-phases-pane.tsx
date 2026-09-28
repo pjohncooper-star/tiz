@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, Input, Label } from "@/components/ui";
 import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
 import { ZoneSplitEditor } from "@/components/simple-planner/zone-split-editor";
@@ -29,7 +29,15 @@ import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
-import { phaseGenerateBlockers } from "@/lib/plan/season/phase-generate-blockers";
+import { phaseGenerateBlockersForTemplate } from "@/lib/plan/season/phase-generate-blockers";
+import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
+import { formulaForDiscipline } from "@/lib/plan/season/base-formulas";
+import {
+  DisciplineFormulaSelect,
+  formulaLongReadout,
+  formulaVolumeReadout,
+  phaseDisciplineStartHours,
+} from "@/components/simple-planner/discipline-formula-fields";
 import {
   PLANNING_MODE_HELP,
   PLANNING_MODE_LABELS,
@@ -72,6 +80,7 @@ export type WeeklyTemplateOption = {
   id: string;
   name: string;
   category: WeeklyTemplateKind;
+  items?: Array<{ discipline: string }>;
 };
 
 type SimplePlannerPhasesPaneProps = {
@@ -79,6 +88,7 @@ type SimplePlannerPhasesPaneProps = {
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
+  formulaCatalog?: SessionFormulaCatalog;
   totalWeeks: number;
   weeks: SimpleWeek[];
   templates: WeeklyTemplateOption[];
@@ -103,6 +113,7 @@ export function SimplePlannerPhasesPane({
   phases,
   phaseKindZoneDefaults,
   zoneFocusCatalog,
+  formulaCatalog = [],
   totalWeeks,
   weeks,
   templates,
@@ -180,9 +191,9 @@ export function SimplePlannerPhasesPane({
                   style={{ backgroundColor: phase.color }}
                 />
                 <span className="font-medium">{phase.name}</span>
-                {phaseGenerateBlockers(phase).length > 0 ? (
+                {phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates).length > 0 ? (
                   <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                    {phaseGenerateBlockers(phase)[0]}
+                    {phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates)[0]}
                   </span>
                 ) : null}
               </div>
@@ -223,6 +234,7 @@ export function SimplePlannerPhasesPane({
             phases={phases}
             phaseKindZoneDefaults={phaseKindZoneDefaults}
             zoneFocusCatalog={zoneFocusCatalog}
+            formulaCatalog={formulaCatalog}
             totalWeeks={totalWeeks}
             weeks={weeks}
             templates={templates}
@@ -245,8 +257,8 @@ export function SimplePlannerPhasesPane({
               seasonId={seasonId}
               phaseId={selected.id}
               phaseName={selected.name}
-              canGenerate={phaseGenerateBlockers(selected).length === 0}
-              blockers={phaseGenerateBlockers(selected)}
+              canGenerate={phaseGenerateBlockersForTemplate(selected, formulaCatalog, templates).length === 0}
+              blockers={phaseGenerateBlockersForTemplate(selected, formulaCatalog, templates)}
             />
           ) : (
             <p className="mt-3 text-xs text-zinc-500">
@@ -266,6 +278,7 @@ export function PhaseDetailEditor({
   phases,
   phaseKindZoneDefaults,
   zoneFocusCatalog,
+  formulaCatalog = [],
   totalWeeks,
   weeks,
   templates,
@@ -288,6 +301,7 @@ export function PhaseDetailEditor({
   phases: SimplePhase[];
   phaseKindZoneDefaults: PhaseKindZoneDefaults;
   zoneFocusCatalog: ZoneFocusCatalog;
+  formulaCatalog?: SessionFormulaCatalog;
   totalWeeks: number;
   weeks: SimpleWeek[];
   templates: WeeklyTemplateOption[];
@@ -380,6 +394,7 @@ export function PhaseDetailEditor({
         showLongSettings={showLongVolumeSettings}
         rampDefaults={rampDefaults}
         disciplineSettings={disciplineSettings}
+        formulaCatalog={formulaCatalog}
         onChange={onChange}
         hideBike={phasesLocked}
       />
@@ -391,48 +406,100 @@ export function PhaseDetailEditor({
             ? "Sessions per week includes the long on long weeks; off-week policy replaces or drops that seat. Long bike/run volume ramps stay outside main hours."
             : "Sessions per week includes the long. Unchecked weeks keep an endurance session instead. Rest and taper weeks omit the long."}
         </p>
-        {showLongVolumeSettings ? (
-          <>
-            <LongDisciplineEditor
-              label="Long ride"
-              startMin={phase.longRideStartMin}
-              endMin={phase.longRideEndMin}
-              offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
-              offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
-              onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
-              onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
-              onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
-              onPercentChange={(value) =>
-                onChange({ ...phase, longRideOffWeekEndurancePercent: value })
-              }
-              showOffWeekPolicy={false}
-            />
-            <LongDisciplineEditor
-              label="Long run"
-              startMin={phase.longRunStartMin}
-              endMin={phase.longRunEndMin}
-              offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
-              offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
-              onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
-              onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
-              onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
-              onPercentChange={(value) =>
-                onChange({ ...phase, longRunOffWeekEndurancePercent: value })
-              }
-              showOffWeekPolicy={false}
-            />
-          </>
-        ) : null}
+        {(() => {
+          const bikeReadout = formulaLongReadout(
+            formulaCatalog,
+            phase.disciplineFormulaIds,
+            "BIKE",
+            phaseDisciplineStartHours({
+              phase,
+              phases,
+              weeks,
+              rampDefaults,
+              effectiveMode,
+              discipline: "bike",
+            })
+          );
+          const runReadout = formulaLongReadout(
+            formulaCatalog,
+            phase.disciplineFormulaIds,
+            "RUN",
+            phaseDisciplineStartHours({
+              phase,
+              phases,
+              weeks,
+              rampDefaults,
+              effectiveMode,
+              discipline: "run",
+            })
+          );
+          return (
+            <>
+              {bikeReadout ? (
+                <p className="text-sm">
+                  <span className="font-medium">Long ride. </span>
+                  {bikeReadout}
+                </p>
+              ) : null}
+              {runReadout ? (
+                <p className="text-sm">
+                  <span className="font-medium">Long run. </span>
+                  {runReadout}
+                </p>
+              ) : null}
+              {showLongVolumeSettings && !bikeReadout ? (
+                <LongDisciplineEditor
+                  label="Long ride"
+                  startMin={phase.longRideStartMin}
+                  endMin={phase.longRideEndMin}
+                  offWeekPolicy={phase.longRideOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+                  offWeekPercent={phase.longRideOffWeekEndurancePercent ?? 60}
+                  onStartMinChange={(value) => onChange({ ...phase, longRideStartMin: value })}
+                  onEndMinChange={(value) => onChange({ ...phase, longRideEndMin: value })}
+                  onPolicyChange={(value) => onChange({ ...phase, longRideOffWeekPolicy: value })}
+                  onPercentChange={(value) =>
+                    onChange({ ...phase, longRideOffWeekEndurancePercent: value })
+                  }
+                  showOffWeekPolicy={false}
+                />
+              ) : null}
+              {showLongVolumeSettings && !runReadout ? (
+                <LongDisciplineEditor
+                  label="Long run"
+                  startMin={phase.longRunStartMin}
+                  endMin={phase.longRunEndMin}
+                  offWeekPolicy={phase.longRunOffWeekPolicy ?? "ENDURANCE_PERCENT"}
+                  offWeekPercent={phase.longRunOffWeekEndurancePercent ?? 60}
+                  onStartMinChange={(value) => onChange({ ...phase, longRunStartMin: value })}
+                  onEndMinChange={(value) => onChange({ ...phase, longRunEndMin: value })}
+                  onPolicyChange={(value) => onChange({ ...phase, longRunOffWeekPolicy: value })}
+                  onPercentChange={(value) =>
+                    onChange({ ...phase, longRunOffWeekEndurancePercent: value })
+                  }
+                  showOffWeekPolicy={false}
+                />
+              ) : null}
+            </>
+          );
+        })()}
       </fieldset>
 
       <fieldset className="mt-4 space-y-2">
         <legend className="text-sm font-medium">Ramp by discipline</legend>
-        {(["swim", "bike", "run"] as const).map((discipline) => (
+        {(["swim", "bike", "run"] as const).map((discipline) => {
+          const formulaDiscipline =
+            discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
+          const formula = formulaForDiscipline(
+            formulaCatalog,
+            phase.disciplineFormulaIds,
+            formulaDiscipline
+          );
+          return (
           <label key={discipline} className="flex items-center gap-2 text-sm capitalize">
             <input
               type="checkbox"
-              checked={phase.rampEnabled[discipline]}
-              disabled={phasesLocked && discipline === "bike"}
+              checked={formula ? true : phase.rampEnabled[discipline]}
+              disabled={Boolean(formula) || (phasesLocked && discipline === "bike")}
               onChange={(event) =>
                 onChange({
                   ...phase,
@@ -443,9 +510,10 @@ export function PhaseDetailEditor({
                 })
               }
             />
-            {discipline} ramp on
+            {formula ? `${discipline} follows the session formula` : `${discipline} ramp on`}
           </label>
-        ))}
+          );
+        })}
       </fieldset>
 
         <details className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
@@ -478,6 +546,7 @@ export function PhaseDetailEditor({
           </div>
           {showLongVolumeSettings ? (
             <>
+              {formulaForDiscipline(formulaCatalog, phase.disciplineFormulaIds, "BIKE") ? null : (
               <LongDisciplineEditor
                 label="Long ride off-week"
                 startMin={phase.longRideStartMin}
@@ -492,6 +561,8 @@ export function PhaseDetailEditor({
                 }
                 minutesHidden
               />
+              )}
+              {formulaForDiscipline(formulaCatalog, phase.disciplineFormulaIds, "RUN") ? null : (
               <LongDisciplineEditor
                 label="Long run off-week"
                 startMin={phase.longRunStartMin}
@@ -506,6 +577,7 @@ export function PhaseDetailEditor({
                 }
                 minutesHidden
               />
+              )}
             </>
           ) : null}
           </div>
@@ -602,10 +674,24 @@ export function PhaseDetailEditor({
               { key: "runSessionsPerWeek" as const, label: "Run" },
               { key: "strengthSessionsPerWeek" as const, label: "Strength" },
             ] as const
-          ).map((field) => (
+          ).map((field) => {
+            const formulaDiscipline =
+              field.key === "swimSessionsPerWeek"
+                ? "SWIM"
+                : field.key === "bikeSessionsPerWeek"
+                  ? "BIKE"
+                  : field.key === "runSessionsPerWeek"
+                    ? "RUN"
+                    : null;
+            const formula = formulaDiscipline
+              ? formulaForDiscipline(formulaCatalog, phase.disciplineFormulaIds, formulaDiscipline)
+              : null;
+            return (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              {phasesLocked && field.key === "bikeSessionsPerWeek" ? (
+              {formula ? (
+                <p className="mt-1 text-sm">{formula.sessions.length}</p>
+              ) : phasesLocked && field.key === "bikeSessionsPerWeek" ? (
                 <p className="mt-1 text-sm text-zinc-500">From TrainerRoad</p>
               ) : (
                 <NumberEditorInput
@@ -623,7 +709,8 @@ export function PhaseDetailEditor({
                 />
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
         {programWeekHint?.programSessionCounts &&
         Object.values(programWeekHint.programSessionCounts).some((count) => (count ?? 0) > 0) ? (
@@ -661,10 +748,27 @@ export function PhaseDetailEditor({
               { key: "bikeIntenseDaysPerWeek" as const, label: "Bike" },
               { key: "runIntenseDaysPerWeek" as const, label: "Run" },
             ] as const
-          ).map((field) => (
+          ).map((field) => {
+            const formulaDiscipline =
+              field.key === "swimIntenseDaysPerWeek"
+                ? "SWIM"
+                : field.key === "bikeIntenseDaysPerWeek"
+                  ? "BIKE"
+                  : "RUN";
+            const formula = formulaForDiscipline(
+              formulaCatalog,
+              phase.disciplineFormulaIds,
+              formulaDiscipline
+            );
+            const intenseCount = formula
+              ? formula.sessions.filter((session) => session.intensity && !session.long).length
+              : null;
+            return (
             <div key={field.key}>
               <Label>{field.label}</Label>
-              {phasesLocked && field.key === "bikeIntenseDaysPerWeek" ? (
+              {intenseCount != null ? (
+                <p className="mt-1 text-sm">{intenseCount}</p>
+              ) : phasesLocked && field.key === "bikeIntenseDaysPerWeek" ? (
                 <p className="mt-1 text-sm text-zinc-500">From TrainerRoad</p>
               ) : (
                 <NumberEditorInput
@@ -682,7 +786,8 @@ export function PhaseDetailEditor({
                 />
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </fieldset>
 
@@ -698,6 +803,9 @@ export function PhaseDetailEditor({
           catalog={zoneFocusCatalog}
           showPresetPercents
           showStartEnd
+          lockedDisciplines={(["SWIM", "BIKE", "RUN"] as const).filter((discipline) =>
+            formulaForDiscipline(formulaCatalog, phase.disciplineFormulaIds, discipline)
+          )}
         />
       </fieldset>
         </>
@@ -752,6 +860,7 @@ export function PhaseVolumeEditor({
   showLongSettings,
   rampDefaults,
   disciplineSettings,
+  formulaCatalog = [],
   onChange,
   hideBike = false,
 }: {
@@ -762,6 +871,7 @@ export function PhaseVolumeEditor({
   showLongSettings: boolean;
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  formulaCatalog?: SessionFormulaCatalog;
   onChange: (phase: SimplePhase) => void;
   hideBike?: boolean;
 }) {
@@ -808,6 +918,7 @@ export function PhaseVolumeEditor({
       </div>
 
       {effectiveMode === "OVERALL" ? (
+        <div className="space-y-3">
         <VolumeProgressionRow
           label="Total hours"
           progressionMode={progressionMode}
@@ -827,6 +938,45 @@ export function PhaseVolumeEditor({
           onRampPercentChange={(value) => onChange({ ...phase, volumeRampPercent: value })}
           onStepHoursChange={(value) => onChange({ ...phase, volumeStepHours: value })}
         />
+        {( ["swim", "bike", "run"] as const)
+          .filter((discipline) => !(hideBike && discipline === "bike"))
+          .map((discipline) => {
+            const formulaDiscipline =
+              discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
+            const readout = formulaVolumeReadout(
+              formulaCatalog,
+              phase.disciplineFormulaIds,
+              formulaDiscipline,
+              phaseDisciplineStartHours({
+                phase,
+                phases,
+                weeks,
+                rampDefaults,
+                effectiveMode,
+                discipline,
+              })
+            );
+            return (
+              <div
+                key={discipline}
+                className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+              >
+                <p className="text-sm font-medium capitalize">{discipline}</p>
+                {readout ? (
+                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{readout}</p>
+                ) : (
+                  <p className="mt-2 text-xs text-zinc-500">Uses the phase progression.</p>
+                )}
+                <DisciplineFormulaSelect
+                  discipline={formulaDiscipline}
+                  catalog={formulaCatalog}
+                  ids={phase.disciplineFormulaIds}
+                  onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
+                />
+              </div>
+            );
+          })}
+        </div>
       ) : (
         (["swim", "bike", "run"] as const)
           .filter((discipline) => !(hideBike && discipline === "bike"))
@@ -901,6 +1051,23 @@ export function PhaseVolumeEditor({
             }
           }
 
+          const formulaDiscipline =
+            discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
+          const startForFormula = phaseDisciplineStartHours({
+            phase,
+            phases,
+            weeks,
+            rampDefaults,
+            effectiveMode,
+            discipline,
+          });
+          const formulaReadout = formulaVolumeReadout(
+            formulaCatalog,
+            phase.disciplineFormulaIds,
+            formulaDiscipline,
+            startForFormula
+          );
+
           if (distanceMode) {
             return (
               <VolumeDistanceProgressionRow
@@ -915,6 +1082,15 @@ export function PhaseVolumeEditor({
                 rampPercent={rampPercent}
                 stepHours={stepHours}
                 chainedStart={chainedStart}
+                formulaReadout={formulaReadout}
+                formulaSelect={
+                  <DisciplineFormulaSelect
+                    discipline={formulaDiscipline}
+                    catalog={formulaCatalog}
+                    ids={phase.disciplineFormulaIds}
+                    onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
+                  />
+                }
                 onStartChange={(hours) => patchDiscipline({ start: hours })}
                 onEndChange={(hours) => patchDiscipline({ end: hours })}
                 onRampPercentChange={(value) => patchDiscipline({ ramp: value })}
@@ -933,6 +1109,15 @@ export function PhaseVolumeEditor({
               rampPercent={rampPercent}
               stepHours={stepHours}
               chainedStart={chainedStart}
+              formulaReadout={formulaReadout}
+              formulaSelect={
+                <DisciplineFormulaSelect
+                  discipline={formulaDiscipline}
+                  catalog={formulaCatalog}
+                  ids={phase.disciplineFormulaIds}
+                  onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
+                />
+              }
               onStartChange={(value) => patchDiscipline({ start: value })}
               onEndChange={(value) => patchDiscipline({ end: value })}
               onRampPercentChange={(value) => patchDiscipline({ ramp: value })}
@@ -953,6 +1138,8 @@ function VolumeProgressionRow({
   rampPercent,
   stepHours,
   chainedStart,
+  formulaReadout = null,
+  formulaSelect = null,
   onStartChange,
   onEndChange,
   onRampPercentChange,
@@ -965,6 +1152,8 @@ function VolumeProgressionRow({
   rampPercent?: number | null;
   stepHours?: number | null;
   chainedStart: ResolvedChainedStart | null;
+  formulaReadout?: string | null;
+  formulaSelect?: ReactNode;
   onStartChange: (value: number | null) => void;
   onEndChange: (value: number | null) => void;
   onRampPercentChange: (value: number | null) => void;
@@ -991,7 +1180,9 @@ function VolumeProgressionRow({
             return Number.isFinite(value) && value >= 0 ? value : null;
           }}
         />
-        {progressionMode === "TARGET" ? (
+        {formulaReadout ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">{formulaReadout}</p>
+        ) : progressionMode === "TARGET" ? (
           <div>
             <Label>End (h)</Label>
             <NumberEditorInput
@@ -1005,7 +1196,7 @@ function VolumeProgressionRow({
             />
           </div>
         ) : null}
-        {progressionMode === "PERCENT" ? (
+        {!formulaReadout && progressionMode === "PERCENT" ? (
           <>
             <div>
               <Label>Rate / week (%)</Label>
@@ -1034,7 +1225,7 @@ function VolumeProgressionRow({
             </div>
           </>
         ) : null}
-        {progressionMode === "STEP" ? (
+        {!formulaReadout && progressionMode === "STEP" ? (
           <>
             <div>
               <Label>Step / week (h)</Label>
@@ -1063,6 +1254,7 @@ function VolumeProgressionRow({
           </>
         ) : null}
       </div>
+      {formulaSelect}
     </div>
   );
 }
@@ -1078,6 +1270,8 @@ function VolumeDistanceProgressionRow({
   rampPercent,
   stepHours,
   chainedStart,
+  formulaReadout = null,
+  formulaSelect = null,
   onStartChange,
   onEndChange,
   onRampPercentChange,
@@ -1093,6 +1287,8 @@ function VolumeDistanceProgressionRow({
   rampPercent?: number | null;
   stepHours?: number | null;
   chainedStart: ResolvedChainedStart | null;
+  formulaReadout?: string | null;
+  formulaSelect?: ReactNode;
   onStartChange: (hours: number | null) => void;
   onEndChange: (hours: number | null) => void;
   onRampPercentChange: (value: number | null) => void;
@@ -1159,7 +1355,9 @@ function VolumeDistanceProgressionRow({
             distanceDisplayToMeters(raw, paceDiscipline, disciplineSettings)
           }
         />
-        {progressionMode === "TARGET" ? (
+        {formulaReadout ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">{formulaReadout}</p>
+        ) : progressionMode === "TARGET" ? (
           <div>
             <Label>{unitLabel} end</Label>
             <TextEditorInput
@@ -1172,7 +1370,7 @@ function VolumeDistanceProgressionRow({
             />
           </div>
         ) : null}
-        {progressionMode === "PERCENT" ? (
+        {!formulaReadout && progressionMode === "PERCENT" ? (
           <>
             <div>
               <Label>Rate / week (%)</Label>
@@ -1200,7 +1398,7 @@ function VolumeDistanceProgressionRow({
             </div>
           </>
         ) : null}
-        {progressionMode === "STEP" ? (
+        {!formulaReadout && progressionMode === "STEP" ? (
           <>
             <div>
               <Label>{unitLabel} step / week</Label>
@@ -1227,6 +1425,7 @@ function VolumeDistanceProgressionRow({
           </>
         ) : null}
       </div>
+      {formulaSelect}
     </div>
   );
 }

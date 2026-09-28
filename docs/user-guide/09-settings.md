@@ -67,6 +67,18 @@ Below the library, **default zone focus by phase kind** maps Base, Build, Race p
 
 The percentages behind each preset are listed in [chapter 5](./05-season-planner.md#zone-focus-and-tiz-targets).
 
+### Session formulas
+
+A library of named session formulas, one sport at a time. The library starts empty. **Add formula** creates a single endurance session at 100% in Z1; name it and edit from there.
+
+Each formula has:
+
+- A **name** you type, and a sport (swim, bike, or run).
+- **Growth % per week**, and an optional **peak cap** in hours.
+- A list of **sessions**. Each session is a **share of the week** (the shares must total 100%), a zone from Z1 to Z5, and optional **intensity** and **long** flags. Bike and run can mark at most one long session. The share is that session’s duration. Intensity sessions count as intense days. A long session’s minutes are the long ride or long run, still inside the weekly hours.
+
+A season phase chooses a saved formula for a sport. Editing the formula updates every phase that uses it. Starting hours stay on the phase, so two seasons can use the same formula from different starts. Two growth rates are two saved formulas.
+
 ### Training load (ECO)
 
 > *"ECO (Objective Load Equivalents) scores each swim, bike, and run with one comparable load unit. When off, planner and calendar hide all ECO references."*

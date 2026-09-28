@@ -24,6 +24,12 @@ import {
   planningModeSeparatesLongVolume,
   resolvePlanningModeForWeek,
 } from "@/lib/plan/season/planning-mode";
+import {
+  formulaForDiscipline,
+  formulaWeekFromHours,
+} from "@/lib/plan/season/base-formulas";
+import { parsePhaseCoachNotes } from "@/lib/plan/season/simple-phase-notes";
+import { loadAthleteSessionFormulaCatalog } from "@/lib/plan/season/simple-planner.server";
 
 export type MaterializeSeasonOptions = {
   /** When true, skip weeks that already have any planned sessions. */
@@ -267,6 +273,8 @@ export async function materializeSeasonTemplates(
     stored: parseLongWeekFlags(plan.longRunWeekFlags),
   });
 
+  const formulaCatalog = await loadAthleteSessionFormulaCatalog(athleteId);
+
   const contexts: WeekMaterializationContext[] = plan.weeks
     .filter(
       (week) =>
@@ -305,6 +313,35 @@ export async function materializeSeasonTemplates(
         fullLongMinutes: fullLongMinutes(phase, "run"),
       });
 
+      const phaseRow = phase
+        ? plan.phases.find((row) => row.id === phase.id)
+        : undefined;
+      const notes = phaseRow ? parsePhaseCoachNotes(phaseRow.coachNotes) : null;
+      const formulaSessions: WeekMaterializationContext["formulaSessions"] = {};
+      if (notes) {
+        const hours = {
+          SWIM: week.swimHours,
+          BIKE: week.bikeHours,
+          RUN: week.runHours,
+        } as const;
+        for (const discipline of ["SWIM", "BIKE", "RUN"] as const) {
+          const formula = formulaForDiscipline(
+            formulaCatalog,
+            notes.disciplineFormulaIds,
+            discipline
+          );
+          if (!formula) continue;
+          formulaSessions[discipline] = formulaWeekFromHours(
+            formula,
+            hours[discipline]
+          ).sessions.map((session) => ({
+            minutes: session.minutes,
+            intensity: session.intensity,
+            long: session.long,
+          }));
+        }
+      }
+
       return {
         weekIndex: week.weekIndex,
         weekStartKey: formatDateKey(week.weekStartDate),
@@ -313,6 +350,7 @@ export async function materializeSeasonTemplates(
         phaseTemplateId: phaseTemplateIdForWeek(week.weekIndex, phaseSpansForLookup),
         bikeLongSeat,
         runLongSeat,
+        ...(Object.keys(formulaSessions).length > 0 ? { formulaSessions } : {}),
       };
     });
 

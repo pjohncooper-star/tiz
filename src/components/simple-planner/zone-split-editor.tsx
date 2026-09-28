@@ -35,6 +35,7 @@ type ZoneSplitEditorProps = {
   showPresetPercents?: boolean;
   /** Show start/end TiZ % editors (phase pane). */
   showStartEnd?: boolean;
+  lockedDisciplines?: TriPlanDiscipline[];
 };
 
 export function ZoneSplitEditor({
@@ -44,21 +45,29 @@ export function ZoneSplitEditor({
   compact = false,
   showPresetPercents = false,
   showStartEnd = false,
+  lockedDisciplines = [],
 }: ZoneSplitEditorProps) {
   return (
     <div className="space-y-3">
-      {DISCIPLINE_ROWS.map((row) => (
-        <DisciplineZoneSplitRow
-          key={row.key}
-          label={row.label}
-          split={value[row.key]}
-          catalog={catalog}
-          compact={compact}
-          showPresetPercents={showPresetPercents}
-          showStartEnd={showStartEnd}
-          onChange={(split) => onChange({ ...value, [row.key]: split })}
-        />
-      ))}
+      {DISCIPLINE_ROWS.map((row) =>
+        lockedDisciplines.includes(row.key) ? (
+          <div key={row.key}>
+            <p className="text-sm font-medium">{row.label}</p>
+            <p className="text-xs text-zinc-500">Set by the session formula.</p>
+          </div>
+        ) : (
+          <DisciplineZoneSplitRow
+            key={row.key}
+            label={row.label}
+            split={value[row.key]}
+            catalog={catalog}
+            compact={compact}
+            showPresetPercents={showPresetPercents}
+            showStartEnd={showStartEnd}
+            onChange={(split) => onChange({ ...value, [row.key]: split })}
+          />
+        )
+      )}
     </div>
   );
 }

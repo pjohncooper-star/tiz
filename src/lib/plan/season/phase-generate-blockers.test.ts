@@ -29,4 +29,31 @@ describe("phaseGenerateBlockers", () => {
     assert.deepEqual(phaseGenerateBlockers(phase), []);
     assert.equal(phaseCanGenerateSessions(phase), true);
   });
+
+  it("blocks when the template session count does not match the formula", () => {
+    const phase = {
+      ...createPhaseAtWeek(2, 1),
+      weeklyTemplateId: "tmpl_1",
+      disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
+    };
+    assert.deepEqual(
+      phaseGenerateBlockers(phase, {
+        catalog: [
+          {
+            id: "sf_run",
+            name: "Run split",
+            discipline: "RUN",
+            growthPercentPerWeek: 0,
+            peakCapHours: null,
+            sessions: [
+              { sharePercent: 50, zone: 1, intensity: false, long: false },
+              { sharePercent: 50, zone: 2, intensity: false, long: true },
+            ],
+          },
+        ],
+        templateItems: [{ discipline: "RUN" }],
+      }),
+      ["Weekly template has 1 run session; formula has 2 sessions"]
+    );
+  });
 });

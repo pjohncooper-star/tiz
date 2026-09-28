@@ -6,6 +6,7 @@ import { updateSimpleSeasonSchema } from "@/lib/plan/api-schemas";
 import { parseGoalEventWrite } from "@/lib/plan/season/goal-event-api";
 import {
   updateSimpleSeasonPlan,
+  loadAthleteSessionFormulaCatalog,
   loadAthleteZoneFocusCatalog,
 } from "@/lib/plan/season/simple-planner.server";
 import { parseSimpleRampDefaultsFromApi } from "@/lib/plan/season/simple-ramp";
@@ -41,11 +42,15 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    const [zoneFocusCatalog, sessionFormulaCatalog] = await Promise.all([
+      loadAthleteZoneFocusCatalog(athleteId),
+      loadAthleteSessionFormulaCatalog(athleteId),
+    ]);
     const trainerRoadCalendarSaved = await athleteHasTrainerRoadCalendar(athleteId);
     return NextResponse.json({
       season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
       zoneFocusCatalog,
+      sessionFormulaCatalog,
       trainerRoadCalendarSaved,
     });
   } catch (err) {
@@ -101,10 +106,14 @@ export async function PATCH(request: Request, context: RouteContext) {
       }
       const ics = await fetchTrainerRoadIcs(url);
       const plan = await applyTrainerRoadCalendarToSeason(athleteId, id, ics);
-      const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+      const [zoneFocusCatalog, sessionFormulaCatalog] = await Promise.all([
+        loadAthleteZoneFocusCatalog(athleteId),
+        loadAthleteSessionFormulaCatalog(athleteId),
+      ]);
       return NextResponse.json({
         season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
         zoneFocusCatalog,
+        sessionFormulaCatalog,
       });
     }
 
@@ -143,10 +152,14 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const zoneFocusCatalog = await loadAthleteZoneFocusCatalog(athleteId);
+    const [zoneFocusCatalog, sessionFormulaCatalog] = await Promise.all([
+      loadAthleteZoneFocusCatalog(athleteId),
+      loadAthleteSessionFormulaCatalog(athleteId),
+    ]);
     return NextResponse.json({
       season: await serializeSimpleSeasonPlanWithTrainerRoadBike(athleteId, plan),
       zoneFocusCatalog,
+      sessionFormulaCatalog,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update season";

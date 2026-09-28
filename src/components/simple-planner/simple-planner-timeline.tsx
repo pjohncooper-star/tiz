@@ -9,7 +9,9 @@ import {
 } from "@/lib/plan/season/preview-race-markers";
 import { monthTicksForWeeks } from "@/lib/plan/season/season-dates";
 import { isAssignedPhase, phaseForWeekIndex } from "@/lib/plan/season/phase-span-utils";
-import { phaseGenerateBlockers } from "@/lib/plan/season/phase-generate-blockers";
+import { phaseGenerateBlockersForTemplate } from "@/lib/plan/season/phase-generate-blockers";
+import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
+import type { WeeklyTemplateOption } from "@/components/simple-planner/simple-planner-phases-pane";
 import type { ApplyWindowWithPausesResult } from "@/lib/plan/training-plan";
 import {
   raceEventKey,
@@ -52,6 +54,8 @@ type SimplePlannerTimelineProps = {
     window: ApplyWindowWithPausesResult;
   }>;
   attachments?: SimpleTrainingPlanAttachment[];
+  formulaCatalog?: SessionFormulaCatalog;
+  templates?: WeeklyTemplateOption[];
   onPauseAllThisWeek?: () => void;
   onMoveProgram?: (attachmentId: string, weekDelta: number) => void;
 };
@@ -84,6 +88,8 @@ export function SimplePlannerTimeline({
   planWindow = null,
   planWindows = [],
   attachments = [],
+  formulaCatalog = [],
+  templates = [],
   onPauseAllThisWeek,
   onMoveProgram,
 }: SimplePlannerTimelineProps) {
@@ -400,7 +406,7 @@ export function SimplePlannerTimeline({
               const widthPct =
                 ((phase.endWeekIndex - phase.startWeekIndex + 1) / displayWeeks) * 100;
               const leftPct = (phase.startWeekIndex / displayWeeks) * 100;
-              const blockers = phaseGenerateBlockers(phase);
+              const blockers = phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates);
               return (
                 <button
                   key={phase.id ?? `${phase.name}-${phase.startWeekIndex}`}
