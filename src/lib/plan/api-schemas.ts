@@ -318,14 +318,14 @@ const formulaSessionSchema = z.object({
 });
 
 export const sessionFormulaCatalogSchema = z.array(
-  z.object({
-    id: z.string().min(1),
-    name: z.string().min(1),
-    discipline: z.enum(["SWIM", "BIKE", "RUN"]),
-    growthPercentPerWeek: z.number().min(0).max(100),
-    peakCapHours: z.number().nonnegative().nullable(),
-    sessions: z.array(formulaSessionSchema).min(1).max(7),
-  })
+  z
+    .object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      discipline: z.enum(["SWIM", "BIKE", "RUN"]),
+      sessions: z.array(formulaSessionSchema).min(1).max(7),
+    })
+    .strip()
 );
 
 export const zoneFocusCatalogSchema = z
