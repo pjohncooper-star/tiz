@@ -175,7 +175,7 @@ Chaining is the useful default: set the start for your first phase, then let eac
 
 On the Load tab, under each sport’s volume row, choose **None** or a formula saved in **Settings → Training & planning → Session formulas**. **None** leaves that sport on the phase progression (Target, Percent per week, or Absolute step).
 
-A chosen formula keeps that sport’s **start hours** and replaces the end and rate fields with a readout of the formula’s growth, cap, and session shares at those start hours. The long-ride or long-run minutes for that sport follow the session marked long. On the Intensity tab, that sport’s sessions per week, intense days, and zone focus become readouts from the formula. The other sports stay editable. The phase progression select still drives sports set to **None**.
+A chosen formula keeps that sport’s **start hours** and replaces the end and rate fields with a readout, for example “Grows 10% per week, peak 4.5 h (season). At the start hours: …”. Growth per week and peak come from the season, per sport, in **Season → Advanced → [Planning units](#season-defaults)**, not from the formula. Weekly hours compound from the start hours at that rate and stop at the peak. Set the sport’s growth to 0 to hold volume flat. The session minutes are the formula’s shares at the start hours. The long-ride or long-run minutes for that sport follow the session marked long. On the Intensity tab, that sport’s sessions per week, intense days, and zone focus become readouts from the formula. The other sports stay editable. The phase progression select still drives sports set to **None**.
 
 Rest weeks keep the season’s rest-week cut. If the formula was deleted, the inspector says so and that sport stays on its normal ramp until you clear the choice or pick another. **Edit in settings** opens the library.
 
@@ -229,6 +229,8 @@ Under Season inspector **Advanced** (collapsed by default):
 **Phase kind zone defaults** — the zone focus applied to each phase kind (Base, Build, Race prep, Taper) per sport, used when creating new phases. A link points to **Settings** for managing the focus library itself.
 
 **Planning units** — whether swim and run are planned in **hours** or **distance**, plus the **reference pace** used to convert between them. Bike is always hours. If you think in "60 km weeks" rather than "5 hour weeks", switch the run to distance and give it a reference pace.
+
+The same table has **Growth % / week** and **Peak** for each sport. A sport that uses a [session formula](#session-formula) grows at this rate and is capped at this peak. They also drive the season fallback ramp for phases with no volume settings of their own. In distance mode, the peak is entered as distance and converted to hours with the reference pace.
 
 Rest-week %, max hours, and rest/test templates also live here.
 

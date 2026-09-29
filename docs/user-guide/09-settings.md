@@ -74,10 +74,9 @@ A library of named session formulas, one sport at a time. The library starts emp
 Each formula has:
 
 - A **name** you type, and a sport (swim, bike, or run).
-- **Growth % per week**, and an optional **peak cap** in hours.
 - A list of **sessions**. Each session is a **share of the week** (the shares must total 100%), a zone from Z1 to Z5, and optional **intensity** and **long** flags. Bike and run can mark at most one long session. The share is that session’s duration. Intensity sessions count as intense days. A long session’s minutes are the long ride or long run, still inside the weekly hours.
 
-A season phase chooses a saved formula for a sport. Editing the formula updates every phase that uses it. Starting hours stay on the phase, so two seasons can use the same formula from different starts. Two growth rates are two saved formulas.
+A formula only sets the shape of the week. The season sets weekly volume: start hours come from the phase, and growth per week and peak come from **Season → Advanced → Planning units** for that sport. A season phase chooses a saved formula for a sport. Editing the formula updates every phase that uses it, so two seasons can use the same formula with different starts, growth, and peaks.
 
 ### Training load (ECO)
 

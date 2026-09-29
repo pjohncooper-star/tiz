@@ -17,8 +17,6 @@ export type DisciplineFormula = {
   id: string;
   name: string;
   discipline: FormulaDiscipline;
-  growthPercentPerWeek: number;
-  peakCapHours: number | null;
   sessions: FormulaSession[];
 };
 
@@ -67,8 +65,6 @@ export function createEmptyDisciplineFormula(
     id: newSessionFormulaId(),
     name: "",
     discipline,
-    growthPercentPerWeek: 0,
-    peakCapHours: null,
     sessions: [defaultFormulaSession()],
   };
 }
@@ -88,15 +84,6 @@ export function formulaShareTotal(sessions: FormulaSession[]): number {
 export function validateDisciplineFormula(formula: DisciplineFormula): string | null {
   if (!formula.name.trim()) return "Name the formula";
   if (!isFormulaDiscipline(formula.discipline)) return "Choose a sport";
-  if (!Number.isFinite(formula.growthPercentPerWeek) || formula.growthPercentPerWeek < 0) {
-    return "Growth must be zero or more";
-  }
-  if (
-    formula.peakCapHours != null &&
-    (!Number.isFinite(formula.peakCapHours) || formula.peakCapHours < 0)
-  ) {
-    return "Peak cap must be empty or zero or more";
-  }
   if (formula.sessions.length < 1) return "Add at least one session";
   if (formula.sessions.length > 7) return "A formula can have at most 7 sessions";
   const longCount = formula.sessions.filter((session) => session.long).length;
@@ -141,20 +128,10 @@ function parseFormula(raw: unknown): DisciplineFormula | null {
   const sessions = row.sessions
     .map((session) => parseSession(session, row.discipline as FormulaDiscipline))
     .filter((session): session is FormulaSession => session != null);
-  const growthPercentPerWeek = Number(row.growthPercentPerWeek);
-  const peakRaw = row.peakCapHours;
-  const peakCapHours =
-    peakRaw == null || peakRaw === ""
-      ? null
-      : Number.isFinite(Number(peakRaw))
-        ? Number(peakRaw)
-        : null;
   const formula: DisciplineFormula = {
     id,
     name,
     discipline: row.discipline,
-    growthPercentPerWeek: Number.isFinite(growthPercentPerWeek) ? growthPercentPerWeek : 0,
-    peakCapHours,
     sessions,
   };
   if (validateDisciplineFormula(formula)) return null;
@@ -180,8 +157,6 @@ export function serializeSessionFormulaCatalog(
       id: formula.id,
       name: formula.name.trim(),
       discipline: formula.discipline,
-      growthPercentPerWeek: formula.growthPercentPerWeek,
-      peakCapHours: formula.peakCapHours,
       sessions: formula.sessions.map((session) => ({
         sharePercent: session.sharePercent,
         zone: session.zone,
@@ -220,22 +195,34 @@ export function formulaForDiscipline(
   return formula;
 }
 
-/** Compound growth from the phase start. Rest weeks are not an offset. */
+/**
+ * Compound growth from the phase start at the season's rate for the sport, capped at
+ * the season's peak for the sport. Rest weeks are not an offset. A peak of 0 or less
+ * means no cap.
+ */
 export function formulaHoursAtTrainingWeek(input: {
   startHours: number;
-  growthPercentPerWeek: number;
-  peakCapHours: number | null;
+  ratePercent: number;
+  peakHours: number;
   trainingWeekOffset: number;
 }): number {
   const start = Math.max(0, input.startHours);
+  const rate = Number.isFinite(input.ratePercent) ? Math.max(0, input.ratePercent) : 0;
   const grown = weeklyCompoundVolumeAtWeek(
     start,
-    input.growthPercentPerWeek,
+    rate,
     Math.max(0, input.trainingWeekOffset),
     "INCREASE"
   );
-  if (input.peakCapHours == null || !Number.isFinite(input.peakCapHours)) return grown;
-  return roundHours(Math.min(grown, Math.max(0, input.peakCapHours)));
+  if (!Number.isFinite(input.peakHours) || input.peakHours <= 0) return grown;
+  return roundHours(Math.min(grown, input.peakHours));
+}
+
+export function seasonGrowthSummary(ratePercent: number, peakHours: number): string {
+  const growth =
+    ratePercent > 0 ? `Grows ${ratePercent}% per week` : "Holds weekly hours";
+  const peak = peakHours > 0 ? `, peak ${peakHours} h` : "";
+  return `${growth}${peak} (season).`;
 }
 
 function distributeMinutes(totalMinutes: number, shares: number[]): number[] {
@@ -289,13 +276,8 @@ export function formulaSessionSummary(
   formula: DisciplineFormula,
   startHours: number | null
 ): string {
-  const growth =
-    formula.growthPercentPerWeek === 0
-      ? "Holds weekly hours"
-      : `Grows ${formula.growthPercentPerWeek}% per week`;
-  const cap = formula.peakCapHours != null ? `, cap ${formula.peakCapHours} h` : "";
   if (startHours == null || !Number.isFinite(startHours)) {
-    return `${growth}${cap}.`;
+    return `${formula.sessions.length} ${formula.sessions.length === 1 ? "session" : "sessions"}. Set start hours to see minutes.`;
   }
   const week = formulaWeekFromHours(formula, startHours);
   const shares = week.sessions
@@ -308,7 +290,7 @@ export function formulaSessionSummary(
       return `${session.minutes} min Z${session.zone}${tag}`;
     })
     .join(", ");
-  return `${growth}${cap}. At the start hours: ${shares}.`;
+  return `At the start hours: ${shares}.`;
 }
 
 export function formulaLongSummary(

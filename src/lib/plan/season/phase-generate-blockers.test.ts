@@ -43,8 +43,6 @@ describe("phaseGenerateBlockers", () => {
             id: "sf_run",
             name: "Run split",
             discipline: "RUN",
-            growthPercentPerWeek: 0,
-            peakCapHours: null,
             sessions: [
               { sharePercent: 50, zone: 1, intensity: false, long: false },
               { sharePercent: 50, zone: 2, intensity: false, long: true },
