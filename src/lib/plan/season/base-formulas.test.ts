@@ -12,8 +12,6 @@ function formula(overrides: Partial<DisciplineFormula> = {}): DisciplineFormula 
     id: "sf_test",
     name: "Even",
     discipline: "RUN",
-    growthPercentPerWeek: 0,
-    peakCapHours: null,
     sessions: [
       { sharePercent: 25, zone: 2, intensity: false, long: false },
       { sharePercent: 25, zone: 2, intensity: false, long: false },
@@ -54,12 +52,12 @@ describe("formula week shares", () => {
 });
 
 describe("formula growth", () => {
-  it("compounds weekly growth and holds at the cap", () => {
+  it("compounds at the season rate and holds at the season peak", () => {
     assert.equal(
       formulaHoursAtTrainingWeek({
         startHours: 4,
-        growthPercentPerWeek: 10,
-        peakCapHours: 4.5,
+        ratePercent: 10,
+        peakHours: 4.5,
         trainingWeekOffset: 0,
       }),
       4
@@ -67,8 +65,8 @@ describe("formula growth", () => {
     assert.equal(
       formulaHoursAtTrainingWeek({
         startHours: 4,
-        growthPercentPerWeek: 10,
-        peakCapHours: 4.5,
+        ratePercent: 10,
+        peakHours: 4.5,
         trainingWeekOffset: 1,
       }),
       4.4
@@ -76,11 +74,23 @@ describe("formula growth", () => {
     assert.equal(
       formulaHoursAtTrainingWeek({
         startHours: 4,
-        growthPercentPerWeek: 10,
-        peakCapHours: 4.5,
+        ratePercent: 10,
+        peakHours: 4.5,
         trainingWeekOffset: 2,
       }),
       4.5
+    );
+  });
+
+  it("does not cap when the season peak is zero", () => {
+    assert.equal(
+      formulaHoursAtTrainingWeek({
+        startHours: 4,
+        ratePercent: 10,
+        peakHours: 0,
+        trainingWeekOffset: 2,
+      }),
+      4.84
     );
   });
 });
@@ -93,5 +103,14 @@ describe("session formula catalog", () => {
     ]);
     assert.equal(catalog.length, 1);
     assert.equal(catalog[0]!.name, "Even");
+  });
+
+  it("loads saved formulas that still carry growth and peak cap, ignoring both", () => {
+    const catalog = parseSessionFormulaCatalog([
+      { ...formula(), growthPercentPerWeek: 10, peakCapHours: 5 },
+    ]);
+    assert.equal(catalog.length, 1);
+    assert.equal("growthPercentPerWeek" in catalog[0]!, false);
+    assert.equal("peakCapHours" in catalog[0]!, false);
   });
 });

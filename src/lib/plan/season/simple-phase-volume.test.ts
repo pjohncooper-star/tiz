@@ -567,8 +567,6 @@ describe("discipline formulas", () => {
     id: "sf_run",
     name: "Run split",
     discipline: "RUN",
-    growthPercentPerWeek: 10,
-    peakCapHours: 5,
     sessions: [
       { sharePercent: 100, zone: 1, intensity: false, long: false },
     ],
@@ -577,8 +575,12 @@ describe("discipline formulas", () => {
   function runInput(
     phases: PhaseVolumeSpan[],
     weeks: SimpleWeekVolume[],
-    catalog: DisciplineFormula[]
+    catalog: DisciplineFormula[],
+    run: { ratePercent: number; peakHours: number } = { ratePercent: 10, peakHours: 4.5 }
   ) {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.run.ratePercent = run.ratePercent;
+    defaults.run.peakHours = run.peakHours;
     return recalculatePhaseAwareVolumes({
       weeks,
       phases,
@@ -587,7 +589,7 @@ describe("discipline formulas", () => {
         endWeekIndex: phase.endWeekIndex,
         rampEnabled: phase.rampEnabled,
       })),
-      defaults: defaultSimpleRampDefaults(),
+      defaults,
       restVolumePercent: 75,
       seasonDefaultPlanningMode: "BY_DISCIPLINE",
       seasonAnchors: { startHours: 8, peakHours: 12 },
@@ -596,7 +598,7 @@ describe("discipline formulas", () => {
     });
   }
 
-  it("compounds run hours, caps them, and cuts the rest week without changing swim or bike", () => {
+  it("grows run hours at the season rate, caps at the season peak, and cuts the rest week without changing swim or bike", () => {
     const phases = [
       basePhase({
         endWeekIndex: 3,
@@ -620,11 +622,28 @@ describe("discipline formulas", () => {
     assert.equal(result[0]!.runHours, 4);
     assert.equal(result[1]!.runHours, 4.4);
     assert.equal(result[2]!.runHours, 3.3);
-    assert.equal(result[3]!.runHours, 4.84);
+    assert.equal(result[3]!.runHours, 4.5);
     assert.equal(result[0]!.swimHours, untouched[0]!.swimHours);
     assert.equal(result[1]!.bikeHours, untouched[1]!.bikeHours);
     assert.equal(result[3]!.swimHours, untouched[3]!.swimHours);
     assert.equal(result[3]!.bikeHours, untouched[3]!.bikeHours);
+  });
+
+  it("holds run hours flat when the season run rate is zero", () => {
+    const phases = [
+      basePhase({
+        endWeekIndex: 2,
+        runStartHours: 4,
+        runEndHours: 4,
+        disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
+      }),
+    ];
+    const weeks = [week(0, 1, 1, 1), week(1, 1, 1, 1), week(2, 1, 1, 1)];
+    const result = runInput(phases, weeks, [runFormula], { ratePercent: 0, peakHours: 6 });
+    assert.deepEqual(
+      result.map((w) => w.runHours),
+      [4, 4, 4]
+    );
   });
 
   it("ignores a phase formula id that is not in the library", () => {
