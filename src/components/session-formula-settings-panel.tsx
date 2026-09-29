@@ -209,33 +209,10 @@ function FormulaEditor({
             ))}
           </select>
         </div>
-        <div>
-          <Label>Growth % per week</Label>
-          <NumberEditorInput
-            min={0}
-            max={100}
-            integer={false}
-            className="mt-1"
-            value={formula.growthPercentPerWeek}
-            onCommit={(value) => {
-              if (value == null) return;
-              onChange({ ...formula, growthPercentPerWeek: value });
-            }}
-          />
-        </div>
-        <div>
-          <Label>Peak cap (h)</Label>
-          <NumberEditorInput
-            nullable
-            integer={false}
-            min={0}
-            className="mt-1"
-            placeholder="No cap"
-            value={formula.peakCapHours}
-            onCommit={(peakCapHours) => onChange({ ...formula, peakCapHours })}
-          />
-        </div>
       </div>
+      <p className="text-xs text-zinc-500">
+        Weekly volume, growth, and peak come from the season.
+      </p>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">

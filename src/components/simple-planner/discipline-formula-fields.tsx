@@ -8,6 +8,7 @@ import {
   formulaForDiscipline,
   formulaLongSummary,
   formulaSessionSummary,
+  seasonGrowthSummary,
   type DisciplineFormulaIds,
   type FormulaDiscipline,
   type SessionFormulaCatalog,
@@ -88,23 +89,34 @@ export function DisciplineFormulaSelect({
         </p>
       ) : null}
       {resolved ? (
-        <Link href={SETTINGS_HREF} className="mt-1 inline-block text-xs text-sky-600 hover:underline">
-          Edit in settings
-        </Link>
+        <p className="mt-1 text-xs text-zinc-500">
+          <Link href={SETTINGS_HREF} className="text-sky-600 hover:underline">
+            Edit in settings
+          </Link>
+          . Growth and peak are set per sport in Season → Advanced → Planning units.
+        </p>
       ) : null}
     </div>
   );
 }
 
+const FORMULA_RAMP_KEY: Record<FormulaDiscipline, keyof SimpleRampDefaults> = {
+  SWIM: "swim",
+  BIKE: "bike",
+  RUN: "run",
+};
+
 export function formulaVolumeReadout(
   catalog: SessionFormulaCatalog,
   ids: DisciplineFormulaIds | null | undefined,
   discipline: FormulaDiscipline,
-  startHours: number | null
+  startHours: number | null,
+  rampDefaults: SimpleRampDefaults
 ): string | null {
   const formula = formulaForDiscipline(catalog, ids, discipline);
   if (!formula) return null;
-  return formulaSessionSummary(formula, startHours);
+  const def = rampDefaults[FORMULA_RAMP_KEY[discipline]];
+  return `${seasonGrowthSummary(def.ratePercent, def.peakHours)} ${formulaSessionSummary(formula, startHours)}`;
 }
 
 export function formulaLongReadout(

@@ -954,7 +954,8 @@ export function PhaseVolumeEditor({
                 rampDefaults,
                 effectiveMode,
                 discipline,
-              })
+              }),
+              rampDefaults
             );
             return (
               <div
@@ -1065,7 +1066,8 @@ export function PhaseVolumeEditor({
             formulaCatalog,
             phase.disciplineFormulaIds,
             formulaDiscipline,
-            startForFormula
+            startForFormula,
+            rampDefaults
           );
 
           if (distanceMode) {
