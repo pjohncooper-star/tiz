@@ -765,6 +765,20 @@ function writeFormulaHours(
   }
 }
 
+function seasonPeakHours(discipline: SimpleDiscipline, defaults: SimpleRampDefaults): number {
+  const def = defaults[discipline];
+  const paceDiscipline = paceDisciplineFor(discipline);
+  if (
+    paceDiscipline &&
+    isDistanceDiscipline(discipline, defaults) &&
+    def.peakDistanceMeters > 0 &&
+    def.referencePaceSeconds > 0
+  ) {
+    return hoursFromDistancePace(paceDiscipline, def.peakDistanceMeters, def.referencePaceSeconds);
+  }
+  return def.peakHours;
+}
+
 function applyFormulaDisciplineVolumes(
   weeks: SimpleWeekVolume[],
   phases: PhaseVolumeSpan[],
@@ -792,8 +806,8 @@ function applyFormulaDisciplineVolumes(
       if (!formula) continue;
       const hours = formulaHoursAtTrainingWeek({
         startHours: formulaStartHours(weeks, phase, discipline),
-        growthPercentPerWeek: formula.growthPercentPerWeek,
-        peakCapHours: formula.peakCapHours,
+        ratePercent: input.defaults[discipline].ratePercent,
+        peakHours: seasonPeakHours(discipline, input.defaults),
         trainingWeekOffset: trainingWeekOffset(weeks, phase, week.weekIndex),
       });
       writeFormulaHours(week, discipline, hours, input.defaults);
