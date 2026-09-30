@@ -804,6 +804,30 @@ function seasonPeakHours(discipline: SimpleDiscipline, defaults: SimpleRampDefau
   return def.peakHours;
 }
 
+export type FormulaVolumeSource = "phase" | "season" | "none";
+
+/** Weekly growth for a formula sport. Growth lives on the phase; empty holds volume flat. */
+export function formulaPhaseRate(
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline
+): { value: number; source: FormulaVolumeSource } {
+  const rate = disciplineRampPercent(phase, discipline) ?? phase.volumeRampPercent;
+  if (rate != null && Number.isFinite(rate)) return { value: rate, source: "phase" };
+  return { value: 0, source: "none" };
+}
+
+/** Cap for a formula sport: the phase's end hours, else the season peak in the phase's units. */
+export function formulaPhasePeakHours(
+  phase: PhaseVolumeSpan,
+  discipline: SimpleDiscipline,
+  seasonDefaults: SimpleRampDefaults
+): { value: number; source: FormulaVolumeSource } {
+  const end = phaseEndHours(phase, discipline);
+  if (end != null && Number.isFinite(end)) return { value: end, source: "phase" };
+  const peak = seasonPeakHours(discipline, phaseRampDefaults(seasonDefaults, phase));
+  return { value: peak, source: peak > 0 ? "season" : "none" };
+}
+
 function applyFormulaDisciplineVolumes(
   weeks: SimpleWeekVolume[],
   phases: PhaseVolumeSpan[],
@@ -821,6 +845,7 @@ function applyFormulaDisciplineVolumes(
     if (week.isRestWeek) continue;
     const phase = phaseAtWeek(phases, week.weekIndex);
     if (!phase?.disciplineFormulaIds) continue;
+    const phaseDefaults = phaseRampDefaults(input.defaults, phase);
     let touched = false;
     for (const discipline of SIMPLE_DISCIPLINES) {
       const formula = formulaForDiscipline(
@@ -831,11 +856,11 @@ function applyFormulaDisciplineVolumes(
       if (!formula) continue;
       const hours = formulaHoursAtTrainingWeek({
         startHours: formulaStartHours(weeks, phase, discipline),
-        ratePercent: input.defaults[discipline].ratePercent,
-        peakHours: seasonPeakHours(discipline, input.defaults),
+        ratePercent: formulaPhaseRate(phase, discipline).value,
+        peakHours: formulaPhasePeakHours(phase, discipline, input.defaults).value,
         trainingWeekOffset: trainingWeekOffset(weeks, phase, week.weekIndex),
       });
-      writeFormulaHours(week, discipline, hours, input.defaults);
+      writeFormulaHours(week, discipline, hours, phaseDefaults);
       touched = true;
     }
     if (touched) week.totalHours = sumWeekHours(week);
@@ -846,6 +871,7 @@ function applyFormulaDisciplineVolumes(
     const phase = phaseAtWeek(phases, week.weekIndex);
     if (!phase?.disciplineFormulaIds) continue;
     const baseIndex = rampBaseWeekIndex(weeks, week.weekIndex);
+    const phaseDefaults = phaseRampDefaults(input.defaults, phase);
     let touched = false;
     for (const discipline of SIMPLE_DISCIPLINES) {
       const formula = formulaForDiscipline(
@@ -862,7 +888,7 @@ function applyFormulaDisciplineVolumes(
             : discipline === "bike"
               ? weeks[baseIndex]!.bikeHours
               : weeks[baseIndex]!.runHours;
-      writeFormulaHours(week, discipline, priorHours * factor, input.defaults);
+      writeFormulaHours(week, discipline, priorHours * factor, phaseDefaults);
       touched = true;
     }
     if (touched) week.totalHours = sumWeekHours(week);
