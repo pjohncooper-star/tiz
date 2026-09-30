@@ -19,6 +19,7 @@ import { recomputeAfterPreferenceChange } from "@/lib/zones/recompute-zones";
 import { validateSelfEvalConfig } from "@/lib/survey/self-eval-config";
 import { phaseKindZoneDefaultsSchema, zoneFocusSettingsSchema, sessionFormulaCatalogSchema, swimEquipmentSettingsSchema, racePaceAnchorsSettingsSchema } from "@/lib/plan/api-schemas";
 import {
+  parseSessionFormulaCatalog,
   serializeSessionFormulaCatalog,
   validateDisciplineFormula,
 } from "@/lib/plan/season/base-formulas";
@@ -97,6 +98,11 @@ export async function GET() {
         : false,
     swimEquipmentCatalog,
     racePaceAnchors,
+    sessionFormulaCatalog: parseSessionFormulaCatalog(
+      athlete && "sessionFormulaCatalog" in athlete
+        ? (athlete as { sessionFormulaCatalog?: unknown }).sessionFormulaCatalog
+        : null
+    ),
     maxHeartRateBpm:
       athlete && "maxHeartRateBpm" in athlete
         ? ((athlete as { maxHeartRateBpm?: number | null }).maxHeartRateBpm ?? null)

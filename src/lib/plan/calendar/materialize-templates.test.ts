@@ -326,3 +326,75 @@ test("formula shares replace matching run durations and leave a count mismatch a
     [30, 40, 50]
   );
 });
+
+test("template mix writes packed fixed workouts onto the week", () => {
+  const tpl: MaterializeTemplate = {
+    id: "ns",
+    items: [
+      {
+        weekday: "TUE",
+        discipline: "RUN",
+        title: "Run",
+        durationMinutes: null,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "INTENSITY",
+        sharePercent: 33,
+        zone: 3,
+        shapeKind: "FIXED",
+        workSeconds: 180,
+        restSeconds: 60,
+        minReps: 3,
+        warmupSeconds: 0,
+        cooldownSeconds: 0,
+      },
+      {
+        weekday: "THU",
+        discipline: "RUN",
+        title: "Run",
+        durationMinutes: null,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "INTENSITY",
+        sharePercent: 33,
+        zone: 3,
+        shapeKind: "FIXED",
+        workSeconds: 360,
+        restSeconds: 60,
+        minReps: 3,
+        warmupSeconds: 0,
+        cooldownSeconds: 0,
+      },
+      {
+        weekday: "SAT",
+        discipline: "RUN",
+        title: "Run",
+        durationMinutes: null,
+        distanceMeters: null,
+        poolSize: null,
+        sessionRole: "INTENSITY",
+        sharePercent: 34,
+        zone: 3,
+        shapeKind: "FIXED",
+        workSeconds: 600,
+        restSeconds: 60,
+        minReps: 3,
+        warmupSeconds: 0,
+        cooldownSeconds: 0,
+      },
+    ],
+  };
+  const plan = planWeekMaterialization(
+    {
+      ...baseCtx,
+      phaseTemplateId: "ns",
+      weekHours: { RUN: 2 },
+    },
+    opts({ templatesById: new Map([["ns", tpl]]) })
+  );
+  assert.equal(plan.sessions.length, 3);
+  assert.ok(plan.sessions.every((session) => session.steps && session.targetZones));
+  assert.match(plan.sessions[0]!.title, /×3'/);
+  assert.match(plan.sessions[2]!.title, /×10'/);
+  assert.ok((plan.sessions[0]!.targetZones?.["3"] ?? 0) > 0);
+});

@@ -1,6 +1,10 @@
 import type { PlanningMode } from "@prisma/client";
 import type { SimplePhase, SimpleWeek } from "@/components/simple-planner/simple-planner-types";
 import type { SessionFormulaCatalog } from "./base-formulas";
+import {
+  mixItemsForTemplate,
+  type FormulaTemplateItem,
+} from "@/lib/plan/calendar/template-formula-shape";
 import { migrateSeasonRampDefaultsOntoPhases } from "./migrate-season-ramp-to-phases";
 import { isAssignedPhase } from "./phase-span-utils";
 import {
@@ -14,7 +18,10 @@ import {
 } from "./simple-ramp";
 import { roundHours } from "./volume-curve";
 
-function toPhaseVolumeSpan(phase: SimplePhase): PhaseVolumeSpan {
+function toPhaseVolumeSpan(
+  phase: SimplePhase,
+  templates?: Array<{ id: string; items?: FormulaTemplateItem[] | null }>
+): PhaseVolumeSpan {
   return {
     id: phase.id,
     startWeekIndex: phase.startWeekIndex,
@@ -42,6 +49,8 @@ function toPhaseVolumeSpan(phase: SimplePhase): PhaseVolumeSpan {
     runStepHours: phase.runStepHours,
     ...pickPhasePlanningUnits(phase),
     disciplineFormulaIds: phase.disciplineFormulaIds,
+    weeklyTemplateId: phase.weeklyTemplateId ?? null,
+    formulaTemplateItems: mixItemsForTemplate(phase.weeklyTemplateId, templates),
   };
 }
 
@@ -70,6 +79,7 @@ export function previewPhaseAwareVolumes(input: {
   seasonDefaultPlanningMode: PlanningMode;
   preserveBikeHours?: boolean;
   formulaCatalog?: SessionFormulaCatalog;
+  templates?: Array<{ id: string; items?: FormulaTemplateItem[] | null }>;
 }): { weeks: SimpleWeek[]; phases: SimplePhase[]; migrated: boolean } {
   const planningMode = input.seasonDefaultPlanningMode ?? "BY_DISCIPLINE";
   const { phases, migrated } = migrateSeasonRampDefaultsOntoPhases(
@@ -81,7 +91,7 @@ export function previewPhaseAwareVolumes(input: {
   const assigned = phases.filter(isAssignedPhase);
   const volumeWeeks = recalculatePhaseAwareVolumes({
     weeks: input.weeks.map(toWeekVolume),
-    phases: assigned.map(toPhaseVolumeSpan),
+    phases: assigned.map((phase) => toPhaseVolumeSpan(phase, input.templates)),
     rampPhaseSpans: assigned.map((phase) => ({
       startWeekIndex: phase.startWeekIndex,
       endWeekIndex: phase.endWeekIndex,

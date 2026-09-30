@@ -1,5 +1,5 @@
 import { addDays, format } from "date-fns";
-import type { LongOffWeekPolicy, PhaseKind, PlanningMode } from "@prisma/client";
+import { Prisma, type LongOffWeekPolicy, type PhaseKind, type PlanningMode } from "@prisma/client";
 import { formatDateKey, parseDateKey } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { computeZoneAllocationMissing } from "@/lib/plan/session-zone";
@@ -30,6 +30,7 @@ import {
 } from "@/lib/plan/season/base-formulas";
 import { parsePhaseCoachNotes } from "@/lib/plan/season/simple-phase-notes";
 import { loadAthleteSessionFormulaCatalog } from "@/lib/plan/season/simple-planner.server";
+import { serializeWorkoutTree } from "@/lib/workout/workout-tree";
 
 export type MaterializeSeasonOptions = {
   /** When true, skip weeks that already have any planned sessions. */
@@ -230,6 +231,14 @@ export async function materializeSeasonTemplates(
           distanceMeters: item.distanceMeters,
           poolSize: item.poolSize,
           sessionRole: item.sessionRole,
+          sharePercent: item.sharePercent,
+          zone: item.zone,
+          shapeKind: item.shapeKind,
+          workSeconds: item.workSeconds,
+          restSeconds: item.restSeconds,
+          minReps: item.minReps,
+          warmupSeconds: item.warmupSeconds,
+          cooldownSeconds: item.cooldownSeconds,
         })),
       },
     ])
@@ -351,6 +360,11 @@ export async function materializeSeasonTemplates(
         bikeLongSeat,
         runLongSeat,
         ...(Object.keys(formulaSessions).length > 0 ? { formulaSessions } : {}),
+        weekHours: {
+          SWIM: week.swimHours,
+          BIKE: week.bikeHours,
+          RUN: week.runHours,
+        },
       };
     });
 
@@ -415,30 +429,55 @@ export async function materializeSeasonTemplates(
           continue;
         }
       } else {
-        await tx.plannedSession.deleteMany({
+        const existingRows = await tx.plannedSession.findMany({
           where: {
             athleteId,
             source: "TEMPLATE",
             scheduledDate: { gte: weekStartDate, lte: weekEndDate },
           },
+          include: { structuredWorkout: { select: { id: true } } },
         });
+        const keepIds = existingRows
+          .filter((row) => row.structuredWorkout)
+          .map((row) => row.id);
+        const keepKeys = new Set(
+          existingRows
+            .filter((row) => row.structuredWorkout)
+            .map((row) => `${formatDateKey(row.scheduledDate)}:${row.discipline}`)
+        );
+        await tx.plannedSession.deleteMany({
+          where: {
+            athleteId,
+            source: "TEMPLATE",
+            scheduledDate: { gte: weekStartDate, lte: weekEndDate },
+            ...(keepIds.length > 0 ? { id: { notIn: keepIds } } : {}),
+          },
+        });
+        for (const session of weekPlan.sessions) {
+          const collisionKey = `${session.scheduledDateKey}:${session.discipline}`;
+          if (keepKeys.has(collisionKey)) {
+            planSessionKeys.add(collisionKey);
+          }
+        }
       }
 
       for (const session of weekPlan.sessions) {
         const collisionKey = `${session.scheduledDateKey}:${session.discipline}`;
         if (planSessionKeys.has(collisionKey)) continue;
         const targetZones =
-          !session.suppressTiz &&
-          session.durationMinutes &&
-          session.durationMinutes > 0
-            ? { "2": session.durationMinutes }
-            : undefined;
+          !session.suppressTiz && session.targetZones
+            ? session.targetZones
+            : !session.suppressTiz &&
+                session.durationMinutes &&
+                session.durationMinutes > 0
+              ? { "2": session.durationMinutes }
+              : undefined;
         const zoneAllocationMissing = computeZoneAllocationMissing(
           session.discipline,
           targetZones
         );
 
-        await tx.plannedSession.create({
+        const created = await tx.plannedSession.create({
           data: {
             athleteId,
             scheduledDate: parseDateKey(session.scheduledDateKey),
@@ -449,10 +488,21 @@ export async function materializeSeasonTemplates(
             source: "TEMPLATE",
             sessionRole: session.sessionRole,
             poolSlotKind: session.poolSlotKind ?? null,
-            targetZones,
+            targetZones: targetZones as Prisma.InputJsonValue | undefined,
             zoneAllocationMissing,
+            estimatedDurationMinutes: session.durationMinutes,
           },
         });
+        if (session.steps && session.steps.nodes.length > 0 && session.discipline !== "STRENGTH") {
+          await tx.structuredWorkout.create({
+            data: {
+              athleteId,
+              plannedSessionId: created.id,
+              discipline: session.discipline,
+              steps: serializeWorkoutTree(session.steps) as Prisma.InputJsonValue,
+            },
+          });
+        }
         sessionsCreated++;
       }
       weeksMaterialized++;

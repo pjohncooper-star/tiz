@@ -236,7 +236,7 @@ export function formulaGrowthSummary(input: {
   return `${growth}${peak}.`;
 }
 
-function distributeMinutes(totalMinutes: number, shares: number[]): number[] {
+export function distributeMinutes(totalMinutes: number, shares: number[]): number[] {
   if (shares.length === 0) return [];
   const raw = shares.map((share) => (share / 100) * totalMinutes);
   const minutes = raw.map((value) => Math.floor(value));

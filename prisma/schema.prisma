@@ -1052,6 +1052,11 @@ enum WeeklyTemplateKind {
   TEST
 }
 
+enum WorkoutShapeKind {
+  STEADY
+  FIXED
+}
+
 model WeeklyScheduleTemplate {
   id        String             @id @default(cuid())
   athleteId String
@@ -1080,6 +1085,16 @@ model WeeklyScheduleTemplateItem {
   poolSize        PoolSize?
   sessionRole     SessionRole @default(MODERATE)
   sortOrder       Int        @default(0)
+  /** Share of that sport's weekly hours. Null = duration-based slot. */
+  sharePercent    Float?
+  /** Target zone 1–5 for formula slots. */
+  zone            Int?
+  shapeKind       WorkoutShapeKind?
+  workSeconds     Int?
+  restSeconds     Int?
+  minReps         Int?
+  warmupSeconds   Int?
+  cooldownSeconds Int?
 
   template         WeeklyScheduleTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   plannedSessions  PlannedSession[]

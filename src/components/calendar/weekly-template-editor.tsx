@@ -22,6 +22,14 @@ import {
   TEMPLATE_CATEGORIES,
   TEMPLATE_CATEGORY_LABELS,
 } from "@/lib/plan/calendar/template-category";
+import {
+  applyCatalogFormulaToItems,
+  mixShareError,
+} from "@/lib/plan/calendar/template-formula-shape";
+import {
+  parseSessionFormulaCatalog,
+  type SessionFormulaCatalog,
+} from "@/lib/plan/season/base-formulas";
 
 const WEEKDAYS: WeeklyTemplateItem["weekday"][] = [
   "MON",
@@ -87,6 +95,14 @@ function newDraft(weekday: WeeklyTemplateItem["weekday"]): TemplateItemDraft {
     poolSize: null,
     sessionRole: "MODERATE",
     sortOrder: 0,
+    sharePercent: null,
+    zone: null,
+    shapeKind: null,
+    workSeconds: null,
+    restSeconds: null,
+    minReps: null,
+    warmupSeconds: null,
+    cooldownSeconds: null,
   };
 }
 
@@ -195,6 +211,145 @@ function TemplateDayColumn({
                   ))}
                 </select>
               </div>
+              {row.discipline !== "STRENGTH" ? (
+                <>
+                  <div className="mb-1.5">
+                    <span className={FIELD_LABEL}>Share %</span>
+                    <NumberEditorInput
+                      min={0}
+                      max={100}
+                      integer={false}
+                      nullable
+                      className={COMPACT_NUMBER_FIELD}
+                      value={row.sharePercent ?? null}
+                      onCommit={(v) => onUpdate(row.key, { sharePercent: v })}
+                    />
+                  </div>
+                  {row.sharePercent != null && row.sharePercent > 0 ? (
+                    <>
+                      <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
+                        <div className="min-w-0">
+                          <span className={FIELD_LABEL}>Zone</span>
+                          <select
+                            className={COMPACT_FIELD}
+                            value={row.zone ?? (row.sessionRole === "INTENSITY" ? 3 : 2)}
+                            onChange={(e) =>
+                              onUpdate(row.key, { zone: Number(e.target.value) })
+                            }
+                          >
+                            {[1, 2, 3, 4, 5].map((zone) => (
+                              <option key={zone} value={zone}>
+                                Z{zone}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="min-w-0">
+                          <span className={FIELD_LABEL}>Shape</span>
+                          <select
+                            className={COMPACT_FIELD}
+                            value={row.shapeKind ?? "STEADY"}
+                            onChange={(e) => {
+                              const shapeKind = e.target.value as "STEADY" | "FIXED";
+                              onUpdate(row.key, {
+                                shapeKind,
+                                workSeconds:
+                                  shapeKind === "FIXED" ? row.workSeconds ?? 360 : null,
+                                restSeconds:
+                                  shapeKind === "FIXED" ? row.restSeconds ?? 60 : null,
+                                minReps: shapeKind === "FIXED" ? row.minReps ?? 1 : null,
+                              });
+                            }}
+                          >
+                            <option value="STEADY">Steady</option>
+                            <option value="FIXED">Fixed</option>
+                          </select>
+                        </div>
+                      </div>
+                      {row.shapeKind === "FIXED" ? (
+                        <div className="mb-1.5 grid min-w-0 grid-cols-3 gap-1.5">
+                          <div className="min-w-0">
+                            <span className={FIELD_LABEL}>Work min</span>
+                            <NumberEditorInput
+                              min={1}
+                              nullable
+                              className={COMPACT_NUMBER_FIELD}
+                              value={
+                                row.workSeconds != null
+                                  ? Math.round(row.workSeconds / 60)
+                                  : null
+                              }
+                              onCommit={(v) =>
+                                onUpdate(row.key, {
+                                  workSeconds: v != null ? v * 60 : null,
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <span className={FIELD_LABEL}>Rest s</span>
+                            <NumberEditorInput
+                              min={0}
+                              nullable
+                              className={COMPACT_NUMBER_FIELD}
+                              value={row.restSeconds ?? null}
+                              onCommit={(v) => onUpdate(row.key, { restSeconds: v })}
+                            />
+                          </div>
+                          <div className="min-w-0">
+                            <span className={FIELD_LABEL}>Min reps</span>
+                            <NumberEditorInput
+                              min={1}
+                              nullable
+                              className={COMPACT_NUMBER_FIELD}
+                              value={row.minReps ?? null}
+                              onCommit={(v) => onUpdate(row.key, { minReps: v })}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
+                        <div className="min-w-0">
+                          <span className={FIELD_LABEL}>WU min</span>
+                          <NumberEditorInput
+                            min={0}
+                            nullable
+                            className={COMPACT_NUMBER_FIELD}
+                            value={
+                              row.warmupSeconds != null
+                                ? Math.round(row.warmupSeconds / 60)
+                                : null
+                            }
+                            onCommit={(v) =>
+                              onUpdate(row.key, {
+                                warmupSeconds: v != null ? v * 60 : null,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <span className={FIELD_LABEL}>CD min</span>
+                          <NumberEditorInput
+                            min={0}
+                            nullable
+                            className={COMPACT_NUMBER_FIELD}
+                            value={
+                              row.cooldownSeconds != null
+                                ? Math.round(row.cooldownSeconds / 60)
+                                : null
+                            }
+                            onCommit={(v) =>
+                              onUpdate(row.key, {
+                                cooldownSeconds: v != null ? v * 60 : null,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
               {row.discipline === "SWIM" ? (
                 <div className="mb-1.5">
                   <PoolSizeSelect
@@ -296,6 +451,8 @@ export function WeeklyTemplateEditor({
   const [selectedWeekday, setSelectedWeekday] = useState<WeeklyTemplateItem["weekday"] | null>(
     null
   );
+  const [formulaCatalog, setFormulaCatalog] = useState<SessionFormulaCatalog>([]);
+  const [applyFormulaId, setApplyFormulaId] = useState("");
 
   useEffect(() => {
     void (async () => {
@@ -311,6 +468,15 @@ export function WeeklyTemplateEditor({
     })();
   }, [templateId]);
 
+  useEffect(() => {
+    void (async () => {
+      const res = await fetch("/api/settings");
+      if (!res.ok) return;
+      const data = (await res.json()) as { sessionFormulaCatalog?: unknown };
+      setFormulaCatalog(parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null));
+    })();
+  }, []);
+
   const itemsByWeekday = useMemo(() => {
     const map = new Map<WeeklyTemplateItem["weekday"], TemplateItemDraft[]>();
     for (const day of WEEKDAYS) map.set(day, []);
@@ -325,6 +491,18 @@ export function WeeklyTemplateEditor({
 
   function updateItem(key: string, patch: Partial<WeeklyTemplateItem>) {
     setItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
+  }
+
+  function applyMix() {
+    const formula = formulaCatalog.find((row) => row.id === applyFormulaId);
+    if (!formula) return;
+    const next = applyCatalogFormulaToItems(items, formula);
+    if ("error" in next) {
+      setError(next.error);
+      return;
+    }
+    setError(null);
+    setItems(next);
   }
 
   function addSession(weekday: WeeklyTemplateItem["weekday"]) {
@@ -346,6 +524,13 @@ export function WeeklyTemplateEditor({
       setError("Add at least one session to your weekly template");
       return;
     }
+    for (const discipline of ["SWIM", "BIKE", "RUN"] as const) {
+      const mixError = mixShareError(validItems, discipline);
+      if (mixError) {
+        setError(mixError);
+        return;
+      }
+    }
 
     const serialized = WEEKDAYS.flatMap((weekday) => {
       const dayItems = validItems
@@ -360,6 +545,15 @@ export function WeeklyTemplateEditor({
         poolSize: row.discipline === "SWIM" ? row.poolSize : null,
         sessionRole: row.sessionRole,
         sortOrder: index,
+        sharePercent:
+          row.sharePercent != null && row.sharePercent > 0 ? row.sharePercent : null,
+        zone: row.zone ?? null,
+        shapeKind: row.shapeKind ?? null,
+        workSeconds: row.workSeconds ?? null,
+        restSeconds: row.restSeconds ?? null,
+        minReps: row.minReps ?? null,
+        warmupSeconds: row.warmupSeconds ?? null,
+        cooldownSeconds: row.cooldownSeconds ?? null,
       }));
     });
 
@@ -408,11 +602,50 @@ export function WeeklyTemplateEditor({
         </div>
       </div>
 
+      {formulaCatalog.length > 0 ? (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[12rem] flex-1">
+            <Label>Apply saved mix</Label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              value={applyFormulaId}
+              onChange={(e) => setApplyFormulaId(e.target.value)}
+            >
+              <option value="">Choose a formula…</option>
+              {formulaCatalog.map((formula) => (
+                <option key={formula.id} value={formula.id}>
+                  {formula.name} ({formula.discipline.toLowerCase()})
+                </option>
+              ))}
+            </select>
+          </div>
+          <Button type="button" variant="secondary" onClick={applyMix} disabled={!applyFormulaId}>
+            Apply to this sport
+          </Button>
+        </div>
+      ) : null}
+
       <div>
         <p className="mb-2 text-sm font-medium">Weekly layout</p>
         <p className="mb-3 text-xs text-zinc-500">
-          Add sessions to each day. New sessions default to the sport name (Bike, Run, Swim).
+          Add sessions to each day. Set a share % to make that sport formulaic (shares must
+          total 100%). Fixed shape is Norwegian Singles-style intervals; extra intensity
+          promotes toward the longest interval.
         </p>
+        <div className="mb-3 flex flex-wrap gap-3 text-xs text-zinc-500">
+          {(["SWIM", "BIKE", "RUN"] as const).map((discipline) => {
+            const mixError = mixShareError(items, discipline);
+            const hasMix = items.some(
+              (item) => item.discipline === discipline && (item.sharePercent ?? 0) > 0
+            );
+            if (!hasMix && !mixError) return null;
+            return (
+              <span key={discipline} className={mixError ? "text-red-600" : ""}>
+                {mixError ?? `${discipline.toLowerCase()} mix 100%`}
+              </span>
+            );
+          })}
+        </div>
 
         <div className="overflow-x-auto pb-2">
           <div className="min-w-[68rem]">

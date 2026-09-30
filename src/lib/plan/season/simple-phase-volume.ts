@@ -12,6 +12,7 @@ import {
   type FormulaGrowthSource,
   type SessionFormulaCatalog,
 } from "./base-formulas";
+import { templateDisciplineHasMix } from "@/lib/plan/calendar/template-formula-shape";
 import {
   distanceMetersFromHoursPace,
   hoursFromDistancePace,
@@ -75,6 +76,8 @@ export type PhaseVolumeSpan = PhasePlanningSpan & PhasePlanningUnits & {
   runRampPercent?: number | null;
   runStepHours?: number | null;
   disciplineFormulaIds?: DisciplineFormulaIds | null;
+  weeklyTemplateId?: string | null;
+  formulaTemplateItems?: import("@/lib/plan/calendar/template-formula-shape").FormulaTemplateItem[];
 };
 
 const DISCIPLINE_KEYS: DisciplineKey[] = ["swim", "bike", "run"];
@@ -849,27 +852,40 @@ function applyFormulaDisciplineVolumes(
   }
 ): void {
   const catalog = input.formulaCatalog ?? [];
-  if (catalog.length === 0) return;
   const factor = input.restVolumePercent / 100;
+
+  function usesFormulaVolume(
+    phase: PhaseVolumeSpan | null | undefined,
+    discipline: (typeof SIMPLE_DISCIPLINES)[number]
+  ): boolean {
+    if (!phase) return false;
+    if (
+      formulaForDiscipline(
+        catalog,
+        phase.disciplineFormulaIds,
+        FORMULA_DISCIPLINE_KEY[discipline]
+      )
+    ) {
+      return true;
+    }
+    return templateDisciplineHasMix(
+      phase.formulaTemplateItems,
+      FORMULA_DISCIPLINE_KEY[discipline]
+    );
+  }
 
   for (const week of weeks) {
     if (week.isRestWeek) continue;
     const phase = phaseAtWeek(phases, week.weekIndex);
-    if (!phase?.disciplineFormulaIds) continue;
     const phaseDefaults = phaseRampDefaults(input.defaults, phase);
     let touched = false;
     for (const discipline of SIMPLE_DISCIPLINES) {
-      const formula = formulaForDiscipline(
-        catalog,
-        phase.disciplineFormulaIds,
-        FORMULA_DISCIPLINE_KEY[discipline]
-      );
-      if (!formula) continue;
+      if (!usesFormulaVolume(phase, discipline)) continue;
       const hours = formulaHoursAtTrainingWeek({
-        startHours: formulaStartHours(weeks, phase, discipline),
-        ratePercent: formulaPhaseRate(phase, discipline).value,
-        peakHours: formulaPhasePeakHours(phase, discipline, input.defaults).value,
-        trainingWeekOffset: trainingWeekOffset(weeks, phase, week.weekIndex),
+        startHours: formulaStartHours(weeks, phase!, discipline),
+        ratePercent: formulaPhaseRate(phase!, discipline).value,
+        peakHours: formulaPhasePeakHours(phase!, discipline, input.defaults).value,
+        trainingWeekOffset: trainingWeekOffset(weeks, phase!, week.weekIndex),
       });
       writeFormulaHours(week, discipline, hours, phaseDefaults);
       touched = true;
@@ -880,20 +896,14 @@ function applyFormulaDisciplineVolumes(
   for (const week of weeks) {
     if (!week.isRestWeek) continue;
     const phase = phaseAtWeek(phases, week.weekIndex);
-    if (!phase?.disciplineFormulaIds) continue;
     const baseIndex = rampBaseWeekIndex(weeks, week.weekIndex);
     const phaseDefaults = phaseRampDefaults(input.defaults, phase);
     let touched = false;
     for (const discipline of SIMPLE_DISCIPLINES) {
-      const formula = formulaForDiscipline(
-        catalog,
-        phase.disciplineFormulaIds,
-        FORMULA_DISCIPLINE_KEY[discipline]
-      );
-      if (!formula) continue;
+      if (!usesFormulaVolume(phase, discipline)) continue;
       const priorHours =
         baseIndex < 0
-          ? formulaStartHours(weeks, phase, discipline)
+          ? formulaStartHours(weeks, phase!, discipline)
           : discipline === "swim"
             ? weeks[baseIndex]!.swimHours
             : discipline === "bike"

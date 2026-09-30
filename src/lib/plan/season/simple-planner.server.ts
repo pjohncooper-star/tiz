@@ -344,6 +344,7 @@ function phaseComputeFromWrites(
       runStepHours: phase.runStepHours,
       ...pickPhasePlanningUnits(phase),
       disciplineFormulaIds: phase.disciplineFormulaIds ?? emptyDisciplineFormulaIds(),
+      weeklyTemplateId: phase.weeklyTemplateId ?? null,
     }));
 }
 
@@ -411,6 +412,7 @@ function phaseComputeFromDb(
         runStepHours: phase.runStepHours,
         ...pickPhasePlanningUnits(phase),
         disciplineFormulaIds: notes.disciplineFormulaIds,
+        weeklyTemplateId: phase.weeklyTemplateId ?? null,
       };
     });
 }
@@ -615,6 +617,8 @@ function phaseVolumeSpansFromCompute(
     runStepHours: phase.runStepHours,
     ...pickPhasePlanningUnits(phase),
     disciplineFormulaIds: phase.disciplineFormulaIds,
+    weeklyTemplateId: phase.weeklyTemplateId ?? null,
+    formulaTemplateItems: phase.formulaTemplateItems,
   }));
 }
 
@@ -1056,12 +1060,25 @@ export async function updateSimpleSeasonPlan(
 
   const catalog = await loadAthleteZoneFocusCatalog(athleteId);
   const formulaCatalog = await loadAthleteSessionFormulaCatalog(athleteId);
+  const templateRows = await db.weeklyScheduleTemplate.findMany({
+    where: { athleteId },
+    include: { items: true },
+  });
+  const templatesById = new Map(
+    templateRows.map((row) => [row.id, row.items] as const)
+  );
+  const phaseComputeWithMix = phaseCompute.map((phase) => ({
+    ...phase,
+    formulaTemplateItems: phase.weeklyTemplateId
+      ? templatesById.get(phase.weeklyTemplateId)
+      : undefined,
+  }));
 
   if (input.recalculate) {
     weeks = recalculateWeeks(
       weeks,
       zonePhaseSpans,
-      phaseCompute,
+      phaseComputeWithMix,
       phasesWithBlocks,
       defaults,
       deLoadStrategy,

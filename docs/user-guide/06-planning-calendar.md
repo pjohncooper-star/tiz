@@ -185,9 +185,13 @@ Press **+ New**, give it a name, and choose a category:
 | **Rest week** | Used for weeks marked Rest |
 | **Test week** | Used for weeks marked Test |
 
-The editor is a seven-day grid. Press **+** on a day to add a session, then set **Type**, **Title**, **Role** (Easy / Moderate / Intensity / Long), **Min** (duration), **Dist** or swim distance, and **Pool** for swims. **Remove** deletes a session, **Save template** saves.
+The editor is a seven-day grid. Press **+** on a day to add a session, then set **Type**, **Title**, **Role** (Easy / Moderate / Intensity / Long), **Share %**, duration, distance, and **Pool** for swims. **Remove** deletes a session, **Save template** saves.
 
-A template stores the weekday, discipline, title, duration, distance, pool size, role, and order for each session. It does **not** store structured workout steps, target zones, or times of day — those come later, from the pool or by hand.
+When a sport’s shares are set, they must total 100% of that sport’s weekly clock. Those slots become the live mix: **Zone**, **Shape** (**Steady** warmup + block + cooldown, or **Fixed** locked interval and rest), optional **WU** / **CD**, and for fixed slots **Work**, **Rest**, and **Min reps**. Same-sport, same-zone fixed slots pack as a group — extra intensity promotes toward the longest interval (Norwegian Singles 3'/6'/10'). Warmup is Z2; rest and cooldown are Z1 and stay on that card.
+
+**Apply saved mix** stamps a formula from **Settings → Training & planning → Session formulas** onto matching slots. **Duplicate** copies a template including its mix.
+
+A template still stores weekday, discipline, title, duration, distance, pool size, role, and order. Mix fields are optional; empty shares keep the slot duration-based. **Apply template** on the calendar still drops the layout without generating structured steps. **Generate sessions** on a phase writes those mix workouts (steps and zone targets) onto the calendar, and skips template sessions that already have a structured workout.
 
 ### Applying one
 

@@ -15,6 +15,8 @@ import {
   type FormulaDiscipline,
   type SessionFormulaCatalog,
 } from "@/lib/plan/season/base-formulas";
+import { templateDisciplineHasMix } from "@/lib/plan/calendar/template-formula-shape";
+import type { WeeklyTemplateOption } from "@/components/simple-planner/simple-planner-phases-pane";
 
 const LOAD_DISCIPLINE: Record<"swim" | "bike" | "run", FormulaDiscipline> = {
   swim: "SWIM",
@@ -25,10 +27,12 @@ const LOAD_DISCIPLINE: Record<"swim" | "bike" | "run", FormulaDiscipline> = {
 export function SimplePlannerLoadTable({
   season,
   formulaCatalog = [],
+  templates = [],
   onSeasonChange,
 }: {
   season: SimpleSeason;
   formulaCatalog?: SessionFormulaCatalog;
+  templates?: WeeklyTemplateOption[];
   onSeasonChange: (season: SimpleSeason) => void;
 }) {
   const phases = season.phases.filter(isAssignedPhase);
@@ -141,25 +145,32 @@ export function SimplePlannerLoadTable({
                           ? "bikeEndHours"
                           : "runEndHours";
                     const mode = inferVolumeProgressionMode(phase);
+                    const mixItems = templates.find(
+                      (row) => row.id === phase.weeklyTemplateId
+                    )?.items;
+                    const fromTemplate = templateDisciplineHasMix(
+                      mixItems,
+                      LOAD_DISCIPLINE[discipline]
+                    );
                     const formula = formulaForDiscipline(
                       formulaCatalog,
                       phase.disciplineFormulaIds,
                       LOAD_DISCIPLINE[discipline]
                     );
                     const chosenId = phase.disciplineFormulaIds?.[LOAD_DISCIPLINE[discipline]];
-                    if (!formula && chosenId) {
+                    if (!fromTemplate && !formula && chosenId) {
                       return (
                         <td key={`${phase.id}-${discipline}`} className="py-2 pr-3 text-xs text-zinc-600 dark:text-zinc-300">
                           Removed formula
                         </td>
                       );
                     }
-                    if (formula) {
+                    if (fromTemplate || formula) {
                       return (
                         <td key={`${phase.id}-${discipline}`} className="py-2 pr-3">
                           <div className="flex flex-col gap-1">
                             <span className="text-xs text-zinc-600 dark:text-zinc-300">
-                              {formula.name}
+                              {fromTemplate ? "From template" : formula!.name}
                             </span>
                             <NumberEditorInput
                               min={0}

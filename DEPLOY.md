@@ -224,6 +224,19 @@ Or paste `prisma/migrations/manual_phase_planning_units.sql` into the Neon SQL e
 
 This adds nullable `swimPlanningMode`, `runPlanningMode`, `swimReferencePaceSeconds`, and `runReferencePaceSeconds` to `SeasonPhase`. Empty values inherit the season's planning units, so existing seasons are unchanged.
 
+### Template formula slots (schema migration)
+
+Before or immediately after deploying template-owned formula mix / generated workouts, apply the idempotent SQL migration against Neon:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."   # production Neon URL
+npm run db:migrate:template-formula-slots
+```
+
+Or paste `prisma/migrations/manual_template_formula_slots.sql` into the Neon SQL editor.
+
+This adds share, zone, shape, and interval fields on `WeeklyScheduleTemplateItem`. Existing templates stay duration-based until you set shares.
+
 ---
 
 ## Troubleshooting

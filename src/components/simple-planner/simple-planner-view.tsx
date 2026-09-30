@@ -38,7 +38,8 @@ import { previewPhaseAwareVolumes } from "@/lib/plan/season/preview-phase-volume
 
 function normalizeSeason(
   season: SimpleSeason,
-  formulaCatalog?: SessionFormulaCatalog
+  formulaCatalog?: SessionFormulaCatalog,
+  templates?: WeeklyTemplateOption[]
 ): SimpleSeason {
   const kindDefaults = season.phaseKindZoneDefaults ?? defaultPhaseKindZoneDefaults();
   const longRideWeekFlags = resolveLongWeekFlagsForSeason({
@@ -98,8 +99,9 @@ function normalizeSeason(
     restVolumePercent: base.deLoadVolumePercent,
     seasonDefaultPlanningMode: base.defaultPlanningMode ?? "BY_DISCIPLINE",
     preserveBikeHours: Boolean(base.trainerRoadDriven),
-    formulaCatalog,
-  });
+        formulaCatalog,
+        templates,
+      });
 
   return {
     ...base,
@@ -110,9 +112,15 @@ function normalizeSeason(
 
 function fullVolumeSignature(
   season: SimpleSeason,
-  catalog: SessionFormulaCatalog
+  catalog: SessionFormulaCatalog,
+  templates: WeeklyTemplateOption[] = []
 ): string {
-  return `${volumePreviewSignature(season)}|${JSON.stringify(catalog)}`;
+  return `${volumePreviewSignature(season)}|${JSON.stringify(catalog)}|${JSON.stringify(
+    templates.map((template) => ({
+      id: template.id,
+      items: template.items ?? [],
+    }))
+  )}`;
 }
 
 function volumePreviewSignature(season: SimpleSeason): string {
@@ -148,6 +156,7 @@ function volumePreviewSignature(season: SimpleSeason): string {
       runStepHours: phase.runStepHours,
       ...pickPhasePlanningUnits(phase),
       disciplineFormulaIds: phase.disciplineFormulaIds,
+      weeklyTemplateId: phase.weeklyTemplateId,
     })),
   });
 }
@@ -224,7 +233,7 @@ export function SimplePlannerView({
   >({});
 
   const volumeSignature = season
-    ? fullVolumeSignature(season, sessionFormulaCatalog)
+    ? fullVolumeSignature(season, sessionFormulaCatalog, templates)
     : null;
 
   useEffect(() => {
@@ -243,6 +252,7 @@ export function SimplePlannerView({
         seasonDefaultPlanningMode: current.defaultPlanningMode ?? "BY_DISCIPLINE",
         preserveBikeHours: Boolean(current.trainerRoadDriven),
         formulaCatalog: sessionFormulaCatalog,
+        templates,
       });
       setSeason((draft) => {
         if (!draft) return draft;
@@ -253,7 +263,7 @@ export function SimplePlannerView({
         };
       });
     });
-  }, [sessionFormulaCatalog, volumeSignature]);
+  }, [sessionFormulaCatalog, templates, volumeSignature]);
 
   const load = useCallback(async () => {
     if (seasonIdParam && seasonRef.current?.id === seasonIdParam) {
@@ -298,9 +308,11 @@ export function SimplePlannerView({
     const wantCreateForm = createRequested && !seasonIdParam;
     const formulaCatalog = parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null);
     const loaded =
-      wantCreateForm || !data.season ? null : normalizeSeason(data.season, formulaCatalog);
+      wantCreateForm || !data.season
+        ? null
+        : normalizeSeason(data.season, formulaCatalog, templates);
     lastVolumeSignatureRef.current = loaded
-      ? fullVolumeSignature(loaded, formulaCatalog)
+      ? fullVolumeSignature(loaded, formulaCatalog, templates)
       : null;
     setSeason(loaded);
     setBaselineSeason(loaded ? cloneSeason(loaded) : null);
@@ -323,19 +335,14 @@ export function SimplePlannerView({
       const res = await fetch("/api/plan/calendar/templates");
       if (!res.ok) return;
       const data = (await res.json()) as {
-        templates?: {
-          id: string;
-          name: string;
-          category: WeeklyTemplateOption["category"];
-          items?: Array<{ discipline: string }>;
-        }[];
+        templates?: WeeklyTemplateOption[];
       };
       setTemplates(
         (data.templates ?? []).map((t) => ({
           id: t.id,
           name: t.name,
           category: t.category,
-          items: (t.items ?? []).map((item) => ({ discipline: item.discipline })),
+          items: t.items ?? [],
         }))
       );
     })();
@@ -495,8 +502,8 @@ export function SimplePlannerView({
       sessionFormulaCatalog?: SessionFormulaCatalog;
     };
     const formulaCatalog = parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null);
-    const normalized = normalizeSeason(data.season, formulaCatalog);
-    lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
+    const normalized = normalizeSeason(data.season, formulaCatalog, templates);
+    lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog, templates);
     setSeason(normalized);
     setBaselineSeason(cloneSeason(normalized));
     setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
@@ -559,8 +566,8 @@ export function SimplePlannerView({
       }
       loadGenerationRef.current += 1;
       const formulaCatalog = parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null);
-      const normalized = normalizeSeason(data.season, formulaCatalog);
-      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
+      const normalized = normalizeSeason(data.season, formulaCatalog, templates);
+      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog, templates);
       setSeason(normalized);
       setBaselineSeason(cloneSeason(normalized));
       setZoneFocusCatalog(parseZoneFocusCatalog(data.zoneFocusCatalog ?? null));
@@ -619,8 +626,8 @@ export function SimplePlannerView({
       }
       if (!body.season) return;
       const formulaCatalog = parseSessionFormulaCatalog(body.sessionFormulaCatalog ?? null);
-      const normalized = normalizeSeason(body.season, formulaCatalog);
-      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
+      const normalized = normalizeSeason(body.season, formulaCatalog, templates);
+      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog, templates);
       setSeason(normalized);
       setBaselineSeason(cloneSeason(normalized));
       setSessionFormulaCatalog(formulaCatalog);
@@ -745,8 +752,8 @@ export function SimplePlannerView({
         return;
       }
       const formulaCatalog = parseSessionFormulaCatalog(body.sessionFormulaCatalog ?? null);
-      const normalized = normalizeSeason(body.season, formulaCatalog);
-      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog);
+      const normalized = normalizeSeason(body.season, formulaCatalog, templates);
+      lastVolumeSignatureRef.current = fullVolumeSignature(normalized, formulaCatalog, templates);
       setSeason(normalized);
       setBaselineSeason(cloneSeason(normalized));
       setSessionFormulaCatalog(formulaCatalog);
@@ -803,7 +810,11 @@ export function SimplePlannerView({
       onSave={() => void saveSeason(savePayload({ recalculate: true }))}
       onDiscard={() => {
         if (!baselineSeason) return;
-        lastVolumeSignatureRef.current = fullVolumeSignature(baselineSeason, sessionFormulaCatalog);
+        lastVolumeSignatureRef.current = fullVolumeSignature(
+          baselineSeason,
+          sessionFormulaCatalog,
+          templates
+        );
         setSeason(cloneSeason(baselineSeason));
         setError(null);
       }}

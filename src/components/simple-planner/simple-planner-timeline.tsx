@@ -406,7 +406,7 @@ export function SimplePlannerTimeline({
               const widthPct =
                 ((phase.endWeekIndex - phase.startWeekIndex + 1) / displayWeeks) * 100;
               const leftPct = (phase.startWeekIndex / displayWeeks) * 100;
-              const blockers = phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates);
+              const blockers = phaseGenerateBlockersForTemplate(phase, templates);
               return (
                 <button
                   key={phase.id ?? `${phase.name}-${phase.startWeekIndex}`}

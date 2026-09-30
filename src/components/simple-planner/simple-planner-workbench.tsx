@@ -278,6 +278,7 @@ export function SimplePlannerWorkbench({
             <SimplePlannerLoadTable
               season={season}
               formulaCatalog={formulaCatalog}
+              templates={templates}
               onSeasonChange={onSeasonChange}
             />
           )}
