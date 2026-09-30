@@ -36,6 +36,13 @@ import {
   type SessionFormulaCatalog,
 } from "./base-formulas";
 import {
+  templateDisciplineHasMix,
+  templateFormulaLongMinutes,
+  templateFormulaSlotOverride,
+  templateFormulaZoneMinutes,
+  type FormulaTemplateItem,
+} from "@/lib/plan/calendar/template-formula-shape";
+import {
   endPercentsForDisciplineSplit,
 } from "./phase-zone-defaults";
 import { lerpZonePercents } from "./zone-split";
@@ -106,6 +113,8 @@ export type SimplePhaseCompute = PhasePlanningSpan & {
   swimReferencePaceSeconds?: number | null;
   runReferencePaceSeconds?: number | null;
   disciplineFormulaIds?: DisciplineFormulaIds | null;
+  weeklyTemplateId?: string | null;
+  formulaTemplateItems?: import("@/lib/plan/calendar/template-formula-shape").FormulaTemplateItem[];
   startWeekIndex: number;
   endWeekIndex: number;
 };
@@ -308,28 +317,37 @@ export function computeCalendarWeekPoolFields(input: {
   const runFlag = !suppressLong && (context.longRunWeekFlags[weekIndex] ?? false);
   const formulas = formulaResultsForPhase(phase, input.formulaCatalog ?? []);
   const hours = input.disciplineHours;
-  const bikeFormulaWeek =
-    formulas.BIKE && hours ? formulaWeekFromHours(formulas.BIKE, hours.BIKE) : null;
-  const runFormulaWeek =
-    formulas.RUN && hours ? formulaWeekFromHours(formulas.RUN, hours.RUN) : null;
+  const items = phase?.formulaTemplateItems;
+  const bikeLongMinutes =
+    hours && templateDisciplineHasMix(items, "BIKE")
+      ? templateFormulaLongMinutes(items ?? [], "BIKE", hours.BIKE)
+      : formulas.BIKE && hours
+        ? formulaWeekFromHours(formulas.BIKE, hours.BIKE).longMinutes
+        : null;
+  const runLongMinutes =
+    hours && templateDisciplineHasMix(items, "RUN")
+      ? templateFormulaLongMinutes(items ?? [], "RUN", hours.RUN)
+      : formulas.RUN && hours
+        ? formulaWeekFromHours(formulas.RUN, hours.RUN).longMinutes
+        : null;
 
   const fullLongRideMinutes = suppressLong
     ? 0
-    : bikeFormulaWeek
-      ? bikeFormulaWeek.longMinutes
+    : bikeLongMinutes != null
+      ? bikeLongMinutes
       : longMinutesForMetric(weekIndex, phase, "longRide", context.longAnchors);
   const fullLongRunMinutes = suppressLong
     ? 0
-    : runFormulaWeek
-      ? runFormulaWeek.longMinutes
+    : runLongMinutes != null
+      ? runLongMinutes
       : longMinutesForMetric(weekIndex, phase, "longRun", context.longAnchors);
 
   const longFill = resolveLongSeatFill({
     mode,
     phase,
     suppressLong,
-    fullLongRide: bikeFormulaWeek ? bikeFormulaWeek.longMinutes > 0 && rideFlag : rideFlag,
-    fullLongRun: runFormulaWeek ? runFormulaWeek.longMinutes > 0 && runFlag : runFlag,
+    fullLongRide: bikeLongMinutes != null ? bikeLongMinutes > 0 && rideFlag : rideFlag,
+    fullLongRun: runLongMinutes != null ? runLongMinutes > 0 && runFlag : runFlag,
     fullLongRideMinutes,
     fullLongRunMinutes,
   });
@@ -337,11 +355,11 @@ export function computeCalendarWeekPoolFields(input: {
   const slotBudgets = buildSlotBudgets({
     phase,
     mode,
-    longRideFull: bikeFormulaWeek ? bikeFormulaWeek.longMinutes > 0 && rideFlag : rideFlag,
-    longRunFull: runFormulaWeek ? runFormulaWeek.longMinutes > 0 && runFlag : runFlag,
+    longRideFull: bikeLongMinutes != null ? bikeLongMinutes > 0 && rideFlag : rideFlag,
+    longRunFull: runLongMinutes != null ? runLongMinutes > 0 && runFlag : runFlag,
     longRideResult: longFill.longRideOff,
     longRunResult: longFill.longRunOff,
-    formulaSlots: formulaSlotOverrides(formulas),
+    formulaSlots: formulaSlotOverrides(formulas, items),
   });
 
   return {
@@ -537,12 +555,33 @@ function formulaResultsForPhase(
   return resolved;
 }
 
+function phaseHasFormulaSport(
+  phase: SimplePhaseCompute | null,
+  catalog: SessionFormulaCatalog,
+  discipline: FormulaDiscipline
+): boolean {
+  if (!phase) return false;
+  if (formulaForDiscipline(catalog, phase.disciplineFormulaIds, discipline)) return true;
+  return templateDisciplineHasMix(phase.formulaTemplateItems, discipline);
+}
+
 function applyFormulaZoneMinutes(
   zoneMinutes: ZoneMinutes,
   discipline: FormulaDiscipline,
   formula: DisciplineFormula | undefined,
-  hours: number
+  hours: number,
+  items?: FormulaTemplateItem[]
 ): void {
+  if (templateDisciplineHasMix(items, discipline)) {
+    const week = templateFormulaZoneMinutes(items ?? [], discipline, hours);
+    for (let zone = 1; zone <= 5; zone += 1) {
+      const key = zoneKey(discipline, zone);
+      const minutes = week[zone as 1 | 2 | 3 | 4 | 5];
+      if (minutes > 0) zoneMinutes[key] = minutes;
+      else delete zoneMinutes[key];
+    }
+    return;
+  }
   if (!formula) return;
   const week = formulaWeekFromHours(formula, hours);
   for (let zone = 1; zone <= 5; zone += 1) {
@@ -554,10 +593,16 @@ function applyFormulaZoneMinutes(
 }
 
 function formulaSlotOverrides(
-  formulas: Partial<Record<FormulaDiscipline, DisciplineFormula>>
+  formulas: Partial<Record<FormulaDiscipline, DisciplineFormula>>,
+  items?: FormulaTemplateItem[]
 ): Partial<Record<TriPlanDiscipline, FormulaSlotOverride>> {
   const slots: Partial<Record<TriPlanDiscipline, FormulaSlotOverride>> = {};
   for (const discipline of ["SWIM", "BIKE", "RUN"] as const) {
+    const fromMix = items ? templateFormulaSlotOverride(items, discipline) : null;
+    if (fromMix) {
+      slots[discipline] = fromMix;
+      continue;
+    }
     const formula = formulas[discipline];
     if (!formula) continue;
     slots[discipline] = {
@@ -618,6 +663,8 @@ export function enrichSimpleSeasonWeeks(input: {
       phase,
       input.formulaCatalog ?? []
     );
+    const mixItems = phase?.formulaTemplateItems;
+    const catalog = input.formulaCatalog ?? [];
 
     if (mode === "OVERALL") {
       const split = applySeasonSplitHours(
@@ -626,9 +673,15 @@ export function enrichSimpleSeasonWeeks(input: {
         input.seasonSplit.bike,
         input.seasonSplit.run
       );
-      swimHours = formulaByDiscipline.SWIM ? week.swimHours : split.swimHours;
-      bikeHours = formulaByDiscipline.BIKE ? week.bikeHours : split.bikeHours;
-      runHours = formulaByDiscipline.RUN ? week.runHours : split.runHours;
+      swimHours = phaseHasFormulaSport(phase, catalog, "SWIM")
+        ? week.swimHours
+        : split.swimHours;
+      bikeHours = phaseHasFormulaSport(phase, catalog, "BIKE")
+        ? week.bikeHours
+        : split.bikeHours;
+      runHours = phaseHasFormulaSport(phase, catalog, "RUN")
+        ? week.runHours
+        : split.runHours;
       totalHours = roundHours(swimHours + bikeHours + runHours);
     }
 
@@ -642,22 +695,26 @@ export function enrichSimpleSeasonWeeks(input: {
     const fullLongRide = !suppressLong && (longRideFlags[week.weekIndex] ?? false);
     const fullLongRun = !suppressLong && (longRunFlags[week.weekIndex] ?? false);
 
-    const runFormulaWeek = formulaByDiscipline.RUN
-      ? formulaWeekFromHours(formulaByDiscipline.RUN, runHours)
-      : null;
-    const bikeFormulaWeek = formulaByDiscipline.BIKE
-      ? formulaWeekFromHours(formulaByDiscipline.BIKE, bikeHours)
-      : null;
+    const bikeLongMinutes = templateDisciplineHasMix(mixItems, "BIKE")
+      ? templateFormulaLongMinutes(mixItems ?? [], "BIKE", bikeHours)
+      : formulaByDiscipline.BIKE
+        ? formulaWeekFromHours(formulaByDiscipline.BIKE, bikeHours).longMinutes
+        : null;
+    const runLongMinutes = templateDisciplineHasMix(mixItems, "RUN")
+      ? templateFormulaLongMinutes(mixItems ?? [], "RUN", runHours)
+      : formulaByDiscipline.RUN
+        ? formulaWeekFromHours(formulaByDiscipline.RUN, runHours).longMinutes
+        : null;
 
     const fullLongRideMinutes = suppressLong
       ? 0
-      : bikeFormulaWeek
-        ? bikeFormulaWeek.longMinutes
+      : bikeLongMinutes != null
+        ? bikeLongMinutes
         : longMinutesForMetric(week.weekIndex, phase, "longRide", input.longAnchors);
     const fullLongRunMinutes = suppressLong
       ? 0
-      : runFormulaWeek
-        ? runFormulaWeek.longMinutes
+      : runLongMinutes != null
+        ? runLongMinutes
         : longMinutesForMetric(week.weekIndex, phase, "longRun", input.longAnchors);
 
     const longFill = resolveLongSeatFill({
@@ -683,13 +740,31 @@ export function enrichSimpleSeasonWeeks(input: {
       deLoadStrategy: input.deLoadStrategy,
       catalog: input.catalog,
     });
-    applyFormulaZoneMinutes(zoneMinutes, "SWIM", formulaByDiscipline.SWIM, swimHours);
-    applyFormulaZoneMinutes(zoneMinutes, "BIKE", formulaByDiscipline.BIKE, bikeHours);
-    applyFormulaZoneMinutes(zoneMinutes, "RUN", formulaByDiscipline.RUN, runHours);
+    applyFormulaZoneMinutes(
+      zoneMinutes,
+      "SWIM",
+      formulaByDiscipline.SWIM,
+      swimHours,
+      mixItems
+    );
+    applyFormulaZoneMinutes(
+      zoneMinutes,
+      "BIKE",
+      formulaByDiscipline.BIKE,
+      bikeHours,
+      mixItems
+    );
+    applyFormulaZoneMinutes(
+      zoneMinutes,
+      "RUN",
+      formulaByDiscipline.RUN,
+      runHours,
+      mixItems
+    );
 
     let longSessionZoneMinutes: ZoneMinutes = {};
     if (mode === "SEPARATE_LONG_TIZ") {
-      if (longRideMinutes > 0 && !formulaByDiscipline.BIKE) {
+      if (longRideMinutes > 0 && !phaseHasFormulaSport(phase, catalog, "BIKE")) {
         longSessionZoneMinutes = {
           ...longSessionZoneMinutes,
           ...computeLongSessionZoneMinutes(
@@ -701,7 +776,7 @@ export function enrichSimpleSeasonWeeks(input: {
           ),
         };
       }
-      if (longRunMinutes > 0 && !formulaByDiscipline.RUN) {
+      if (longRunMinutes > 0 && !phaseHasFormulaSport(phase, catalog, "RUN")) {
         longSessionZoneMinutes = {
           ...longSessionZoneMinutes,
           ...computeLongSessionZoneMinutes(
@@ -726,11 +801,11 @@ export function enrichSimpleSeasonWeeks(input: {
     const slotBudgets = buildSlotBudgets({
       phase,
       mode,
-      longRideFull: bikeFormulaWeek ? bikeFormulaWeek.longMinutes > 0 && fullLongRide : fullLongRide,
-      longRunFull: runFormulaWeek ? runFormulaWeek.longMinutes > 0 && fullLongRun : fullLongRun,
+      longRideFull: bikeLongMinutes != null ? bikeLongMinutes > 0 && fullLongRide : fullLongRide,
+      longRunFull: runLongMinutes != null ? runLongMinutes > 0 && fullLongRun : fullLongRun,
       longRideResult: longRideOff,
       longRunResult: longRunOff,
-      formulaSlots: formulaSlotOverrides(formulaByDiscipline),
+      formulaSlots: formulaSlotOverrides(formulaByDiscipline, mixItems),
     });
 
     return {

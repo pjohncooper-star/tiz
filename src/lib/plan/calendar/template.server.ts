@@ -5,6 +5,7 @@ import type {
   PoolSize,
   SessionRole,
   WeeklyTemplateKind,
+  WorkoutShapeKind,
 } from "@prisma/client";
 import { normalizeWeekStart, parseDateKey, WEEK_OPTS } from "@/lib/dates";
 import { db } from "@/lib/db";
@@ -24,6 +25,14 @@ export type WeeklyTemplateItemInput = {
   poolSize?: PoolSize | null;
   sessionRole?: SessionRole;
   sortOrder?: number;
+  sharePercent?: number | null;
+  zone?: number | null;
+  shapeKind?: WorkoutShapeKind | null;
+  workSeconds?: number | null;
+  restSeconds?: number | null;
+  minReps?: number | null;
+  warmupSeconds?: number | null;
+  cooldownSeconds?: number | null;
 };
 
 export type WeeklyTemplateItemDto = {
@@ -36,6 +45,14 @@ export type WeeklyTemplateItemDto = {
   poolSize: PoolSize | null;
   sessionRole: SessionRole;
   sortOrder: number;
+  sharePercent: number | null;
+  zone: number | null;
+  shapeKind: WorkoutShapeKind | null;
+  workSeconds: number | null;
+  restSeconds: number | null;
+  minReps: number | null;
+  warmupSeconds: number | null;
+  cooldownSeconds: number | null;
 };
 
 export type WeeklyTemplateDto = {
@@ -76,6 +93,14 @@ function serializeTemplate(template: TemplateWithItems): WeeklyTemplateDto {
       poolSize: item.poolSize,
       sessionRole: item.sessionRole,
       sortOrder: item.sortOrder,
+      sharePercent: item.sharePercent,
+      zone: item.zone,
+      shapeKind: item.shapeKind,
+      workSeconds: item.workSeconds,
+      restSeconds: item.restSeconds,
+      minReps: item.minReps,
+      warmupSeconds: item.warmupSeconds,
+      cooldownSeconds: item.cooldownSeconds,
     })),
   };
 }
@@ -95,6 +120,14 @@ function templateItemCreateData(items: WeeklyTemplateItemInput[]) {
         discipline: item.discipline,
       }),
     sortOrder: item.sortOrder ?? index,
+    sharePercent: item.sharePercent ?? null,
+    zone: item.zone ?? null,
+    shapeKind: item.shapeKind ?? null,
+    workSeconds: item.workSeconds ?? null,
+    restSeconds: item.restSeconds ?? null,
+    minReps: item.minReps ?? null,
+    warmupSeconds: item.warmupSeconds ?? null,
+    cooldownSeconds: item.cooldownSeconds ?? null,
   }));
 }
 

@@ -13,6 +13,11 @@ import {
   type FormulaDiscipline,
   type SessionFormulaCatalog,
 } from "@/lib/plan/season/base-formulas";
+import {
+  formulaMixPreview,
+  templateDisciplineHasMix,
+  type FormulaTemplateItem,
+} from "@/lib/plan/calendar/template-formula-shape";
 import { resolveChainedPhaseVolumeStart } from "@/lib/plan/season/phase-volume-display";
 import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import { roundHours } from "@/lib/plan/season/volume-curve";
@@ -112,16 +117,43 @@ const FORMULA_RAMP_KEY: Record<FormulaDiscipline, "swim" | "bike" | "run"> = {
   RUN: "run",
 };
 
+export function TemplateMixReadout({
+  discipline,
+  items,
+  startHours,
+}: {
+  discipline: FormulaDiscipline;
+  items?: FormulaTemplateItem[];
+  startHours: number | null;
+}) {
+  const hasMix = templateDisciplineHasMix(items, discipline);
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Session mix</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        {hasMix
+          ? formulaMixPreview(items ?? [], discipline, startHours)
+          : "Set shares on the weekly template. Saved mixes in settings can be applied there."}{" "}
+        <Link href="/calendar/template" className="text-sky-600 hover:underline">
+          Edit template
+        </Link>
+      </p>
+    </div>
+  );
+}
+
 export function formulaVolumeReadout(
   catalog: SessionFormulaCatalog,
   ids: DisciplineFormulaIds | null | undefined,
   discipline: FormulaDiscipline,
   startHours: number | null,
   phase: FormulaVolumePhase,
-  rampDefaults: SimpleRampDefaults
+  rampDefaults: SimpleRampDefaults,
+  items?: FormulaTemplateItem[]
 ): string | null {
   const formula = formulaForDiscipline(catalog, ids, discipline);
-  if (!formula) return null;
+  const hasMix = templateDisciplineHasMix(items, discipline);
+  if (!formula && !hasMix) return null;
   const key = FORMULA_RAMP_KEY[discipline];
   const rate = formulaPhaseRate(phase, key);
   const peak = formulaPhasePeakHours(phase, key, rampDefaults);
@@ -130,7 +162,12 @@ export function formulaVolumeReadout(
     peakHours: peak.value,
     peakSource: peak.source,
   });
-  return `${growth} ${formulaSessionSummary(formula, startHours)}`;
+  const sessions = hasMix
+    ? formulaMixPreview(items ?? [], discipline, startHours)
+    : formula
+      ? formulaSessionSummary(formula, startHours)
+      : "";
+  return `${growth} ${sessions}`;
 }
 
 /** Placeholder for an empty phase peak: the season peak it falls back to. */

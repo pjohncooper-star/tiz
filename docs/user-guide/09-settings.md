@@ -71,12 +71,7 @@ The percentages behind each preset are listed in [chapter 5](./05-season-planner
 
 A library of named session formulas, one sport at a time. The library starts empty. **Add formula** creates a single endurance session at 100% in Z1; name it and edit from there.
 
-Each formula has:
-
-- A **name** you type, and a sport (swim, bike, or run).
-- A list of **sessions**. Each session is a **share of the week** (the shares must total 100%), a zone from Z1 to Z5, and optional **intensity** and **long** flags. Bike and run can mark at most one long session. The share is that session’s duration. Intensity sessions count as intense days. A long session’s minutes are the long ride or long run, still inside the weekly hours.
-
-A formula only sets the shape of the week. The phase sets weekly volume: start hours, growth per week, and peak are fields on the phase that uses the formula. An empty peak falls back to the season peak in **Season → Advanced → Planning units**. A season phase chooses a saved formula for a sport. Editing the formula updates every phase that uses it, so two phases can use the same formula with different starts, growth, and peaks.
+Each formula has a **name**, a sport, and a list of **sessions** (share of the week, zone, optional intensity and long). Use **Apply saved mix** on a weekly template to stamp those shares onto matching slots. The live mix, interval lengths, and generated workouts live on the template. The phase still sets start hours, growth, and peak.
 
 ### Training load (ECO)
 

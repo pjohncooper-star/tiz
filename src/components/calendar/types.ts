@@ -59,6 +59,14 @@ export type WeeklyTemplateItem = {
   poolSize: "SCY" | "SCM" | "LCM" | null;
   sessionRole: "EASY" | "MODERATE" | "INTENSITY" | "LONG";
   sortOrder: number;
+  sharePercent?: number | null;
+  zone?: number | null;
+  shapeKind?: "STEADY" | "FIXED" | null;
+  workSeconds?: number | null;
+  restSeconds?: number | null;
+  minReps?: number | null;
+  warmupSeconds?: number | null;
+  cooldownSeconds?: number | null;
 };
 
 export type WeeklyTemplate = {

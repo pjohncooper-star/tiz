@@ -30,28 +30,27 @@ describe("phaseGenerateBlockers", () => {
     assert.equal(phaseCanGenerateSessions(phase), true);
   });
 
-  it("blocks when the template session count does not match the formula", () => {
+  it("blocks when mix shares do not total 100", () => {
     const phase = {
       ...createPhaseAtWeek(2, 1),
       weeklyTemplateId: "tmpl_1",
-      disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
     };
     assert.deepEqual(
       phaseGenerateBlockers(phase, {
-        catalog: [
+        templateItems: [
           {
-            id: "sf_run",
-            name: "Run split",
             discipline: "RUN",
-            sessions: [
-              { sharePercent: 50, zone: 1, intensity: false, long: false },
-              { sharePercent: 50, zone: 2, intensity: false, long: true },
-            ],
+            sessionRole: "INTENSITY",
+            sharePercent: 40,
+          },
+          {
+            discipline: "RUN",
+            sessionRole: "LONG",
+            sharePercent: 40,
           },
         ],
-        templateItems: [{ discipline: "RUN" }],
       }),
-      ["Weekly template has 1 run session; formula has 2 sessions"]
+      ["run shares total 80% (need 100%)"]
     );
   });
 });

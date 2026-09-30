@@ -19,9 +19,16 @@ import {
 } from "@/lib/plan/season/simple-week-compute";
 import {
   formulaForDiscipline,
+  type FormulaDiscipline,
   type SessionFormulaCatalog,
 } from "@/lib/plan/season/base-formulas";
 import { loadAthleteSessionFormulaCatalog } from "@/lib/plan/season/simple-planner.server";
+import { listWeeklyTemplates } from "@/lib/plan/calendar/template.server";
+import {
+  mixItemsForTemplate,
+  templateFormulaSlotOverride,
+  type FormulaTemplateItem,
+} from "@/lib/plan/calendar/template-formula-shape";
 
 type SerializedSeason = ReturnType<typeof serializeSimpleSeasonPlan>;
 type SerializedPhase = SerializedSeason["phases"][number];
@@ -105,7 +112,10 @@ function parseSlotBudgets(raw: unknown): WeekSlotBudgets | null {
   };
 }
 
-function phaseToCompute(phase: SerializedPhase): SimplePhaseCompute {
+function phaseToCompute(
+  phase: SerializedPhase,
+  mixItems?: FormulaTemplateItem[]
+): SimplePhaseCompute {
   return {
     id: phase.id,
     startWeekIndex: phase.startWeekIndex,
@@ -127,6 +137,8 @@ function phaseToCompute(phase: SerializedPhase): SimplePhaseCompute {
     longRideOffWeekEndurancePercent: phase.longRideOffWeekEndurancePercent,
     longRunOffWeekEndurancePercent: phase.longRunOffWeekEndurancePercent,
     disciplineFormulaIds: phase.disciplineFormulaIds,
+    weeklyTemplateId: phase.weeklyTemplateId ?? null,
+    formulaTemplateItems: mixItems,
     rampEnabled: phase.rampEnabled,
   };
 }
@@ -148,10 +160,21 @@ function findSeasonWeek(
 function applyFormulaSessionCounts(
   rows: CalendarWeekTargetDiscipline[],
   phase: SerializedPhase | null,
-  catalog: SessionFormulaCatalog
+  catalog: SessionFormulaCatalog,
+  mixItems?: FormulaTemplateItem[]
 ): CalendarWeekTargetDiscipline[] {
   if (!phase) return rows;
   return rows.map((row) => {
+    const fromMix = mixItems
+      ? templateFormulaSlotOverride(mixItems, row.discipline as FormulaDiscipline)
+      : null;
+    if (fromMix) {
+      return {
+        ...row,
+        sessionsPerWeek: fromMix.sessions,
+        intenseDaysPerWeek: fromMix.intense,
+      };
+    }
     const formula = formulaForDiscipline(catalog, phase.disciplineFormulaIds, row.discipline);
     if (!formula) return row;
     return {
@@ -174,7 +197,8 @@ function buildWeekTarget(
   phase: SerializedPhase | null,
   planningMode: PlanningMode,
   season: SerializedSeason,
-  formulaCatalog: SessionFormulaCatalog
+  formulaCatalog: SessionFormulaCatalog,
+  mixItems?: FormulaTemplateItem[]
 ): CalendarWeekTarget {
   const byDiscipline = applyFormulaSessionCounts(
     TARGET_DISCIPLINES.map((discipline) => ({
@@ -185,11 +209,12 @@ function buildWeekTarget(
       intenseDaysPerWeek: phase ? phase[INTENSE_KEY[discipline]] : 0,
     })),
     phase,
-    formulaCatalog
+    formulaCatalog,
+    mixItems
   );
 
   const storedSlotBudgets = parseSlotBudgets(week.slotBudgets);
-  const phaseCompute = phase ? phaseToCompute(phase) : null;
+  const phaseCompute = phase ? phaseToCompute(phase, mixItems) : null;
   let slotBudgets = storedSlotBudgets ?? undefined;
   let longRideMinutes = week.longRideMinutes ?? 0;
   let longRunMinutes = week.longRunMinutes ?? 0;
@@ -261,7 +286,10 @@ export async function getCalendarWeekTargets(
   }
 
   const requested = new Set(weekStarts);
-  const formulaCatalog = await loadAthleteSessionFormulaCatalog(athleteId);
+  const [formulaCatalog, templates] = await Promise.all([
+    loadAthleteSessionFormulaCatalog(athleteId),
+    listWeeklyTemplates(athleteId),
+  ]);
   const trSessions = season.trainerRoadDriven
     ? await loadTrainerRoadBikeSessions(athleteId, weekStarts)
     : [];
@@ -284,7 +312,16 @@ export async function getCalendarWeekTargets(
       phasePlanningSpans,
       defaultPlanningMode
     );
-    let target = buildWeekTarget(weekStart, week, phase, planningMode, season, formulaCatalog);
+    const mixItems = mixItemsForTemplate(phase?.weeklyTemplateId, templates);
+    let target = buildWeekTarget(
+      weekStart,
+      week,
+      phase,
+      planningMode,
+      season,
+      formulaCatalog,
+      mixItems
+    );
     if (season.trainerRoadDriven) {
       target = applyTrainerRoadBikeWeekTarget(target, trSessions);
     }

@@ -26,6 +26,7 @@ import {
   inferVolumeProgressionMode,
 } from "@/lib/plan/season/volume-progression";
 import { templateCategoryLabel } from "@/lib/plan/calendar/template-category";
+import type { FormulaTemplateItem } from "@/lib/plan/calendar/template-formula-shape";
 import type { PhaseKindZoneDefaults } from "@/lib/plan/season/zone-split-types";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import { zoneSplitsForPhase } from "@/lib/plan/season/simple-phase-zone-seed";
@@ -33,7 +34,7 @@ import { phaseGenerateBlockersForTemplate } from "@/lib/plan/season/phase-genera
 import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
 import { formulaForDiscipline } from "@/lib/plan/season/base-formulas";
 import {
-  DisciplineFormulaSelect,
+  TemplateMixReadout,
   formulaLongReadout,
   formulaSeasonPeakPlaceholder,
   formulaVolumeReadout,
@@ -82,7 +83,7 @@ export type WeeklyTemplateOption = {
   id: string;
   name: string;
   category: WeeklyTemplateKind;
-  items?: Array<{ discipline: string }>;
+  items?: FormulaTemplateItem[];
 };
 
 type SimplePlannerPhasesPaneProps = {
@@ -193,9 +194,9 @@ export function SimplePlannerPhasesPane({
                   style={{ backgroundColor: phase.color }}
                 />
                 <span className="font-medium">{phase.name}</span>
-                {phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates).length > 0 ? (
+                {phaseGenerateBlockersForTemplate(phase, templates).length > 0 ? (
                   <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                    {phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates)[0]}
+                    {phaseGenerateBlockersForTemplate(phase, templates)[0]}
                   </span>
                 ) : null}
               </div>
@@ -259,8 +260,8 @@ export function SimplePlannerPhasesPane({
               seasonId={seasonId}
               phaseId={selected.id}
               phaseName={selected.name}
-              canGenerate={phaseGenerateBlockersForTemplate(selected, formulaCatalog, templates).length === 0}
-              blockers={phaseGenerateBlockersForTemplate(selected, formulaCatalog, templates)}
+              canGenerate={phaseGenerateBlockersForTemplate(selected, templates).length === 0}
+              blockers={phaseGenerateBlockersForTemplate(selected, templates)}
             />
           ) : (
             <p className="mt-3 text-xs text-zinc-500">
@@ -397,6 +398,7 @@ export function PhaseDetailEditor({
         rampDefaults={rampDefaults}
         disciplineSettings={disciplineSettings}
         formulaCatalog={formulaCatalog}
+        templates={templates}
         onChange={onChange}
         hideBike={phasesLocked}
       />
@@ -863,6 +865,7 @@ export function PhaseVolumeEditor({
   rampDefaults,
   disciplineSettings,
   formulaCatalog = [],
+  templates = [],
   onChange,
   hideBike = false,
 }: {
@@ -874,6 +877,7 @@ export function PhaseVolumeEditor({
   rampDefaults: SimpleRampDefaults;
   disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
   formulaCatalog?: SessionFormulaCatalog;
+  templates?: WeeklyTemplateOption[];
   onChange: (phase: SimplePhase) => void;
   hideBike?: boolean;
 }) {
@@ -910,13 +914,15 @@ export function PhaseVolumeEditor({
   ): FormulaVolumeFieldsProps | null {
     const formulaDiscipline =
       discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
+    const mixItems = templates.find((row) => row.id === phase.weeklyTemplateId)?.items;
     const readout = formulaVolumeReadout(
       formulaCatalog,
       phase.disciplineFormulaIds,
       formulaDiscipline,
       startHours,
       phase,
-      rampDefaults
+      rampDefaults,
+      mixItems
     );
     if (!readout) return null;
     return {
@@ -995,17 +1001,15 @@ export function PhaseVolumeEditor({
           .map((discipline) => {
             const formulaDiscipline =
               discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
-            const formula = formulaFieldsFor(
+            const startForFormula = phaseDisciplineStartHours({
+              phase,
+              phases,
+              weeks,
+              rampDefaults,
+              effectiveMode,
               discipline,
-              phaseDisciplineStartHours({
-                phase,
-                phases,
-                weeks,
-                rampDefaults,
-                effectiveMode,
-                discipline,
-              })
-            );
+            });
+            const formula = formulaFieldsFor(discipline, startForFormula);
             return (
               <div
                 key={discipline}
@@ -1039,11 +1043,10 @@ export function PhaseVolumeEditor({
                 ) : (
                   <p className="mt-2 text-xs text-zinc-500">Uses the phase progression.</p>
                 )}
-                <DisciplineFormulaSelect
+                <TemplateMixReadout
                   discipline={formulaDiscipline}
-                  catalog={formulaCatalog}
-                  ids={phase.disciplineFormulaIds}
-                  onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
+                  items={templates.find((row) => row.id === phase.weeklyTemplateId)?.items}
+                  startHours={startForFormula}
                 />
               </div>
             );
@@ -1118,11 +1121,10 @@ export function PhaseVolumeEditor({
                 chainedStart={chainedStart}
                 formula={formula}
                 formulaSelect={
-                  <DisciplineFormulaSelect
+                  <TemplateMixReadout
                     discipline={formulaDiscipline}
-                    catalog={formulaCatalog}
-                    ids={phase.disciplineFormulaIds}
-                    onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
+                    items={templates.find((row) => row.id === phase.weeklyTemplateId)?.items}
+                    startHours={startForFormula}
                   />
                 }
                 onStartChange={(hours) => patchDiscipline(discipline, { start: hours })}
@@ -1145,11 +1147,10 @@ export function PhaseVolumeEditor({
               chainedStart={chainedStart}
               formula={formula}
               formulaSelect={
-                <DisciplineFormulaSelect
+                <TemplateMixReadout
                   discipline={formulaDiscipline}
-                  catalog={formulaCatalog}
-                  ids={phase.disciplineFormulaIds}
-                  onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
+                  items={templates.find((row) => row.id === phase.weeklyTemplateId)?.items}
+                  startHours={startForFormula}
                 />
               }
               onStartChange={(value) => patchDiscipline(discipline, { start: value })}

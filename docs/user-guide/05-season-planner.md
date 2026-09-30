@@ -74,13 +74,13 @@ One bar per week, height proportional to hours, stacked by sport — swim, bike,
 - **A/B/C race badges** on the weeks your races fall in.
 - Month labels along the axis.
 
-Controls: **Show volume** / **Hide volume**, and filters for **All**, **Swim**, **Bike**, **Run**. Clicking a week selects it in the inspector. Clicking a phase band opens that phase's tabs. A `!` on a phase band means Generate sessions is blocked (unassigned weeks, a missing weekly template, or a template whose session count does not match a chosen formula).
+Controls: **Show volume** / **Hide volume**, and filters for **All**, **Swim**, **Bike**, **Run**. Clicking a week selects it in the inspector. Clicking a phase band opens that phase's tabs. A `!` on a phase band means Generate sessions is blocked (unassigned weeks, a missing weekly template, or mix shares that do not total 100%).
 
 This is the chart to check when you are asking "does this season look right" — you are looking for a sane progression, rest weeks that actually dip, and a taper that actually tapers.
 
 ### Load table
 
-Toggle **Load** under the timeline for a cross-phase spreadsheet: one row per discipline (bike hours hide while following TrainerRoad), one column per assigned phase, plus rest-week % and max hours. Edits write the same fields as the phase Load tab. Bike cells say **From TrainerRoad** while that season is following the feed. A sport that uses a session formula shows that formula’s name in the cell. A removed formula shows **Removed formula**.
+Toggle **Load** under the timeline for a cross-phase spreadsheet: one row per discipline (bike hours hide while following TrainerRoad), one column per assigned phase, plus rest-week % and max hours. Edits write the same fields as the phase Load tab. Bike cells say **From TrainerRoad** while that season is following the feed. A sport whose weekly template has a mix shows **From template**. A leftover catalog formula (no mix on the template) still shows that formula’s name. A removed formula shows **Removed formula**.
 
 ## Races
 
@@ -175,11 +175,9 @@ Chaining is the useful default: set the start for your first phase, then let eac
 
 ### Session formula
 
-On the Load tab, under each sport’s volume row, choose **None** or a formula saved in **Settings → Training & planning → Session formulas**. **None** leaves that sport on the phase progression (Target, Percent per week, or Absolute step).
+The mix lives on the **weekly template**, not on the phase. On each endurance slot you can set a **share %** of that sport’s weekly hours (shares must total 100%), a zone, and a shape: **Steady** (warmup + block + cooldown) or **Fixed** (locked interval length and rest). Same-sport, same-zone fixed slots pack as a group: extra intensity promotes toward the longest interval (Norwegian Singles 3'/6'/10'). Warmup is Z2, rest and cooldown are Z1; they stay on that card and do not shrink easy or long days.
 
-A chosen formula keeps that sport’s **start hours** and shows two phase fields: **Growth / week (%)** and **Peak**. Weekly hours compound from the start hours at the phase’s growth and stop at the peak. Growth lives only on the phase; leave it empty to hold volume flat. An empty peak uses the season peak for that sport from **Season → Advanced → [Planning units](#season-defaults)**. The readout says where each number comes from, for example “Grows 8% per week (phase), peak 6 h (season). At the start hours: …”. The session minutes are the formula’s shares at the start hours. The Load table shows the same start, growth, and peak fields under the formula’s name. The long-ride or long-run minutes for that sport follow the session marked long. On the Intensity tab, that sport’s sessions per week, intense days, and zone focus become readouts from the formula. The other sports stay editable. The phase progression select still drives sports set to **None**.
-
-Rest weeks keep the season’s rest-week cut. If the formula was deleted, the inspector says so and that sport stays on its normal ramp until you clear the choice or pick another. **Edit in settings** opens the library.
+**Apply saved mix** stamps a formula from **Settings → Training & planning → Session formulas** onto matching slots. The phase still owns start hours, growth, and peak. The Load tab readout comes from the template mix.
 
 ### Zone focus and TiZ targets
 
@@ -263,9 +261,9 @@ Each phase has a **Generate sessions for this phase** panel:
 | **Only fill weeks with no existing sessions** | On by default. Skips any week that already has planned sessions. |
 | **Generate sessions** | Runs it |
 
-Two prerequisites: the phase must be **assigned to weeks**, and it must have a **weekly template**. Missing ones show next to **Generate sessions** and as a badge on the phase chip / `!` on the timeline band. A phase you just added must be saved first. When a sport uses a session formula, the weekly template must have the same number of sessions in that sport as the formula. A mismatch stays blocked, for example “Weekly template has 1 run session; formula has 2 sessions.”
+Two prerequisites: the phase must be **assigned to weeks**, and it must have a **weekly template**. Missing ones show next to **Generate sessions** and as a badge on the phase chip / `!` on the timeline band. A phase you just added must be saved first. If a sport has a mix on the template, its shares must total 100%.
 
-Generation keeps each template item’s weekday. For a sport with a formula, it sets that sport’s session durations from the formula’s shares for that week. The resulting pool cards stay empty until you build the workout.
+Generation keeps each template item’s weekday. For a sport with a mix, it writes session durations, zone minutes, and a structured workout from the slot’s shape (steady or fixed intervals). Warmup, rest, and cooldown count as Z1/Z2. Sessions that already have a workout are left alone.
 
 What generation does:
 

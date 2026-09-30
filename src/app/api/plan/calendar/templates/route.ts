@@ -5,22 +5,12 @@ import {
   createWeeklyTemplate,
   listWeeklyTemplates,
 } from "@/lib/plan/calendar/template.server";
-
-const templateItemSchema = z.object({
-  weekday: z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]),
-  discipline: z.enum(["BIKE", "RUN", "SWIM", "STRENGTH"]),
-  title: z.string().trim().min(1).max(200),
-  durationMinutes: z.number().int().positive().nullable().optional(),
-  distanceMeters: z.number().positive().nullable().optional(),
-  poolSize: z.enum(["SCY", "SCM", "LCM"]).nullable().optional(),
-  sessionRole: z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]).optional(),
-  sortOrder: z.number().int().nonnegative().optional(),
-});
+import { weeklyTemplateItemSchema } from "@/lib/plan/api-schemas";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
   category: z.enum(["DEFAULT", "PHASE", "REST", "TEST"]).optional(),
-  items: z.array(templateItemSchema).optional(),
+  items: z.array(weeklyTemplateItemSchema).optional(),
 });
 
 export async function GET() {

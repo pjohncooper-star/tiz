@@ -15,12 +15,21 @@
  * No DB access here so it is fully unit-testable; the server layer feeds it
  * plain data and persists the returned session specs.
  */
-import type { Discipline, PoolSize, PoolSlotKind, SessionRole, Weekday } from "@prisma/client";
+import type { Discipline, PoolSize, PoolSlotKind, SessionRole, Weekday, WorkoutShapeKind } from "@prisma/client";
 import { weekdayToDate } from "./weekday-to-date";
 import {
   resolveWeekTemplateKind,
   type ResolvedTemplateKind,
 } from "./week-template-resolution";
+import {
+  isFormulaDiscipline,
+  resolveTemplateFormulaWeek,
+  templateDisciplineHasMix,
+  type FormulaTemplateItem,
+} from "./template-formula-shape";
+import type { WorkoutTreeDocument } from "@/lib/workout/workout-tree";
+import type { ZoneMinutes } from "@/lib/workout/workout-types";
+import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 
 export type MaterializeTemplateItem = {
   weekday: Weekday;
@@ -30,6 +39,14 @@ export type MaterializeTemplateItem = {
   distanceMeters: number | null;
   poolSize: PoolSize | null;
   sessionRole: SessionRole;
+  sharePercent?: number | null;
+  zone?: number | null;
+  shapeKind?: WorkoutShapeKind | null;
+  workSeconds?: number | null;
+  restSeconds?: number | null;
+  minReps?: number | null;
+  warmupSeconds?: number | null;
+  cooldownSeconds?: number | null;
 };
 
 export type MaterializeTemplate = {
@@ -61,8 +78,11 @@ export type WeekMaterializationContext = {
   /**
    * When set for a sport, replace that sport's template durations when the
    * template has the same number of sessions. Already includes rest-week hours.
+   * Used only when the template has no mix shares (legacy catalog pairing).
    */
   formulaSessions?: Partial<Record<"SWIM" | "BIKE" | "RUN", FormulaDurationSession[]>>;
+  /** Sport hours for this week (rest-cut). Drives template mix durations. */
+  weekHours?: Partial<Record<"SWIM" | "BIKE" | "RUN", number>>;
 };
 
 export type FormulaDurationSession = {
@@ -93,6 +113,9 @@ export type MaterializedSession = {
   poolSlotKind?: PoolSlotKind | null;
   /** When true the session sits outside the TiZ system (test weeks). */
   suppressTiz: boolean;
+  targetZones?: ZoneMinutes;
+  steps?: WorkoutTreeDocument;
+  formulaLabel?: string;
 };
 
 export type WeekMaterializationPlan = {
@@ -172,6 +195,9 @@ export function applyLongSeatToSession(
         title: intensityTitle(session.title, session.discipline),
         sessionRole: "INTENSITY",
         poolSlotKind: "INTENSITY",
+        steps: undefined,
+        targetZones: undefined,
+        formulaLabel: undefined,
       };
     case "substitute_endurance": {
       const durationMinutes =
@@ -184,6 +210,9 @@ export function applyLongSeatToSession(
         durationMinutes,
         sessionRole: "EASY",
         poolSlotKind: "SUBSTITUTE_ENDURANCE",
+        steps: undefined,
+        targetZones: undefined,
+        formulaLabel: undefined,
       };
     }
     case "endurance":
@@ -192,10 +221,18 @@ export function applyLongSeatToSession(
         title: enduranceSubstituteTitle(session.title, session.discipline),
         sessionRole: "MODERATE",
         poolSlotKind: "ENDURANCE",
+        steps: undefined,
+        targetZones: undefined,
+        formulaLabel: undefined,
       };
     case "omit":
       return null;
   }
+}
+
+function isGenericTemplateTitle(title: string, discipline: Discipline): boolean {
+  const trimmed = title.trim();
+  return trimmed === "" || trimmed === DISCIPLINE_DISPLAY_LABELS[discipline];
 }
 
 function pairedFormulaMinutes(
@@ -264,22 +301,42 @@ export function planWeekMaterialization(
     : 1;
 
   const items = template?.items ?? [];
+  const formulaResolved = resolveTemplateFormulaWeek(
+    items as FormulaTemplateItem[],
+    ctx.weekHours ?? {}
+  );
   const formulaMinutes = pairedFormulaMinutes(items, ctx.formulaSessions, opts.omitDisciplines);
   const sessions: MaterializedSession[] = [];
   items.forEach((item, index) => {
     if (opts.omitDisciplines?.includes(item.discipline)) return;
+    const mix =
+      isFormulaDiscipline(item.discipline) &&
+      templateDisciplineHasMix(items as FormulaTemplateItem[], item.discipline)
+        ? formulaResolved[index]
+        : null;
     const base: MaterializedSession = {
       scheduledDateKey: weekdayToDate(ctx.weekStartKey, item.weekday),
       weekday: item.weekday,
       discipline: item.discipline,
-      title: item.title,
-      // Formula minutes already follow the week's hours, including rest cuts.
+      title:
+        mix && isGenericTemplateTitle(item.title, item.discipline)
+          ? mix.label
+          : item.title,
       durationMinutes:
-        formulaMinutes.get(index) ?? scaleDuration(item.durationMinutes, scale),
+        mix?.durationMinutes ??
+        formulaMinutes.get(index) ??
+        scaleDuration(item.durationMinutes, scale),
       distanceMeters: item.distanceMeters,
       poolSize: item.discipline === "SWIM" ? item.poolSize : null,
       sessionRole: item.sessionRole,
       suppressTiz: resolution.suppressTiz,
+      ...(mix && !resolution.suppressTiz
+        ? {
+            targetZones: mix.targetZones,
+            steps: mix.tree,
+            formulaLabel: mix.label,
+          }
+        : {}),
     };
     const next = applyLongSeatToSession(base, ctx);
     if (next) sessions.push(next);

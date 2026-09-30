@@ -58,6 +58,50 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
     setNewCategory("DEFAULT");
   }
 
+  async function handleDuplicate(id: string) {
+    setBusy(true);
+    setError(null);
+    const current = await fetch(`/api/plan/calendar/templates/${id}`);
+    if (!current.ok) {
+      setBusy(false);
+      setError("Could not load template");
+      return;
+    }
+    const data = (await current.json()) as {
+      template: {
+        name: string;
+        category: WeeklyTemplateKind;
+        items: unknown[];
+      };
+    };
+    const res = await fetch("/api/plan/calendar/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `${data.template.name} copy`,
+        category: data.template.category,
+        items: data.template.items,
+      }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "Could not duplicate template");
+      return;
+    }
+    const { template } = await res.json();
+    setTemplates((list) => [
+      ...list,
+      {
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        itemCount: Array.isArray(template.items) ? template.items.length : 0,
+      },
+    ]);
+    setSelectedId(template.id);
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("Delete this template? It will be unassigned from any phases or seasons.")) {
       return;
@@ -160,6 +204,15 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
                       {templateCategoryLabel(template.category)} · {template.itemCount}{" "}
                       {template.itemCount === 1 ? "session" : "sessions"}
                     </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs text-sky-600 hover:text-sky-800"
+                    onClick={() => handleDuplicate(template.id)}
+                    disabled={busy}
+                    aria-label={`Duplicate ${template.name}`}
+                  >
+                    Duplicate
                   </button>
                   <button
                     type="button"

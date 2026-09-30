@@ -310,6 +310,25 @@ const longOffWeekPolicySchema = z.enum([
   "ENDURANCE_PERCENT",
 ]);
 
+export const weeklyTemplateItemSchema = z.object({
+  weekday: z.enum(["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"]),
+  discipline: z.enum(["BIKE", "RUN", "SWIM", "STRENGTH"]),
+  title: z.string().trim().min(1).max(200),
+  durationMinutes: z.number().int().positive().nullable().optional(),
+  distanceMeters: z.number().positive().nullable().optional(),
+  poolSize: z.enum(["SCY", "SCM", "LCM"]).nullable().optional(),
+  sessionRole: z.enum(["EASY", "MODERATE", "INTENSITY", "LONG"]).optional(),
+  sortOrder: z.number().int().nonnegative().optional(),
+  sharePercent: z.number().positive().max(100).nullable().optional(),
+  zone: z.number().int().min(1).max(5).nullable().optional(),
+  shapeKind: z.enum(["STEADY", "FIXED"]).nullable().optional(),
+  workSeconds: z.number().int().positive().nullable().optional(),
+  restSeconds: z.number().int().nonnegative().nullable().optional(),
+  minReps: z.number().int().positive().nullable().optional(),
+  warmupSeconds: z.number().int().nonnegative().nullable().optional(),
+  cooldownSeconds: z.number().int().nonnegative().nullable().optional(),
+});
+
 const formulaSessionSchema = z.object({
   sharePercent: z.number().positive().max(100),
   zone: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),

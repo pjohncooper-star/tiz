@@ -163,7 +163,7 @@ function PhaseInspector({
   onSeasonChange: (season: SimpleSeason) => void;
 }) {
   const [tab, setTab] = useState<Exclude<PhaseEditorSection, "all">>("shape");
-  const blockers = phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates);
+  const blockers = phaseGenerateBlockersForTemplate(phase, templates);
 
   function updatePhase(updated: SimplePhase) {
     onSeasonChange({
@@ -520,7 +520,7 @@ function SeasonInspector({
         <p className="text-sm font-medium">Phases</p>
         <ul className="mt-1 space-y-1 text-sm">
           {assigned.map((phase) => {
-            const blockers = phaseGenerateBlockersForTemplate(phase, formulaCatalog, templates);
+            const blockers = phaseGenerateBlockersForTemplate(phase, templates);
             return (
               <li key={phase.id ?? phase.name}>
                 <button
