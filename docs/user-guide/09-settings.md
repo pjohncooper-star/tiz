@@ -76,7 +76,7 @@ Each formula has:
 - A **name** you type, and a sport (swim, bike, or run).
 - A list of **sessions**. Each session is a **share of the week** (the shares must total 100%), a zone from Z1 to Z5, and optional **intensity** and **long** flags. Bike and run can mark at most one long session. The share is that session’s duration. Intensity sessions count as intense days. A long session’s minutes are the long ride or long run, still inside the weekly hours.
 
-A formula only sets the shape of the week. The season sets weekly volume: start hours come from the phase, and growth per week and peak come from **Season → Advanced → Planning units** for that sport. A season phase chooses a saved formula for a sport. Editing the formula updates every phase that uses it, so two seasons can use the same formula with different starts, growth, and peaks.
+A formula only sets the shape of the week. The phase sets weekly volume: start hours, growth per week, and peak are fields on the phase that uses the formula. An empty peak falls back to the season peak in **Season → Advanced → Planning units**. A season phase chooses a saved formula for a sport. Editing the formula updates every phase that uses it, so two phases can use the same formula with different starts, growth, and peaks.
 
 ### Training load (ECO)
 

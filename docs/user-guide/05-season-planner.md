@@ -57,7 +57,7 @@ Click:
 | Race badge | Race editor |
 | Program bar | Program attachment pane |
 
-**Advanced** (collapsed) on Season: default planning mode, max hours, rest-week %, rest/test templates, phase-kind zone defaults, planning units. On a phase Load tab: planning-mode override and long off-week policy.
+**Advanced** (collapsed) on Season: default planning mode, max hours, rest-week %, rest/test templates, phase-kind zone defaults, planning units. On a phase Load tab: planning-mode override, planning units, and long off-week policy.
 
 Also in the header: **Programs** (to the library) and **All seasons**. When the season is following TrainerRoad, **Refresh feed** re-fetches the calendar, updates bike sessions, and realigns this season’s phases with today’s phase markers. Last synced time sits under the dates. Save or discard unsaved edits first. When ECO load is enabled, a **Fitness / fatigue** disclosure under the canvas projects your PMC curve from the season you are drafting.
 
@@ -167,6 +167,8 @@ Under **Phase volume**, each sport gets a progression:
 
 Chaining is the useful default: set the start for your first phase, then let each subsequent phase continue from the previous one's exit volume, so there are no discontinuities at phase boundaries.
 
+**Planning units** sit at the top of Phase volume, for swim and run. Choose **Season (Hours)** or **Season (Distance)** to use the season's setting, or pick **Hours** or **Distance** for this phase only. The reference pace works the same way: it shows the season pace until you type one, and **Use season** clears it. A base phase can be planned in kilometres while a later phase is planned in hours. At a phase boundary, volume carries over as distance when both phases are in distance, and as hours otherwise, converted with the new phase's pace.
+
 **Rest weeks** interrupt the ramp. Under Week review, **Rest week volume** sets what a rest week gets as a percentage of the previous training week — 75% by default. Rest weeks are marked every fourth week when a season is created, and you can tick or untick the **Rest** checkbox on any week.
 
 **Mesocycles** are the four-week blocks inside each phase. You do not edit them directly; the planner uses them to time de-load weeks, schedule long weeks, and step volume plateaus. They are also what the Dashboard's "This cycle" date range refers to.
@@ -175,7 +177,7 @@ Chaining is the useful default: set the start for your first phase, then let eac
 
 On the Load tab, under each sport’s volume row, choose **None** or a formula saved in **Settings → Training & planning → Session formulas**. **None** leaves that sport on the phase progression (Target, Percent per week, or Absolute step).
 
-A chosen formula keeps that sport’s **start hours** and replaces the end and rate fields with a readout, for example “Grows 10% per week, peak 4.5 h (season). At the start hours: …”. Growth per week and peak come from the season, per sport, in **Season → Advanced → [Planning units](#season-defaults)**, not from the formula. Weekly hours compound from the start hours at that rate and stop at the peak. Set the sport’s growth to 0 to hold volume flat. The session minutes are the formula’s shares at the start hours. The long-ride or long-run minutes for that sport follow the session marked long. On the Intensity tab, that sport’s sessions per week, intense days, and zone focus become readouts from the formula. The other sports stay editable. The phase progression select still drives sports set to **None**.
+A chosen formula keeps that sport’s **start hours** and shows two phase fields: **Growth / week (%)** and **Peak**. Weekly hours compound from the start hours at the phase’s growth and stop at the peak. Growth lives only on the phase; leave it empty to hold volume flat. An empty peak uses the season peak for that sport from **Season → Advanced → [Planning units](#season-defaults)**. The readout says where each number comes from, for example “Grows 8% per week (phase), peak 6 h (season). At the start hours: …”. The session minutes are the formula’s shares at the start hours. The Load table shows the same start, growth, and peak fields under the formula’s name. The long-ride or long-run minutes for that sport follow the session marked long. On the Intensity tab, that sport’s sessions per week, intense days, and zone focus become readouts from the formula. The other sports stay editable. The phase progression select still drives sports set to **None**.
 
 Rest weeks keep the season’s rest-week cut. If the formula was deleted, the inspector says so and that sport stays on its normal ramp until you clear the choice or pick another. **Edit in settings** opens the library.
 
@@ -228,9 +230,9 @@ Under Season inspector **Advanced** (collapsed by default):
 
 **Phase kind zone defaults** — the zone focus applied to each phase kind (Base, Build, Race prep, Taper) per sport, used when creating new phases. A link points to **Settings** for managing the focus library itself.
 
-**Planning units** — whether swim and run are planned in **hours** or **distance**, plus the **reference pace** used to convert between them. Bike is always hours. If you think in "60 km weeks" rather than "5 hour weeks", switch the run to distance and give it a reference pace.
+**Planning units** — the season defaults for whether swim and run are planned in **hours** or **distance**, plus the **reference pace** used to convert between them. Bike is always hours. If you think in "60 km weeks" rather than "5 hour weeks", switch the run to distance and give it a reference pace. Each phase can override the mode and pace on its Load tab (see [Volume and ramps](#volume-and-ramps)).
 
-The same table has **Growth % / week** and **Peak** for each sport. A sport that uses a [session formula](#session-formula) grows at this rate and is capped at this peak. They also drive the season fallback ramp for phases with no volume settings of their own. In distance mode, the peak is entered as distance and converted to hours with the reference pace.
+The same table has a **Peak** for each sport. A sport that uses a [session formula](#session-formula) is capped at this peak when its phase has no peak of its own. In distance mode, the peak is entered as distance and converted to hours with the reference pace. Growth is not set here; it lives on each phase.
 
 Rest-week %, max hours, and rest/test templates also live here.
 
