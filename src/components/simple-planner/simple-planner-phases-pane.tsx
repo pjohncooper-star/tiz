@@ -35,6 +35,7 @@ import { formulaForDiscipline } from "@/lib/plan/season/base-formulas";
 import {
   DisciplineFormulaSelect,
   formulaLongReadout,
+  formulaSeasonPeakPlaceholder,
   formulaVolumeReadout,
   phaseDisciplineStartHours,
 } from "@/components/simple-planner/discipline-formula-fields";
@@ -55,7 +56,7 @@ import {
   isEmptyPhase,
   setPhaseWeekRange,
 } from "@/lib/plan/season/phase-span-utils";
-import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
+import { phaseRampDefaults, type SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import type { PlanDiscipline } from "@/lib/plan/session";
 import type { DisciplineUnitSettings } from "@/lib/units/discipline-settings";
 import { distanceMetersFromHoursPace } from "@/lib/plan/season/distance-pace-rollup";
@@ -65,6 +66,7 @@ import {
   distanceMetersToDisplay,
   disciplinePlanningMode,
   exactHoursFromDisciplineDistance,
+  PlannerPaceInput,
 } from "@/components/simple-planner/simple-planner-volume-display";
 import { LongWeekScheduleGrid } from "@/components/simple-planner/long-week-schedule-grid";
 import type { SimpleWeek } from "@/components/simple-planner/simple-planner-types";
@@ -876,8 +878,52 @@ export function PhaseVolumeEditor({
   hideBike?: boolean;
 }) {
   const progressionMode = inferVolumeProgressionMode(phase);
-  const swimDistance = disciplinePlanningMode("swim", rampDefaults) === "DISTANCE";
-  const runDistance = disciplinePlanningMode("run", rampDefaults) === "DISTANCE";
+  const phaseDefaults = phaseRampDefaults(rampDefaults, phase);
+
+  function patchDiscipline(
+    discipline: "swim" | "bike" | "run",
+    patch: {
+      start?: number | null;
+      end?: number | null;
+      ramp?: number | null;
+      step?: number | null;
+    }
+  ) {
+    const keys = {
+      swim: ["swimStartHours", "swimEndHours", "swimRampPercent", "swimStepHours"],
+      bike: ["bikeStartHours", "bikeEndHours", "bikeRampPercent", "bikeStepHours"],
+      run: ["runStartHours", "runEndHours", "runRampPercent", "runStepHours"],
+    } as const;
+    const [startKey, endKey, rampKey, stepKey] = keys[discipline];
+    onChange({
+      ...phase,
+      ...(patch.start !== undefined ? { [startKey]: patch.start } : {}),
+      ...(patch.end !== undefined ? { [endKey]: patch.end } : {}),
+      ...(patch.ramp !== undefined ? { [rampKey]: patch.ramp } : {}),
+      ...(patch.step !== undefined ? { [stepKey]: patch.step } : {}),
+    });
+  }
+
+  function formulaFieldsFor(
+    discipline: "swim" | "bike" | "run",
+    startHours: number | null
+  ): FormulaVolumeFieldsProps | null {
+    const formulaDiscipline =
+      discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
+    const readout = formulaVolumeReadout(
+      formulaCatalog,
+      phase.disciplineFormulaIds,
+      formulaDiscipline,
+      startHours,
+      phase,
+      rampDefaults
+    );
+    if (!readout) return null;
+    return {
+      readout,
+      peakPlaceholder: formulaSeasonPeakPlaceholder(formulaDiscipline, phase, rampDefaults),
+    };
+  }
 
   const disciplineLabels: Record<"swim" | "bike" | "run", string> = {
     swim: "Swim",
@@ -899,6 +945,12 @@ export function PhaseVolumeEditor({
   return (
     <fieldset className="mt-4 space-y-3">
       <legend className="text-sm font-medium">Phase volume</legend>
+      <PhasePlanningUnitsFields
+        phase={phase}
+        rampDefaults={rampDefaults}
+        disciplineSettings={disciplineSettings}
+        onChange={onChange}
+      />
       <div>
         <Label>Progression</Label>
         <select
@@ -943,10 +995,8 @@ export function PhaseVolumeEditor({
           .map((discipline) => {
             const formulaDiscipline =
               discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
-            const readout = formulaVolumeReadout(
-              formulaCatalog,
-              phase.disciplineFormulaIds,
-              formulaDiscipline,
+            const formula = formulaFieldsFor(
+              discipline,
               phaseDisciplineStartHours({
                 phase,
                 phases,
@@ -954,8 +1004,7 @@ export function PhaseVolumeEditor({
                 rampDefaults,
                 effectiveMode,
                 discipline,
-              }),
-              rampDefaults
+              })
             );
             return (
               <div
@@ -963,8 +1012,30 @@ export function PhaseVolumeEditor({
                 className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
               >
                 <p className="text-sm font-medium capitalize">{discipline}</p>
-                {readout ? (
-                  <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{readout}</p>
+                {formula ? (
+                  <>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <FormulaGrowthInput
+                        value={disciplineRampValue(phase, discipline)}
+                        onCommit={(value) => patchDiscipline(discipline, { ramp: value })}
+                      />
+                      <div>
+                        <Label>Peak (h)</Label>
+                        <NumberEditorInput
+                          min={0}
+                          nullable
+                          integer={false}
+                          className="mt-1"
+                          placeholder={formula.peakPlaceholder}
+                          value={disciplineEndValue(phase, discipline)}
+                          onCommit={(value) => patchDiscipline(discipline, { end: value })}
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                      {formula.readout}
+                    </p>
+                  </>
                 ) : (
                   <p className="mt-2 text-xs text-zinc-500">Uses the phase progression.</p>
                 )}
@@ -983,9 +1054,9 @@ export function PhaseVolumeEditor({
           .filter((discipline) => !(hideBike && discipline === "bike"))
           .map((discipline) => {
           const distanceMode =
-            discipline !== "bike" && disciplinePlanningMode(discipline, rampDefaults) === "DISTANCE";
+            discipline !== "bike" && disciplinePlanningMode(discipline, phaseDefaults) === "DISTANCE";
           const paceDiscipline = discipline === "swim" ? "SWIM" : "RUN";
-          const def = rampDefaults[discipline];
+          const def = phaseDefaults[discipline];
           const chainedStart = resolveChainedPhaseVolumeStart({
             phase,
             phases,
@@ -1019,39 +1090,6 @@ export function PhaseVolumeEditor({
                 ? phase.bikeStepHours
                 : phase.runStepHours;
 
-          function patchDiscipline(patch: {
-            start?: number | null;
-            end?: number | null;
-            ramp?: number | null;
-            step?: number | null;
-          }) {
-            if (discipline === "swim") {
-              onChange({
-                ...phase,
-                ...(patch.start !== undefined ? { swimStartHours: patch.start } : {}),
-                ...(patch.end !== undefined ? { swimEndHours: patch.end } : {}),
-                ...(patch.ramp !== undefined ? { swimRampPercent: patch.ramp } : {}),
-                ...(patch.step !== undefined ? { swimStepHours: patch.step } : {}),
-              });
-            } else if (discipline === "bike") {
-              onChange({
-                ...phase,
-                ...(patch.start !== undefined ? { bikeStartHours: patch.start } : {}),
-                ...(patch.end !== undefined ? { bikeEndHours: patch.end } : {}),
-                ...(patch.ramp !== undefined ? { bikeRampPercent: patch.ramp } : {}),
-                ...(patch.step !== undefined ? { bikeStepHours: patch.step } : {}),
-              });
-            } else {
-              onChange({
-                ...phase,
-                ...(patch.start !== undefined ? { runStartHours: patch.start } : {}),
-                ...(patch.end !== undefined ? { runEndHours: patch.end } : {}),
-                ...(patch.ramp !== undefined ? { runRampPercent: patch.ramp } : {}),
-                ...(patch.step !== undefined ? { runStepHours: patch.step } : {}),
-              });
-            }
-          }
-
           const formulaDiscipline =
             discipline === "swim" ? "SWIM" : discipline === "bike" ? "BIKE" : "RUN";
           const startForFormula = phaseDisciplineStartHours({
@@ -1062,13 +1100,7 @@ export function PhaseVolumeEditor({
             effectiveMode,
             discipline,
           });
-          const formulaReadout = formulaVolumeReadout(
-            formulaCatalog,
-            phase.disciplineFormulaIds,
-            formulaDiscipline,
-            startForFormula,
-            rampDefaults
-          );
+          const formula = formulaFieldsFor(discipline, startForFormula);
 
           if (distanceMode) {
             return (
@@ -1084,7 +1116,7 @@ export function PhaseVolumeEditor({
                 rampPercent={rampPercent}
                 stepHours={stepHours}
                 chainedStart={chainedStart}
-                formulaReadout={formulaReadout}
+                formula={formula}
                 formulaSelect={
                   <DisciplineFormulaSelect
                     discipline={formulaDiscipline}
@@ -1093,10 +1125,10 @@ export function PhaseVolumeEditor({
                     onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
                   />
                 }
-                onStartChange={(hours) => patchDiscipline({ start: hours })}
-                onEndChange={(hours) => patchDiscipline({ end: hours })}
-                onRampPercentChange={(value) => patchDiscipline({ ramp: value })}
-                onStepHoursChange={(hours) => patchDiscipline({ step: hours })}
+                onStartChange={(hours) => patchDiscipline(discipline, { start: hours })}
+                onEndChange={(hours) => patchDiscipline(discipline, { end: hours })}
+                onRampPercentChange={(value) => patchDiscipline(discipline, { ramp: value })}
+                onStepHoursChange={(hours) => patchDiscipline(discipline, { step: hours })}
               />
             );
           }
@@ -1111,7 +1143,7 @@ export function PhaseVolumeEditor({
               rampPercent={rampPercent}
               stepHours={stepHours}
               chainedStart={chainedStart}
-              formulaReadout={formulaReadout}
+              formula={formula}
               formulaSelect={
                 <DisciplineFormulaSelect
                   discipline={formulaDiscipline}
@@ -1120,10 +1152,10 @@ export function PhaseVolumeEditor({
                   onChange={(disciplineFormulaIds) => onChange({ ...phase, disciplineFormulaIds })}
                 />
               }
-              onStartChange={(value) => patchDiscipline({ start: value })}
-              onEndChange={(value) => patchDiscipline({ end: value })}
-              onRampPercentChange={(value) => patchDiscipline({ ramp: value })}
-              onStepHoursChange={(value) => patchDiscipline({ step: value })}
+              onStartChange={(value) => patchDiscipline(discipline, { start: value })}
+              onEndChange={(value) => patchDiscipline(discipline, { end: value })}
+              onRampPercentChange={(value) => patchDiscipline(discipline, { ramp: value })}
+              onStepHoursChange={(value) => patchDiscipline(discipline, { step: value })}
             />
           );
         })
@@ -1140,7 +1172,7 @@ function VolumeProgressionRow({
   rampPercent,
   stepHours,
   chainedStart,
-  formulaReadout = null,
+  formula = null,
   formulaSelect = null,
   onStartChange,
   onEndChange,
@@ -1154,7 +1186,7 @@ function VolumeProgressionRow({
   rampPercent?: number | null;
   stepHours?: number | null;
   chainedStart: ResolvedChainedStart | null;
-  formulaReadout?: string | null;
+  formula?: FormulaVolumeFieldsProps | null;
   formulaSelect?: ReactNode;
   onStartChange: (value: number | null) => void;
   onEndChange: (value: number | null) => void;
@@ -1182,8 +1214,22 @@ function VolumeProgressionRow({
             return Number.isFinite(value) && value >= 0 ? value : null;
           }}
         />
-        {formulaReadout ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{formulaReadout}</p>
+        {formula ? (
+          <>
+            <FormulaGrowthInput value={rampPercent ?? null} onCommit={onRampPercentChange} />
+            <div>
+              <Label>Peak (h)</Label>
+              <NumberEditorInput
+                min={0}
+                nullable
+                integer={false}
+                className="mt-1"
+                placeholder={formula.peakPlaceholder}
+                value={endHours ?? null}
+                onCommit={onEndChange}
+              />
+            </div>
+          </>
         ) : progressionMode === "TARGET" ? (
           <div>
             <Label>End (h)</Label>
@@ -1198,7 +1244,7 @@ function VolumeProgressionRow({
             />
           </div>
         ) : null}
-        {!formulaReadout && progressionMode === "PERCENT" ? (
+        {!formula && progressionMode === "PERCENT" ? (
           <>
             <div>
               <Label>Rate / week (%)</Label>
@@ -1227,7 +1273,7 @@ function VolumeProgressionRow({
             </div>
           </>
         ) : null}
-        {!formulaReadout && progressionMode === "STEP" ? (
+        {!formula && progressionMode === "STEP" ? (
           <>
             <div>
               <Label>Step / week (h)</Label>
@@ -1256,6 +1302,9 @@ function VolumeProgressionRow({
           </>
         ) : null}
       </div>
+      {formula ? (
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{formula.readout}</p>
+      ) : null}
       {formulaSelect}
     </div>
   );
@@ -1272,7 +1321,7 @@ function VolumeDistanceProgressionRow({
   rampPercent,
   stepHours,
   chainedStart,
-  formulaReadout = null,
+  formula = null,
   formulaSelect = null,
   onStartChange,
   onEndChange,
@@ -1289,7 +1338,7 @@ function VolumeDistanceProgressionRow({
   rampPercent?: number | null;
   stepHours?: number | null;
   chainedStart: ResolvedChainedStart | null;
-  formulaReadout?: string | null;
+  formula?: FormulaVolumeFieldsProps | null;
   formulaSelect?: ReactNode;
   onStartChange: (hours: number | null) => void;
   onEndChange: (hours: number | null) => void;
@@ -1357,8 +1406,21 @@ function VolumeDistanceProgressionRow({
             distanceDisplayToMeters(raw, paceDiscipline, disciplineSettings)
           }
         />
-        {formulaReadout ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">{formulaReadout}</p>
+        {formula ? (
+          <>
+            <FormulaGrowthInput value={rampPercent ?? null} onCommit={onRampPercentChange} />
+            <div>
+              <Label>{unitLabel} peak</Label>
+              <TextEditorInput
+                inputMode="decimal"
+                className="mt-1"
+                value={displayFromHours(endHours)}
+                placeholder={formula.peakPlaceholder}
+                allowEmpty
+                onCommit={(raw) => commitDistance(raw, "end")}
+              />
+            </div>
+          </>
         ) : progressionMode === "TARGET" ? (
           <div>
             <Label>{unitLabel} end</Label>
@@ -1372,7 +1434,7 @@ function VolumeDistanceProgressionRow({
             />
           </div>
         ) : null}
-        {!formulaReadout && progressionMode === "PERCENT" ? (
+        {!formula && progressionMode === "PERCENT" ? (
           <>
             <div>
               <Label>Rate / week (%)</Label>
@@ -1400,7 +1462,7 @@ function VolumeDistanceProgressionRow({
             </div>
           </>
         ) : null}
-        {!formulaReadout && progressionMode === "STEP" ? (
+        {!formula && progressionMode === "STEP" ? (
           <>
             <div>
               <Label>{unitLabel} step / week</Label>
@@ -1427,7 +1489,142 @@ function VolumeDistanceProgressionRow({
           </>
         ) : null}
       </div>
+      {formula ? (
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{formula.readout}</p>
+      ) : null}
       {formulaSelect}
+    </div>
+  );
+}
+
+type FormulaVolumeFieldsProps = {
+  readout: string;
+  peakPlaceholder: string;
+};
+
+function FormulaGrowthInput({
+  value,
+  onCommit,
+}: {
+  value: number | null;
+  onCommit: (value: number | null) => void;
+}) {
+  return (
+    <div>
+      <Label>Growth / week (%)</Label>
+      <NumberEditorInput
+        min={0}
+        max={100}
+        nullable
+        integer={false}
+        className="mt-1"
+        placeholder="0 (flat)"
+        value={value}
+        onCommit={onCommit}
+      />
+    </div>
+  );
+}
+
+function disciplineRampValue(phase: SimplePhase, discipline: "swim" | "bike" | "run") {
+  if (discipline === "swim") return phase.swimRampPercent ?? null;
+  if (discipline === "bike") return phase.bikeRampPercent ?? null;
+  return phase.runRampPercent ?? null;
+}
+
+function disciplineEndValue(phase: SimplePhase, discipline: "swim" | "bike" | "run") {
+  if (discipline === "swim") return phase.swimEndHours ?? null;
+  if (discipline === "bike") return phase.bikeEndHours ?? null;
+  return phase.runEndHours ?? null;
+}
+
+const PLANNING_UNIT_ROWS = [
+  {
+    key: "swim",
+    label: "Swim",
+    paceDiscipline: "SWIM",
+    modeKey: "swimPlanningMode",
+    paceKey: "swimReferencePaceSeconds",
+  },
+  {
+    key: "run",
+    label: "Run",
+    paceDiscipline: "RUN",
+    modeKey: "runPlanningMode",
+    paceKey: "runReferencePaceSeconds",
+  },
+] as const;
+
+function PhasePlanningUnitsFields({
+  phase,
+  rampDefaults,
+  disciplineSettings,
+  onChange,
+}: {
+  phase: SimplePhase;
+  rampDefaults: SimpleRampDefaults;
+  disciplineSettings: Record<PlanDiscipline, DisciplineUnitSettings>;
+  onChange: (phase: SimplePhase) => void;
+}) {
+  const resolved = phaseRampDefaults(rampDefaults, phase);
+  return (
+    <div className="space-y-2">
+      <Label>Planning units</Label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {PLANNING_UNIT_ROWS.map((row) => {
+          const seasonMode = rampDefaults[row.key].mode;
+          const override = phase[row.modeKey] ?? null;
+          const paceOverride = phase[row.paceKey] ?? null;
+          return (
+            <div
+              key={row.key}
+              className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <p className="text-sm font-medium">{row.label}</p>
+              <select
+                aria-label={`${row.label} planning unit`}
+                className="mt-2 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                value={override ?? ""}
+                onChange={(event) =>
+                  onChange({
+                    ...phase,
+                    [row.modeKey]: (event.target.value || null) as "HOURS" | "DISTANCE" | null,
+                  })
+                }
+              >
+                <option value="">
+                  Season ({seasonMode === "DISTANCE" ? "Distance" : "Hours"})
+                </option>
+                <option value="HOURS">Hours</option>
+                <option value="DISTANCE">Distance</option>
+              </select>
+              <div className="mt-2 flex items-center gap-2">
+                <PlannerPaceInput
+                  className="w-28 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                  value={resolved[row.key].referencePaceSeconds}
+                  discipline={row.paceDiscipline}
+                  disciplineSettings={disciplineSettings}
+                  onChange={(seconds) => onChange({ ...phase, [row.paceKey]: seconds })}
+                />
+                {paceOverride != null ? (
+                  <button
+                    type="button"
+                    className="text-xs text-sky-600 hover:underline"
+                    onClick={() => onChange({ ...phase, [row.paceKey]: null })}
+                  >
+                    Use season
+                  </button>
+                ) : (
+                  <span className="text-xs text-zinc-500">Season pace</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-zinc-500">
+        Empty uses the season&apos;s planning units from Season → Advanced.
+      </p>
     </div>
   );
 }

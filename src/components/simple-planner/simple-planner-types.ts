@@ -4,7 +4,7 @@ import type {
   VolumeMesocycleMode,
   VolumeProgressionMode,
 } from "@prisma/client";
-import type { SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
+import type { PhasePlanningUnits, SimpleRampDefaults } from "@/lib/plan/season/simple-ramp";
 import {
   defaultPhaseKindZoneDefaults,
   defaultZoneSplitsForKind,
@@ -41,7 +41,7 @@ export type SimpleGoalEvent = {
   priority: "A" | "B" | "C";
 };
 
-export type SimplePhase = {
+export type SimplePhase = PhasePlanningUnits & {
   id?: string;
   name: string;
   color: string;

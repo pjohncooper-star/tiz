@@ -218,11 +218,22 @@ export function formulaHoursAtTrainingWeek(input: {
   return roundHours(Math.min(grown, input.peakHours));
 }
 
-export function seasonGrowthSummary(ratePercent: number, peakHours: number): string {
+export type FormulaGrowthSource = "phase" | "season" | "none";
+
+export function formulaGrowthSummary(input: {
+  ratePercent: number;
+  peakHours: number;
+  peakSource: FormulaGrowthSource;
+}): string {
   const growth =
-    ratePercent > 0 ? `Grows ${ratePercent}% per week` : "Holds weekly hours";
-  const peak = peakHours > 0 ? `, peak ${peakHours} h` : "";
-  return `${growth}${peak} (season).`;
+    input.ratePercent > 0
+      ? `Grows ${input.ratePercent}% per week (phase)`
+      : "Holds weekly hours";
+  const peak =
+    input.peakSource === "none" || !(input.peakHours > 0)
+      ? ""
+      : `, peak ${roundHours(input.peakHours)} h (${input.peakSource})`;
+  return `${growth}${peak}.`;
 }
 
 function distributeMinutes(totalMinutes: number, shares: number[]): number[] {

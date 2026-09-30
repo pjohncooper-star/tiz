@@ -29,6 +29,7 @@ import {
   type SimpleDiscipline,
   type SimpleRampDefaults,
   type SimpleWeekVolume,
+  pickPhasePlanningUnits,
 } from "./simple-ramp";
 import {
   recalculatePhaseAwareVolumes,
@@ -165,6 +166,10 @@ export type SimplePhaseWrite = {
   runEndHours?: number | null;
   runRampPercent?: number | null;
   runStepHours?: number | null;
+  swimPlanningMode?: import("./simple-ramp").VolumePlanningMode | null;
+  runPlanningMode?: import("./simple-ramp").VolumePlanningMode | null;
+  swimReferencePaceSeconds?: number | null;
+  runReferencePaceSeconds?: number | null;
   disciplineFormulaIds?: import("./base-formulas").DisciplineFormulaIds | null;
 };
 
@@ -272,6 +277,7 @@ function phaseWritesToDb(phases: SimplePhaseWrite[]) {
         runEndHours: write.runEndHours ?? null,
         runRampPercent: write.runRampPercent ?? null,
         runStepHours: write.runStepHours ?? null,
+        ...pickPhasePlanningUnits(write),
         coachNotes: serializePhaseCoachNotes({
           goal: phase.goal ?? null,
           strengthSessionsPerWeek: phase.strengthSessionsPerWeek,
@@ -336,6 +342,7 @@ function phaseComputeFromWrites(
       runEndHours: phase.runEndHours,
       runRampPercent: phase.runRampPercent,
       runStepHours: phase.runStepHours,
+      ...pickPhasePlanningUnits(phase),
       disciplineFormulaIds: phase.disciplineFormulaIds ?? emptyDisciplineFormulaIds(),
     }));
 }
@@ -402,6 +409,7 @@ function phaseComputeFromDb(
         runEndHours: phase.runEndHours,
         runRampPercent: phase.runRampPercent,
         runStepHours: phase.runStepHours,
+        ...pickPhasePlanningUnits(phase),
         disciplineFormulaIds: notes.disciplineFormulaIds,
       };
     });
@@ -605,6 +613,7 @@ function phaseVolumeSpansFromCompute(
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    ...pickPhasePlanningUnits(phase),
     disciplineFormulaIds: phase.disciplineFormulaIds,
   }));
 }
@@ -1174,6 +1183,7 @@ export async function updateSimpleSeasonPlan(
             runEndHours: phase.runEndHours,
             runRampPercent: phase.runRampPercent,
             runStepHours: phase.runStepHours,
+            ...pickPhasePlanningUnits(phase),
           },
         });
       }
@@ -1368,6 +1378,7 @@ export function serializeSimpleSeasonPlan(
         runEndHours: phase.runEndHours,
         runRampPercent: phase.runRampPercent,
         runStepHours: phase.runStepHours,
+        ...pickPhasePlanningUnits(phase),
         disciplineFormulaIds: notes.disciplineFormulaIds,
       };
     });

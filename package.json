@@ -16,6 +16,7 @@
     "db:migrate:planning-modes": "prisma db execute --file prisma/migrations/manual_planning_modes.sql --schema prisma/schema.prisma",
     "db:migrate:phase-templates": "prisma db execute --file prisma/migrations/manual_phase_templates.sql --schema prisma/schema.prisma",
     "db:migrate:template-library": "prisma db execute --file prisma/migrations/manual_template_library.sql --schema prisma/schema.prisma",
+    "db:migrate:phase-planning-units": "prisma db execute --file prisma/migrations/manual_phase_planning_units.sql --schema prisma/schema.prisma",
     "db:migrate:phase-volume-progression": "prisma db execute --file prisma/migrations/manual_phase_volume_progression.sql --schema prisma/schema.prisma",
     "db:migrate:training-plans": "prisma db execute --file prisma/migrations/manual_training_plans.sql --schema prisma/schema.prisma",
     "db:studio": "prisma studio",

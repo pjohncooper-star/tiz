@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createWorkoutComponentSchema, createSimpleSeasonSchema } from "@/lib/plan/api-schemas";
+import {
+  createWorkoutComponentSchema,
+  createSimpleSeasonSchema,
+  simplePhaseSchema,
+} from "@/lib/plan/api-schemas";
 import {
   defaultLeafStep,
   serializeWorkoutTree,
@@ -58,5 +62,43 @@ describe("createSimpleSeasonSchema", () => {
   it("rejects unknown seedPhases values", () => {
     const result = createSimpleSeasonSchema.safeParse({ ...base, seedPhases: "wizard" });
     assert.equal(result.success, false);
+  });
+});
+
+describe("simplePhaseSchema planning units", () => {
+  const phase = {
+    name: "Base",
+    color: "#38bdf8",
+    phaseKind: "BASE",
+    startWeekIndex: 0,
+    endWeekIndex: 3,
+    rampEnabled: { swim: true, bike: true, run: true },
+    swimSessionsPerWeek: 3,
+    bikeSessionsPerWeek: 3,
+    runSessionsPerWeek: 4,
+    strengthSessionsPerWeek: 0,
+    swimIntenseDaysPerWeek: 0,
+    bikeIntenseDaysPerWeek: 0,
+    runIntenseDaysPerWeek: 0,
+  };
+
+  it("accepts phase overrides and empty values", () => {
+    const withOverrides = simplePhaseSchema.safeParse({
+      ...phase,
+      runPlanningMode: "DISTANCE",
+      runReferencePaceSeconds: 300,
+      swimPlanningMode: null,
+      swimReferencePaceSeconds: null,
+    });
+    assert.equal(withOverrides.success, true);
+    assert.equal(simplePhaseSchema.safeParse(phase).success, true);
+  });
+
+  it("rejects an unknown planning unit and a non-positive pace", () => {
+    assert.equal(simplePhaseSchema.safeParse({ ...phase, runPlanningMode: "MILES" }).success, false);
+    assert.equal(
+      simplePhaseSchema.safeParse({ ...phase, runReferencePaceSeconds: 0 }).success,
+      false
+    );
   });
 });

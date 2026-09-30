@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  formulaPhasePeakHours,
+  formulaPhaseRate,
   linearVolumeAtWeek,
   planUsesPhaseVolumeRamps,
   recalculatePhaseAwareVolumes,
@@ -9,6 +11,7 @@ import {
 import {
   buildDisciplineRampDefaults,
   defaultSimpleRampDefaults,
+  phaseRampDefaults,
 } from "./simple-ramp";
 import type { SimpleWeekVolume } from "./simple-ramp";
 import {
@@ -576,11 +579,11 @@ describe("discipline formulas", () => {
     phases: PhaseVolumeSpan[],
     weeks: SimpleWeekVolume[],
     catalog: DisciplineFormula[],
-    run: { ratePercent: number; peakHours: number } = { ratePercent: 10, peakHours: 4.5 }
+    seasonRun: { ratePercent: number; peakHours: number } = { ratePercent: 5, peakHours: 6 }
   ) {
     const defaults = defaultSimpleRampDefaults();
-    defaults.run.ratePercent = run.ratePercent;
-    defaults.run.peakHours = run.peakHours;
+    defaults.run.ratePercent = seasonRun.ratePercent;
+    defaults.run.peakHours = seasonRun.peakHours;
     return recalculatePhaseAwareVolumes({
       weeks,
       phases,
@@ -598,7 +601,7 @@ describe("discipline formulas", () => {
     });
   }
 
-  it("grows run hours at the season rate, caps at the season peak, and cuts the rest week without changing swim or bike", () => {
+  it("grows run hours at the phase rate, caps at the phase peak, and cuts the rest week without changing swim or bike", () => {
     const phases = [
       basePhase({
         endWeekIndex: 3,
@@ -607,7 +610,8 @@ describe("discipline formulas", () => {
         bikeStartHours: 4,
         bikeEndHours: 4,
         runStartHours: 4,
-        runEndHours: 4,
+        runRampPercent: 10,
+        runEndHours: 4.5,
         disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
       }),
     ];
@@ -629,20 +633,52 @@ describe("discipline formulas", () => {
     assert.equal(result[3]!.bikeHours, untouched[3]!.bikeHours);
   });
 
-  it("holds run hours flat when the season run rate is zero", () => {
+  it("holds run hours flat when the phase has no growth, ignoring the season rate", () => {
     const phases = [
       basePhase({
         endWeekIndex: 2,
         runStartHours: 4,
-        runEndHours: 4,
         disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
       }),
     ];
     const weeks = [week(0, 1, 1, 1), week(1, 1, 1, 1), week(2, 1, 1, 1)];
-    const result = runInput(phases, weeks, [runFormula], { ratePercent: 0, peakHours: 6 });
+    const result = runInput(phases, weeks, [runFormula], { ratePercent: 20, peakHours: 10 });
     assert.deepEqual(
       result.map((w) => w.runHours),
       [4, 4, 4]
+    );
+  });
+
+  it("caps at the season peak when the phase has growth but no peak", () => {
+    const phases = [
+      basePhase({
+        endWeekIndex: 2,
+        runStartHours: 4,
+        runRampPercent: 10,
+        disciplineFormulaIds: { SWIM: null, BIKE: null, RUN: "sf_run" },
+      }),
+    ];
+    const weeks = [week(0, 1, 1, 1), week(1, 1, 1, 1), week(2, 1, 1, 1)];
+    const result = runInput(phases, weeks, [runFormula], { ratePercent: 0, peakHours: 4.5 });
+    assert.deepEqual(
+      result.map((w) => w.runHours),
+      [4, 4.4, 4.5]
+    );
+  });
+
+  it("reads the phase rate and season peak through the helpers", () => {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.run.peakHours = 6;
+    const phase = basePhase({ runRampPercent: 8 });
+    assert.deepEqual(formulaPhaseRate(phase, "run"), { value: 8, source: "phase" });
+    assert.deepEqual(formulaPhaseRate(basePhase(), "run"), { value: 0, source: "none" });
+    assert.deepEqual(formulaPhasePeakHours(phase, "run", defaults), {
+      value: 6,
+      source: "season",
+    });
+    assert.deepEqual(
+      formulaPhasePeakHours(basePhase({ runEndHours: 5 }), "run", defaults),
+      { value: 5, source: "phase" }
     );
   });
 
@@ -663,5 +699,126 @@ describe("discipline formulas", () => {
       []
     );
     assert.equal(withId[0]!.runHours, withoutId[0]!.runHours);
+  });
+});
+
+describe("phase planning units", () => {
+  function hoursSwimDefaults() {
+    const defaults = defaultSimpleRampDefaults();
+    defaults.swim = buildDisciplineRampDefaults({
+      mode: "HOURS",
+      startHours: 2,
+      peakHours: 4,
+      ratePercent: 5,
+      startDistanceMeters: 0,
+      peakDistanceMeters: 0,
+      referencePaceSeconds: 90,
+      paceDiscipline: "SWIM",
+    });
+    return defaults;
+  }
+
+  function recalc(phases: PhaseVolumeSpan[], weeks: SimpleWeekVolume[], defaults = hoursSwimDefaults()) {
+    return recalculatePhaseAwareVolumes({
+      weeks,
+      phases,
+      rampPhaseSpans: phases.map((p) => ({
+        startWeekIndex: p.startWeekIndex,
+        endWeekIndex: p.endWeekIndex,
+        rampEnabled: p.rampEnabled,
+      })),
+      defaults,
+      restVolumePercent: 75,
+      seasonDefaultPlanningMode: "BY_DISCIPLINE",
+      seasonAnchors: { startHours: 8, peakHours: 12 },
+      seasonSplit: { swim: 25, bike: 50, run: 25 },
+    });
+  }
+
+  it("phase overrides win, empty fields inherit, and bike stays hours", () => {
+    const defaults = hoursSwimDefaults();
+    assert.equal(phaseRampDefaults(defaults, basePhase()), defaults);
+    const resolved = phaseRampDefaults(
+      defaults,
+      basePhase({ swimPlanningMode: "DISTANCE", swimReferencePaceSeconds: 100 })
+    );
+    assert.equal(resolved.swim.mode, "DISTANCE");
+    assert.equal(resolved.swim.referencePaceSeconds, 100);
+    assert.equal(resolved.swim.peakDistanceMeters, 14400);
+    assert.equal(resolved.run, defaults.run);
+    assert.equal(resolved.bike, defaults.bike);
+    assert.equal(resolved.bike.mode, "HOURS");
+  });
+
+  it("ramps one phase in distance while the season plans in hours", () => {
+    const phases = [
+      basePhase({
+        endWeekIndex: 1,
+        swimPlanningMode: "DISTANCE",
+        swimStartHours: exactSwimHours(3000),
+        swimEndHours: exactSwimHours(4000),
+      }),
+    ];
+    const result = recalc(phases, [week(0, 2, 4, 2), week(1, 2, 4, 2)]);
+    assert.equal(result[0]!.swimDistanceMeters, 3000);
+    assert.equal(result[1]!.swimDistanceMeters, 4000);
+  });
+
+  it("carries hours into a distance phase and converts at that phase's pace", () => {
+    const phases = [
+      basePhase({ startWeekIndex: 0, endWeekIndex: 0, swimStartHours: 2, swimEndHours: 2 }),
+      basePhase({
+        startWeekIndex: 1,
+        endWeekIndex: 1,
+        swimPlanningMode: "DISTANCE",
+        swimReferencePaceSeconds: 120,
+        swimEndHours: 2,
+      }),
+    ];
+    const result = recalc(phases, [week(0, 2, 4, 2), week(1, 2, 4, 2)]);
+    assert.equal(result[0]!.swimHours, 2);
+    assert.equal(result[0]!.swimDistanceMeters, 8000);
+    assert.equal(result[1]!.swimDistanceMeters, 6000);
+  });
+
+  it("carries meters between two distance phases", () => {
+    const phases = [
+      basePhase({
+        startWeekIndex: 0,
+        endWeekIndex: 0,
+        swimPlanningMode: "DISTANCE",
+        swimStartHours: exactSwimHours(4000),
+        swimEndHours: exactSwimHours(4000),
+      }),
+      basePhase({
+        startWeekIndex: 1,
+        endWeekIndex: 1,
+        swimPlanningMode: "DISTANCE",
+        swimReferencePaceSeconds: 120,
+        swimEndHours: exactSwimHours(4000, 120),
+      }),
+    ];
+    const result = recalc(phases, [week(0, 2, 4, 2), week(1, 2, 4, 2)]);
+    assert.equal(result[0]!.swimDistanceMeters, 4000);
+    assert.equal(result[1]!.swimDistanceMeters, 4000);
+  });
+
+  it("cuts a rest week in the units of its phase", () => {
+    const phases = [
+      basePhase({
+        swimPlanningMode: "DISTANCE",
+        swimStartHours: exactSwimHours(3000),
+        swimEndHours: exactSwimHours(5000),
+      }),
+    ];
+    const result = recalc(phases, [
+      week(0, 2, 4, 2),
+      week(1, 2, 4, 2),
+      week(2, 2, 4, 2, true),
+      week(3, 2, 4, 2),
+    ]);
+    assert.equal(result[1]!.swimDistanceMeters, 4000);
+    assert.equal(result[2]!.swimDistanceMeters, 3000);
+    assert.equal(result[2]!.swimHours, hoursFromDistancePace("SWIM", 3000, 90));
   });
 });

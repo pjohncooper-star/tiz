@@ -211,6 +211,19 @@ Or paste `prisma/migrations/manual_multi_program_seasons.sql` into the Neon SQL 
 
 This adds `SeasonPlan.maxWeekHours` / `planSessionConflicts`, `SeasonWeek.strengthHours` / `strengthSessions`, per-attachment `ownsDisciplines` / `fillLeftoverTiz`, and `PlannedSession.seasonTrainingPlanAttachmentId`. Existing seasons keep a single attached program; clash resolutions default to keep both.
 
+### Per-phase planning units (schema migration)
+
+Before or immediately after deploying per-phase planning units, apply the idempotent SQL migration against Neon:
+
+```powershell
+$env:DATABASE_URL="postgresql://..."   # production Neon URL
+npm run db:migrate:phase-planning-units
+```
+
+Or paste `prisma/migrations/manual_phase_planning_units.sql` into the Neon SQL editor.
+
+This adds nullable `swimPlanningMode`, `runPlanningMode`, `swimReferencePaceSeconds`, and `runReferencePaceSeconds` to `SeasonPhase`. Empty values inherit the season's planning units, so existing seasons are unchanged.
+
 ---
 
 ## Troubleshooting

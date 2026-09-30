@@ -447,6 +447,10 @@ export const simplePhaseSchema = z
     runEndHours: z.number().nonnegative().nullable().optional(),
     runRampPercent: z.number().nonnegative().nullable().optional(),
     runStepHours: z.number().nonnegative().nullable().optional(),
+    swimPlanningMode: z.enum(["HOURS", "DISTANCE"]).nullable().optional(),
+    runPlanningMode: z.enum(["HOURS", "DISTANCE"]).nullable().optional(),
+    swimReferencePaceSeconds: z.number().positive().nullable().optional(),
+    runReferencePaceSeconds: z.number().positive().nullable().optional(),
     disciplineFormulaIds: z
       .object({
         SWIM: z.string().nullable().optional(),

@@ -11,6 +11,10 @@ import type { CalendarWeekTarget } from "@/components/calendar/types";
 import { formatDateKey, mondayWeekStartKey, parseDateKey } from "@/lib/dates";
 import { defaultPhaseForKind } from "@/lib/plan/season/default-phases";
 import { buildSeasonDateBounds, weekIndexForDate } from "@/lib/plan/season/season-dates";
+import {
+  pickPhasePlanningUnits,
+  type PhasePlanningUnits,
+} from "@/lib/plan/season/simple-ramp";
 import { roundHours } from "@/lib/plan/season/volume-curve";
 import type { PhaseZoneSplits } from "@/lib/plan/season/zone-split-types";
 import type { ParsedTrainerRoadCalendar } from "./calendar";
@@ -83,7 +87,7 @@ export type TrainerRoadSeasonPhase = {
   runEndHours?: number | null;
   runRampPercent?: number | null;
   runStepHours?: number | null;
-};
+} & PhasePlanningUnits;
 
 export type TrainerRoadSeasonDraft = {
   name: string;
@@ -214,6 +218,7 @@ function copySwimRunFields(
     runEndHours: previous.runEndHours,
     runRampPercent: previous.runRampPercent,
     runStepHours: previous.runStepHours,
+    ...pickPhasePlanningUnits(previous),
   };
 }
 
