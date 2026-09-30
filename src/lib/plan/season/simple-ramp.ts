@@ -297,10 +297,14 @@ function applyDistanceRamp(
   }
 }
 
+/** Resolves the planning units for a week, e.g. from the phase that owns it. */
+export type WeekDefaultsResolver = (weekIndex: number) => SimpleRampDefaults;
+
 export function applyRestVolumeCuts(
   weeks: SimpleWeekVolume[],
   defaults: SimpleRampDefaults,
-  restVolumePercent: number
+  restVolumePercent: number,
+  defaultsForWeek?: WeekDefaultsResolver
 ): void {
   const factor = restVolumePercent / 100;
 
@@ -309,9 +313,10 @@ export function applyRestVolumeCuts(
     if (!week.isRestWeek) continue;
 
     const baseIndex = rampBaseWeekIndex(weeks, weekIndex);
+    const weekDefaults = defaultsForWeek?.(week.weekIndex) ?? defaults;
 
     for (const discipline of SIMPLE_DISCIPLINES) {
-      const def = defaults[discipline];
+      const def = weekDefaults[discipline];
       const hoursKey = HOURS_KEY[discipline];
       const distanceKey = DISTANCE_KEY[discipline];
       const mode = disciplineMode(discipline, def);
@@ -345,16 +350,18 @@ export function applyRestVolumeCuts(
 
 export function syncDerivedDistanceOrHours(
   weeks: SimpleWeekVolume[],
-  defaults: SimpleRampDefaults
+  defaults: SimpleRampDefaults,
+  defaultsForWeek?: WeekDefaultsResolver
 ): void {
-  for (const discipline of ["swim", "run"] as const) {
-    const def = defaults[discipline];
-    const mode = disciplineMode(discipline, def);
-    const distanceKey = DISTANCE_KEY[discipline]!;
-    const hoursKey = HOURS_KEY[discipline];
-    const paceDiscipline = PACE_DISCIPLINE[discipline]!;
+  for (const week of weeks) {
+    const weekDefaults = defaultsForWeek?.(week.weekIndex) ?? defaults;
+    for (const discipline of ["swim", "run"] as const) {
+      const def = weekDefaults[discipline];
+      const mode = disciplineMode(discipline, def);
+      const distanceKey = DISTANCE_KEY[discipline]!;
+      const hoursKey = HOURS_KEY[discipline];
+      const paceDiscipline = PACE_DISCIPLINE[discipline]!;
 
-    for (const week of weeks) {
       if (mode === "DISTANCE") {
         const meters = week[distanceKey];
         if (meters != null && meters > 0) {

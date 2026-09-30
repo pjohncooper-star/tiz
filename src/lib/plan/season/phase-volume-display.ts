@@ -127,7 +127,6 @@ function toSeasonPhaseInputs(phases: SimplePhase[]): SeasonPhaseInput[] {
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
-    ...pickPhasePlanningUnits(phase),
   }));
 }
 
@@ -172,7 +171,8 @@ export function resolveChainedPhaseVolumeStart(input: {
   if (disciplineStartHours(phase, discipline) != null) return null;
 
   const distanceMode =
-    discipline !== "bike" && rampDefaults[discipline].mode === "DISTANCE";
+    discipline !== "bike" &&
+    phaseRampDefaults(rampDefaults, phase)[discipline].mode === "DISTANCE";
   if (distanceMode) {
     const sortedSpans = sortedAssignedPhases(phases).map(toPhaseVolumeSpan);
     const weekVolumes = weeks.map(toWeekVolume);

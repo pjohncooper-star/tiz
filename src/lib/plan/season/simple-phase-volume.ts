@@ -41,7 +41,9 @@ import {
   sumWeekHours,
   syncDerivedDistanceOrHours,
   applyRestVolumeCuts,
+  phaseRampDefaults,
   recalculateSimpleVolumes,
+  type WeekDefaultsResolver,
 } from "./simple-ramp";
 import { roundHours } from "./volume-curve";
 import {
@@ -198,8 +200,9 @@ export function resolveEntryMeters(
   phaseIndex: number,
   sortedPhases: PhaseVolumeSpan[],
   weeks: SimpleWeekVolume[],
-  defaults: SimpleRampDefaults
+  seasonDefaults: SimpleRampDefaults
 ): number {
+  const defaults = phaseRampDefaults(seasonDefaults, phase);
   const explicitStart = phaseStartHours(phase, discipline);
   if (explicitStart != null) {
     return metersFromHours(discipline, explicitStart, defaults);
@@ -208,10 +211,20 @@ export function resolveEntryMeters(
     const priorPhase = sortedPhases[phaseIndex - 1]!;
     const lastWeek = lastNonRestWeekInPhase(weeks, priorPhase);
     if (lastWeek) {
-      return weekMeters(lastWeek, discipline, defaults);
+      const priorDefaults = phaseRampDefaults(seasonDefaults, priorPhase);
+      if (isDistanceDiscipline(discipline, priorDefaults)) {
+        return weekMeters(lastWeek, discipline, priorDefaults);
+      }
+      return metersFromHours(discipline, weekHours(lastWeek, discipline), defaults);
     }
   }
   return defaults[discipline].startDistanceMeters;
+}
+
+function weekHours(week: SimpleWeekVolume, discipline: SimpleDiscipline): number {
+  if (discipline === "swim") return week.swimHours;
+  if (discipline === "bike") return week.bikeHours;
+  return week.runHours;
 }
 
 function resolveExitMeters(
@@ -459,6 +472,13 @@ function lastRampExitDiscipline(
   return resolved[resolved.length - 1]?.exit ?? 0;
 }
 
+function weekDefaultsResolver(
+  sorted: PhaseVolumeSpan[],
+  defaults: SimpleRampDefaults
+): WeekDefaultsResolver {
+  return (weekIndex) => phaseRampDefaults(defaults, phaseAtWeek(sorted, weekIndex));
+}
+
 function applyDisciplineVolume(
   week: SimpleWeekVolume,
   discipline: SimpleDiscipline,
@@ -467,14 +487,15 @@ function applyDisciplineVolume(
   weeks: SimpleWeekVolume[],
   targets: { entry: number; exit: number },
   rampOn: boolean,
-  defaults: SimpleRampDefaults
+  defaults: SimpleRampDefaults,
+  seasonDefaults: SimpleRampDefaults
 ): void {
   const rampPercent = disciplineRampPercent(phase, discipline) ?? phase.volumeRampPercent;
   const stepHours = disciplineStepHours(phase, discipline) ?? phase.volumeStepHours;
 
   if (isDistanceDiscipline(discipline, defaults)) {
     const phaseIndex = phaseIndexOf(sorted, phase);
-    const entryM = resolveEntryMeters(discipline, phase, phaseIndex, sorted, weeks, defaults);
+    const entryM = resolveEntryMeters(discipline, phase, phaseIndex, sorted, weeks, seasonDefaults);
     const exitM = resolveExitMeters(discipline, phase, defaults);
     // Convert step/cap semantics: stepHours → meters via reference pace for this discipline.
     const paceDiscipline = paceDisciplineFor(discipline)!;
@@ -604,6 +625,7 @@ export function recalculatePhaseAwareVolumes(input: {
 
     const phase = phaseAtWeek(sorted, week.weekIndex);
     if (!phase) continue;
+    const phaseDefaults = phaseRampDefaults(input.defaults, phase);
 
     const mode = resolvePlanningModeForWeek(
       week.weekIndex,
@@ -639,7 +661,7 @@ export function recalculatePhaseAwareVolumes(input: {
             discipline,
             factor,
             disciplineTargets,
-            input.defaults
+            phaseDefaults
           );
         }
         week.totalHours = sumWeekHours(week);
@@ -686,14 +708,16 @@ export function recalculatePhaseAwareVolumes(input: {
         result,
         targets,
         isRampOnForDiscipline(rampSpan, discipline),
+        phaseDefaults,
         input.defaults
       );
     }
     week.totalHours = sumWeekHours(week);
   }
 
-  applyRestVolumeCuts(result, input.defaults, input.restVolumePercent);
-  syncDerivedDistanceOrHours(result, input.defaults);
+  const defaultsForWeek = weekDefaultsResolver(sorted, input.defaults);
+  applyRestVolumeCuts(result, input.defaults, input.restVolumePercent, defaultsForWeek);
+  syncDerivedDistanceOrHours(result, input.defaults, defaultsForWeek);
 
   for (const week of result) {
     week.totalHours = sumWeekHours(week);
