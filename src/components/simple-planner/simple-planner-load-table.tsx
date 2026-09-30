@@ -147,10 +147,51 @@ export function SimplePlannerLoadTable({
                       LOAD_DISCIPLINE[discipline]
                     );
                     const chosenId = phase.disciplineFormulaIds?.[LOAD_DISCIPLINE[discipline]];
-                    if (formula || chosenId) {
+                    if (!formula && chosenId) {
                       return (
                         <td key={`${phase.id}-${discipline}`} className="py-2 pr-3 text-xs text-zinc-600 dark:text-zinc-300">
-                          {formula ? formula.name : "Removed formula"}
+                          Removed formula
+                        </td>
+                      );
+                    }
+                    if (formula) {
+                      return (
+                        <td key={`${phase.id}-${discipline}`} className="py-2 pr-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-xs text-zinc-600 dark:text-zinc-300">
+                              {formula.name}
+                            </span>
+                            <NumberEditorInput
+                              min={0}
+                              nullable
+                              integer={false}
+                              className="w-20"
+                              placeholder="chain"
+                              value={phase[startKey] ?? null}
+                              onCommit={(value) => updatePhase({ ...phase, [startKey]: value })}
+                            />
+                            <NumberEditorInput
+                              min={0}
+                              max={100}
+                              nullable
+                              integer={false}
+                              className="w-20"
+                              ariaLabel={`${discipline} growth percent per week`}
+                              placeholder="0 %/wk"
+                              value={phase[rampKey] ?? null}
+                              onCommit={(value) => updatePhase({ ...phase, [rampKey]: value })}
+                            />
+                            <NumberEditorInput
+                              min={0}
+                              nullable
+                              integer={false}
+                              className="w-20"
+                              ariaLabel={`${discipline} peak hours`}
+                              placeholder="season peak"
+                              value={phase[endKey] ?? null}
+                              onCommit={(value) => updatePhase({ ...phase, [endKey]: value })}
+                            />
+                          </div>
                         </td>
                       );
                     }

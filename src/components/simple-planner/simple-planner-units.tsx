@@ -75,7 +75,6 @@ export function SeasonUnitsEditor({
               <th className="pb-2 pr-4">Discipline</th>
               <th className="pb-2 pr-4">Mode</th>
               <th className="pb-2 pr-4">Reference pace</th>
-              <th className="pb-2 pr-4">Growth % / week</th>
               <th className="pb-2">Peak</th>
             </tr>
           </thead>
@@ -116,20 +115,6 @@ export function SeasonUnitsEditor({
                     ) : (
                       <span className="text-zinc-400">—</span>
                     )}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <NumberEditorInput
-                      ariaLabel={`${row.label} growth percent per week`}
-                      className={CELL_INPUT_CLASS}
-                      integer={false}
-                      min={0}
-                      max={100}
-                      value={def.ratePercent}
-                      onCommit={(ratePercent) => {
-                        if (ratePercent == null) return;
-                        updateDiscipline(row.key, { ratePercent });
-                      }}
-                    />
                   </td>
                   <td className="py-2">
                     {distancePeak ? (
@@ -182,8 +167,8 @@ export function SeasonUnitsEditor({
         </table>
       </div>
       <p className="text-xs text-zinc-500">
-        Growth and peak drive sports that use a session formula, and the season fallback ramp
-        for phases without their own volume settings.
+        Season defaults. Each phase can override mode and pace on its Load tab. Peak caps a
+        formula sport when its phase has no peak of its own.
       </p>
     </div>
   );

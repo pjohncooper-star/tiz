@@ -9,6 +9,7 @@ import {
   formulaHoursAtTrainingWeek,
   type DisciplineFormulaIds,
   type FormulaDiscipline,
+  type FormulaGrowthSource,
   type SessionFormulaCatalog,
 } from "./base-formulas";
 import {
@@ -117,7 +118,7 @@ function phaseStartHours(
 }
 
 function phaseEndHours(
-  phase: PhaseVolumeSpan,
+  phase: Pick<PhaseVolumeSpan, "swimEndHours" | "bikeEndHours" | "runEndHours">,
   discipline: SimpleDiscipline
 ): number | null | undefined {
   if (discipline === "swim") return phase.swimEndHours;
@@ -328,7 +329,7 @@ function mesocycleModeFor(phase: PhaseVolumeSpan): VolumeMesocycleMode {
 }
 
 function disciplineRampPercent(
-  phase: PhaseVolumeSpan,
+  phase: Pick<PhaseVolumeSpan, "swimRampPercent" | "bikeRampPercent" | "runRampPercent">,
   discipline: SimpleDiscipline
 ): number | null | undefined {
   if (discipline === "swim") return phase.swimRampPercent;
@@ -804,13 +805,23 @@ function seasonPeakHours(discipline: SimpleDiscipline, defaults: SimpleRampDefau
   return def.peakHours;
 }
 
-export type FormulaVolumeSource = "phase" | "season" | "none";
+export type FormulaVolumePhase = PhasePlanningUnits &
+  Pick<
+    PhaseVolumeSpan,
+    | "volumeRampPercent"
+    | "swimRampPercent"
+    | "bikeRampPercent"
+    | "runRampPercent"
+    | "swimEndHours"
+    | "bikeEndHours"
+    | "runEndHours"
+  >;
 
 /** Weekly growth for a formula sport. Growth lives on the phase; empty holds volume flat. */
 export function formulaPhaseRate(
-  phase: PhaseVolumeSpan,
+  phase: FormulaVolumePhase,
   discipline: SimpleDiscipline
-): { value: number; source: FormulaVolumeSource } {
+): { value: number; source: FormulaGrowthSource } {
   const rate = disciplineRampPercent(phase, discipline) ?? phase.volumeRampPercent;
   if (rate != null && Number.isFinite(rate)) return { value: rate, source: "phase" };
   return { value: 0, source: "none" };
@@ -818,10 +829,10 @@ export function formulaPhaseRate(
 
 /** Cap for a formula sport: the phase's end hours, else the season peak in the phase's units. */
 export function formulaPhasePeakHours(
-  phase: PhaseVolumeSpan,
+  phase: FormulaVolumePhase,
   discipline: SimpleDiscipline,
   seasonDefaults: SimpleRampDefaults
-): { value: number; source: FormulaVolumeSource } {
+): { value: number; source: FormulaGrowthSource } {
   const end = phaseEndHours(phase, discipline);
   if (end != null && Number.isFinite(end)) return { value: end, source: "phase" };
   const peak = seasonPeakHours(discipline, phaseRampDefaults(seasonDefaults, phase));
