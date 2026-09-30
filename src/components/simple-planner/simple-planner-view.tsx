@@ -28,6 +28,7 @@ import {
 import { DEFAULT_REST_VOLUME_PERCENT } from "@/lib/plan/season/constants";
 import { defaultPhaseKindZoneDefaults } from "@/lib/plan/season/phase-zone-defaults";
 import { parseSessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
+import { pickPhasePlanningUnits } from "@/lib/plan/season/simple-ramp";
 import type { SessionFormulaCatalog } from "@/lib/plan/season/base-formulas";
 import { parseZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
 import type { ZoneFocusCatalog } from "@/lib/plan/season/zone-focus-catalog";
@@ -145,6 +146,7 @@ function volumePreviewSignature(season: SimpleSeason): string {
       runEndHours: phase.runEndHours,
       runRampPercent: phase.runRampPercent,
       runStepHours: phase.runStepHours,
+      ...pickPhasePlanningUnits(phase),
       disciplineFormulaIds: phase.disciplineFormulaIds,
     })),
   });

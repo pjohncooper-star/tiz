@@ -30,6 +30,7 @@ import {
 } from "./phase-volume-ramp";
 import type { SeasonPhaseInput } from "./types";
 import {
+  type PhasePlanningUnits,
   type SimpleDiscipline,
   type SimplePhaseSpan,
   type SimpleRampDefaults,
@@ -48,7 +49,7 @@ import {
   volumeAtProgressionWeek,
 } from "./volume-progression";
 
-export type PhaseVolumeSpan = PhasePlanningSpan & {
+export type PhaseVolumeSpan = PhasePlanningSpan & PhasePlanningUnits & {
   id?: string;
   phaseKind: PhaseKind;
   rampEnabled: Record<SimpleDiscipline, boolean>;

@@ -7,7 +7,11 @@ import {
   recalculatePhaseAwareVolumes,
   type PhaseVolumeSpan,
 } from "./simple-phase-volume";
-import type { SimpleRampDefaults, SimpleWeekVolume } from "./simple-ramp";
+import {
+  pickPhasePlanningUnits,
+  type SimpleRampDefaults,
+  type SimpleWeekVolume,
+} from "./simple-ramp";
 import { roundHours } from "./volume-curve";
 
 function toPhaseVolumeSpan(phase: SimplePhase): PhaseVolumeSpan {
@@ -36,6 +40,7 @@ function toPhaseVolumeSpan(phase: SimplePhase): PhaseVolumeSpan {
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    ...pickPhasePlanningUnits(phase),
     disciplineFormulaIds: phase.disciplineFormulaIds,
   };
 }

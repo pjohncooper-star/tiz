@@ -23,6 +23,83 @@ export type DisciplineRampDefaults = {
 
 export type SimpleRampDefaults = Record<SimpleDiscipline, DisciplineRampDefaults>;
 
+/** Optional per-phase overrides of the season planning units. Empty inherits the season. */
+export type PhasePlanningUnits = {
+  swimPlanningMode?: VolumePlanningMode | null;
+  runPlanningMode?: VolumePlanningMode | null;
+  swimReferencePaceSeconds?: number | null;
+  runReferencePaceSeconds?: number | null;
+};
+
+export function pickPhasePlanningUnits(phase: PhasePlanningUnits): {
+  swimPlanningMode: VolumePlanningMode | null;
+  runPlanningMode: VolumePlanningMode | null;
+  swimReferencePaceSeconds: number | null;
+  runReferencePaceSeconds: number | null;
+} {
+  return {
+    swimPlanningMode: phase.swimPlanningMode ?? null,
+    runPlanningMode: phase.runPlanningMode ?? null,
+    swimReferencePaceSeconds: phase.swimReferencePaceSeconds ?? null,
+    runReferencePaceSeconds: phase.runReferencePaceSeconds ?? null,
+  };
+}
+
+function resolvePhaseUnitDiscipline(
+  discipline: "swim" | "run",
+  def: DisciplineRampDefaults,
+  modeOverride: VolumePlanningMode | null | undefined,
+  paceOverride: number | null | undefined
+): DisciplineRampDefaults {
+  const mode = modeOverride ?? def.mode;
+  const pace = paceOverride != null && paceOverride > 0 ? paceOverride : def.referencePaceSeconds;
+  if (mode === def.mode && pace === def.referencePaceSeconds) return def;
+  const paceDiscipline = discipline === "swim" ? "SWIM" : "RUN";
+  // The season's own unit stays canonical; the other unit is derived with the resolved pace.
+  if (def.mode === "DISTANCE") {
+    return {
+      ...def,
+      mode,
+      referencePaceSeconds: pace,
+      startHours: hoursFromDistancePace(paceDiscipline, def.startDistanceMeters, pace),
+      peakHours: hoursFromDistancePace(paceDiscipline, def.peakDistanceMeters, pace),
+    };
+  }
+  return {
+    ...def,
+    mode,
+    referencePaceSeconds: pace,
+    startDistanceMeters: roundMeters(
+      distanceMetersFromHoursPace(paceDiscipline, def.startHours, pace)
+    ),
+    peakDistanceMeters: roundMeters(
+      distanceMetersFromHoursPace(paceDiscipline, def.peakHours, pace)
+    ),
+  };
+}
+
+/** Season defaults with a phase's swim/run planning-unit overrides applied. Bike stays hours. */
+export function phaseRampDefaults(
+  defaults: SimpleRampDefaults,
+  phase: PhasePlanningUnits | null | undefined
+): SimpleRampDefaults {
+  if (!phase) return defaults;
+  const swim = resolvePhaseUnitDiscipline(
+    "swim",
+    defaults.swim,
+    phase.swimPlanningMode,
+    phase.swimReferencePaceSeconds
+  );
+  const run = resolvePhaseUnitDiscipline(
+    "run",
+    defaults.run,
+    phase.runPlanningMode,
+    phase.runReferencePaceSeconds
+  );
+  if (swim === defaults.swim && run === defaults.run) return defaults;
+  return { ...defaults, swim, run };
+}
+
 export type SimplePhaseSpan = {
   startWeekIndex: number;
   endWeekIndex: number;

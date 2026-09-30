@@ -5,6 +5,7 @@ import {
   parseDateKey,
 } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { pickPhasePlanningUnits } from "@/lib/plan/season/simple-ramp";
 import { getSeasonPlanById } from "@/lib/plan/season/season-plan.server";
 import type { GoalEventWriteInput } from "@/lib/plan/season/goal-events-sync";
 import {
@@ -81,6 +82,7 @@ function toPhaseWrites(phases: TrainerRoadSeasonPhase[]): SimplePhaseWrite[] {
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    ...pickPhasePlanningUnits(phase),
   }));
 }
 

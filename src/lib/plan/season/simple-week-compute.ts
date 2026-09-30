@@ -19,7 +19,7 @@ import {
   type PhasePlanningSpan,
 } from "./planning-mode";
 import type { PhaseWithBlocks } from "./phase-blocks";
-import type { SimpleWeekVolume } from "./simple-ramp";
+import type { PhasePlanningUnits, SimpleWeekVolume } from "./simple-ramp";
 import {
   computeZoneMinutesForWeekFromSplits,
   type ZonePhaseSpan,
@@ -101,6 +101,10 @@ export type SimplePhaseCompute = PhasePlanningSpan & {
   runEndHours?: number | null;
   runRampPercent?: number | null;
   runStepHours?: number | null;
+  swimPlanningMode?: PhasePlanningUnits["swimPlanningMode"];
+  runPlanningMode?: PhasePlanningUnits["runPlanningMode"];
+  swimReferencePaceSeconds?: number | null;
+  runReferencePaceSeconds?: number | null;
   disciplineFormulaIds?: DisciplineFormulaIds | null;
   startWeekIndex: number;
   endWeekIndex: number;

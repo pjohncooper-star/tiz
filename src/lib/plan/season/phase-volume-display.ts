@@ -12,7 +12,12 @@ import {
   resolveEntryMeters,
   type PhaseVolumeSpan,
 } from "./simple-phase-volume";
-import type { SimpleRampDefaults, SimpleWeekVolume } from "./simple-ramp";
+import {
+  phaseRampDefaults,
+  pickPhasePlanningUnits,
+  type SimpleRampDefaults,
+  type SimpleWeekVolume,
+} from "./simple-ramp";
 import { roundHours } from "./volume-curve";
 import type { SeasonPhaseInput } from "./types";
 import { isAssignedPhase } from "./phase-span-utils";
@@ -61,6 +66,7 @@ function toPhaseVolumeSpan(phase: SimplePhase): PhaseVolumeSpan {
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    ...pickPhasePlanningUnits(phase),
   };
 }
 
@@ -121,6 +127,7 @@ function toSeasonPhaseInputs(phases: SimplePhase[]): SeasonPhaseInput[] {
     runEndHours: phase.runEndHours,
     runRampPercent: phase.runRampPercent,
     runStepHours: phase.runStepHours,
+    ...pickPhasePlanningUnits(phase),
   }));
 }
 

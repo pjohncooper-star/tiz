@@ -658,6 +658,10 @@ model SeasonPhase {
   runEndHours          Float?
   runRampPercent       Float?
   runStepHours         Float?
+  swimPlanningMode         VolumePlanningMode?
+  runPlanningMode          VolumePlanningMode?
+  swimReferencePaceSeconds Float?
+  runReferencePaceSeconds  Float?
   rampSwimEnabled      Boolean    @default(true)
   rampBikeEnabled      Boolean    @default(true)
   rampRunEnabled       Boolean    @default(true)
