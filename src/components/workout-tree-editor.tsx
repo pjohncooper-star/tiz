@@ -15,7 +15,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import type { Discipline, SignalType } from "@prisma/client";
 import { Button, Input, Label, Select } from "@/components/ui";
-import { NumberEditorInput } from "@/components/number-editor-input";
+import { DurationEditorInput, NumberEditorInput } from "@/components/number-editor-input";
 import {
   PanelDensityProvider,
   PanelLabel,
@@ -49,9 +49,7 @@ import {
   defaultRepeatBlock,
   defaultSwimIntervalSet,
   formatDurationSeconds,
-  formatDurationHms,
   intensityLabel,
-  parseDurationInput,
   primarySignalForDiscipline,
   totalTreeDurationSeconds,
   type LeafStep,
@@ -475,75 +473,6 @@ function WorkoutDropSlot({
             : "h-0.5 bg-transparent"
       }`}
     />
-  );
-}
-
-function DurationEditorInput({
-  seconds,
-  onCommit,
-  label,
-  placeholder = "0:10:00",
-  optional = false,
-}: {
-  seconds: number | null | undefined;
-  onCommit: (seconds: number | null) => void;
-  label: string;
-  placeholder?: string;
-  optional?: boolean;
-}) {
-  const resolved = seconds != null && seconds > 0 ? seconds : null;
-  const [text, setText] = useState(() => (resolved != null ? formatDurationHms(resolved) : ""));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) {
-      setText(resolved != null ? formatDurationHms(resolved) : "");
-    }
-  }, [resolved, focused]);
-
-  function commit() {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      if (optional) {
-        onCommit(null);
-        setText("");
-      } else if (resolved != null) {
-        setText(formatDurationHms(resolved));
-      }
-      return;
-    }
-    const sec = parseDurationInput(trimmed);
-    if (sec != null && sec > 0) {
-      onCommit(sec);
-      setText(formatDurationHms(sec));
-      return;
-    }
-    if (resolved != null) {
-      setText(formatDurationHms(resolved));
-    } else {
-      setText("");
-    }
-  }
-
-  return (
-    <div className="min-w-0">
-      <Label>{label}</Label>
-      <Input
-        value={text}
-        placeholder={placeholder}
-        onFocus={() => setFocused(true)}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => {
-          setFocused(false);
-          commit();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.currentTarget.blur();
-          }
-        }}
-      />
-    </div>
   );
 }
 

@@ -811,22 +811,39 @@ export function formatDurationHms(seconds: number): string {
   return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Compact editor display: M:SS with minutes uncapped (e.g. 6:00, 90:00). */
+export function formatDurationMinSec(seconds: number): string {
+  if (seconds <= 0) return "0:00";
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 /**
  * Parse editor duration input.
  * Plain numbers (including decimals) are minutes; colon forms are mm:ss or h:mm:ss.
+ * Zero is rejected unless `allowZero` is set.
  */
-export function parseDurationInput(value: string): number | null {
+export function parseDurationInput(
+  value: string,
+  options: { allowZero?: boolean } = {}
+): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
+  let seconds: number | null = null;
   if (/^\d+(\.\d+)?$/.test(trimmed)) {
     const minutes = Number(trimmed);
-    return Number.isFinite(minutes) && minutes > 0 ? Math.round(minutes * 60) : null;
+    seconds = Number.isFinite(minutes) ? Math.round(minutes * 60) : null;
+  } else {
+    const parts = trimmed.split(":").map((p) => Number(p.trim()));
+    if (parts.some((p) => !Number.isFinite(p) || p < 0)) return null;
+    if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+    else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
   }
-  const parts = trimmed.split(":").map((p) => Number(p.trim()));
-  if (parts.some((p) => !Number.isFinite(p) || p < 0)) return null;
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  return null;
+  if (seconds == null) return null;
+  if (seconds === 0) return options.allowZero ? 0 : null;
+  return seconds;
 }
 
 export function normalizeStepsPayload(raw: unknown): WorkoutTreeDocument {
