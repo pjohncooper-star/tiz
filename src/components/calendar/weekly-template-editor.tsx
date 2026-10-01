@@ -23,12 +23,17 @@ import {
   TEMPLATE_CATEGORY_LABELS,
 } from "@/lib/plan/calendar/template-category";
 import {
-  applyCatalogFormulaToItems,
+  applyCatalogPairing,
   defaultZoneForRole,
   mixShareError,
+  planCatalogPairing,
+  sessionRoleForFormulaSession,
+  type CatalogPairing,
 } from "@/lib/plan/calendar/template-formula-shape";
 import {
   parseSessionFormulaCatalog,
+  type DisciplineFormula,
+  type FormulaSession,
   type SessionFormulaCatalog,
 } from "@/lib/plan/season/base-formulas";
 
@@ -113,6 +118,113 @@ function draftsFromTemplate(template: WeeklyTemplate): TemplateItemDraft[] {
     sessionRole: item.sessionRole ?? "MODERATE",
     key: item.id ?? `t_${item.weekday}_${item.sortOrder}_${Math.random().toString(36).slice(2, 5)}`,
   }));
+}
+
+function describeFormulaSession(session: FormulaSession): string {
+  const shape = session.intensity && !session.long ? "Fixed" : "Steady";
+  return `${session.sharePercent}% · Z${session.zone} ${shape}${session.long ? " · long" : ""}`;
+}
+
+/** Days to place new sessions on: empty days first, then days without this sport. */
+function daysForNewSessions(
+  items: WeeklyTemplateItem[],
+  discipline: WeeklyTemplateItem["discipline"],
+  count: number
+): WeeklyTemplateItem["weekday"][] {
+  const used = new Set(items.map((item) => item.weekday));
+  const withSport = new Set(
+    items.filter((item) => item.discipline === discipline).map((item) => item.weekday)
+  );
+  const ordered = [
+    ...WEEKDAYS.filter((day) => !used.has(day)),
+    ...WEEKDAYS.filter((day) => used.has(day) && !withSport.has(day)),
+    ...WEEKDAYS.filter((day) => withSport.has(day)),
+  ];
+  return Array.from({ length: count }, (_, index) => ordered[index % ordered.length]!);
+}
+
+type PendingApply = {
+  formula: DisciplineFormula;
+  pairing: CatalogPairing;
+  addMissing: boolean;
+};
+
+function ApplyMixPreview({
+  pending,
+  items,
+  onToggleAddMissing,
+  onConfirm,
+  onCancel,
+}: {
+  pending: PendingApply;
+  items: TemplateItemDraft[];
+  onToggleAddMissing: (value: boolean) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { formula, pairing } = pending;
+  const sport = formula.discipline.toLowerCase();
+  const addDays = daysForNewSessions(items, formula.discipline, pairing.missing.length);
+  const slotLabel = (item: TemplateItemDraft) =>
+    `${WEEKDAY_SHORT[item.weekday]} ${item.title || defaultTitle(item.discipline)} (${SESSION_ROLE_LABELS[item.sessionRole].toLowerCase()})`;
+
+  return (
+    <div className="rounded-md border border-sky-300 bg-sky-50/60 p-3 text-sm dark:border-sky-800 dark:bg-sky-950/30">
+      <p className="mb-2 font-medium">
+        Apply {formula.name} to {sport}
+      </p>
+      {pairing.pairs.length > 0 ? (
+        <ul className="mb-2 space-y-0.5 text-xs">
+          {pairing.pairs.map((pair) => (
+            <li key={pair.itemIndex}>
+              {slotLabel(items[pair.itemIndex]!)} → {describeFormulaSession(pair.session)}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mb-2 text-xs text-zinc-500">No {sport} sessions on this template yet.</p>
+      )}
+      {pairing.missing.length > 0 ? (
+        <label className="mb-2 flex items-start gap-2 text-xs">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={pending.addMissing}
+            onChange={(e) => onToggleAddMissing(e.target.checked)}
+          />
+          <span>
+            Add {pairing.missing.length} {sport}{" "}
+            {pairing.missing.length === 1 ? "session" : "sessions"}:{" "}
+            {pairing.missing
+              .map(
+                (session, index) =>
+                  `${WEEKDAY_SHORT[addDays[index]!]} ${describeFormulaSession(session)}`
+              )
+              .join(", ")}
+            {pending.addMissing ? null : (
+              <span className="block text-amber-700 dark:text-amber-400">
+                Without these, {sport} shares will not total 100%.
+              </span>
+            )}
+          </span>
+        </label>
+      ) : null}
+      {pairing.extra.length > 0 ? (
+        <p className="mb-2 text-xs text-zinc-600 dark:text-zinc-400">
+          Not in this mix (kept duration-based, share cleared):{" "}
+          {pairing.extra.map((index) => slotLabel(items[index]!)).join(", ")}
+        </p>
+      ) : null}
+      <div className="flex gap-2">
+        <Button type="button" onClick={onConfirm}>
+          Apply
+        </Button>
+        <Button type="button" variant="secondary" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 type TemplateDayColumnProps = {
@@ -497,6 +609,16 @@ export function WeeklyTemplateEditor({
   );
   const [formulaCatalog, setFormulaCatalog] = useState<SessionFormulaCatalog>([]);
   const [applyFormulaId, setApplyFormulaId] = useState("");
+  const [pendingApply, setPendingApply] = useState<PendingApply | null>(null);
+  const [undo, setUndo] = useState<{ items: TemplateItemDraft[]; label: string } | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!undo) return;
+    const timer = window.setTimeout(() => setUndo(null), 15000);
+    return () => window.clearTimeout(timer);
+  }, [undo]);
 
   useEffect(() => {
     void (async () => {
@@ -543,6 +665,8 @@ export function WeeklyTemplateEditor({
     setCategory(baseline.category);
     setItems(baseline.items);
     setError(null);
+    setPendingApply(null);
+    setUndo(null);
   }
 
   useEffect(() => {
@@ -570,16 +694,59 @@ export function WeeklyTemplateEditor({
     setItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
-  function applyMix() {
+  function previewApply() {
     const formula = formulaCatalog.find((row) => row.id === applyFormulaId);
     if (!formula) return;
-    const next = applyCatalogFormulaToItems(items, formula);
-    if ("error" in next) {
-      setError(next.error);
-      return;
+    const pairing = planCatalogPairing(items, formula);
+    setPendingApply({ formula, pairing, addMissing: pairing.missing.length > 0 });
+  }
+
+  function confirmApply() {
+    if (!pendingApply) return;
+    const { formula, addMissing } = pendingApply;
+    let pairing = pendingApply.pairing;
+    let base = items;
+    if (addMissing && pairing.missing.length > 0) {
+      const days = daysForNewSessions(items, formula.discipline, pairing.missing.length);
+      const dayCounts = new Map<WeeklyTemplateItem["weekday"], number>();
+      const added = pairing.missing.map((session, index) => {
+        const weekday = days[index]!;
+        const taken =
+          dayCounts.get(weekday) ?? items.filter((item) => item.weekday === weekday).length;
+        dayCounts.set(weekday, taken + 1);
+        const draft = newDraft(weekday);
+        draft.key = `${draft.key}_${index}`;
+        draft.discipline = formula.discipline;
+        draft.title = defaultTitle(formula.discipline);
+        draft.poolSize = formula.discipline === "SWIM" ? "SCM" : null;
+        draft.sessionRole = sessionRoleForFormulaSession(session);
+        draft.sortOrder = taken;
+        return draft;
+      });
+      base = [...items, ...added];
+      pairing = {
+        ...pairing,
+        pairs: [
+          ...pairing.pairs,
+          ...pairing.missing.map((session, index) => ({
+            itemIndex: items.length + index,
+            session,
+          })),
+        ],
+        missing: [],
+      };
     }
+    setUndo({ items, label: `Applied ${formula.name} to ${formula.discipline.toLowerCase()}` });
+    setItems(applyCatalogPairing(base, pairing));
+    setPendingApply(null);
+    setApplyFormulaId("");
     setError(null);
-    setItems(next);
+  }
+
+  function undoApply() {
+    if (!undo) return;
+    setItems(undo.items);
+    setUndo(null);
   }
 
   function addSession(weekday: WeeklyTemplateItem["weekday"]) {
@@ -686,25 +853,54 @@ export function WeeklyTemplateEditor({
       </div>
 
       {formulaCatalog.length > 0 ? (
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[12rem] flex-1">
-            <Label>Apply saved mix</Label>
-            <select
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-              value={applyFormulaId}
-              onChange={(e) => setApplyFormulaId(e.target.value)}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[12rem] flex-1">
+              <Label>Apply saved mix</Label>
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                value={applyFormulaId}
+                onChange={(e) => {
+                  setApplyFormulaId(e.target.value);
+                  setPendingApply(null);
+                }}
+              >
+                <option value="">Choose a formula…</option>
+                {formulaCatalog.map((formula) => (
+                  <option key={formula.id} value={formula.id}>
+                    {formula.name} ({formula.discipline.toLowerCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={previewApply}
+              disabled={!applyFormulaId || pendingApply != null}
             >
-              <option value="">Choose a formula…</option>
-              {formulaCatalog.map((formula) => (
-                <option key={formula.id} value={formula.id}>
-                  {formula.name} ({formula.discipline.toLowerCase()})
-                </option>
-              ))}
-            </select>
+              Apply to this sport…
+            </Button>
           </div>
-          <Button type="button" variant="secondary" onClick={applyMix} disabled={!applyFormulaId}>
-            Apply to this sport
-          </Button>
+          {pendingApply ? (
+            <ApplyMixPreview
+              pending={pendingApply}
+              items={items}
+              onToggleAddMissing={(addMissing) =>
+                setPendingApply((current) => (current ? { ...current, addMissing } : current))
+              }
+              onConfirm={confirmApply}
+              onCancel={() => setPendingApply(null)}
+            />
+          ) : null}
+          {undo ? (
+            <div className="flex items-center gap-3 rounded-md bg-zinc-900 px-3 py-2 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">
+              <span className="mr-auto">{undo.label}</span>
+              <button type="button" className="font-semibold underline" onClick={undoApply}>
+                Undo
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
