@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
 import {
@@ -240,6 +241,8 @@ function ApplyMixPreview({
   );
 }
 
+const SESSION_FORMULAS_HREF = "/settings/training#session-formulas";
+
 const MIX_SPORTS: FormulaDiscipline[] = ["SWIM", "BIKE", "RUN"];
 
 const DEFAULT_PREVIEW_HOURS: Record<FormulaDiscipline, number | null> = {
@@ -293,6 +296,38 @@ function roleChangePatch(
     if (nextShape !== currentShape) Object.assign(patch, shapePatch(row, nextShape));
   }
   return patch;
+}
+
+function mixSummary(row: WeeklyTemplateItem): string {
+  const zone = `Z${row.zone ?? defaultZoneForRole(row.sessionRole)}`;
+  if (row.shapeKind !== "FIXED") return `${zone} steady`;
+  const work = row.workSeconds != null ? formatDurationMinSec(row.workSeconds) : "?";
+  const rest = formatDurationMinSec(row.restSeconds ?? DEFAULT_REST_SECONDS);
+  return `${zone} fixed · ${work} / ${rest}`;
+}
+
+function MixDetails({
+  defaultOpen,
+  summary,
+  children,
+}: {
+  defaultOpen: boolean;
+  summary: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <details
+      className="mb-1.5 rounded border border-zinc-200 px-1.5 py-1 dark:border-zinc-800"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
+      <summary className="cursor-pointer select-none truncate text-[10px] font-medium text-zinc-600 dark:text-zinc-300">
+        Mix details · {summary}
+      </summary>
+      <div className="mt-1.5">{children}</div>
+    </details>
+  );
 }
 
 type TemplateDayColumnProps = {
@@ -429,7 +464,7 @@ function TemplateDayColumn({
                       />
                     </div>
                     {hasShare(row) ? (
-                      <>
+                      <MixDetails defaultOpen={row.shapeKind === "FIXED"} summary={mixSummary(row)}>
                         <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
                           <div className="min-w-0">
                             <span className={FIELD_LABEL}>Zone</span>
@@ -525,7 +560,7 @@ function TemplateDayColumn({
                             />
                           </div>
                         </div>
-                      </>
+                      </MixDetails>
                     ) : null}
                   </>
                 ) : null}
@@ -677,6 +712,7 @@ export function WeeklyTemplateEditor({
     null
   );
   const [formulaCatalog, setFormulaCatalog] = useState<SessionFormulaCatalog>([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [applyFormulaId, setApplyFormulaId] = useState("");
   const [pendingApply, setPendingApply] = useState<PendingApply | null>(null);
   const [undo, setUndo] = useState<{ items: TemplateItemDraft[]; label: string } | null>(
@@ -744,6 +780,7 @@ export function WeeklyTemplateEditor({
       if (!res.ok) return;
       const data = (await res.json()) as { sessionFormulaCatalog?: unknown };
       setFormulaCatalog(parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null));
+      setCatalogLoaded(true);
     })();
   }, []);
 
@@ -1004,6 +1041,14 @@ export function WeeklyTemplateEditor({
             </div>
           ) : null}
         </div>
+      ) : catalogLoaded ? (
+        <p className="text-xs text-zinc-500">
+          No saved mixes yet.{" "}
+          <Link href={SESSION_FORMULAS_HREF} className="text-sky-600 hover:underline">
+            Create one in Settings
+          </Link>{" "}
+          to stamp shares and zones onto a sport in one step.
+        </p>
       ) : null}
 
       <div>
