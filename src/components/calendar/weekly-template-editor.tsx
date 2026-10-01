@@ -25,14 +25,17 @@ import {
 import {
   applyCatalogPairing,
   defaultZoneForRole,
+  fixedPackGroups,
   mixShareError,
   planCatalogPairing,
+  resolveTemplateFormulaWeek,
   sessionRoleForFormulaSession,
   type CatalogPairing,
 } from "@/lib/plan/calendar/template-formula-shape";
 import {
   parseSessionFormulaCatalog,
   type DisciplineFormula,
+  type FormulaDiscipline,
   type FormulaSession,
   type SessionFormulaCatalog,
 } from "@/lib/plan/season/base-formulas";
@@ -227,9 +230,28 @@ function ApplyMixPreview({
   );
 }
 
+const MIX_SPORTS: FormulaDiscipline[] = ["SWIM", "BIKE", "RUN"];
+
+const DEFAULT_PREVIEW_HOURS: Record<FormulaDiscipline, number | null> = {
+  SWIM: 3,
+  BIKE: 8,
+  RUN: 5,
+};
+
+type CardPreview = {
+  label: string;
+  minutes: number;
+  packedWith: WeeklyTemplateItem["weekday"][];
+};
+
+function hasShare(row: WeeklyTemplateItem): boolean {
+  return row.sharePercent != null && row.sharePercent > 0;
+}
+
 type TemplateDayColumnProps = {
   weekday: WeeklyTemplateItem["weekday"];
   items: TemplateItemDraft[];
+  previews: Map<string, CardPreview>;
   isSelected: boolean;
   onAdd: () => void;
   onUpdate: (key: string, patch: Partial<WeeklyTemplateItem>) => void;
@@ -239,6 +261,7 @@ type TemplateDayColumnProps = {
 function TemplateDayColumn({
   weekday,
   items,
+  previews,
   isSelected,
   onAdd,
   onUpdate,
@@ -271,275 +294,288 @@ function TemplateDayColumn({
         {items.length === 0 ? (
           <p className="py-4 text-center text-xs text-zinc-400">No sessions</p>
         ) : (
-          items.map((row) => (
-            <div key={row.key} className={SESSION_CARD_CLASS}>
-              <div className="mb-1.5">
-                <span className={FIELD_LABEL}>Type</span>
-                <select
-                  className={COMPACT_FIELD}
-                  value={row.discipline}
-                  onChange={(e) => {
-                    const discipline = e.target.value as WeeklyTemplateItem["discipline"];
-                    const patch: Partial<WeeklyTemplateItem> = {
-                      discipline,
-                      poolSize: discipline === "SWIM" ? "SCM" : null,
-                    };
-                    if (titleMatchesDisciplineDefault(row.title, row.discipline)) {
-                      patch.title = defaultTitle(discipline);
-                    }
-                    onUpdate(row.key, patch);
-                  }}
-                >
-                  {DISCIPLINES.map((d) => (
-                    <option key={d} value={d}>
-                      {DISCIPLINE_DISPLAY_LABELS[d]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mb-1.5">
-                <span className={FIELD_LABEL}>Title</span>
-                <input
-                  type="text"
-                  className={COMPACT_FIELD}
-                  value={row.title}
-                  onChange={(e) => onUpdate(row.key, { title: e.target.value })}
-                />
-              </div>
-              <div className="mb-1.5">
-                <span className={FIELD_LABEL}>Role</span>
-                <select
-                  className={COMPACT_FIELD}
-                  value={row.sessionRole}
-                  onChange={(e) =>
-                    onUpdate(row.key, {
-                      sessionRole: e.target.value as WeeklyTemplateItem["sessionRole"],
-                    })
-                  }
-                >
-                  {SESSION_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {SESSION_ROLE_LABELS[role]}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {row.discipline !== "STRENGTH" ? (
-                <>
-                  <div className="mb-1.5">
-                    <span className={FIELD_LABEL}>Share %</span>
-                    <NumberEditorInput
-                      min={0}
-                      max={100}
-                      integer={false}
-                      nullable
-                      className={COMPACT_NUMBER_FIELD}
-                      value={row.sharePercent ?? null}
-                      onCommit={(v) =>
-                        onUpdate(row.key, {
-                          sharePercent: v,
-                          ...(v != null && v > 0 && row.zone == null
-                            ? { zone: defaultZoneForRole(row.sessionRole) }
-                            : {}),
-                        })
-                      }
-                    />
+          items.map((row) => {
+            const preview = previews.get(row.key);
+            return (
+              <div key={row.key} className={SESSION_CARD_CLASS}>
+                {preview ? (
+                  <div className="mb-1.5 rounded bg-sky-50 px-1.5 py-1 text-[10px] leading-tight text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                    <span className="font-semibold">{preview.label}</span> · {preview.minutes} min
+                    {preview.packedWith.length > 0 ? (
+                      <span className="mt-0.5 block text-sky-700 dark:text-sky-300">
+                        Packed with {preview.packedWith.map((day) => WEEKDAY_SHORT[day]).join(", ")}
+                      </span>
+                    ) : null}
                   </div>
-                  {row.sharePercent != null && row.sharePercent > 0 ? (
-                    <>
-                      <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
-                        <div className="min-w-0">
-                          <span className={FIELD_LABEL}>Zone</span>
-                          <select
-                            className={COMPACT_FIELD}
-                            value={row.zone ?? defaultZoneForRole(row.sessionRole)}
-                            onChange={(e) =>
-                              onUpdate(row.key, { zone: Number(e.target.value) })
-                            }
-                          >
-                            {[1, 2, 3, 4, 5].map((zone) => (
-                              <option key={zone} value={zone}>
-                                Z{zone}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="min-w-0">
-                          <span className={FIELD_LABEL}>Shape</span>
-                          <select
-                            className={COMPACT_FIELD}
-                            value={row.shapeKind ?? "STEADY"}
-                            onChange={(e) => {
-                              const shapeKind = e.target.value as "STEADY" | "FIXED";
-                              onUpdate(row.key, {
-                                shapeKind,
-                                workSeconds:
-                                  shapeKind === "FIXED" ? row.workSeconds ?? 360 : null,
-                                restSeconds:
-                                  shapeKind === "FIXED" ? row.restSeconds ?? 60 : null,
-                                minReps: shapeKind === "FIXED" ? row.minReps ?? 1 : null,
-                              });
-                            }}
-                          >
-                            <option value="STEADY">Steady</option>
-                            <option value="FIXED">Fixed</option>
-                          </select>
-                        </div>
-                      </div>
-                      {row.shapeKind === "FIXED" ? (
-                        <div className="mb-1.5 grid min-w-0 grid-cols-3 gap-1.5">
+                ) : null}
+                <div className="mb-1.5">
+                  <span className={FIELD_LABEL}>Type</span>
+                  <select
+                    className={COMPACT_FIELD}
+                    value={row.discipline}
+                    onChange={(e) => {
+                      const discipline = e.target.value as WeeklyTemplateItem["discipline"];
+                      const patch: Partial<WeeklyTemplateItem> = {
+                        discipline,
+                        poolSize: discipline === "SWIM" ? "SCM" : null,
+                      };
+                      if (titleMatchesDisciplineDefault(row.title, row.discipline)) {
+                        patch.title = defaultTitle(discipline);
+                      }
+                      onUpdate(row.key, patch);
+                    }}
+                  >
+                    {DISCIPLINES.map((d) => (
+                      <option key={d} value={d}>
+                        {DISCIPLINE_DISPLAY_LABELS[d]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mb-1.5">
+                  <span className={FIELD_LABEL}>Title</span>
+                  <input
+                    type="text"
+                    className={COMPACT_FIELD}
+                    value={row.title}
+                    onChange={(e) => onUpdate(row.key, { title: e.target.value })}
+                  />
+                </div>
+                <div className="mb-1.5">
+                  <span className={FIELD_LABEL}>Role</span>
+                  <select
+                    className={COMPACT_FIELD}
+                    value={row.sessionRole}
+                    onChange={(e) =>
+                      onUpdate(row.key, {
+                        sessionRole: e.target.value as WeeklyTemplateItem["sessionRole"],
+                      })
+                    }
+                  >
+                    {SESSION_ROLES.map((role) => (
+                      <option key={role} value={role}>
+                        {SESSION_ROLE_LABELS[role]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {row.discipline !== "STRENGTH" ? (
+                  <>
+                    <div className="mb-1.5">
+                      <span className={FIELD_LABEL}>Share %</span>
+                      <NumberEditorInput
+                        min={0}
+                        max={100}
+                        integer={false}
+                        nullable
+                        className={COMPACT_NUMBER_FIELD}
+                        value={row.sharePercent ?? null}
+                        onCommit={(v) =>
+                          onUpdate(row.key, {
+                            sharePercent: v,
+                            ...(v != null && v > 0 && row.zone == null
+                              ? { zone: defaultZoneForRole(row.sessionRole) }
+                              : {}),
+                          })
+                        }
+                      />
+                    </div>
+                    {row.sharePercent != null && row.sharePercent > 0 ? (
+                      <>
+                        <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
                           <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Work min</span>
+                            <span className={FIELD_LABEL}>Zone</span>
+                            <select
+                              className={COMPACT_FIELD}
+                              value={row.zone ?? defaultZoneForRole(row.sessionRole)}
+                              onChange={(e) =>
+                                onUpdate(row.key, { zone: Number(e.target.value) })
+                              }
+                            >
+                              {[1, 2, 3, 4, 5].map((zone) => (
+                                <option key={zone} value={zone}>
+                                  Z{zone}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="min-w-0">
+                            <span className={FIELD_LABEL}>Shape</span>
+                            <select
+                              className={COMPACT_FIELD}
+                              value={row.shapeKind ?? "STEADY"}
+                              onChange={(e) => {
+                                const shapeKind = e.target.value as "STEADY" | "FIXED";
+                                onUpdate(row.key, {
+                                  shapeKind,
+                                  workSeconds:
+                                    shapeKind === "FIXED" ? row.workSeconds ?? 360 : null,
+                                  restSeconds:
+                                    shapeKind === "FIXED" ? row.restSeconds ?? 60 : null,
+                                  minReps: shapeKind === "FIXED" ? row.minReps ?? 1 : null,
+                                });
+                              }}
+                            >
+                              <option value="STEADY">Steady</option>
+                              <option value="FIXED">Fixed</option>
+                            </select>
+                          </div>
+                        </div>
+                        {row.shapeKind === "FIXED" ? (
+                          <div className="mb-1.5 grid min-w-0 grid-cols-3 gap-1.5">
+                            <div className="min-w-0">
+                              <span className={FIELD_LABEL}>Work min</span>
+                              <NumberEditorInput
+                                min={1}
+                                nullable
+                                className={COMPACT_NUMBER_FIELD}
+                                value={
+                                  row.workSeconds != null
+                                    ? Math.round(row.workSeconds / 60)
+                                    : null
+                                }
+                                onCommit={(v) =>
+                                  onUpdate(row.key, {
+                                    workSeconds: v != null ? v * 60 : null,
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <span className={FIELD_LABEL}>Rest s</span>
+                              <NumberEditorInput
+                                min={0}
+                                nullable
+                                className={COMPACT_NUMBER_FIELD}
+                                value={row.restSeconds ?? null}
+                                onCommit={(v) => onUpdate(row.key, { restSeconds: v })}
+                              />
+                            </div>
+                            <div className="min-w-0">
+                              <span className={FIELD_LABEL}>Min reps</span>
+                              <NumberEditorInput
+                                min={1}
+                                nullable
+                                className={COMPACT_NUMBER_FIELD}
+                                value={row.minReps ?? null}
+                                onCommit={(v) => onUpdate(row.key, { minReps: v })}
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                        <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
+                          <div className="min-w-0">
+                            <span className={FIELD_LABEL}>WU min</span>
                             <NumberEditorInput
-                              min={1}
+                              min={0}
                               nullable
                               className={COMPACT_NUMBER_FIELD}
                               value={
-                                row.workSeconds != null
-                                  ? Math.round(row.workSeconds / 60)
+                                row.warmupSeconds != null
+                                  ? Math.round(row.warmupSeconds / 60)
                                   : null
                               }
                               onCommit={(v) =>
                                 onUpdate(row.key, {
-                                  workSeconds: v != null ? v * 60 : null,
+                                  warmupSeconds: v != null ? v * 60 : null,
                                 })
                               }
                             />
                           </div>
                           <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Rest s</span>
+                            <span className={FIELD_LABEL}>CD min</span>
                             <NumberEditorInput
                               min={0}
                               nullable
                               className={COMPACT_NUMBER_FIELD}
-                              value={row.restSeconds ?? null}
-                              onCommit={(v) => onUpdate(row.key, { restSeconds: v })}
+                              value={
+                                row.cooldownSeconds != null
+                                  ? Math.round(row.cooldownSeconds / 60)
+                                  : null
+                              }
+                              onCommit={(v) =>
+                                onUpdate(row.key, {
+                                  cooldownSeconds: v != null ? v * 60 : null,
+                                })
+                              }
                             />
                           </div>
-                          <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Min reps</span>
-                            <NumberEditorInput
-                              min={1}
-                              nullable
-                              className={COMPACT_NUMBER_FIELD}
-                              value={row.minReps ?? null}
-                              onCommit={(v) => onUpdate(row.key, { minReps: v })}
-                            />
-                          </div>
                         </div>
-                      ) : null}
-                      <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
-                        <div className="min-w-0">
-                          <span className={FIELD_LABEL}>WU min</span>
-                          <NumberEditorInput
-                            min={0}
-                            nullable
-                            className={COMPACT_NUMBER_FIELD}
-                            value={
-                              row.warmupSeconds != null
-                                ? Math.round(row.warmupSeconds / 60)
-                                : null
-                            }
-                            onCommit={(v) =>
-                              onUpdate(row.key, {
-                                warmupSeconds: v != null ? v * 60 : null,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <span className={FIELD_LABEL}>CD min</span>
-                          <NumberEditorInput
-                            min={0}
-                            nullable
-                            className={COMPACT_NUMBER_FIELD}
-                            value={
-                              row.cooldownSeconds != null
-                                ? Math.round(row.cooldownSeconds / 60)
-                                : null
-                            }
-                            onCommit={(v) =>
-                              onUpdate(row.key, {
-                                cooldownSeconds: v != null ? v * 60 : null,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                    </>
-                  ) : null}
-                </>
-              ) : null}
-              {row.discipline === "SWIM" ? (
-                <div className="mb-1.5">
-                  <PoolSizeSelect
-                    compact
-                    value={poolSizeForSwimStep(row.poolSize)}
-                    onChange={(poolSize) => onUpdate(row.key, { poolSize })}
-                  />
-                </div>
-              ) : null}
-              <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
-                <div className="min-w-0">
-                  <span className={FIELD_LABEL}>Min</span>
-                  <NumberEditorInput
-                    min={0}
-                    nullable
-                    className={COMPACT_NUMBER_FIELD}
-                    value={row.durationMinutes}
-                    onCommit={(v) => onUpdate(row.key, { durationMinutes: v })}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <span className={FIELD_LABEL}>
-                    {row.discipline === "SWIM"
-                      ? reportingDistanceInputLabel(
-                          "SWIM",
-                          swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                        )
-                      : "Dist (m)"}
-                  </span>
-                  {row.discipline === "SWIM" ? (
-                    <TextEditorInput
-                      inputMode="decimal"
-                      className={COMPACT_NUMBER_FIELD}
-                      value={reportingDistanceMetersToInput(
-                        row.distanceMeters,
-                        "SWIM",
-                        swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                      )}
-                      onCommit={(raw) =>
-                        onUpdate(row.key, {
-                          distanceMeters: reportingDistanceInputToMeters(
-                            raw,
-                            "SWIM",
-                            swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                          ),
-                        })
-                      }
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+                {row.discipline === "SWIM" ? (
+                  <div className="mb-1.5">
+                    <PoolSizeSelect
+                      compact
+                      value={poolSizeForSwimStep(row.poolSize)}
+                      onChange={(poolSize) => onUpdate(row.key, { poolSize })}
                     />
-                  ) : (
+                  </div>
+                ) : null}
+                <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
+                  <div className="min-w-0">
+                    <span className={FIELD_LABEL}>Min</span>
                     <NumberEditorInput
                       min={0}
                       nullable
-                      integer={false}
-                      inputMode="decimal"
                       className={COMPACT_NUMBER_FIELD}
-                      value={row.distanceMeters}
-                      onCommit={(v) => onUpdate(row.key, { distanceMeters: v })}
+                      value={row.durationMinutes}
+                      onCommit={(v) => onUpdate(row.key, { durationMinutes: v })}
                     />
-                  )}
+                  </div>
+                  <div className="min-w-0">
+                    <span className={FIELD_LABEL}>
+                      {row.discipline === "SWIM"
+                        ? reportingDistanceInputLabel(
+                            "SWIM",
+                            swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
+                          )
+                        : "Dist (m)"}
+                    </span>
+                    {row.discipline === "SWIM" ? (
+                      <TextEditorInput
+                        inputMode="decimal"
+                        className={COMPACT_NUMBER_FIELD}
+                        value={reportingDistanceMetersToInput(
+                          row.distanceMeters,
+                          "SWIM",
+                          swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
+                        )}
+                        onCommit={(raw) =>
+                          onUpdate(row.key, {
+                            distanceMeters: reportingDistanceInputToMeters(
+                              raw,
+                              "SWIM",
+                              swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
+                            ),
+                          })
+                        }
+                      />
+                    ) : (
+                      <NumberEditorInput
+                        min={0}
+                        nullable
+                        integer={false}
+                        inputMode="decimal"
+                        className={COMPACT_NUMBER_FIELD}
+                        value={row.distanceMeters}
+                        onCommit={(v) => onUpdate(row.key, { distanceMeters: v })}
+                      />
+                    )}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  className="text-[10px] text-red-600 hover:text-red-800"
+                  onClick={() => onRemove(row.key)}
+                >
+                  Remove
+                </button>
               </div>
-              <button
-                type="button"
-                className="text-[10px] text-red-600 hover:text-red-800"
-                onClick={() => onRemove(row.key)}
-              >
-                Remove
-              </button>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
       </div>
@@ -677,6 +713,39 @@ export function WeeklyTemplateEditor({
       setFormulaCatalog(parseSessionFormulaCatalog(data.sessionFormulaCatalog ?? null));
     })();
   }, []);
+
+  const [previewHours, setPreviewHours] =
+    useState<Record<FormulaDiscipline, number | null>>(DEFAULT_PREVIEW_HOURS);
+
+  const mixSports = MIX_SPORTS.filter((discipline) =>
+    items.some((item) => item.discipline === discipline && hasShare(item))
+  );
+
+  const cardPreviews = useMemo(() => {
+    const hours: Partial<Record<FormulaDiscipline, number>> = {};
+    for (const discipline of MIX_SPORTS) {
+      const value = previewHours[discipline];
+      if (value != null && value > 0) hours[discipline] = value;
+    }
+    const resolved = resolveTemplateFormulaWeek(items, hours);
+    const groups = fixedPackGroups(items);
+    const map = new Map<string, CardPreview>();
+    items.forEach((item, index) => {
+      const session = resolved[index];
+      if (!session) return;
+      const group = groups.find((members) => members.includes(index)) ?? [];
+      const packedWith = group
+        .filter((member) => member !== index)
+        .map((member) => items[member]!.weekday)
+        .sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b));
+      map.set(item.key, {
+        label: session.label,
+        minutes: session.durationMinutes,
+        packedWith,
+      });
+    });
+    return map;
+  }, [items, previewHours]);
 
   const itemsByWeekday = useMemo(() => {
     const map = new Map<WeeklyTemplateItem["weekday"], TemplateItemDraft[]>();
@@ -911,6 +980,33 @@ export function WeeklyTemplateEditor({
           total 100%). Fixed shape is Norwegian Singles-style intervals; extra intensity
           promotes toward the longest interval.
         </p>
+        {mixSports.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+              Preview at
+            </span>
+            {mixSports.map((discipline) => (
+              <label key={discipline} className="w-20">
+                <span className={FIELD_LABEL}>
+                  {DISCIPLINE_DISPLAY_LABELS[discipline]} h/wk
+                </span>
+                <NumberEditorInput
+                  min={0}
+                  integer={false}
+                  nullable
+                  className={COMPACT_NUMBER_FIELD}
+                  value={previewHours[discipline]}
+                  onCommit={(value) =>
+                    setPreviewHours((current) => ({ ...current, [discipline]: value }))
+                  }
+                />
+              </label>
+            ))}
+            <span className="text-[11px] text-zinc-500">
+              Preview only. Each phase&apos;s weekly hours set the real durations.
+            </span>
+          </div>
+        ) : null}
         <div className="mb-3 flex flex-wrap gap-3 text-xs text-zinc-500">
           {(["SWIM", "BIKE", "RUN"] as const).map((discipline) => {
             const mixError = mixShareError(items, discipline);
@@ -940,6 +1036,7 @@ export function WeeklyTemplateEditor({
                   key={weekday}
                   weekday={weekday}
                   items={itemsByWeekday.get(weekday) ?? []}
+                  previews={cardPreviews}
                   isSelected={selectedWeekday === weekday}
                   onAdd={() => addSession(weekday)}
                   onUpdate={updateItem}

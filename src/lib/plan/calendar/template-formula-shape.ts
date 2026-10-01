@@ -486,6 +486,22 @@ export function resolveTemplateFormulaWeek(
   return resolved;
 }
 
+/** Fixed-shape mix sessions that share a sport and zone and are packed together. */
+export function fixedPackGroups(items: FormulaTemplateItem[]): number[][] {
+  const groups = new Map<string, number[]>();
+  items.forEach((item, index) => {
+    if (!isFormulaDiscipline(item.discipline)) return;
+    if (item.sharePercent == null || !(item.sharePercent > 0)) return;
+    if (shapeKindOf(item) !== "FIXED") return;
+    const zone = clampZone(item.zone, defaultZoneForRole(item.sessionRole));
+    const key = `${item.discipline}:${zone}`;
+    const list = groups.get(key) ?? [];
+    list.push(index);
+    groups.set(key, list);
+  });
+  return [...groups.values()].filter((group) => group.length >= 2);
+}
+
 export function templateFormulaZoneMinutes(
   items: FormulaTemplateItem[],
   discipline: FormulaDiscipline,
