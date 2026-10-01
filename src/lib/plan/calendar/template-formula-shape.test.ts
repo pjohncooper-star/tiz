@@ -2,12 +2,19 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   applyCatalogFormulaToItems,
+  applyCatalogPairing,
+  defaultZoneForRole,
+  fixedPackGroups,
   mixShareError,
   packFixedGroup,
   resolveTemplateFormulaWeek,
   templateDisciplineHasMix,
+  planCatalogPairing,
+  sessionRoleForFormulaSession,
+  templateFormulaSlotOverride,
   templateFormulaZoneMinutes,
   type FormulaTemplateItem,
+  type PairableTemplateItem,
 } from "./template-formula-shape";
 
 function nsSlots(minReps = 3): FormulaTemplateItem[] {
@@ -43,6 +50,106 @@ describe("template formula mix helpers", () => {
     const items = nsSlots();
     items[0]!.sharePercent = 10;
     assert.match(mixShareError(items, "RUN") ?? "", /100%/);
+  });
+
+  it("allows duration-based extras alongside a complete mix", () => {
+    const items: FormulaTemplateItem[] = [
+      ...nsSlots(),
+      { discipline: "RUN", sessionRole: "EASY", durationMinutes: 30 },
+    ];
+    assert.equal(mixShareError(items, "RUN"), null);
+    assert.equal(templateFormulaSlotOverride(items, "RUN")?.sessions, 3);
+  });
+
+  it("defaults zones by role", () => {
+    assert.equal(defaultZoneForRole("EASY"), 1);
+    assert.equal(defaultZoneForRole("MODERATE"), 2);
+    assert.equal(defaultZoneForRole("LONG"), 2);
+    assert.equal(defaultZoneForRole("INTENSITY"), 3);
+  });
+});
+
+describe("fixedPackGroups", () => {
+  it("groups fixed sessions by sport and zone", () => {
+    const items: FormulaTemplateItem[] = [
+      ...nsSlots(),
+      { ...nsSlots()[0]!, discipline: "BIKE" },
+      { ...nsSlots()[0]!, zone: 4 },
+      { discipline: "RUN", sessionRole: "LONG", sharePercent: 20, shapeKind: "STEADY" },
+    ];
+    assert.deepEqual(fixedPackGroups(items), [[0, 1, 2]]);
+  });
+
+  it("ignores fixed sessions without a share or work interval", () => {
+    const items: FormulaTemplateItem[] = [
+      { ...nsSlots()[0]!, sharePercent: null },
+      { ...nsSlots()[1]!, workSeconds: null },
+      nsSlots()[2]!,
+    ];
+    assert.deepEqual(fixedPackGroups(items), []);
+  });
+});
+
+describe("planCatalogPairing", () => {
+  const formula = {
+    id: "f",
+    name: "F",
+    discipline: "RUN" as const,
+    sessions: [
+      { sharePercent: 20, zone: 1 as const, intensity: false, long: false },
+      { sharePercent: 30, zone: 3 as const, intensity: true, long: false },
+      { sharePercent: 50, zone: 2 as const, intensity: false, long: true },
+    ],
+  };
+
+  it("pairs long and intensity roles first, then the rest by weekday", () => {
+    const items: PairableTemplateItem[] = [
+      { discipline: "RUN", sessionRole: "LONG", weekday: "SUN", sortOrder: 0 },
+      { discipline: "RUN", sessionRole: "MODERATE", weekday: "MON", sortOrder: 0 },
+      { discipline: "BIKE", sessionRole: "EASY", weekday: "MON", sortOrder: 1 },
+      { discipline: "RUN", sessionRole: "INTENSITY", weekday: "THU", sortOrder: 0 },
+    ];
+    const pairing = planCatalogPairing(items, formula);
+    assert.deepEqual(
+      pairing.pairs.map((pair) => [pair.itemIndex, pair.session.sharePercent]),
+      [
+        [1, 20],
+        [3, 30],
+        [0, 50],
+      ]
+    );
+    assert.deepEqual(pairing.missing, []);
+    assert.deepEqual(pairing.extra, []);
+  });
+
+  it("reports missing formula sessions and extra template slots", () => {
+    const short = planCatalogPairing(
+      [{ discipline: "RUN", sessionRole: "INTENSITY", weekday: "TUE" }],
+      formula
+    );
+    assert.equal(short.pairs.length, 1);
+    assert.equal(short.pairs[0]!.session.intensity, true);
+    assert.equal(short.missing.length, 2);
+
+    const items: PairableTemplateItem[] = [
+      { discipline: "RUN", sessionRole: "EASY", weekday: "MON" },
+      { discipline: "RUN", sessionRole: "EASY", weekday: "TUE" },
+      { discipline: "RUN", sessionRole: "INTENSITY", weekday: "WED" },
+      { discipline: "RUN", sessionRole: "LONG", weekday: "SAT" },
+      { discipline: "RUN", sessionRole: "EASY", weekday: "SUN", sharePercent: 10 },
+    ];
+    const long = planCatalogPairing(items, formula);
+    assert.deepEqual(long.extra, [1, 4]);
+    const applied = applyCatalogPairing(items, long);
+    assert.equal(applied[1]!.sharePercent, null);
+    assert.equal(applied[4]!.sharePercent, null);
+    assert.equal(mixShareError(applied, "RUN"), null);
+  });
+
+  it("maps formula sessions to template roles", () => {
+    assert.equal(sessionRoleForFormulaSession(formula.sessions[0]!), "EASY");
+    assert.equal(sessionRoleForFormulaSession(formula.sessions[1]!), "INTENSITY");
+    assert.equal(sessionRoleForFormulaSession(formula.sessions[2]!), "LONG");
   });
 });
 
@@ -149,5 +256,20 @@ describe("applyCatalogFormulaToItems", () => {
     assert.equal(next[1]!.sharePercent, 60);
     assert.equal(next[1]!.shapeKind, "STEADY");
     assert.equal(next[2]!.sharePercent, undefined);
+  });
+});
+
+describe("applyCatalogFormulaToItems count mismatch", () => {
+  it("errors when the template and formula session counts differ", () => {
+    const next = applyCatalogFormulaToItems([{ discipline: "RUN", sessionRole: "EASY" }], {
+      id: "ns",
+      name: "NS",
+      discipline: "RUN",
+      sessions: [
+        { sharePercent: 50, zone: 1, intensity: false, long: false },
+        { sharePercent: 50, zone: 2, intensity: false, long: true },
+      ],
+    });
+    assert.ok("error" in next);
   });
 });
