@@ -437,21 +437,57 @@ function TemplateDayColumn({
 
 type LibraryTemplate = WeeklyTemplate & { category?: WeeklyTemplateKind };
 
+type EditorSnapshot = {
+  name: string;
+  category: WeeklyTemplateKind;
+  items: TemplateItemDraft[];
+};
+
+function snapshotKey(snapshot: EditorSnapshot): string {
+  const items = WEEKDAYS.flatMap((weekday) =>
+    snapshot.items
+      .filter((row) => row.weekday === weekday)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((row) => [
+        row.weekday,
+        row.discipline,
+        row.title,
+        row.durationMinutes,
+        row.distanceMeters,
+        row.poolSize,
+        row.sessionRole,
+        row.sharePercent ?? null,
+        row.zone ?? null,
+        row.shapeKind ?? null,
+        row.workSeconds ?? null,
+        row.restSeconds ?? null,
+        row.minReps ?? null,
+        row.warmupSeconds ?? null,
+        row.cooldownSeconds ?? null,
+      ])
+  );
+  return JSON.stringify({ name: snapshot.name, category: snapshot.category, items });
+}
+
 type WeeklyTemplateEditorProps = {
   /** Id of the library template to edit. */
   templateId: string;
   /** Called after a successful save with the updated name/category. */
   onSaved?: (summary: { id: string; name: string; category: WeeklyTemplateKind }) => void;
+  /** Called whenever the editor gains or loses unsaved changes. */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 export function WeeklyTemplateEditor({
   templateId,
   onSaved,
+  onDirtyChange,
 }: WeeklyTemplateEditorProps) {
   const router = useRouter();
   const [name, setName] = useState("Weekly template");
   const [category, setCategory] = useState<WeeklyTemplateKind>("DEFAULT");
   const [items, setItems] = useState<TemplateItemDraft[]>([]);
+  const [baseline, setBaseline] = useState<EditorSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -468,13 +504,46 @@ export function WeeklyTemplateEditor({
       if (res.ok) {
         const data = await res.json();
         const template = data.template as LibraryTemplate;
-        setName(template.name);
-        setCategory(template.category ?? "DEFAULT");
-        setItems(template.items.length > 0 ? draftsFromTemplate(template) : []);
+        const loaded: EditorSnapshot = {
+          name: template.name,
+          category: template.category ?? "DEFAULT",
+          items: template.items.length > 0 ? draftsFromTemplate(template) : [],
+        };
+        setName(loaded.name);
+        setCategory(loaded.category);
+        setItems(loaded.items);
+        setBaseline(loaded);
       }
       setLoading(false);
     })();
   }, [templateId]);
+
+  const dirty = useMemo(
+    () => baseline != null && snapshotKey({ name, category, items }) !== snapshotKey(baseline),
+    [baseline, name, category, items]
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty]);
+
+  function discardChanges() {
+    if (!baseline) return;
+    setName(baseline.name);
+    setCategory(baseline.category);
+    setItems(baseline.items);
+    setError(null);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -525,8 +594,12 @@ export function WeeklyTemplateEditor({
     setItems((rows) => rows.filter((r) => r.key !== key));
   }
 
-  async function handleSave(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    void save();
+  }
+
+  async function save() {
     const validItems = items.filter((row) => row.title.trim());
     if (validItems.length === 0) {
       setError("Add at least one session to your weekly template");
@@ -579,6 +652,8 @@ export function WeeklyTemplateEditor({
       return;
     }
     setSavedAt(Date.now());
+    setItems(validItems);
+    setBaseline({ name, category, items: validItems });
     onSaved?.({ id: templateId, name, category });
     router.refresh();
   }
@@ -588,7 +663,7 @@ export function WeeklyTemplateEditor({
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label>Template name</Label>
@@ -682,14 +757,28 @@ export function WeeklyTemplateEditor({
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save template"}
-        </Button>
-        {savedAt && !saving ? (
-          <span className="text-xs text-emerald-600 dark:text-emerald-400">Saved</span>
-        ) : null}
-      </div>
+      {dirty || saving ? (
+        <div className="sticky bottom-0 z-30 -mx-4 border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 md:mx-0 md:rounded-t-lg">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <p className="mr-auto text-sm text-zinc-500">
+              {saving ? "Saving…" : "Unsaved changes"}
+            </p>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={saving}
+              onClick={discardChanges}
+            >
+              Discard
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save template"}
+            </Button>
+          </div>
+        </div>
+      ) : savedAt ? (
+        <p className="text-xs text-emerald-600 dark:text-emerald-400">All changes saved</p>
+      ) : null}
     </form>
   );
 }

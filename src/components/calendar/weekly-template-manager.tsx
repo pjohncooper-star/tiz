@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { WeeklyTemplateKind } from "@prisma/client";
 import { Button } from "@/components/ui";
 import { WeeklyTemplateEditor } from "@/components/calendar/weekly-template-editor";
@@ -31,8 +31,27 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
   const [newCategory, setNewCategory] = useState<WeeklyTemplateKind>("DEFAULT");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const editorDirtyRef = useRef(false);
+
+  const handleDirtyChange = useCallback((dirty: boolean) => {
+    editorDirtyRef.current = dirty;
+  }, []);
+
+  function confirmLeaveEditor(): boolean {
+    if (!editorDirtyRef.current) return true;
+    const ok = confirm("You have unsaved changes to this template. Discard them?");
+    if (ok) editorDirtyRef.current = false;
+    return ok;
+  }
+
+  function selectTemplate(id: string) {
+    if (id === selectedId) return;
+    if (!confirmLeaveEditor()) return;
+    setSelectedId(id);
+  }
 
   async function handleCreate() {
+    if (!confirmLeaveEditor()) return;
     const name = newName.trim() || "New template";
     setBusy(true);
     setError(null);
@@ -59,6 +78,7 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
   }
 
   async function handleDuplicate(id: string) {
+    if (!confirmLeaveEditor()) return;
     setBusy(true);
     setError(null);
     const current = await fetch(`/api/plan/calendar/templates/${id}`);
@@ -117,7 +137,10 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
     }
     setTemplates((list) => {
       const next = list.filter((t) => t.id !== id);
-      if (selectedId === id) setSelectedId(next[0]?.id ?? null);
+      if (selectedId === id) {
+        editorDirtyRef.current = false;
+        setSelectedId(next[0]?.id ?? null);
+      }
       return next;
     });
   }
@@ -197,7 +220,7 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-left"
-                    onClick={() => setSelectedId(template.id)}
+                    onClick={() => selectTemplate(template.id)}
                   >
                     <span className="block truncate font-medium">{template.name}</span>
                     <span className="text-xs text-zinc-500">
@@ -234,7 +257,12 @@ export function WeeklyTemplateManager({ initialTemplates }: WeeklyTemplateManage
 
       <section className="min-w-0">
         {selectedId ? (
-          <WeeklyTemplateEditor key={selectedId} templateId={selectedId} onSaved={handleSaved} />
+          <WeeklyTemplateEditor
+            key={selectedId}
+            templateId={selectedId}
+            onSaved={handleSaved}
+            onDirtyChange={handleDirtyChange}
+          />
         ) : (
           <p className="text-sm text-zinc-500">
             Select a template on the left, or create a new one to start editing.
