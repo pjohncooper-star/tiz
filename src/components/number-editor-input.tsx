@@ -2,6 +2,11 @@
 
 import { useEffect, useState, type InputHTMLAttributes } from "react";
 import { Input, Label } from "@/components/ui";
+import {
+  formatDurationHms,
+  formatDurationMinSec,
+  parseDurationInput,
+} from "@/lib/workout/workout-tree";
 
 type SharedInputProps = {
   label?: string;
@@ -191,6 +196,90 @@ export function TextEditorInput({
   );
 
   if (!label) return input;
+  return (
+    <div className="min-w-0">
+      <Label>{label}</Label>
+      {input}
+    </div>
+  );
+}
+
+export type DurationEditorInputProps = {
+  seconds: number | null | undefined;
+  onCommit: (seconds: number | null) => void;
+  label?: string;
+  ariaLabel?: string;
+  placeholder?: string;
+  className?: string;
+  /** When true, empty blur commits null; otherwise reverts (default false). */
+  optional?: boolean;
+  /** When true, 0 is a valid duration (e.g. no rest, no warm-up). */
+  allowZero?: boolean;
+  /** Compact M:SS display without a wrapping label, for dense grids. */
+  compact?: boolean;
+};
+
+/** Duration field: plain numbers are minutes; also accepts mm:ss and h:mm:ss. */
+export function DurationEditorInput({
+  seconds,
+  onCommit,
+  label,
+  ariaLabel,
+  placeholder,
+  className,
+  optional = false,
+  allowZero = false,
+  compact = false,
+}: DurationEditorInputProps) {
+  const format = compact ? formatDurationMinSec : formatDurationHms;
+  const resolved =
+    seconds != null && (seconds > 0 || (allowZero && seconds === 0)) ? seconds : null;
+  const [text, setText] = useState(() => (resolved != null ? format(resolved) : ""));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setText(resolved != null ? format(resolved) : "");
+  }, [resolved, focused, format]);
+
+  function commit() {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      if (optional) {
+        onCommit(null);
+        setText("");
+      } else {
+        setText(resolved != null ? format(resolved) : "");
+      }
+      return;
+    }
+    const sec = parseDurationInput(trimmed, { allowZero });
+    if (sec != null) {
+      onCommit(sec);
+      setText(format(sec));
+      return;
+    }
+    setText(resolved != null ? format(resolved) : "");
+  }
+
+  const input = (
+    <Input
+      type="text"
+      inputMode="text"
+      value={text}
+      aria-label={ariaLabel}
+      placeholder={placeholder ?? (compact ? "0:00" : "0:10:00")}
+      className={className}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        commit();
+      }}
+      onKeyDown={blurOnEnter}
+    />
+  );
+
+  if (!label || compact) return input;
   return (
     <div className="min-w-0">
       <Label>{label}</Label>

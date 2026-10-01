@@ -1,6 +1,11 @@
 import type { Discipline, SessionRole, WorkoutShapeKind } from "@prisma/client";
 import { distributeMinutes } from "@/lib/plan/season/base-formulas";
-import type { DisciplineFormula, FormulaDiscipline, FormulaZone } from "@/lib/plan/season/base-formulas";
+import type {
+  DisciplineFormula,
+  FormulaDiscipline,
+  FormulaSession,
+  FormulaZone,
+} from "@/lib/plan/season/base-formulas";
 import {
   primarySignalForDiscipline,
   rollupTreeToZoneMinutes,
@@ -78,15 +83,7 @@ export function mixShareError(
   items: FormulaTemplateItem[],
   discipline: FormulaDiscipline
 ): string | null {
-  const rows = items.filter((item) => item.discipline === discipline);
-  if (rows.length === 0) return null;
-  const withShare = rows.filter(
-    (item) => item.sharePercent != null && item.sharePercent > 0
-  );
-  if (withShare.length === 0) return null;
-  if (withShare.length !== rows.length) {
-    return `Every ${discipline.toLowerCase()} session needs a share when the mix is on`;
-  }
+  if (!templateDisciplineHasMix(items, discipline)) return null;
   const total = shareTotalForDiscipline(items, discipline);
   if (Math.abs(total - 100) > 0.5) {
     return `${discipline.toLowerCase()} shares total ${Math.round(total)}% (need 100%)`;
@@ -101,7 +98,7 @@ function clampZone(zone: number | null | undefined, fallback: number): FormulaZo
   return value as FormulaZone;
 }
 
-function defaultZoneForRole(role: SessionRole): number {
+export function defaultZoneForRole(role: SessionRole): number {
   if (role === "INTENSITY") return 3;
   if (role === "EASY") return 1;
   return 2;
@@ -489,6 +486,22 @@ export function resolveTemplateFormulaWeek(
   return resolved;
 }
 
+/** Fixed-shape mix sessions that share a sport and zone and are packed together. */
+export function fixedPackGroups(items: FormulaTemplateItem[]): number[][] {
+  const groups = new Map<string, number[]>();
+  items.forEach((item, index) => {
+    if (!isFormulaDiscipline(item.discipline)) return;
+    if (item.sharePercent == null || !(item.sharePercent > 0)) return;
+    if (shapeKindOf(item) !== "FIXED") return;
+    const zone = clampZone(item.zone, defaultZoneForRole(item.sessionRole));
+    const key = `${item.discipline}:${zone}`;
+    const list = groups.get(key) ?? [];
+    list.push(index);
+    groups.set(key, list);
+  });
+  return [...groups.values()].filter((group) => group.length >= 2);
+}
+
 export function templateFormulaZoneMinutes(
   items: FormulaTemplateItem[],
   discipline: FormulaDiscipline,
@@ -512,8 +525,11 @@ export function templateFormulaSlotOverride(
   items: FormulaTemplateItem[],
   discipline: FormulaDiscipline
 ): { sessions: number; intense: number; hasLong: boolean } | null {
-  const rows = items.filter((item) => item.discipline === discipline);
-  if (!templateDisciplineHasMix(rows, discipline)) return null;
+  const rows = items.filter(
+    (item) =>
+      item.discipline === discipline && item.sharePercent != null && item.sharePercent > 0
+  );
+  if (rows.length === 0) return null;
   return {
     sessions: rows.length,
     intense: rows.filter((item) => item.sessionRole === "INTENSITY").length,
@@ -535,20 +551,47 @@ export function templateFormulaLongMinutes(
   return minutes;
 }
 
-export function applyCatalogFormulaToItems<T extends FormulaTemplateItem>(
-  items: T[],
+const WEEKDAY_ORDER = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+export type PairableTemplateItem = FormulaTemplateItem & {
+  weekday?: string;
+  sortOrder?: number;
+};
+
+export type CatalogPairing = {
+  pairs: Array<{ itemIndex: number; session: FormulaSession }>;
+  /** Formula sessions with no template slot to land on. */
+  missing: FormulaSession[];
+  /** Template slots of this sport the formula does not cover. */
+  extra: number[];
+};
+
+function weekdayRank(weekday: string | undefined): number {
+  const index = weekday ? WEEKDAY_ORDER.indexOf(weekday) : -1;
+  return index < 0 ? WEEKDAY_ORDER.length : index;
+}
+
+/**
+ * Pair formula sessions to the template's slots for that sport: long slots take
+ * long sessions, intensity slots take intensity sessions, then the rest fill in
+ * week order.
+ */
+export function planCatalogPairing(
+  items: PairableTemplateItem[],
   formula: DisciplineFormula
-): T[] | { error: string } {
+): CatalogPairing {
   const rows = items
     .map((item, index) => ({ item, index }))
-    .filter((row) => row.item.discipline === formula.discipline);
-  if (rows.length !== formula.sessions.length) {
-    return {
-      error: `${formula.discipline.toLowerCase()} template has ${rows.length} sessions; formula has ${formula.sessions.length}`,
-    };
-  }
+    .filter((row) => row.item.discipline === formula.discipline)
+    .sort(
+      (a, b) =>
+        weekdayRank(a.item.weekday) - weekdayRank(b.item.weekday) ||
+        (a.item.sortOrder ?? 0) - (b.item.sortOrder ?? 0) ||
+        a.index - b.index
+    );
+
   const used = new Array(formula.sessions.length).fill(false);
-  const take = (predicate: (session: DisciplineFormula["sessions"][number]) => boolean) => {
+  const take = (predicate: (session: FormulaSession) => boolean) => {
     const found = formula.sessions.findIndex(
       (session, index) => !used[index] && predicate(session)
     );
@@ -557,33 +600,83 @@ export function applyCatalogFormulaToItems<T extends FormulaTemplateItem>(
     return formula.sessions[found]!;
   };
 
-  const assignment = new Map<number, DisciplineFormula["sessions"][number]>();
-  for (const row of rows) {
-    let session =
-      row.item.sessionRole === "LONG"
-        ? take((s) => s.long)
-        : row.item.sessionRole === "INTENSITY"
-          ? take((s) => s.intensity && !s.long)
-          : null;
-    if (!session) session = take(() => true);
-    if (!session) return { error: "Could not pair formula sessions to the template" };
-    assignment.set(row.index, session);
+  const assigned = new Map<number, FormulaSession>();
+  const passes: Array<{
+    role: SessionRole | null;
+    predicate: (session: FormulaSession) => boolean;
+  }> = [
+    { role: "LONG", predicate: (s) => s.long },
+    { role: "INTENSITY", predicate: (s) => s.intensity && !s.long },
+    { role: null, predicate: () => true },
+  ];
+  for (const pass of passes) {
+    for (const row of rows) {
+      if (assigned.has(row.index)) continue;
+      if (pass.role && row.item.sessionRole !== pass.role) continue;
+      const session = take(pass.predicate);
+      if (session) assigned.set(row.index, session);
+    }
   }
 
+  return {
+    pairs: rows
+      .filter((row) => assigned.has(row.index))
+      .map((row) => ({ itemIndex: row.index, session: assigned.get(row.index)! })),
+    missing: formula.sessions.filter((_, index) => !used[index]),
+    extra: rows.filter((row) => !assigned.has(row.index)).map((row) => row.index),
+  };
+}
+
+export function sessionRoleForFormulaSession(session: FormulaSession): SessionRole {
+  if (session.long) return "LONG";
+  if (session.intensity) return "INTENSITY";
+  if (session.zone <= 1) return "EASY";
+  return "MODERATE";
+}
+
+export function stampFormulaSession<T extends FormulaTemplateItem>(
+  item: T,
+  session: FormulaSession
+): T {
+  const intensity = session.intensity && !session.long;
+  return {
+    ...item,
+    sharePercent: session.sharePercent,
+    zone: session.zone,
+    shapeKind: intensity ? "FIXED" : "STEADY",
+    workSeconds: intensity ? item.workSeconds ?? 360 : null,
+    restSeconds: intensity ? item.restSeconds ?? DEFAULT_REST_SECONDS : null,
+    minReps: intensity ? item.minReps ?? DEFAULT_MIN_REPS : null,
+  };
+}
+
+/** Stamp paired slots; extra slots of the sport drop back to duration-based. */
+export function applyCatalogPairing<T extends FormulaTemplateItem>(
+  items: T[],
+  pairing: CatalogPairing
+): T[] {
+  const byIndex = new Map(pairing.pairs.map((pair) => [pair.itemIndex, pair.session]));
+  const extra = new Set(pairing.extra);
   return items.map((item, index) => {
-    const session = assignment.get(index);
-    if (!session) return item;
-    const intensity = session.intensity && !session.long;
-    return {
-      ...item,
-      sharePercent: session.sharePercent,
-      zone: session.zone,
-      shapeKind: intensity ? "FIXED" : "STEADY",
-      workSeconds: intensity ? item.workSeconds ?? 360 : null,
-      restSeconds: intensity ? item.restSeconds ?? DEFAULT_REST_SECONDS : null,
-      minReps: intensity ? item.minReps ?? DEFAULT_MIN_REPS : null,
-    };
+    const session = byIndex.get(index);
+    if (session) return stampFormulaSession(item, session);
+    if (extra.has(index)) return { ...item, sharePercent: null };
+    return item;
   });
+}
+
+export function applyCatalogFormulaToItems<T extends PairableTemplateItem>(
+  items: T[],
+  formula: DisciplineFormula
+): T[] | { error: string } {
+  const pairing = planCatalogPairing(items, formula);
+  if (pairing.missing.length > 0 || pairing.extra.length > 0) {
+    const count = pairing.pairs.length + pairing.extra.length;
+    return {
+      error: `${formula.discipline.toLowerCase()} template has ${count} sessions; formula has ${formula.sessions.length}`,
+    };
+  }
+  return applyCatalogPairing(items, pairing);
 }
 
 export function mixItemsForTemplate(

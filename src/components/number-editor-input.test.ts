@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { formatDurationMinSec, parseDurationInput } from "../lib/workout/workout-tree";
 
 /**
  * NumberEditorInput / TextEditorInput commit rules (mirrors component logic).
@@ -127,5 +128,33 @@ describe("TextEditorInput commit rules", () => {
     });
     assert.equal(result.committed, undefined);
     assert.equal(result.display, "5:00");
+  });
+});
+
+describe("DurationEditorInput parsing", () => {
+  it("reads plain numbers as minutes and colon forms as m:ss or h:mm:ss", () => {
+    assert.equal(parseDurationInput("6"), 360);
+    assert.equal(parseDurationInput("1.5"), 90);
+    assert.equal(parseDurationInput("3:30"), 210);
+    assert.equal(parseDurationInput("1:00:00"), 3600);
+  });
+
+  it("rejects zero unless allowZero is set", () => {
+    assert.equal(parseDurationInput("0"), null);
+    assert.equal(parseDurationInput("0:00"), null);
+    assert.equal(parseDurationInput("0", { allowZero: true }), 0);
+    assert.equal(parseDurationInput("0:00", { allowZero: true }), 0);
+  });
+
+  it("rejects malformed input", () => {
+    assert.equal(parseDurationInput("abc", { allowZero: true }), null);
+    assert.equal(parseDurationInput("1:-5"), null);
+  });
+
+  it("formats compact M:SS with uncapped minutes", () => {
+    assert.equal(formatDurationMinSec(0), "0:00");
+    assert.equal(formatDurationMinSec(60), "1:00");
+    assert.equal(formatDurationMinSec(360), "6:00");
+    assert.equal(formatDurationMinSec(5400), "90:00");
   });
 });
