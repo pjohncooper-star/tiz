@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
-import { NumberEditorInput, TextEditorInput } from "@/components/number-editor-input";
+import {
+  DurationEditorInput,
+  NumberEditorInput,
+  TextEditorInput,
+} from "@/components/number-editor-input";
 import { PoolSizeSelect } from "@/components/pool-size-select";
 import { DISCIPLINE_DISPLAY_LABELS } from "@/lib/plan/discipline-labels";
 import {
@@ -15,6 +19,7 @@ import {
   reportingDistanceInputToMeters,
   reportingDistanceMetersToInput,
 } from "@/lib/workout/metrics";
+import { formatDurationMinSec } from "@/lib/workout/workout-tree";
 import type { WeeklyTemplate, WeeklyTemplateItem } from "@/components/calendar/types";
 import { SESSION_ROLE_LABELS, SESSION_ROLES } from "@/lib/plan/session-role";
 import type { WeeklyTemplateKind } from "@prisma/client";
@@ -23,12 +28,17 @@ import {
   TEMPLATE_CATEGORY_LABELS,
 } from "@/lib/plan/calendar/template-category";
 import {
+  DEFAULT_COOLDOWN_SECONDS,
+  DEFAULT_MIN_REPS,
+  DEFAULT_REST_SECONDS,
+  DEFAULT_WARMUP_SECONDS,
   applyCatalogPairing,
   defaultZoneForRole,
   fixedPackGroups,
   mixShareError,
   planCatalogPairing,
   resolveTemplateFormulaWeek,
+  shareTotalForDiscipline,
   sessionRoleForFormulaSession,
   type CatalogPairing,
 } from "@/lib/plan/calendar/template-formula-shape";
@@ -248,6 +258,43 @@ function hasShare(row: WeeklyTemplateItem): boolean {
   return row.sharePercent != null && row.sharePercent > 0;
 }
 
+function defaultShapeForRole(role: WeeklyTemplateItem["sessionRole"]): "STEADY" | "FIXED" {
+  return role === "INTENSITY" ? "FIXED" : "STEADY";
+}
+
+function shapePatch(
+  row: WeeklyTemplateItem,
+  shapeKind: "STEADY" | "FIXED"
+): Partial<WeeklyTemplateItem> {
+  return {
+    shapeKind,
+    workSeconds: shapeKind === "FIXED" ? row.workSeconds ?? 360 : null,
+    restSeconds: shapeKind === "FIXED" ? row.restSeconds ?? DEFAULT_REST_SECONDS : null,
+    minReps: shapeKind === "FIXED" ? row.minReps ?? DEFAULT_MIN_REPS : null,
+  };
+}
+
+/**
+ * Role changes carry mix defaults (Intensity → Fixed Z3, Easy → Steady Z1, …) but only
+ * into fields that are empty or still on the previous role's default.
+ */
+function roleChangePatch(
+  row: WeeklyTemplateItem,
+  sessionRole: WeeklyTemplateItem["sessionRole"]
+): Partial<WeeklyTemplateItem> {
+  const patch: Partial<WeeklyTemplateItem> = { sessionRole };
+  if (!hasShare(row) || row.discipline === "STRENGTH") return patch;
+  if (row.zone == null || row.zone === defaultZoneForRole(row.sessionRole)) {
+    patch.zone = defaultZoneForRole(sessionRole);
+  }
+  const currentShape = row.shapeKind ?? null;
+  if (currentShape == null || currentShape === defaultShapeForRole(row.sessionRole)) {
+    const nextShape = defaultShapeForRole(sessionRole);
+    if (nextShape !== currentShape) Object.assign(patch, shapePatch(row, nextShape));
+  }
+  return patch;
+}
+
 type TemplateDayColumnProps = {
   weekday: WeeklyTemplateItem["weekday"];
   items: TemplateItemDraft[];
@@ -347,9 +394,10 @@ function TemplateDayColumn({
                     className={COMPACT_FIELD}
                     value={row.sessionRole}
                     onChange={(e) =>
-                      onUpdate(row.key, {
-                        sessionRole: e.target.value as WeeklyTemplateItem["sessionRole"],
-                      })
+                      onUpdate(
+                        row.key,
+                        roleChangePatch(row, e.target.value as WeeklyTemplateItem["sessionRole"])
+                      )
                     }
                   >
                     {SESSION_ROLES.map((role) => (
@@ -380,7 +428,7 @@ function TemplateDayColumn({
                         }
                       />
                     </div>
-                    {row.sharePercent != null && row.sharePercent > 0 ? (
+                    {hasShare(row) ? (
                       <>
                         <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
                           <div className="min-w-0">
@@ -406,14 +454,7 @@ function TemplateDayColumn({
                               value={row.shapeKind ?? "STEADY"}
                               onChange={(e) => {
                                 const shapeKind = e.target.value as "STEADY" | "FIXED";
-                                onUpdate(row.key, {
-                                  shapeKind,
-                                  workSeconds:
-                                    shapeKind === "FIXED" ? row.workSeconds ?? 360 : null,
-                                  restSeconds:
-                                    shapeKind === "FIXED" ? row.restSeconds ?? 60 : null,
-                                  minReps: shapeKind === "FIXED" ? row.minReps ?? 1 : null,
-                                });
+                                onUpdate(row.key, shapePatch(row, shapeKind));
                               }}
                             >
                               <option value="STEADY">Steady</option>
@@ -424,30 +465,23 @@ function TemplateDayColumn({
                         {row.shapeKind === "FIXED" ? (
                           <div className="mb-1.5 grid min-w-0 grid-cols-3 gap-1.5">
                             <div className="min-w-0">
-                              <span className={FIELD_LABEL}>Work min</span>
-                              <NumberEditorInput
-                                min={1}
-                                nullable
-                                className={COMPACT_NUMBER_FIELD}
-                                value={
-                                  row.workSeconds != null
-                                    ? Math.round(row.workSeconds / 60)
-                                    : null
-                                }
-                                onCommit={(v) =>
-                                  onUpdate(row.key, {
-                                    workSeconds: v != null ? v * 60 : null,
-                                  })
-                                }
+                              <span className={FIELD_LABEL}>Work</span>
+                              <DurationEditorInput
+                                compact
+                                ariaLabel="Work interval (min:sec)"
+                                className={COMPACT_FIELD}
+                                seconds={row.workSeconds}
+                                onCommit={(v) => onUpdate(row.key, { workSeconds: v })}
                               />
                             </div>
                             <div className="min-w-0">
-                              <span className={FIELD_LABEL}>Rest s</span>
-                              <NumberEditorInput
-                                min={0}
-                                nullable
-                                className={COMPACT_NUMBER_FIELD}
-                                value={row.restSeconds ?? null}
+                              <span className={FIELD_LABEL}>Rest</span>
+                              <DurationEditorInput
+                                compact
+                                allowZero
+                                ariaLabel="Rest between reps (min:sec)"
+                                className={COMPACT_FIELD}
+                                seconds={row.restSeconds}
                                 onCommit={(v) => onUpdate(row.key, { restSeconds: v })}
                               />
                             </div>
@@ -465,39 +499,29 @@ function TemplateDayColumn({
                         ) : null}
                         <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
                           <div className="min-w-0">
-                            <span className={FIELD_LABEL}>WU min</span>
-                            <NumberEditorInput
-                              min={0}
-                              nullable
-                              className={COMPACT_NUMBER_FIELD}
-                              value={
-                                row.warmupSeconds != null
-                                  ? Math.round(row.warmupSeconds / 60)
-                                  : null
-                              }
-                              onCommit={(v) =>
-                                onUpdate(row.key, {
-                                  warmupSeconds: v != null ? v * 60 : null,
-                                })
-                              }
+                            <span className={FIELD_LABEL}>Warm-up</span>
+                            <DurationEditorInput
+                              compact
+                              allowZero
+                              optional
+                              ariaLabel="Warm-up (min:sec)"
+                              placeholder={formatDurationMinSec(DEFAULT_WARMUP_SECONDS)}
+                              className={COMPACT_FIELD}
+                              seconds={row.warmupSeconds}
+                              onCommit={(v) => onUpdate(row.key, { warmupSeconds: v })}
                             />
                           </div>
                           <div className="min-w-0">
-                            <span className={FIELD_LABEL}>CD min</span>
-                            <NumberEditorInput
-                              min={0}
-                              nullable
-                              className={COMPACT_NUMBER_FIELD}
-                              value={
-                                row.cooldownSeconds != null
-                                  ? Math.round(row.cooldownSeconds / 60)
-                                  : null
-                              }
-                              onCommit={(v) =>
-                                onUpdate(row.key, {
-                                  cooldownSeconds: v != null ? v * 60 : null,
-                                })
-                              }
+                            <span className={FIELD_LABEL}>Cool-down</span>
+                            <DurationEditorInput
+                              compact
+                              allowZero
+                              optional
+                              ariaLabel="Cool-down (min:sec)"
+                              placeholder={formatDurationMinSec(DEFAULT_COOLDOWN_SECONDS)}
+                              className={COMPACT_FIELD}
+                              seconds={row.cooldownSeconds}
+                              onCommit={(v) => onUpdate(row.key, { cooldownSeconds: v })}
                             />
                           </div>
                         </div>
@@ -517,13 +541,22 @@ function TemplateDayColumn({
                 <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
                   <div className="min-w-0">
                     <span className={FIELD_LABEL}>Min</span>
-                    <NumberEditorInput
-                      min={0}
-                      nullable
-                      className={COMPACT_NUMBER_FIELD}
-                      value={row.durationMinutes}
-                      onCommit={(v) => onUpdate(row.key, { durationMinutes: v })}
-                    />
+                    {hasShare(row) && row.discipline !== "STRENGTH" ? (
+                      <div
+                        className={`${COMPACT_FIELD} bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400`}
+                        title="Duration comes from the sport's weekly hours and this session's share"
+                      >
+                        {preview ? `${preview.minutes} · mix` : "set by mix"}
+                      </div>
+                    ) : (
+                      <NumberEditorInput
+                        min={0}
+                        nullable
+                        className={COMPACT_NUMBER_FIELD}
+                        value={row.durationMinutes}
+                        onCommit={(v) => onUpdate(row.key, { durationMinutes: v })}
+                      />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <span className={FIELD_LABEL}>
@@ -1007,16 +1040,22 @@ export function WeeklyTemplateEditor({
             </span>
           </div>
         ) : null}
-        <div className="mb-3 flex flex-wrap gap-3 text-xs text-zinc-500">
-          {(["SWIM", "BIKE", "RUN"] as const).map((discipline) => {
-            const mixError = mixShareError(items, discipline);
-            const hasMix = items.some(
-              (item) => item.discipline === discipline && (item.sharePercent ?? 0) > 0
-            );
-            if (!hasMix && !mixError) return null;
+        <div className="mb-3 flex flex-wrap gap-2 text-xs">
+          {mixSports.map((discipline) => {
+            const sport = discipline.toLowerCase();
+            const total = Math.round(shareTotalForDiscipline(items, discipline) * 10) / 10;
+            const gap = Math.round((100 - total) * 10) / 10;
+            const tone =
+              Math.abs(gap) <= 0.5
+                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                : gap > 0
+                  ? "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                  : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+            const detail =
+              Math.abs(gap) <= 0.5 ? "" : gap > 0 ? ` · ${gap}% left` : ` · ${-gap}% over`;
             return (
-              <span key={discipline} className={mixError ? "text-red-600" : ""}>
-                {mixError ?? `${discipline.toLowerCase()} mix 100%`}
+              <span key={discipline} className={`rounded px-2 py-0.5 font-medium ${tone}`}>
+                {sport} {total}%{detail}
               </span>
             );
           })}
