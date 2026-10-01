@@ -101,7 +101,7 @@ function clampZone(zone: number | null | undefined, fallback: number): FormulaZo
   return value as FormulaZone;
 }
 
-function defaultZoneForRole(role: SessionRole): number {
+export function defaultZoneForRole(role: SessionRole): number {
   if (role === "INTENSITY") return 3;
   if (role === "EASY") return 1;
   return 2;

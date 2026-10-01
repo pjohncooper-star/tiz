@@ -24,6 +24,7 @@ import {
 } from "@/lib/plan/calendar/template-category";
 import {
   applyCatalogFormulaToItems,
+  defaultZoneForRole,
   mixShareError,
 } from "@/lib/plan/calendar/template-formula-shape";
 import {
@@ -222,7 +223,14 @@ function TemplateDayColumn({
                       nullable
                       className={COMPACT_NUMBER_FIELD}
                       value={row.sharePercent ?? null}
-                      onCommit={(v) => onUpdate(row.key, { sharePercent: v })}
+                      onCommit={(v) =>
+                        onUpdate(row.key, {
+                          sharePercent: v,
+                          ...(v != null && v > 0 && row.zone == null
+                            ? { zone: defaultZoneForRole(row.sessionRole) }
+                            : {}),
+                        })
+                      }
                     />
                   </div>
                   {row.sharePercent != null && row.sharePercent > 0 ? (
@@ -232,7 +240,7 @@ function TemplateDayColumn({
                           <span className={FIELD_LABEL}>Zone</span>
                           <select
                             className={COMPACT_FIELD}
-                            value={row.zone ?? (row.sessionRole === "INTENSITY" ? 3 : 2)}
+                            value={row.zone ?? defaultZoneForRole(row.sessionRole)}
                             onChange={(e) =>
                               onUpdate(row.key, { zone: Number(e.target.value) })
                             }
