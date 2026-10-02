@@ -79,14 +79,6 @@ const DISCIPLINES: WeeklyTemplateItem["discipline"][] = [
   "STRENGTH",
 ];
 
-const COMPACT_FIELD =
-  "box-border w-full min-w-0 max-w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs leading-tight text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
-
-const COMPACT_NUMBER_FIELD = `${COMPACT_FIELD} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
-
-const FIELD_LABEL =
-  "mb-0.5 block truncate whitespace-nowrap text-[10px] font-medium leading-none text-zinc-500";
-
 type TemplateItemDraft = WeeklyTemplateItem & { key: string };
 
 function defaultTitle(discipline: WeeklyTemplateItem["discipline"]): string {
@@ -831,7 +823,9 @@ export function WeeklyTemplateEditor({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [formulaCatalog, setFormulaCatalog] = useState<SessionFormulaCatalog>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
-  const [applyFormulaId, setApplyFormulaId] = useState("");
+  const [applyFormulaIds, setApplyFormulaIds] = useState<
+    Partial<Record<FormulaDiscipline, string>>
+  >({});
   const [pendingApply, setPendingApply] = useState<PendingApply | null>(null);
   const [undo, setUndo] = useState<{ items: TemplateItemDraft[]; label: string } | null>(
     null
@@ -971,6 +965,12 @@ export function WeeklyTemplateEditor({
 
   const selectedRow = items.find((row) => row.key === selectedKey) ?? null;
 
+  const toolbarSports = MIX_SPORTS.filter(
+    (discipline) =>
+      items.some((item) => item.discipline === discipline) ||
+      formulaCatalog.some((formula) => formula.discipline === discipline)
+  );
+
   const itemsByWeekday = useMemo(() => {
     const map = new Map<WeeklyTemplateItem["weekday"], TemplateItemDraft[]>();
     for (const day of WEEKDAYS) map.set(day, []);
@@ -987,8 +987,10 @@ export function WeeklyTemplateEditor({
     setItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
-  function previewApply() {
-    const formula = formulaCatalog.find((row) => row.id === applyFormulaId);
+  function previewApply(discipline: FormulaDiscipline) {
+    const formula = formulaCatalog.find(
+      (row) => row.id === applyFormulaIds[discipline] && row.discipline === discipline
+    );
     if (!formula) return;
     const pairing = planCatalogPairing(items, formula);
     setPendingApply({ formula, pairing, addMissing: pairing.missing.length > 0 });
@@ -1033,7 +1035,7 @@ export function WeeklyTemplateEditor({
     setUndo({ items, label: `Applied ${formula.name} to ${formula.discipline.toLowerCase()}` });
     setItems(applyCatalogPairing(base, pairing));
     setPendingApply(null);
-    setApplyFormulaId("");
+    setApplyFormulaIds((current) => ({ ...current, [formula.discipline]: "" }));
     setError(null);
   }
 
@@ -1170,120 +1172,122 @@ export function WeeklyTemplateEditor({
         </div>
       </div>
 
-      {formulaCatalog.length > 0 ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[12rem] flex-1">
-              <Label>Apply saved mix</Label>
-              <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                value={applyFormulaId}
-                onChange={(e) => {
-                  setApplyFormulaId(e.target.value);
-                  setPendingApply(null);
-                }}
-              >
-                <option value="">Choose a formula…</option>
-                {formulaCatalog.map((formula) => (
-                  <option key={formula.id} value={formula.id}>
-                    {formula.name} ({formula.discipline.toLowerCase()})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={previewApply}
-              disabled={!applyFormulaId || pendingApply != null}
-            >
-              Apply to this sport…
-            </Button>
-          </div>
-          {pendingApply ? (
-            <ApplyMixPreview
-              pending={pendingApply}
-              items={items}
-              onToggleAddMissing={(addMissing) =>
-                setPendingApply((current) => (current ? { ...current, addMissing } : current))
-              }
-              onConfirm={confirmApply}
-              onCancel={() => setPendingApply(null)}
-            />
-          ) : null}
-          {undo ? (
-            <div className="flex items-center gap-3 rounded-md bg-zinc-900 px-3 py-2 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">
-              <span className="mr-auto">{undo.label}</span>
-              <button type="button" className="font-semibold underline" onClick={undoApply}>
-                Undo
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : catalogLoaded ? (
-        <p className="text-xs text-zinc-500">
-          No saved mixes yet.{" "}
-          <Link href={SESSION_FORMULAS_HREF} className="text-sky-600 hover:underline">
-            Create one in Settings
-          </Link>{" "}
-          to stamp shares and zones onto a sport in one step.
-        </p>
-      ) : null}
-
       <div>
-        <p className="mb-2 text-sm font-medium">Weekly layout</p>
-        <p className="mb-3 text-xs text-zinc-500">
-          Add sessions to each day. Set a share % to make that sport formulaic (shares must
-          total 100%). Fixed shape is Norwegian Singles-style intervals; extra intensity
-          promotes toward the longest interval.
-        </p>
-        {mixSports.length > 0 ? (
-          <div className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-              Preview at
-            </span>
-            {mixSports.map((discipline) => (
-              <label key={discipline} className="w-20">
-                <span className={FIELD_LABEL}>
-                  {DISCIPLINE_DISPLAY_LABELS[discipline]} h/wk
-                </span>
-                <NumberEditorInput
-                  min={0}
-                  integer={false}
-                  nullable
-                  className={COMPACT_NUMBER_FIELD}
-                  value={previewHours[discipline]}
-                  onCommit={(value) =>
-                    setPreviewHours((current) => ({ ...current, [discipline]: value }))
-                  }
-                />
-              </label>
-            ))}
-            <span className="text-[11px] text-zinc-500">
-              Preview only. Each phase&apos;s weekly hours set the real durations.
-            </span>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <p className="text-sm font-medium">Weekly layout</p>
+          <p className="text-xs text-zinc-500">
+            Click a session to edit it. A share % builds that session from its sport&apos;s
+            weekly hours.
+          </p>
+          <details className="text-xs text-zinc-500">
+            <summary className="cursor-pointer text-sky-600 hover:underline dark:text-sky-400">
+              How mixes work
+            </summary>
+            <p className="mt-1 max-w-2xl">
+              A sport&apos;s shares must total 100%; sessions without a share keep their own
+              duration. Steady is warm-up, one block, cool-down. Fixed intervals that share a
+              sport and zone are packed together, and extra time promotes reps toward the
+              longest interval (Norwegian Singles style). Preview hours only change this page;
+              each phase&apos;s weekly hours set the real durations.
+            </p>
+          </details>
+        </div>
+
+        {toolbarSports.length > 0 || catalogLoaded ? (
+          <div className="mb-3 divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {toolbarSports.map((discipline) => {
+              const sportFormulas = formulaCatalog.filter(
+                (formula) => formula.discipline === discipline
+              );
+              const hasMix = mixSports.includes(discipline);
+              const total = Math.round(shareTotalForDiscipline(items, discipline) * 10) / 10;
+              const gap = Math.round((100 - total) * 10) / 10;
+              const tone =
+                Math.abs(gap) <= 0.5
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : gap > 0
+                    ? "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+              const detail =
+                Math.abs(gap) <= 0.5 ? "" : gap > 0 ? ` · ${gap}% left` : ` · ${-gap}% over`;
+              return (
+                <div key={discipline} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                  <span className="w-12 text-sm font-medium">
+                    {DISCIPLINE_DISPLAY_LABELS[discipline]}
+                  </span>
+                  {hasMix ? (
+                    <>
+                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${tone}`}>
+                        {total}%{detail}
+                      </span>
+                      <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                        Preview
+                        <span className="w-16">
+                          <NumberEditorInput
+                            min={0}
+                            integer={false}
+                            nullable
+                            ariaLabel={`${DISCIPLINE_DISPLAY_LABELS[discipline]} preview hours per week`}
+                            value={previewHours[discipline]}
+                            onCommit={(value) =>
+                              setPreviewHours((current) => ({ ...current, [discipline]: value }))
+                            }
+                          />
+                        </span>
+                        h/wk
+                      </label>
+                    </>
+                  ) : (
+                    <span className="text-xs text-zinc-500">Duration-based</span>
+                  )}
+                  {sportFormulas.length > 0 ? (
+                    <div className="ml-auto flex items-center gap-2">
+                      <select
+                        className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        aria-label={`Saved ${discipline.toLowerCase()} mix`}
+                        value={applyFormulaIds[discipline] ?? ""}
+                        onChange={(e) => {
+                          setApplyFormulaIds((current) => ({
+                            ...current,
+                            [discipline]: e.target.value,
+                          }));
+                          setPendingApply(null);
+                        }}
+                      >
+                        <option value="">Saved mix…</option>
+                        {sportFormulas.map((formula) => (
+                          <option key={formula.id} value={formula.id}>
+                            {formula.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => previewApply(discipline)}
+                        disabled={
+                          !applyFormulaIds[discipline] ||
+                          pendingApply?.formula.discipline === discipline
+                        }
+                      >
+                        Apply mix…
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+            {catalogLoaded && formulaCatalog.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-zinc-500">
+                No saved mixes yet.{" "}
+                <Link href={SESSION_FORMULAS_HREF} className="text-sky-600 hover:underline">
+                  Create one in Settings
+                </Link>{" "}
+                to stamp a sport&apos;s shares and zones in one step.
+              </p>
+            ) : null}
           </div>
         ) : null}
-        <div className="mb-3 flex flex-wrap gap-2 text-xs">
-          {mixSports.map((discipline) => {
-            const sport = discipline.toLowerCase();
-            const total = Math.round(shareTotalForDiscipline(items, discipline) * 10) / 10;
-            const gap = Math.round((100 - total) * 10) / 10;
-            const tone =
-              Math.abs(gap) <= 0.5
-                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                : gap > 0
-                  ? "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                  : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-            const detail =
-              Math.abs(gap) <= 0.5 ? "" : gap > 0 ? ` · ${gap}% left` : ` · ${-gap}% over`;
-            return (
-              <span key={discipline} className={`rounded px-2 py-0.5 font-medium ${tone}`}>
-                {sport} {total}%{detail}
-              </span>
-            );
-          })}
-        </div>
 
         <div className="overflow-x-auto pb-2">
           <div className="grid min-w-[56rem] grid-cols-7 items-stretch gap-2">
@@ -1305,8 +1309,26 @@ export function WeeklyTemplateEditor({
           </div>
         </div>
 
-        <div className="mt-3">
-          {selectedRow ? (
+        <div className="mt-3 space-y-2">
+          {undo ? (
+            <div className="flex items-center gap-3 rounded-md bg-zinc-900 px-3 py-2 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">
+              <span className="mr-auto">{undo.label}</span>
+              <button type="button" className="font-semibold underline" onClick={undoApply}>
+                Undo
+              </button>
+            </div>
+          ) : null}
+          {pendingApply ? (
+            <ApplyMixPreview
+              pending={pendingApply}
+              items={items}
+              onToggleAddMissing={(addMissing) =>
+                setPendingApply((current) => (current ? { ...current, addMissing } : current))
+              }
+              onConfirm={confirmApply}
+              onCancel={() => setPendingApply(null)}
+            />
+          ) : selectedRow ? (
             <SessionEditorPanel
               key={selectedRow.key}
               row={selectedRow}
