@@ -36,6 +36,7 @@ import {
   applyCatalogPairing,
   defaultZoneForRole,
   fixedPackGroups,
+  describeResolvedSession,
   mixShareError,
   planCatalogPairing,
   resolveTemplateFormulaWeek,
@@ -77,17 +78,6 @@ const DISCIPLINES: WeeklyTemplateItem["discipline"][] = [
   "SWIM",
   "STRENGTH",
 ];
-
-const COMPACT_FIELD =
-  "box-border w-full min-w-0 max-w-full rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs leading-tight text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
-
-const COMPACT_NUMBER_FIELD = `${COMPACT_FIELD} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
-
-const FIELD_LABEL =
-  "mb-0.5 block truncate whitespace-nowrap text-[10px] font-medium leading-none text-zinc-500";
-
-const SESSION_CARD_CLASS =
-  "min-w-0 overflow-hidden rounded-md border border-dashed border-sky-300 bg-white p-1.5 dark:border-sky-800 dark:bg-zinc-950";
 
 type TemplateItemDraft = WeeklyTemplateItem & { key: string };
 
@@ -254,6 +244,7 @@ const DEFAULT_PREVIEW_HOURS: Record<FormulaDiscipline, number | null> = {
 type CardPreview = {
   label: string;
   minutes: number;
+  breakdown: string;
   packedWith: WeeklyTemplateItem["weekday"][];
 };
 
@@ -298,356 +289,477 @@ function roleChangePatch(
   return patch;
 }
 
-function mixSummary(row: WeeklyTemplateItem): string {
-  const zone = `Z${row.zone ?? defaultZoneForRole(row.sessionRole)}`;
-  if (row.shapeKind !== "FIXED") return `${zone} steady`;
-  const work = row.workSeconds != null ? formatDurationMinSec(row.workSeconds) : "?";
-  const rest = formatDurationMinSec(row.restSeconds ?? DEFAULT_REST_SECONDS);
-  return `${zone} fixed · ${work} / ${rest}`;
+const WEEKDAY_LONG: Record<WeeklyTemplateItem["weekday"], string> = {
+  MON: "Monday",
+  TUE: "Tuesday",
+  WED: "Wednesday",
+  THU: "Thursday",
+  FRI: "Friday",
+  SAT: "Saturday",
+  SUN: "Sunday",
+};
+
+const ROLE_CHIP_CLASS: Record<WeeklyTemplateItem["sessionRole"], string> = {
+  EASY: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
+  MODERATE: "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300",
+  INTENSITY: "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300",
+  LONG: "bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-300",
+};
+
+const PANEL_LABEL = "mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400";
+
+const PANEL_SELECT =
+  "w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+
+function swimUnit(row: WeeklyTemplateItem) {
+  return swimDisplayUnit(poolSizeForSwimStep(row.poolSize));
 }
 
-function MixDetails({
-  defaultOpen,
-  summary,
-  children,
+function formatCardDistance(row: WeeklyTemplateItem): string | null {
+  if (row.distanceMeters == null || row.distanceMeters <= 0) return null;
+  if (row.discipline === "SWIM") {
+    const unit = swimUnit(row);
+    return `${reportingDistanceMetersToInput(row.distanceMeters, "SWIM", unit)} ${unit === "METRIC" ? "m" : "yd"}`;
+  }
+  if (row.distanceMeters >= 1000) {
+    const km = row.distanceMeters / 1000;
+    return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
+  }
+  return `${Math.round(row.distanceMeters)} m`;
+}
+
+function displayTitle(row: WeeklyTemplateItem): string {
+  return row.title.trim() || defaultTitle(row.discipline);
+}
+
+function SessionSummaryCard({
+  row,
+  preview,
+  selected,
+  warning,
+  onSelect,
 }: {
-  defaultOpen: boolean;
-  summary: string;
-  children: React.ReactNode;
+  row: TemplateItemDraft;
+  preview: CardPreview | undefined;
+  selected: boolean;
+  warning: string | null;
+  onSelect: () => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const mix = hasShare(row) && row.discipline !== "STRENGTH";
+  const headline = mix ? preview?.label ?? "Mix session" : displayTitle(row);
+  const detail = mix
+    ? `${row.sharePercent}% · ${preview ? `${preview.minutes} min` : "set preview hours"}`
+    : [
+        row.durationMinutes != null && row.durationMinutes > 0
+          ? `${row.durationMinutes} min`
+          : null,
+        formatCardDistance(row),
+      ]
+        .filter(Boolean)
+        .join(" · ") || "No duration";
+
   return (
-    <details
-      className="mb-1.5 rounded border border-zinc-200 px-1.5 py-1 dark:border-zinc-800"
-      open={open}
-      onToggle={(e) => setOpen(e.currentTarget.open)}
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={`relative w-full min-w-0 rounded-md border bg-white p-2 text-left transition hover:border-sky-400 dark:bg-zinc-950 ${
+        selected
+          ? "border-sky-500 ring-2 ring-sky-500/50"
+          : "border-zinc-200 dark:border-zinc-800"
+      }`}
     >
-      <summary className="cursor-pointer select-none truncate text-[10px] font-medium text-zinc-600 dark:text-zinc-300">
-        Mix details · {summary}
-      </summary>
-      <div className="mt-1.5">{children}</div>
-    </details>
+      {warning ? (
+        <span
+          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-500"
+          title={warning}
+          aria-label={warning}
+        />
+      ) : null}
+      <span className="flex min-w-0 items-center gap-1.5 pr-3">
+        <span className="truncate text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+          {DISCIPLINE_DISPLAY_LABELS[row.discipline]}
+        </span>
+        <span
+          className={`shrink-0 rounded px-1 py-px text-[10px] font-medium ${ROLE_CHIP_CLASS[row.sessionRole]}`}
+        >
+          {SESSION_ROLE_LABELS[row.sessionRole]}
+        </span>
+      </span>
+      <span className="mt-1 block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
+        {headline}
+      </span>
+      <span className="block truncate text-[11px] text-zinc-500">{detail}</span>
+      {preview && preview.packedWith.length > 0 ? (
+        <span className="mt-0.5 block truncate text-[11px] text-sky-700 dark:text-sky-300">
+          Packed with {preview.packedWith.map((day) => WEEKDAY_SHORT[day]).join(", ")}
+        </span>
+      ) : null}
+    </button>
   );
 }
-
-type TemplateDayColumnProps = {
-  weekday: WeeklyTemplateItem["weekday"];
-  items: TemplateItemDraft[];
-  previews: Map<string, CardPreview>;
-  isSelected: boolean;
-  onAdd: () => void;
-  onUpdate: (key: string, patch: Partial<WeeklyTemplateItem>) => void;
-  onRemove: (key: string) => void;
-};
 
 function TemplateDayColumn({
   weekday,
   items,
   previews,
-  isSelected,
+  warnings,
+  selectedKey,
   onAdd,
-  onUpdate,
-  onRemove,
-}: TemplateDayColumnProps) {
+  onSelect,
+}: {
+  weekday: WeeklyTemplateItem["weekday"];
+  items: TemplateItemDraft[];
+  previews: Map<string, CardPreview>;
+  warnings: Map<string, string>;
+  selectedKey: string | null;
+  onAdd: () => void;
+  onSelect: (key: string) => void;
+}) {
   return (
-    <div className="min-w-0">
-      <div
-        className={`flex h-full min-h-[10rem] flex-col rounded-md border p-2.5 transition ${
-          isSelected
-            ? "border-sky-500 bg-sky-50/40 ring-1 ring-sky-500/40 dark:border-sky-600 dark:bg-sky-950/40"
-            : "border-zinc-200 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/30"
-        }`}
-      >
+    <div className="flex min-h-[8rem] min-w-0 flex-col rounded-md border border-zinc-200 bg-zinc-50/50 p-2 dark:border-zinc-800 dark:bg-zinc-900/30">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
           {WEEKDAY_SHORT[weekday]}
         </span>
         <button
           type="button"
-          className="text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400"
+          className="rounded px-1 text-sm leading-none text-sky-600 hover:bg-sky-50 hover:text-sky-800 dark:text-sky-400 dark:hover:bg-sky-950"
           onClick={onAdd}
-          aria-label={`Add session on ${WEEKDAY_SHORT[weekday]}`}
+          aria-label={`Add session on ${WEEKDAY_LONG[weekday]}`}
         >
           +
         </button>
       </div>
-
       <div className="flex flex-1 flex-col gap-2">
         {items.length === 0 ? (
-          <p className="py-4 text-center text-xs text-zinc-400">No sessions</p>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex flex-1 items-center justify-center rounded-md border border-dashed border-zinc-300 py-4 text-xs text-zinc-400 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700"
+          >
+            Rest day · + Add
+          </button>
         ) : (
-          items.map((row) => {
-            const preview = previews.get(row.key);
-            return (
-              <div key={row.key} className={SESSION_CARD_CLASS}>
-                {preview ? (
-                  <div className="mb-1.5 rounded bg-sky-50 px-1.5 py-1 text-[10px] leading-tight text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
-                    <span className="font-semibold">{preview.label}</span> · {preview.minutes} min
-                    {preview.packedWith.length > 0 ? (
-                      <span className="mt-0.5 block text-sky-700 dark:text-sky-300">
-                        Packed with {preview.packedWith.map((day) => WEEKDAY_SHORT[day]).join(", ")}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-                <div className="mb-1.5">
-                  <span className={FIELD_LABEL}>Type</span>
-                  <select
-                    className={COMPACT_FIELD}
-                    value={row.discipline}
-                    onChange={(e) => {
-                      const discipline = e.target.value as WeeklyTemplateItem["discipline"];
-                      const patch: Partial<WeeklyTemplateItem> = {
-                        discipline,
-                        poolSize: discipline === "SWIM" ? "SCM" : null,
-                      };
-                      if (titleMatchesDisciplineDefault(row.title, row.discipline)) {
-                        patch.title = defaultTitle(discipline);
-                      }
-                      onUpdate(row.key, patch);
-                    }}
-                  >
-                    {DISCIPLINES.map((d) => (
-                      <option key={d} value={d}>
-                        {DISCIPLINE_DISPLAY_LABELS[d]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mb-1.5">
-                  <span className={FIELD_LABEL}>Title</span>
-                  <input
-                    type="text"
-                    className={COMPACT_FIELD}
-                    value={row.title}
-                    onChange={(e) => onUpdate(row.key, { title: e.target.value })}
-                  />
-                </div>
-                <div className="mb-1.5">
-                  <span className={FIELD_LABEL}>Role</span>
-                  <select
-                    className={COMPACT_FIELD}
-                    value={row.sessionRole}
-                    onChange={(e) =>
-                      onUpdate(
-                        row.key,
-                        roleChangePatch(row, e.target.value as WeeklyTemplateItem["sessionRole"])
-                      )
-                    }
-                  >
-                    {SESSION_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {SESSION_ROLE_LABELS[role]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {row.discipline !== "STRENGTH" ? (
-                  <>
-                    <div className="mb-1.5">
-                      <span className={FIELD_LABEL}>Share %</span>
-                      <NumberEditorInput
-                        min={0}
-                        max={100}
-                        integer={false}
-                        nullable
-                        className={COMPACT_NUMBER_FIELD}
-                        value={row.sharePercent ?? null}
-                        onCommit={(v) =>
-                          onUpdate(row.key, {
-                            sharePercent: v,
-                            ...(v != null && v > 0 && row.zone == null
-                              ? { zone: defaultZoneForRole(row.sessionRole) }
-                              : {}),
-                          })
-                        }
-                      />
-                    </div>
-                    {hasShare(row) ? (
-                      <MixDetails defaultOpen={row.shapeKind === "FIXED"} summary={mixSummary(row)}>
-                        <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
-                          <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Zone</span>
-                            <select
-                              className={COMPACT_FIELD}
-                              value={row.zone ?? defaultZoneForRole(row.sessionRole)}
-                              onChange={(e) =>
-                                onUpdate(row.key, { zone: Number(e.target.value) })
-                              }
-                            >
-                              {[1, 2, 3, 4, 5].map((zone) => (
-                                <option key={zone} value={zone}>
-                                  Z{zone}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Shape</span>
-                            <select
-                              className={COMPACT_FIELD}
-                              value={row.shapeKind ?? "STEADY"}
-                              onChange={(e) => {
-                                const shapeKind = e.target.value as "STEADY" | "FIXED";
-                                onUpdate(row.key, shapePatch(row, shapeKind));
-                              }}
-                            >
-                              <option value="STEADY">Steady</option>
-                              <option value="FIXED">Fixed</option>
-                            </select>
-                          </div>
-                        </div>
-                        {row.shapeKind === "FIXED" ? (
-                          <div className="mb-1.5 grid min-w-0 grid-cols-3 gap-1.5">
-                            <div className="min-w-0">
-                              <span className={FIELD_LABEL}>Work</span>
-                              <DurationEditorInput
-                                compact
-                                ariaLabel="Work interval (min:sec)"
-                                className={COMPACT_FIELD}
-                                seconds={row.workSeconds}
-                                onCommit={(v) => onUpdate(row.key, { workSeconds: v })}
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <span className={FIELD_LABEL}>Rest</span>
-                              <DurationEditorInput
-                                compact
-                                allowZero
-                                ariaLabel="Rest between reps (min:sec)"
-                                className={COMPACT_FIELD}
-                                seconds={row.restSeconds}
-                                onCommit={(v) => onUpdate(row.key, { restSeconds: v })}
-                              />
-                            </div>
-                            <div className="min-w-0">
-                              <span className={FIELD_LABEL}>Min reps</span>
-                              <NumberEditorInput
-                                min={1}
-                                nullable
-                                className={COMPACT_NUMBER_FIELD}
-                                value={row.minReps ?? null}
-                                onCommit={(v) => onUpdate(row.key, { minReps: v })}
-                              />
-                            </div>
-                          </div>
-                        ) : null}
-                        <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
-                          <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Warm-up</span>
-                            <DurationEditorInput
-                              compact
-                              allowZero
-                              optional
-                              ariaLabel="Warm-up (min:sec)"
-                              placeholder={formatDurationMinSec(DEFAULT_WARMUP_SECONDS)}
-                              className={COMPACT_FIELD}
-                              seconds={row.warmupSeconds}
-                              onCommit={(v) => onUpdate(row.key, { warmupSeconds: v })}
-                            />
-                          </div>
-                          <div className="min-w-0">
-                            <span className={FIELD_LABEL}>Cool-down</span>
-                            <DurationEditorInput
-                              compact
-                              allowZero
-                              optional
-                              ariaLabel="Cool-down (min:sec)"
-                              placeholder={formatDurationMinSec(DEFAULT_COOLDOWN_SECONDS)}
-                              className={COMPACT_FIELD}
-                              seconds={row.cooldownSeconds}
-                              onCommit={(v) => onUpdate(row.key, { cooldownSeconds: v })}
-                            />
-                          </div>
-                        </div>
-                      </MixDetails>
-                    ) : null}
-                  </>
-                ) : null}
-                {row.discipline === "SWIM" ? (
-                  <div className="mb-1.5">
-                    <PoolSizeSelect
-                      compact
-                      value={poolSizeForSwimStep(row.poolSize)}
-                      onChange={(poolSize) => onUpdate(row.key, { poolSize })}
-                    />
-                  </div>
-                ) : null}
-                <div className="mb-1.5 grid min-w-0 grid-cols-2 gap-1.5">
-                  <div className="min-w-0">
-                    <span className={FIELD_LABEL}>Min</span>
-                    {hasShare(row) && row.discipline !== "STRENGTH" ? (
-                      <div
-                        className={`${COMPACT_FIELD} bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400`}
-                        title="Duration comes from the sport's weekly hours and this session's share"
-                      >
-                        {preview ? `${preview.minutes} · mix` : "set by mix"}
-                      </div>
-                    ) : (
-                      <NumberEditorInput
-                        min={0}
-                        nullable
-                        className={COMPACT_NUMBER_FIELD}
-                        value={row.durationMinutes}
-                        onCommit={(v) => onUpdate(row.key, { durationMinutes: v })}
-                      />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <span className={FIELD_LABEL}>
-                      {row.discipline === "SWIM"
-                        ? reportingDistanceInputLabel(
-                            "SWIM",
-                            swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                          )
-                        : "Dist (m)"}
-                    </span>
-                    {row.discipline === "SWIM" ? (
-                      <TextEditorInput
-                        inputMode="decimal"
-                        className={COMPACT_NUMBER_FIELD}
-                        value={reportingDistanceMetersToInput(
-                          row.distanceMeters,
-                          "SWIM",
-                          swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                        )}
-                        onCommit={(raw) =>
-                          onUpdate(row.key, {
-                            distanceMeters: reportingDistanceInputToMeters(
-                              raw,
-                              "SWIM",
-                              swimDisplayUnit(poolSizeForSwimStep(row.poolSize))
-                            ),
-                          })
-                        }
-                      />
-                    ) : (
-                      <NumberEditorInput
-                        min={0}
-                        nullable
-                        integer={false}
-                        inputMode="decimal"
-                        className={COMPACT_NUMBER_FIELD}
-                        value={row.distanceMeters}
-                        onCommit={(v) => onUpdate(row.key, { distanceMeters: v })}
-                      />
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="text-[10px] text-red-600 hover:text-red-800"
-                  onClick={() => onRemove(row.key)}
-                >
-                  Remove
-                </button>
-              </div>
-            );
-          })
+          items.map((row) => (
+            <SessionSummaryCard
+              key={row.key}
+              row={row}
+              preview={previews.get(row.key)}
+              selected={row.key === selectedKey}
+              warning={warnings.get(row.key) ?? null}
+              onSelect={() => onSelect(row.key)}
+            />
+          ))
         )}
       </div>
-      </div>
     </div>
+  );
+}
+
+function SessionEditorPanel({
+  row,
+  preview,
+  previewHours,
+  onUpdate,
+  onDuplicate,
+  onRemove,
+  onClose,
+}: {
+  row: TemplateItemDraft;
+  preview: CardPreview | undefined;
+  previewHours: number | null;
+  onUpdate: (patch: Partial<WeeklyTemplateItem>) => void;
+  onDuplicate: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const sport = DISCIPLINE_DISPLAY_LABELS[row.discipline];
+  const canMix = row.discipline !== "STRENGTH";
+  const mix = canMix && hasShare(row);
+  const fixed = mix && row.shapeKind === "FIXED";
+  const customTitle = titleMatchesDisciplineDefault(row.title, row.discipline) ? "" : row.title;
+
+  return (
+    <section
+      className="rounded-lg border border-sky-300 bg-white p-4 dark:border-sky-800 dark:bg-zinc-950"
+      aria-label={`${WEEKDAY_LONG[row.weekday]} ${sport} session`}
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h3 className="mr-auto text-sm font-semibold">
+          {WEEKDAY_LONG[row.weekday]} · {sport} session
+        </h3>
+        <Button type="button" variant="secondary" onClick={onDuplicate}>
+          Duplicate
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          className="text-red-600 dark:text-red-400"
+          onClick={onRemove}
+        >
+          Remove
+        </Button>
+        <button
+          type="button"
+          className="rounded px-2 py-1 text-lg leading-none text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+          onClick={onClose}
+          aria-label="Close session editor"
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <span className={PANEL_LABEL}>Sport</span>
+          <select
+            className={PANEL_SELECT}
+            value={row.discipline}
+            onChange={(e) => {
+              const discipline = e.target.value as WeeklyTemplateItem["discipline"];
+              const patch: Partial<WeeklyTemplateItem> = {
+                discipline,
+                poolSize: discipline === "SWIM" ? "SCM" : null,
+              };
+              if (titleMatchesDisciplineDefault(row.title, row.discipline)) {
+                patch.title = defaultTitle(discipline);
+              }
+              onUpdate(patch);
+            }}
+          >
+            {DISCIPLINES.map((d) => (
+              <option key={d} value={d}>
+                {DISCIPLINE_DISPLAY_LABELS[d]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <span className={PANEL_LABEL}>Role</span>
+          <select
+            className={PANEL_SELECT}
+            value={row.sessionRole}
+            onChange={(e) =>
+              onUpdate(roleChangePatch(row, e.target.value as WeeklyTemplateItem["sessionRole"]))
+            }
+          >
+            {SESSION_ROLES.map((role) => (
+              <option key={role} value={role}>
+                {SESSION_ROLE_LABELS[role]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <span className={PANEL_LABEL}>Title (optional)</span>
+          <Input
+            value={customTitle}
+            placeholder={mix && preview ? `${preview.label} (auto)` : sport}
+            onChange={(e) => onUpdate({ title: e.target.value })}
+          />
+        </div>
+        {canMix ? (
+          <div>
+            <span className={PANEL_LABEL}>Share of weekly {sport.toLowerCase()} %</span>
+            <NumberEditorInput
+              min={0}
+              max={100}
+              integer={false}
+              nullable
+              placeholder="Duration-based"
+              value={row.sharePercent ?? null}
+              onCommit={(v) =>
+                onUpdate({
+                  sharePercent: v,
+                  ...(v != null && v > 0 && row.zone == null
+                    ? { zone: defaultZoneForRole(row.sessionRole) }
+                    : {}),
+                })
+              }
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {mix ? (
+        <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Mix</p>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div>
+              <span className={PANEL_LABEL}>Zone</span>
+              <select
+                className={PANEL_SELECT}
+                value={row.zone ?? defaultZoneForRole(row.sessionRole)}
+                onChange={(e) => onUpdate({ zone: Number(e.target.value) })}
+              >
+                {[1, 2, 3, 4, 5].map((zone) => (
+                  <option key={zone} value={zone}>
+                    Z{zone}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sm:col-span-2">
+              <span className={PANEL_LABEL}>Shape</span>
+              <div
+                role="radiogroup"
+                aria-label="Workout shape"
+                className="grid grid-cols-2 overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700"
+              >
+                {(["STEADY", "FIXED"] as const).map((shape) => {
+                  const active = (row.shapeKind ?? "STEADY") === shape;
+                  return (
+                    <button
+                      key={shape}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => {
+                        if (!active) onUpdate(shapePatch(row, shape));
+                      }}
+                      className={`px-3 py-2 text-sm font-medium ${
+                        active
+                          ? "bg-sky-600 text-white"
+                          : "bg-white text-zinc-700 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300"
+                      }`}
+                    >
+                      {shape === "STEADY" ? "Steady" : "Fixed intervals"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {fixed ? (
+              <>
+                <div>
+                  <span className={PANEL_LABEL}>Work</span>
+                  <DurationEditorInput
+                    compact
+                    ariaLabel="Work interval (min:sec)"
+                    seconds={row.workSeconds}
+                    onCommit={(v) => onUpdate({ workSeconds: v })}
+                  />
+                </div>
+                <div>
+                  <span className={PANEL_LABEL}>Rest</span>
+                  <DurationEditorInput
+                    compact
+                    allowZero
+                    ariaLabel="Rest between reps (min:sec)"
+                    seconds={row.restSeconds}
+                    onCommit={(v) => onUpdate({ restSeconds: v })}
+                  />
+                </div>
+                <div>
+                  <span className={PANEL_LABEL}>Min reps</span>
+                  <NumberEditorInput
+                    min={1}
+                    nullable
+                    value={row.minReps ?? null}
+                    onCommit={(v) => onUpdate({ minReps: v })}
+                  />
+                </div>
+              </>
+            ) : null}
+            <div>
+              <span className={PANEL_LABEL}>Warm-up</span>
+              <DurationEditorInput
+                compact
+                allowZero
+                optional
+                ariaLabel="Warm-up (min:sec)"
+                placeholder={formatDurationMinSec(DEFAULT_WARMUP_SECONDS)}
+                seconds={row.warmupSeconds}
+                onCommit={(v) => onUpdate({ warmupSeconds: v })}
+              />
+            </div>
+            <div>
+              <span className={PANEL_LABEL}>Cool-down</span>
+              <DurationEditorInput
+                compact
+                allowZero
+                optional
+                ariaLabel="Cool-down (min:sec)"
+                placeholder={formatDurationMinSec(DEFAULT_COOLDOWN_SECONDS)}
+                seconds={row.cooldownSeconds}
+                onCommit={(v) => onUpdate({ cooldownSeconds: v })}
+              />
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300">
+            {preview ? (
+              <>
+                <span className="font-medium">
+                  {preview.minutes} min at {previewHours} h/wk:
+                </span>{" "}
+                {preview.breakdown}
+              </>
+            ) : (
+              "Set preview hours for this sport to see the generated session."
+            )}
+          </p>
+          {preview && preview.packedWith.length > 0 ? (
+            <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">
+              Packed with {preview.packedWith.map((day) => WEEKDAY_LONG[day]).join(", ")} (same
+              sport and zone, fixed intervals share one rep budget)
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3 border-t border-zinc-200 pt-4 sm:grid-cols-3 lg:grid-cols-4 dark:border-zinc-800">
+          <div>
+            <span className={PANEL_LABEL}>Duration (min)</span>
+            <NumberEditorInput
+              min={0}
+              nullable
+              value={row.durationMinutes}
+              onCommit={(v) => onUpdate({ durationMinutes: v })}
+            />
+          </div>
+          {row.discipline !== "STRENGTH" ? (
+            <div>
+              <span className={PANEL_LABEL}>
+                {row.discipline === "SWIM"
+                  ? reportingDistanceInputLabel("SWIM", swimUnit(row))
+                  : "Distance (m)"}
+              </span>
+              {row.discipline === "SWIM" ? (
+                <TextEditorInput
+                  inputMode="decimal"
+                  value={reportingDistanceMetersToInput(row.distanceMeters, "SWIM", swimUnit(row))}
+                  onCommit={(raw) =>
+                    onUpdate({
+                      distanceMeters: reportingDistanceInputToMeters(raw, "SWIM", swimUnit(row)),
+                    })
+                  }
+                />
+              ) : (
+                <NumberEditorInput
+                  min={0}
+                  nullable
+                  integer={false}
+                  inputMode="decimal"
+                  value={row.distanceMeters}
+                  onCommit={(v) => onUpdate({ distanceMeters: v })}
+                />
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {row.discipline === "SWIM" ? (
+        <div className="mt-3 max-w-xs">
+          <PoolSizeSelect
+            className={PANEL_SELECT}
+            labelClassName={PANEL_LABEL}
+            value={poolSizeForSwimStep(row.poolSize)}
+            onChange={(poolSize) => onUpdate({ poolSize })}
+          />
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -667,7 +779,7 @@ function snapshotKey(snapshot: EditorSnapshot): string {
       .map((row) => [
         row.weekday,
         row.discipline,
-        row.title,
+        displayTitle(row),
         row.durationMinutes,
         row.distanceMeters,
         row.poolSize,
@@ -708,12 +820,12 @@ export function WeeklyTemplateEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const [selectedWeekday, setSelectedWeekday] = useState<WeeklyTemplateItem["weekday"] | null>(
-    null
-  );
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [formulaCatalog, setFormulaCatalog] = useState<SessionFormulaCatalog>([]);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
-  const [applyFormulaId, setApplyFormulaId] = useState("");
+  const [applyFormulaIds, setApplyFormulaIds] = useState<
+    Partial<Record<FormulaDiscipline, string>>
+  >({});
   const [pendingApply, setPendingApply] = useState<PendingApply | null>(null);
   const [undo, setUndo] = useState<{ items: TemplateItemDraft[]; label: string } | null>(
     null
@@ -772,7 +884,20 @@ export function WeeklyTemplateEditor({
     setError(null);
     setPendingApply(null);
     setUndo(null);
+    setSelectedKey((key) => (baseline.items.some((row) => row.key === key) ? key : null));
   }
+
+  useEffect(() => {
+    if (!selectedKey) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) return;
+      setSelectedKey(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [selectedKey]);
 
   useEffect(() => {
     void (async () => {
@@ -811,11 +936,40 @@ export function WeeklyTemplateEditor({
       map.set(item.key, {
         label: session.label,
         minutes: session.durationMinutes,
+        breakdown: describeResolvedSession(session),
         packedWith,
       });
     });
     return map;
   }, [items, previewHours]);
+
+  const cardWarnings = useMemo(() => {
+    const offTotal = new Set(
+      MIX_SPORTS.filter((discipline) => mixShareError(items, discipline) != null)
+    );
+    const map = new Map<string, string>();
+    for (const item of items) {
+      if (hasShare(item) && item.discipline !== "STRENGTH") {
+        if (offTotal.has(item.discipline as FormulaDiscipline)) {
+          map.set(item.key, `${DISCIPLINE_DISPLAY_LABELS[item.discipline]} shares don't total 100%`);
+        }
+      } else if (
+        (item.durationMinutes == null || item.durationMinutes <= 0) &&
+        (item.distanceMeters == null || item.distanceMeters <= 0)
+      ) {
+        map.set(item.key, "No share, duration, or distance set");
+      }
+    }
+    return map;
+  }, [items]);
+
+  const selectedRow = items.find((row) => row.key === selectedKey) ?? null;
+
+  const toolbarSports = MIX_SPORTS.filter(
+    (discipline) =>
+      items.some((item) => item.discipline === discipline) ||
+      formulaCatalog.some((formula) => formula.discipline === discipline)
+  );
 
   const itemsByWeekday = useMemo(() => {
     const map = new Map<WeeklyTemplateItem["weekday"], TemplateItemDraft[]>();
@@ -833,11 +987,14 @@ export function WeeklyTemplateEditor({
     setItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   }
 
-  function previewApply() {
-    const formula = formulaCatalog.find((row) => row.id === applyFormulaId);
+  function previewApply(discipline: FormulaDiscipline) {
+    const formula = formulaCatalog.find(
+      (row) => row.id === applyFormulaIds[discipline] && row.discipline === discipline
+    );
     if (!formula) return;
     const pairing = planCatalogPairing(items, formula);
     setPendingApply({ formula, pairing, addMissing: pairing.missing.length > 0 });
+    setSelectedKey(null);
   }
 
   function confirmApply() {
@@ -878,7 +1035,7 @@ export function WeeklyTemplateEditor({
     setUndo({ items, label: `Applied ${formula.name} to ${formula.discipline.toLowerCase()}` });
     setItems(applyCatalogPairing(base, pairing));
     setPendingApply(null);
-    setApplyFormulaId("");
+    setApplyFormulaIds((current) => ({ ...current, [formula.discipline]: "" }));
     setError(null);
   }
 
@@ -888,15 +1045,39 @@ export function WeeklyTemplateEditor({
     setUndo(null);
   }
 
+  function nextSortOrder(weekday: WeeklyTemplateItem["weekday"]): number {
+    const orders = items.filter((row) => row.weekday === weekday).map((row) => row.sortOrder);
+    return orders.length > 0 ? Math.max(...orders) + 1 : 0;
+  }
+
   function addSession(weekday: WeeklyTemplateItem["weekday"]) {
-    setSelectedWeekday(weekday);
-    const dayItems = items.filter((i) => i.weekday === weekday);
     const draft = newDraft(weekday);
-    draft.sortOrder = dayItems.length;
+    draft.sortOrder = nextSortOrder(weekday);
     setItems((rows) => [...rows, draft]);
+    setPendingApply(null);
+    setSelectedKey(draft.key);
+  }
+
+  function duplicateItem(key: string) {
+    const source = items.find((row) => row.key === key);
+    if (!source) return;
+    const copy: TemplateItemDraft = {
+      ...source,
+      id: undefined,
+      key: newDraft(source.weekday).key,
+      sortOrder: nextSortOrder(source.weekday),
+    };
+    setItems((rows) => [...rows, copy]);
+    setSelectedKey(copy.key);
   }
 
   function removeItem(key: string) {
+    const removed = items.find((row) => row.key === key);
+    if (removed && key === selectedKey) {
+      const day = itemsByWeekday.get(removed.weekday) ?? [];
+      const index = day.findIndex((row) => row.key === key);
+      setSelectedKey(day[index + 1]?.key ?? day[index - 1]?.key ?? null);
+    }
     setItems((rows) => rows.filter((r) => r.key !== key));
   }
 
@@ -906,7 +1087,7 @@ export function WeeklyTemplateEditor({
   }
 
   async function save() {
-    const validItems = items.filter((row) => row.title.trim());
+    const validItems = items;
     if (validItems.length === 0) {
       setError("Add at least one session to your weekly template");
       return;
@@ -991,36 +1172,152 @@ export function WeeklyTemplateEditor({
         </div>
       </div>
 
-      {formulaCatalog.length > 0 ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-[12rem] flex-1">
-              <Label>Apply saved mix</Label>
-              <select
-                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                value={applyFormulaId}
-                onChange={(e) => {
-                  setApplyFormulaId(e.target.value);
-                  setPendingApply(null);
-                }}
-              >
-                <option value="">Choose a formula…</option>
-                {formulaCatalog.map((formula) => (
-                  <option key={formula.id} value={formula.id}>
-                    {formula.name} ({formula.discipline.toLowerCase()})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={previewApply}
-              disabled={!applyFormulaId || pendingApply != null}
-            >
-              Apply to this sport…
-            </Button>
+      <div>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <p className="text-sm font-medium">Weekly layout</p>
+          <p className="text-xs text-zinc-500">
+            Click a session to edit it. A share % builds that session from its sport&apos;s
+            weekly hours.
+          </p>
+          <details className="text-xs text-zinc-500">
+            <summary className="cursor-pointer text-sky-600 hover:underline dark:text-sky-400">
+              How mixes work
+            </summary>
+            <p className="mt-1 max-w-2xl">
+              A sport&apos;s shares must total 100%; sessions without a share keep their own
+              duration. Steady is warm-up, one block, cool-down. Fixed intervals that share a
+              sport and zone are packed together, and extra time promotes reps toward the
+              longest interval (Norwegian Singles style). Preview hours only change this page;
+              each phase&apos;s weekly hours set the real durations.
+            </p>
+          </details>
+        </div>
+
+        {toolbarSports.length > 0 || catalogLoaded ? (
+          <div className="mb-3 divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {toolbarSports.map((discipline) => {
+              const sportFormulas = formulaCatalog.filter(
+                (formula) => formula.discipline === discipline
+              );
+              const hasMix = mixSports.includes(discipline);
+              const total = Math.round(shareTotalForDiscipline(items, discipline) * 10) / 10;
+              const gap = Math.round((100 - total) * 10) / 10;
+              const tone =
+                Math.abs(gap) <= 0.5
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : gap > 0
+                    ? "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                    : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
+              const detail =
+                Math.abs(gap) <= 0.5 ? "" : gap > 0 ? ` · ${gap}% left` : ` · ${-gap}% over`;
+              return (
+                <div key={discipline} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                  <span className="w-12 text-sm font-medium">
+                    {DISCIPLINE_DISPLAY_LABELS[discipline]}
+                  </span>
+                  {hasMix ? (
+                    <>
+                      <span className={`rounded px-2 py-0.5 text-xs font-medium ${tone}`}>
+                        {total}%{detail}
+                      </span>
+                      <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                        Preview
+                        <span className="w-16">
+                          <NumberEditorInput
+                            min={0}
+                            integer={false}
+                            nullable
+                            ariaLabel={`${DISCIPLINE_DISPLAY_LABELS[discipline]} preview hours per week`}
+                            value={previewHours[discipline]}
+                            onCommit={(value) =>
+                              setPreviewHours((current) => ({ ...current, [discipline]: value }))
+                            }
+                          />
+                        </span>
+                        h/wk
+                      </label>
+                    </>
+                  ) : (
+                    <span className="text-xs text-zinc-500">Duration-based</span>
+                  )}
+                  {sportFormulas.length > 0 ? (
+                    <div className="ml-auto flex items-center gap-2">
+                      <select
+                        className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                        aria-label={`Saved ${discipline.toLowerCase()} mix`}
+                        value={applyFormulaIds[discipline] ?? ""}
+                        onChange={(e) => {
+                          setApplyFormulaIds((current) => ({
+                            ...current,
+                            [discipline]: e.target.value,
+                          }));
+                          setPendingApply(null);
+                        }}
+                      >
+                        <option value="">Saved mix…</option>
+                        {sportFormulas.map((formula) => (
+                          <option key={formula.id} value={formula.id}>
+                            {formula.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => previewApply(discipline)}
+                        disabled={
+                          !applyFormulaIds[discipline] ||
+                          pendingApply?.formula.discipline === discipline
+                        }
+                      >
+                        Apply mix…
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+            {catalogLoaded && formulaCatalog.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-zinc-500">
+                No saved mixes yet.{" "}
+                <Link href={SESSION_FORMULAS_HREF} className="text-sky-600 hover:underline">
+                  Create one in Settings
+                </Link>{" "}
+                to stamp a sport&apos;s shares and zones in one step.
+              </p>
+            ) : null}
           </div>
+        ) : null}
+
+        <div className="overflow-x-auto pb-2">
+          <div className="grid min-w-[56rem] grid-cols-7 items-stretch gap-2">
+            {WEEKDAYS.map((weekday) => (
+              <TemplateDayColumn
+                key={weekday}
+                weekday={weekday}
+                items={itemsByWeekday.get(weekday) ?? []}
+                previews={cardPreviews}
+                warnings={cardWarnings}
+                selectedKey={selectedKey}
+                onAdd={() => addSession(weekday)}
+                onSelect={(key) => {
+                  setPendingApply(null);
+                  setSelectedKey((current) => (current === key ? null : key));
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {undo ? (
+            <div className="flex items-center gap-3 rounded-md bg-zinc-900 px-3 py-2 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">
+              <span className="mr-auto">{undo.label}</span>
+              <button type="button" className="font-semibold underline" onClick={undoApply}>
+                Undo
+              </button>
+            </div>
+          ) : null}
           {pendingApply ? (
             <ApplyMixPreview
               pending={pendingApply}
@@ -1031,104 +1328,26 @@ export function WeeklyTemplateEditor({
               onConfirm={confirmApply}
               onCancel={() => setPendingApply(null)}
             />
-          ) : null}
-          {undo ? (
-            <div className="flex items-center gap-3 rounded-md bg-zinc-900 px-3 py-2 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">
-              <span className="mr-auto">{undo.label}</span>
-              <button type="button" className="font-semibold underline" onClick={undoApply}>
-                Undo
-              </button>
-            </div>
-          ) : null}
-        </div>
-      ) : catalogLoaded ? (
-        <p className="text-xs text-zinc-500">
-          No saved mixes yet.{" "}
-          <Link href={SESSION_FORMULAS_HREF} className="text-sky-600 hover:underline">
-            Create one in Settings
-          </Link>{" "}
-          to stamp shares and zones onto a sport in one step.
-        </p>
-      ) : null}
-
-      <div>
-        <p className="mb-2 text-sm font-medium">Weekly layout</p>
-        <p className="mb-3 text-xs text-zinc-500">
-          Add sessions to each day. Set a share % to make that sport formulaic (shares must
-          total 100%). Fixed shape is Norwegian Singles-style intervals; extra intensity
-          promotes toward the longest interval.
-        </p>
-        {mixSports.length > 0 ? (
-          <div className="mb-3 flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800">
-            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-              Preview at
-            </span>
-            {mixSports.map((discipline) => (
-              <label key={discipline} className="w-20">
-                <span className={FIELD_LABEL}>
-                  {DISCIPLINE_DISPLAY_LABELS[discipline]} h/wk
-                </span>
-                <NumberEditorInput
-                  min={0}
-                  integer={false}
-                  nullable
-                  className={COMPACT_NUMBER_FIELD}
-                  value={previewHours[discipline]}
-                  onCommit={(value) =>
-                    setPreviewHours((current) => ({ ...current, [discipline]: value }))
-                  }
-                />
-              </label>
-            ))}
-            <span className="text-[11px] text-zinc-500">
-              Preview only. Each phase&apos;s weekly hours set the real durations.
-            </span>
-          </div>
-        ) : null}
-        <div className="mb-3 flex flex-wrap gap-2 text-xs">
-          {mixSports.map((discipline) => {
-            const sport = discipline.toLowerCase();
-            const total = Math.round(shareTotalForDiscipline(items, discipline) * 10) / 10;
-            const gap = Math.round((100 - total) * 10) / 10;
-            const tone =
-              Math.abs(gap) <= 0.5
-                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                : gap > 0
-                  ? "bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                  : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300";
-            const detail =
-              Math.abs(gap) <= 0.5 ? "" : gap > 0 ? ` · ${gap}% left` : ` · ${-gap}% over`;
-            return (
-              <span key={discipline} className={`rounded px-2 py-0.5 font-medium ${tone}`}>
-                {sport} {total}%{detail}
-              </span>
-            );
-          })}
-        </div>
-
-        <div className="overflow-x-auto pb-2">
-          <div className="min-w-[68rem]">
-            <div className="mb-1 grid grid-cols-7 gap-3 text-center text-xs font-medium text-zinc-500">
-              {WEEKDAYS.map((d) => (
-                <div key={d}>{WEEKDAY_SHORT[d]}</div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 items-start gap-3">
-              {WEEKDAYS.map((weekday) => (
-                <TemplateDayColumn
-                  key={weekday}
-                  weekday={weekday}
-                  items={itemsByWeekday.get(weekday) ?? []}
-                  previews={cardPreviews}
-                  isSelected={selectedWeekday === weekday}
-                  onAdd={() => addSession(weekday)}
-                  onUpdate={updateItem}
-                  onRemove={removeItem}
-                />
-              ))}
-            </div>
-          </div>
+          ) : selectedRow ? (
+            <SessionEditorPanel
+              key={selectedRow.key}
+              row={selectedRow}
+              preview={cardPreviews.get(selectedRow.key)}
+              previewHours={
+                selectedRow.discipline === "STRENGTH"
+                  ? null
+                  : previewHours[selectedRow.discipline as FormulaDiscipline]
+              }
+              onUpdate={(patch) => updateItem(selectedRow.key, patch)}
+              onDuplicate={() => duplicateItem(selectedRow.key)}
+              onRemove={() => removeItem(selectedRow.key)}
+              onClose={() => setSelectedKey(null)}
+            />
+          ) : (
+            <p className="rounded-lg border border-dashed border-zinc-300 px-4 py-6 text-center text-sm text-zinc-500 dark:border-zinc-700">
+              Select a session to edit it, or press + on a day to add one.
+            </p>
+          )}
         </div>
       </div>
 

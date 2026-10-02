@@ -4,6 +4,7 @@ import {
   applyCatalogFormulaToItems,
   applyCatalogPairing,
   defaultZoneForRole,
+  describeResolvedSession,
   fixedPackGroups,
   mixShareError,
   packFixedGroup,
@@ -66,6 +67,51 @@ describe("template formula mix helpers", () => {
     assert.equal(defaultZoneForRole("MODERATE"), 2);
     assert.equal(defaultZoneForRole("LONG"), 2);
     assert.equal(defaultZoneForRole("INTENSITY"), 3);
+  });
+});
+
+describe("describeResolvedSession", () => {
+  const slot = (patch: Partial<FormulaTemplateItem>): FormulaTemplateItem => ({
+    discipline: "RUN",
+    sessionRole: "INTENSITY",
+    sharePercent: 100,
+    zone: 3,
+    shapeKind: "FIXED",
+    workSeconds: 360,
+    restSeconds: 60,
+    minReps: 1,
+    warmupSeconds: 600,
+    cooldownSeconds: 300,
+    ...patch,
+  });
+
+  it("breaks a fixed session into warm-up, reps, and cool-down", () => {
+    const [session] = resolveTemplateFormulaWeek([slot({})], { RUN: 1 });
+    assert.equal(
+      describeResolvedSession(session!),
+      "14:00 warm-up · 6 × 6:00 / 1:00 Z3 · 5:00 cool-down"
+    );
+  });
+
+  it("shows a single rep without rest", () => {
+    const [session] = resolveTemplateFormulaWeek([slot({ workSeconds: 1800 })], {
+      RUN: 0.75,
+    });
+    assert.equal(
+      describeResolvedSession(session!),
+      "10:00 warm-up · 1 × 30:00 Z3 · 5:00 cool-down"
+    );
+  });
+
+  it("describes a steady session", () => {
+    const [session] = resolveTemplateFormulaWeek(
+      [slot({ sessionRole: "EASY", zone: 1, shapeKind: "STEADY", workSeconds: null })],
+      { RUN: 1 }
+    );
+    assert.equal(
+      describeResolvedSession(session!),
+      "10:00 warm-up · 45:00 Z1 · 5:00 cool-down"
+    );
   });
 });
 

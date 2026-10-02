@@ -486,6 +486,55 @@ export function resolveTemplateFormulaWeek(
   return resolved;
 }
 
+function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.round(seconds));
+  return `${Math.floor(total / 60)}:${(total % 60).toString().padStart(2, "0")}`;
+}
+
+function leafSeconds(step: LeafStep): number {
+  return step.duration.type === "time" ? step.duration.value : 0;
+}
+
+/** One-line breakdown, e.g. "14:00 warm-up · 6 × 6:00 / 1:00 Z3 · 5:00 cool-down". */
+export function describeResolvedSession(session: ResolvedFormulaSession): string {
+  const found: {
+    warmup: number;
+    cooldown: number;
+    steady: LeafStep | null;
+    interval: LeafStep | null;
+    recovery: LeafStep | null;
+  } = { warmup: 0, cooldown: 0, steady: null, interval: null, recovery: null };
+  const visit = (nodes: WorkoutNode[]) => {
+    for (const node of nodes) {
+      if (node.kind === "repeat") {
+        visit(node.children);
+        continue;
+      }
+      if (node.kind !== "step") continue;
+      if (node.intensity === "warmup") found.warmup += leafSeconds(node);
+      else if (node.intensity === "cooldown") found.cooldown += leafSeconds(node);
+      else if (node.intensity === "active") found.steady = node;
+      else if (node.intensity === "interval") found.interval ??= node;
+      else if (node.intensity === "recovery") found.recovery ??= node;
+    }
+  };
+  visit(session.tree.nodes);
+
+  const { warmup, cooldown, steady, interval, recovery } = found;
+  const parts: string[] = [];
+  if (warmup > 0) parts.push(`${formatClock(warmup)} warm-up`);
+  if (interval) {
+    const reps = Math.max(1, session.reps ?? 1);
+    const work = recovery ? leafSeconds(interval) : leafSeconds(interval) / reps;
+    const rest = recovery ? ` / ${formatClock(leafSeconds(recovery))}` : "";
+    parts.push(`${reps} × ${formatClock(work)}${rest} Z${interval.target.zone ?? "?"}`);
+  } else if (steady) {
+    parts.push(`${formatClock(leafSeconds(steady))} Z${steady.target.zone ?? "?"}`);
+  }
+  if (cooldown > 0) parts.push(`${formatClock(cooldown)} cool-down`);
+  return parts.join(" · ");
+}
+
 /** Fixed-shape mix sessions that share a sport and zone and are packed together. */
 export function fixedPackGroups(items: FormulaTemplateItem[]): number[][] {
   const groups = new Map<string, number[]>();
