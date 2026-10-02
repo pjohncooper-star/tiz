@@ -185,21 +185,28 @@ Press **+ New**, give it a name, and choose a category:
 | **Rest week** | Used for weeks marked Rest |
 | **Test week** | Used for weeks marked Test |
 
-The editor is a seven-day grid. Press **+** on a day to add a session, then set **Type**, **Title**, **Role** (Easy / Moderate / Intensity / Long), **Share %**, duration, distance, and **Pool** for swims. **Remove** deletes a session.
+The editor shows the week as seven columns of compact session cards. Each card shows the sport, a role chip (Easy / Moderate / Intensity / Long), the session (for a mix session, what it would generate, such as `6×6' Z3`), and its share and minutes or its set duration and distance. An amber dot flags a session whose sport shares don’t total 100%, or one with no share, duration, or distance.
+
+Press **+** on a day (or **Rest day · + Add** on an empty one) to add a session. Click a card to edit it in the panel below the grid; click it again, press **×**, or press Esc to close the panel. The panel has **Sport**, **Role**, an optional **Title**, and **Share of weekly … %**, plus **Duplicate** (copies the session onto the same day) and **Remove**. Leave the title empty to use the generated label (shown as the placeholder) or the sport name.
 
 As soon as you change anything, a bar pinned to the bottom of the page shows **Unsaved changes** with **Discard** and **Save template**. Switching to another template, creating one, duplicating, or closing the tab asks before throwing edits away.
 
-When a sport’s shares are set, those slots become the live mix. A chip above the grid tracks each sport’s running total: amber while shares are short of 100% (`run 67% · 33% left`), green at 100%, red when over. Sessions of the same sport with no share stay duration-based alongside the mix. On a mix slot:
+Above the grid, one row per sport shows that sport’s mix status. When a sport has shares, a chip tracks the running total: amber while short of 100% (`67% · 33% left`), green at 100%, red when over. Sessions of the same sport with no share stay duration-based alongside the mix, and a sport with no shares reads **Duration-based**.
 
-- **Min** is read-only — it comes from the sport’s weekly hours and the slot’s share.
-- **Mix details** (open by default for Fixed slots) holds **Zone**, **Shape** (**Steady** warm-up + block + cool-down, or **Fixed** locked interval and rest), **Warm-up** / **Cool-down**, and for fixed slots **Work**, **Rest**, and **Min reps**. Durations are typed as minutes or `m:ss`; `0` turns off rest, warm-up, or cool-down. Empty warm-up/cool-down use 10:00 and 5:00.
-- The zone starts at the role’s default (Easy Z1, Moderate and Long Z2, Intensity Z3). Changing the role carries its defaults (Intensity → Fixed Z3, others → Steady) into the zone and shape only if you haven’t changed them yourself.
+On a session with a share, the panel’s **Mix** section holds:
 
-Same-sport, same-zone fixed slots pack as a group — extra intensity promotes toward the longest interval (Norwegian Singles 3'/6'/10'). Warm-up is Z2; rest and cool-down are Z1 and stay on that card.
+- **Zone**, and **Shape**: **Steady** (warm-up, one block, cool-down) or **Fixed intervals** (locked interval and rest).
+- For fixed intervals: **Work**, **Rest**, and **Min reps**.
+- **Warm-up** and **Cool-down**. Durations are typed as minutes or `m:ss`; `0` turns off rest, warm-up, or cool-down. Empty warm-up/cool-down use 10:00 and 5:00.
+- A breakdown of the generated session at the preview hours, such as `60 min at 5 h/wk: 14:00 warm-up · 6 × 6:00 / 1:00 Z3 · 5:00 cool-down`, and which days it is packed with.
 
-**Preview at** sets example weekly hours per mixed sport (defaults: run 5, bike 8, swim 3). Each mix card then shows what it would generate, such as `4×6' Z3 · 52 min`, and packed fixed slots show **Packed with Thu, Sat**. Preview hours are not saved; each phase’s weekly hours set the real durations.
+A mix session has no duration field: its length comes from the sport’s weekly hours and its share. Sessions without a share show **Duration (min)** and **Distance** instead, and swims add **Pool**. The zone starts at the role’s default (Easy Z1, Moderate and Long Z2, Intensity Z3). Changing the role carries its defaults (Intensity → Fixed Z3, others → Steady) into the zone and shape only if you haven’t changed them yourself.
 
-**Apply saved mix** stamps a formula from **Settings → Training & planning → Session formulas** onto one sport. Pick a formula and press **Apply to this sport…** to see a preview of which day gets which session: long slots take the long session, intensity slots take intensity sessions, and the rest fill in week order. If the formula has more sessions than the template, tick **Add N sessions** to place them on free days with matching roles. Template sessions the formula doesn’t cover keep their own duration and lose their share. Press **Apply** to confirm, or **Undo** right after. With no saved mixes yet, the editor links to Settings instead. **Duplicate** copies a template including its mix.
+Same-sport, same-zone fixed sessions pack as a group — extra intensity promotes toward the longest interval (Norwegian Singles 3'/6'/10'). Warm-up is Z2; rest and cool-down are Z1 and stay on that session. **How mixes work** next to **Weekly layout** summarizes these rules.
+
+Each mixed sport’s row has a **Preview** h/wk input (defaults: run 5, bike 8, swim 3) that sets the example hours the cards and breakdown use. Preview hours are not saved; each phase’s weekly hours set the real durations.
+
+To stamp a saved formula from **Settings → Training & planning → Session formulas** onto a sport, pick it in that sport’s **Saved mix…** list and press **Apply mix…**. A preview below the grid shows which day gets which session: long slots take the long session, intensity slots take intensity sessions, and the rest fill in week order. If the formula has more sessions than the template, tick **Add N sessions** to place them on free days with matching roles. Template sessions the formula doesn’t cover keep their own duration and lose their share. Press **Apply** to confirm, or **Undo** right after. With no saved mixes yet, the toolbar links to Settings instead. **Duplicate** in the template list copies a template including its mix.
 
 A template still stores weekday, discipline, title, duration, distance, pool size, role, and order. Mix fields are optional; empty shares keep the slot duration-based. **Apply template** on the calendar still drops the layout without generating structured steps. **Generate sessions** on a phase writes those mix workouts (steps and zone targets) onto the calendar, and skips template sessions that already have a structured workout.
 
