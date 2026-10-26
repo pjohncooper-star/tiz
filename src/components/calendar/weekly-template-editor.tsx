@@ -1468,6 +1468,7 @@ export function WeeklyTemplateEditor({
           collisionDetection={collisionDetection}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
+          onDragOver={handleDragMove}
           onDragEnd={handleDragEnd}
           onDragCancel={endDrag}
         >
