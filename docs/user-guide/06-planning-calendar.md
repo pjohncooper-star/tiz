@@ -189,6 +189,8 @@ The editor shows the week as seven columns of compact session cards. Each card s
 
 Press **+** on a day (or **Rest day · + Add** on an empty one) to add a session. Click a card to edit it in the panel below the grid; click it again, press **×**, or press Esc to close the panel. The panel has **Sport**, **Role**, an optional **Title**, and **Share of weekly … %**, plus **Duplicate** (copies the session onto the same day) and **Remove**. Leave the title empty to use the generated label (shown as the placeholder) or the sport name.
 
+To move a session, drag its card to another day, or up or down within a day; a blue line shows where it will land. On a touchscreen, press and hold the card before dragging. You can also pick a day in **Move to** at the top of the panel, which puts the session at the end of that day. Moves count as unsaved changes until you press **Save template**.
+
 As soon as you change anything, a bar pinned to the bottom of the page shows **Unsaved changes** with **Discard** and **Save template**. Switching to another template, creating one, duplicating, or closing the tab asks before throwing edits away.
 
 Above the grid, one row per sport shows that sport’s mix status. When a sport has shares, a chip tracks the running total: amber while short of 100% (`67% · 33% left`), green at 100%, red when over. Sessions of the same sport with no share stay duration-based alongside the mix, and a sport with no shares reads **Duration-based**.
