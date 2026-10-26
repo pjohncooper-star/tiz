@@ -1,6 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  pointerWithin,
+  rectIntersection,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragMoveEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, Input, Label } from "@/components/ui";
@@ -51,6 +67,7 @@ import {
   type FormulaSession,
   type SessionFormulaCatalog,
 } from "@/lib/plan/season/base-formulas";
+import { moveTemplateItem } from "@/lib/plan/calendar/template-item-move";
 
 const WEEKDAYS: WeeklyTemplateItem["weekday"][] = [
   "MON",
@@ -332,18 +349,32 @@ function displayTitle(row: WeeklyTemplateItem): string {
   return row.title.trim() || defaultTitle(row.discipline);
 }
 
+type DropTarget = { weekday: WeeklyTemplateItem["weekday"]; index: number };
+
+type CardDropData =
+  | { kind: "card"; weekday: WeeklyTemplateItem["weekday"]; index: number }
+  | { kind: "day"; weekday: WeeklyTemplateItem["weekday"]; count: number };
+
 function SessionSummaryCard({
   row,
   preview,
   selected,
   warning,
   onSelect,
+  cardRef,
+  dragProps,
+  faded = false,
+  lifted = false,
 }: {
   row: TemplateItemDraft;
   preview: CardPreview | undefined;
   selected: boolean;
   warning: string | null;
-  onSelect: () => void;
+  onSelect?: () => void;
+  cardRef?: (node: HTMLElement | null) => void;
+  dragProps?: React.HTMLAttributes<HTMLElement>;
+  faded?: boolean;
+  lifted?: boolean;
 }) {
   const mix = hasShare(row) && row.discipline !== "STRENGTH";
   const headline = mix ? preview?.label ?? "Mix session" : displayTitle(row);
@@ -361,13 +392,16 @@ function SessionSummaryCard({
   return (
     <button
       type="button"
+      ref={cardRef}
+      {...dragProps}
       onClick={onSelect}
       aria-pressed={selected}
-      className={`relative w-full min-w-0 rounded-md border bg-white p-2 text-left transition hover:border-sky-400 dark:bg-zinc-950 ${
+      title="Click to edit, drag to move"
+      className={`relative w-full min-w-0 cursor-grab touch-manipulation rounded-md border bg-white p-2 text-left transition hover:border-sky-400 active:cursor-grabbing dark:bg-zinc-950 ${
         selected
           ? "border-sky-500 ring-2 ring-sky-500/50"
           : "border-zinc-200 dark:border-zinc-800"
-      }`}
+      } ${faded ? "opacity-40" : ""} ${lifted ? "shadow-lg ring-2 ring-sky-500/60" : ""}`}
     >
       {warning ? (
         <span
@@ -399,12 +433,51 @@ function SessionSummaryCard({
   );
 }
 
+function DraggableSessionCard({
+  row,
+  index,
+  dragging,
+  ...cardProps
+}: {
+  row: TemplateItemDraft;
+  index: number;
+  dragging: boolean;
+  preview: CardPreview | undefined;
+  selected: boolean;
+  warning: string | null;
+  onSelect: () => void;
+}) {
+  const draggable = useDraggable({ id: `drag:${row.key}` });
+  const droppable = useDroppable({
+    id: `card:${row.key}`,
+    data: { kind: "card", weekday: row.weekday, index } satisfies CardDropData,
+  });
+  return (
+    <SessionSummaryCard
+      row={row}
+      {...cardProps}
+      cardRef={(node) => {
+        draggable.setNodeRef(node);
+        droppable.setNodeRef(node);
+      }}
+      dragProps={{ ...draggable.attributes, ...draggable.listeners }}
+      faded={dragging}
+    />
+  );
+}
+
+function DropLine() {
+  return <div className="-my-1 h-1 rounded bg-sky-500" aria-hidden />;
+}
+
 function TemplateDayColumn({
   weekday,
   items,
   previews,
   warnings,
   selectedKey,
+  dragKey,
+  dropIndex,
   onAdd,
   onSelect,
 }: {
@@ -413,11 +486,24 @@ function TemplateDayColumn({
   previews: Map<string, CardPreview>;
   warnings: Map<string, string>;
   selectedKey: string | null;
+  dragKey: string | null;
+  dropIndex: number | null;
   onAdd: () => void;
   onSelect: (key: string) => void;
 }) {
+  const { setNodeRef } = useDroppable({
+    id: `day:${weekday}`,
+    data: { kind: "day", weekday, count: items.length } satisfies CardDropData,
+  });
   return (
-    <div className="flex min-h-[8rem] min-w-0 flex-col rounded-md border border-zinc-200 bg-zinc-50/50 p-2 dark:border-zinc-800 dark:bg-zinc-900/30">
+    <div
+      ref={setNodeRef}
+      className={`flex min-h-[8rem] min-w-0 flex-col rounded-md border p-2 transition ${
+        dropIndex != null
+          ? "border-sky-400 bg-sky-50/60 dark:border-sky-700 dark:bg-sky-950/30"
+          : "border-zinc-200 bg-zinc-50/50 dark:border-zinc-800 dark:bg-zinc-900/30"
+      }`}
+    >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-300">
           {WEEKDAY_SHORT[weekday]}
@@ -436,21 +522,32 @@ function TemplateDayColumn({
           <button
             type="button"
             onClick={onAdd}
-            className="flex flex-1 items-center justify-center rounded-md border border-dashed border-zinc-300 py-4 text-xs text-zinc-400 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700"
+            className={`flex flex-1 items-center justify-center rounded-md border border-dashed py-4 text-xs hover:border-sky-400 hover:text-sky-600 ${
+              dropIndex != null
+                ? "border-sky-400 text-sky-600"
+                : "border-zinc-300 text-zinc-400 dark:border-zinc-700"
+            }`}
           >
-            Rest day · + Add
+            {dropIndex != null ? "Drop here" : "Rest day · + Add"}
           </button>
         ) : (
-          items.map((row) => (
-            <SessionSummaryCard
-              key={row.key}
-              row={row}
-              preview={previews.get(row.key)}
-              selected={row.key === selectedKey}
-              warning={warnings.get(row.key) ?? null}
-              onSelect={() => onSelect(row.key)}
-            />
-          ))
+          <>
+            {items.map((row, index) => (
+              <div key={row.key} className="flex flex-col gap-2">
+                {dropIndex === index ? <DropLine /> : null}
+                <DraggableSessionCard
+                  row={row}
+                  index={index}
+                  dragging={row.key === dragKey}
+                  preview={previews.get(row.key)}
+                  selected={row.key === selectedKey}
+                  warning={warnings.get(row.key) ?? null}
+                  onSelect={() => onSelect(row.key)}
+                />
+              </div>
+            ))}
+            {dropIndex === items.length ? <DropLine /> : null}
+          </>
         )}
       </div>
     </div>
@@ -462,6 +559,7 @@ function SessionEditorPanel({
   preview,
   previewHours,
   onUpdate,
+  onMove,
   onDuplicate,
   onRemove,
   onClose,
@@ -470,6 +568,7 @@ function SessionEditorPanel({
   preview: CardPreview | undefined;
   previewHours: number | null;
   onUpdate: (patch: Partial<WeeklyTemplateItem>) => void;
+  onMove: (weekday: WeeklyTemplateItem["weekday"]) => void;
   onDuplicate: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -489,6 +588,20 @@ function SessionEditorPanel({
         <h3 className="mr-auto text-sm font-semibold">
           {WEEKDAY_LONG[row.weekday]} · {sport} session
         </h3>
+        <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+          Move to
+          <select
+            className="rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            value={row.weekday}
+            onChange={(e) => onMove(e.target.value as WeeklyTemplateItem["weekday"])}
+          >
+            {WEEKDAYS.map((day) => (
+              <option key={day} value={day}>
+                {WEEKDAY_LONG[day]}
+              </option>
+            ))}
+          </select>
+        </label>
         <Button type="button" variant="secondary" onClick={onDuplicate}>
           Duplicate
         </Button>
@@ -965,6 +1078,67 @@ export function WeeklyTemplateEditor({
 
   const selectedRow = items.find((row) => row.key === selectedKey) ?? null;
 
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } })
+  );
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const suppressClickRef = useRef(false);
+  const dragRow = dragKey ? items.find((row) => row.key === dragKey) ?? null : null;
+
+  const collisionDetection: CollisionDetection = (args) => {
+    const hits = pointerWithin(args);
+    const card = hits.find((hit) => String(hit.id).startsWith("card:"));
+    if (card) return [card];
+    return hits.length > 0 ? hits : rectIntersection(args);
+  };
+
+  function dropTargetFor(event: DragMoveEvent | DragEndEvent): DropTarget | null {
+    const over = event.over;
+    const data = over?.data.current as CardDropData | undefined;
+    if (!over || !data) return null;
+    if (data.kind === "day") return { weekday: data.weekday, index: data.count };
+    const rect = event.active.rect.current.translated;
+    const centerY = rect ? rect.top + rect.height / 2 : over.rect.top;
+    const after = centerY > over.rect.top + over.rect.height / 2;
+    return { weekday: data.weekday, index: data.index + (after ? 1 : 0) };
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setDragKey(String(event.active.id).replace(/^drag:/, ""));
+    setPendingApply(null);
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    const next = dropTargetFor(event);
+    setDropTarget((current) =>
+      current?.weekday === next?.weekday && current?.index === next?.index ? current : next
+    );
+  }
+
+  function endDrag() {
+    setDragKey(null);
+    setDropTarget(null);
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 0);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const key = String(event.active.id).replace(/^drag:/, "");
+    const target = dropTargetFor(event);
+    if (target) {
+      setItems((rows) => moveTemplateItem(rows, key, target.weekday, target.index));
+    }
+    endDrag();
+  }
+
+  function moveToDay(key: string, weekday: WeeklyTemplateItem["weekday"]) {
+    setItems((rows) => moveTemplateItem(rows, key, weekday, Number.MAX_SAFE_INTEGER));
+  }
+
   const toolbarSports = MIX_SPORTS.filter(
     (discipline) =>
       items.some((item) => item.discipline === discipline) ||
@@ -1289,25 +1463,49 @@ export function WeeklyTemplateEditor({
           </div>
         ) : null}
 
-        <div className="overflow-x-auto pb-2">
-          <div className="grid min-w-[56rem] grid-cols-7 items-stretch gap-2">
-            {WEEKDAYS.map((weekday) => (
-              <TemplateDayColumn
-                key={weekday}
-                weekday={weekday}
-                items={itemsByWeekday.get(weekday) ?? []}
-                previews={cardPreviews}
-                warnings={cardWarnings}
-                selectedKey={selectedKey}
-                onAdd={() => addSession(weekday)}
-                onSelect={(key) => {
-                  setPendingApply(null);
-                  setSelectedKey((current) => (current === key ? null : key));
-                }}
-              />
-            ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragOver={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onDragCancel={endDrag}
+        >
+          <div className="overflow-x-auto pb-2">
+            <div className="grid min-w-[56rem] grid-cols-7 items-stretch gap-2">
+              {WEEKDAYS.map((weekday) => (
+                <TemplateDayColumn
+                  key={weekday}
+                  weekday={weekday}
+                  items={itemsByWeekday.get(weekday) ?? []}
+                  previews={cardPreviews}
+                  warnings={cardWarnings}
+                  selectedKey={selectedKey}
+                  dragKey={dragKey}
+                  dropIndex={dropTarget?.weekday === weekday ? dropTarget.index : null}
+                  onAdd={() => addSession(weekday)}
+                  onSelect={(key) => {
+                    if (suppressClickRef.current) return;
+                    setPendingApply(null);
+                    setSelectedKey((current) => (current === key ? null : key));
+                  }}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+          <DragOverlay dropAnimation={null}>
+            {dragRow ? (
+              <SessionSummaryCard
+                row={dragRow}
+                preview={cardPreviews.get(dragRow.key)}
+                selected={false}
+                warning={null}
+                lifted
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
 
         <div className="mt-3 space-y-2">
           {undo ? (
@@ -1339,6 +1537,7 @@ export function WeeklyTemplateEditor({
                   : previewHours[selectedRow.discipline as FormulaDiscipline]
               }
               onUpdate={(patch) => updateItem(selectedRow.key, patch)}
+              onMove={(weekday) => moveToDay(selectedRow.key, weekday)}
               onDuplicate={() => duplicateItem(selectedRow.key)}
               onRemove={() => removeItem(selectedRow.key)}
               onClose={() => setSelectedKey(null)}
