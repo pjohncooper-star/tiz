@@ -82,7 +82,7 @@ These all work server-side; there is simply no control for them.
 | Drag-reorder program sessions | Reposition them by editing the **Day offset** field |
 | Edit a week's targets on the calendar | Targets come from the season plan only |
 | Goal times per race in the season planner | The field exists on the model and drives calendar race durations. Set a goal time when creating a race directly on the calendar instead. |
-| Plan adherence analytics | Applied sessions are stamped with their program session, but nothing surfaces the comparison |
+| Plan adherence for program sessions | The **Progress** page compares completed training with the season plan, but adherence to an applied program as a whole is not tracked separately |
 
 ## Prescription and export gaps
 
