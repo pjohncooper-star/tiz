@@ -35,6 +35,7 @@ export async function AppSidebar() {
   const items: SidebarNavItem[] = [{ href: "/dashboard", label: "Dashboard" }];
   if (calendarEnabled) {
     items.push({ href: "/calendar", label: "Calendar", scroll: false });
+    items.push({ href: "/progress", label: "Progress" });
   }
   if (planBuilderEnabled) {
     items.push({ href: "/plan", label: "Seasons" });

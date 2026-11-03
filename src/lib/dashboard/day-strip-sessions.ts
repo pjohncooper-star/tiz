@@ -1,8 +1,7 @@
 import { format, parseISO } from "date-fns";
-import type { Discipline } from "@prisma/client";
 import { pickFirstAutoLinkCandidate } from "@/lib/plan/session-link";
 import { compareSessionsForDayOrder } from "@/lib/plan/session-day-order";
-import { sessionCompletionRollup } from "@/lib/plan/session-completion";
+import { resolvePlannedSessionCompletion } from "@/lib/progress/session-status";
 import { workoutHref, workoutHrefForResolvedActivity } from "@/lib/plan/workout-href";
 import type { CalendarPlannedSession } from "@/lib/plan/calendar/serialize";
 import type { CalendarWeekActivity } from "@/lib/plan/calendar/activity-serialize";
@@ -114,27 +113,11 @@ export function buildDayStripSessions(options: {
   const isPast = options.dateKey < options.todayKey;
 
   for (const planned of dayPlanned) {
-    const completion = sessionCompletionRollup({
-      discipline: planned.discipline as Discipline,
-      completedDurationMinutes: planned.completedDurationMinutes,
-      completedDistanceMeters: planned.completedDistanceMeters,
-      completedTargetSpeedMps: planned.completedTargetSpeedMps,
-      completedTargetPaceSeconds: planned.completedTargetPaceSeconds,
-      completedZones: planned.completedZones,
-    });
     const matchedExtra = extraByMatchedSession.get(planned.id);
-    const linkedMinutes =
-      planned.linkedActivity != null
-        ? Math.round((planned.linkedActivity.durationSeconds / 60) * 10) / 10
-        : matchedExtra
-          ? Math.round((matchedExtra.durationSeconds / 60) * 10) / 10
-          : null;
-    const completedMinutes = completion?.durationMinutes ?? linkedMinutes;
-    const isDone =
-      Boolean(planned.linkedActivity) ||
-      planned.hasCompletedOverride ||
-      matchedExtra != null ||
-      completedMinutes != null;
+    const { isDone, completedMinutes } = resolvePlannedSessionCompletion(
+      planned,
+      matchedExtra?.durationSeconds ?? null
+    );
     sessions.push({
       id: planned.id,
       kind: "planned",

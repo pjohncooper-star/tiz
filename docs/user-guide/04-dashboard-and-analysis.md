@@ -81,6 +81,24 @@ A toggle between **Power** and **Run pace**.
 
 **Zone mix** is a bar chart below it: total hours in each of **Z1** through **Z5** across all three sports in the range. This is the quickest way to check whether your "easy" base block was actually easy.
 
+## Progress
+
+The **Progress** page (`/progress`, in the sidebar under Calendar) compares what you completed with your plan. It has two views, switched at the top of the page.
+
+**Week** shows one Monday-start week, with previous and next arrows. It lists volume against the week's target, session adherence, zone match, a per-sport breakdown (swim, bike, run), time in each zone against the target, every session with its status, and any self-evaluation scores for the week.
+
+**Season** covers the whole active season: volume, adherence and zone match to date, a weekly volume chart with phase bands (click a bar to open that week), a per-phase table, zone mix to date, goal races with a countdown, and the fitness and fatigue chart including the planned projection. Without an active season it shows a prompt to create one.
+
+How the numbers are defined:
+
+- **Volume** is completed minutes divided by target minutes. Completed minutes use each activity's recorded duration (not TiZ minutes) for swim, bike and run.
+- **Session adherence** is (done + partial) divided by (done + partial + missed), counting only sessions whose date has passed. Upcoming sessions are not counted.
+- **Partial** means a session was completed at less than 75% of its planned duration. **Extra** activities are completed work with no planned session.
+- **Zone match** is, per zone, the lesser of actual and target minutes, summed across Z1–Z5 and divided by the total target. Over-doing a zone does not make up for under-doing another.
+- Season totals and phase figures include **completed weeks only**. The week in progress is shown separately and is never counted against you.
+
+Caveats: activities are placed on the day they started in the activity's own time zone; an unlinked activity on the same day and sport as an open planned session is matched to it automatically; the page is computed on every load, so nothing is stored.
+
 ## Workout and activity detail
 
 Every completed activity and every planned session opens the same page, at `/workouts/{id}`. Opening an activity URL redirects here — if the activity has no planned session, one is created for it on the fly so there is always something to hold your notes, tags, and role.

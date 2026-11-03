@@ -17,6 +17,10 @@ function isCalendarPath(pathname: string): boolean {
   );
 }
 
+function isProgressPath(pathname: string): boolean {
+  return pathname === "/progress" || pathname.startsWith("/progress/");
+}
+
 function isPlanBuilderUiPath(pathname: string): boolean {
   return pathname === "/plan";
 }
@@ -79,7 +83,7 @@ export default auth((req) => {
   const calendar = isPlanningCalendarEnabled();
   const sessions = isSessionPlanningEnabled();
 
-  if (!calendar && isCalendarPath(pathname)) {
+  if (!calendar && (isCalendarPath(pathname) || isProgressPath(pathname))) {
     return pathname.startsWith("/api/") ? blockApi() : blockPage(req);
   }
 
