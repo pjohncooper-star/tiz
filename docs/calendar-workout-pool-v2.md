@@ -10,7 +10,7 @@
 
 ## Purpose
 
-After season planning sets weekly session budgets (and later a phase layout on the grid), the athlete still needs to:
+After season planning sets weekly session budgets (and, later, a phase-aware weekly template that pre-fills the week), the athlete still needs to:
 
 1. **Place** sessions that aren’t on the calendar yet but are in the weekly budget (unscheduled)
 2. **Choose** concrete structured workouts from suggestions or the library
@@ -93,7 +93,7 @@ Separate but coupled to the pool: every placed session should be able to carry a
 
 | When | How |
 |------|-----|
-| Layout materialize | Default TiZ from slot role + week zone split (easy slot → mostly Z1–2; intensity slot → Z3+) |
+| Phase template materialize | Default TiZ from slot role + week zone split (easy slot → mostly Z1–2; intensity slot → Z3+) |
 | Place unscheduled chip | Open compact TiZ editor or inherit day slot role if dropped on flagged day |
 | Apply structured workout | Roll up from workout steps; merge or replace manual TiZ pills |
 | Manual edit | Existing planned session editor zone pills |
@@ -104,9 +104,9 @@ V2 zone allocation wizard step would set **week-level** zone minutes by discipli
 
 ---
 
-## Intensity days on phase layout (wizard → calendar) — deferred V2c
+## Intensity days from phase templates (planner → calendar) — deferred V2c
 
-Phase layout slots (and optionally anchors) carry a **session role** flag — not a full zone prescription, but a planning hint:
+Phase-template slots carry a **session role** flag — not a full zone prescription, but a planning hint. (There is no season-owned weekday grid or anchor model; the source is the phase-aware weekly template — see [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md).)
 
 | Role | Meaning | Calendar UX | Default TiZ skew |
 |------|---------|-------------|------------------|
@@ -117,23 +117,16 @@ Phase layout slots (and optionally anchors) carry a **session role** flag — no
 
 **User language:** “Intensity day” = this weekday/discipline slot is where hard work belongs.
 
-### Why on the template/layout, not just the workout
+### Why on the template, not just the workout
 
-- Week grid shows **where** quality happens before workouts are picked
+- The phase template shows **where** quality happens before workouts are picked
 - Pool can suggest interval/threshold templates on intensity slots
 - TiZ week rollup can expect more Z3+ on flagged days
 - Coaches scan the week shape without opening every session
 
-### Schema sketch (when layout ships)
+### Schema note
 
-On `SeasonPhaseLayoutItem` (name TBD):
-
-```typescript
-sessionRole: "easy" | "moderate" | "intensity" | "long"  // default "moderate"
-// optional: targetZones preset override (V2+)
-```
-
-**Confirmed:** use this enum (not `isIntensityDay` boolean) so **long** sessions get distinct handling from **intensity** (Z3+) days.
+Session role lives on the phase-aware weekly template item (`WeeklyScheduleTemplateItem.sessionRole`) and is copied to the `PlannedSession` on materialize — there is no separate `SeasonPhaseLayoutItem`. The enum is `easy | moderate | intensity | long` (not an `isIntensityDay` boolean) so **long** sessions get distinct handling from **intensity** (Z3+) days. See [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md).
 
 ---
 
@@ -169,7 +162,7 @@ sessionRole: "easy" | "moderate" | "intensity" | "long"  // default "moderate"
 | Calendar template / manual sessions | **Scheduled** counts (reduces unscheduled) |
 | Workout library | Library section |
 | Remaining hard-zone budget | Suggested section |
-| Future phase layout (V2c) | Grid + intensity flags |
+| Future phase templates (V2c) | Weekday shape + intensity flags |
 | Future zone allocation (V2e) | Week TiZ **budget** interactivity |
 
 ---
@@ -180,7 +173,7 @@ sessionRole: "easy" | "moderate" | "intensity" | "long"  // default "moderate"
 |-------|--------|--------|
 | **V2a** | Unscheduled chips; drag to day; week count math | Shipped |
 | **V2b** | Library (+ Suggested); drag to day/session; focused-week sidebar | Shipped |
-| **V2c** | Layout `sessionRole` + intensity visual on calendar; default TiZ on materialize | Deferred |
+| **V2c** | Phase-template `sessionRole` + intensity visual on calendar; default TiZ on materialize | Deferred |
 | **V2d** | TiZ assign UI in pool placement flow; week zone budget vs actual | Deferred |
 | **V2e** | Zone allocation wizard + distribute week zones to sessions | Deferred |
 

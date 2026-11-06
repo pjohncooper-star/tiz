@@ -1,5 +1,7 @@
 # Plan wizard UI — implementation plan (v2)
 
+> **⚠️ SUPERSEDED (July 2026).** This document plans a **5-step plan wizard** that was never shipped. Production season planning is the single-page **Simple Planner** (`src/components/simple-planner/*`), and the anchor / phase-layout concepts here were dropped. Retained for history only. See [plan-wizard-weekly-template-strategy.md](./plan-wizard-weekly-template-strategy.md) for the current direction (phase-aware weekly templates).
+
 Execute after wireframe + screen spec approval. **Do not** edit `.cursor/plans/` mockup file.
 
 **References:**
